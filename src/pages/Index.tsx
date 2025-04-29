@@ -3,7 +3,7 @@ import Layout from "@/components/layout/Layout";
 import RankingTable from "@/components/home/RankingTable";
 import NextMatches from "@/components/home/NextMatches";
 import StatsCard from "@/components/home/StatsCard";
-import { Trophy as TrophyIcon, User as UserIcon, Volleyball as SoccerBallIcon, Flag as FlagIcon } from "lucide-react";
+import { Trophy as TrophyIcon, User as UserIcon, Volleyball as SoccerBallIcon, Flag as FlagIcon, Users } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
@@ -75,6 +75,17 @@ const Index = () => {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="md:col-span-2">
             <RankingTable />
+            <div className="mt-4">
+              <Link to="/palpites">
+                <Button size="wide" className="bg-fifa-blue hover:bg-fifa-blue/90 text-white gap-2">
+                  <Users className="h-4 w-4" />
+                  Ver Palpites de Todos os Usuários 
+                  <span className="bg-white text-fifa-blue px-2 py-0.5 text-xs font-bold rounded-full">
+                    Limite: 20 Participantes
+                  </span>
+                </Button>
+              </Link>
+            </div>
           </div>
           <div>
             <div className="space-y-6">
