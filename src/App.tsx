@@ -11,6 +11,7 @@ import Resultados from "./pages/Resultados";
 import Palpites from "./pages/Palpites";
 import Cadastro from "./pages/Cadastro";
 import Login from "./pages/Login";
+import Admin from "./pages/Admin";
 
 const queryClient = new QueryClient();
 
@@ -27,6 +28,7 @@ const App = () => (
           <Route path="/palpites" element={<Palpites />} />
           <Route path="/cadastro" element={<Cadastro />} />
           <Route path="/login" element={<Login />} />
+          <Route path="/admin" element={<Admin />} />
           {/* Catch-all route for 404 */}
           <Route path="*" element={<NotFound />} />
         </Routes>
