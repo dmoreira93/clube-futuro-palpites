@@ -3,7 +3,7 @@ import Layout from "@/components/layout/Layout";
 import RankingTable from "@/components/home/RankingTable";
 import NextMatches from "@/components/home/NextMatches";
 import StatsCard from "@/components/home/StatsCard";
-import { Trophy as TrophyIcon, User as UserIcon, Football as SoccerBallIcon, Flag as FlagIcon } from "lucide-react";
+import { Trophy as TrophyIcon, User as UserIcon, Volleyball as SoccerBallIcon, Flag as FlagIcon } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
