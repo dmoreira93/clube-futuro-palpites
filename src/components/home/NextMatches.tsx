@@ -6,7 +6,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Soccer as SoccerBallIcon } from "lucide-react";
+import { Ball as SoccerBallIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
 // Sample data for demonstration
