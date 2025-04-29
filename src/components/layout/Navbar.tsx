@@ -1,16 +1,25 @@
 
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { 
   Volleyball as SoccerBallIcon,
   Trophy as TrophyIcon,
   User as UserIcon,
-  Shield as ShieldIcon
+  Shield as ShieldIcon,
+  LogOut
 } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
 
 const Navbar = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const { isAuthenticated, isAdmin, user, logout } = useAuth();
+  const navigate = useNavigate();
+
+  const handleLogout = () => {
+    logout();
+    navigate("/");
+  };
 
   return (
     <nav className="bg-fifa-blue text-white shadow-lg">
@@ -64,20 +73,41 @@ const Navbar = () => {
             <Link to="/palpites" className="hover:text-fifa-gold transition-colors">
               Meus Palpites
             </Link>
-            <Link to="/admin" className="hover:text-fifa-gold transition-colors flex items-center">
-              <ShieldIcon className="w-4 h-4 mr-1" />
-              Admin
-            </Link>
-            <Link to="/cadastro">
-              <Button variant="outline" className="border-fifa-gold text-fifa-gold hover:bg-fifa-gold hover:text-white">
-                Cadastrar
-              </Button>
-            </Link>
-            <Link to="/login">
-              <Button className="bg-fifa-gold text-fifa-blue hover:bg-opacity-90">
-                Entrar
-              </Button>
-            </Link>
+            
+            {isAdmin && (
+              <Link to="/admin" className="hover:text-fifa-gold transition-colors flex items-center">
+                <ShieldIcon className="w-4 h-4 mr-1" />
+                Admin
+              </Link>
+            )}
+            
+            {!isAuthenticated ? (
+              <>
+                <Link to="/cadastro">
+                  <Button variant="outline" className="border-fifa-gold text-fifa-gold hover:bg-fifa-gold hover:text-white">
+                    Cadastrar
+                  </Button>
+                </Link>
+                <Link to="/login">
+                  <Button className="bg-fifa-gold text-fifa-blue hover:bg-opacity-90">
+                    Entrar
+                  </Button>
+                </Link>
+              </>
+            ) : (
+              <div className="flex items-center space-x-2">
+                <span className="text-sm">Olá, {user?.name}</span>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  className="border-fifa-gold text-fifa-gold hover:bg-fifa-gold hover:text-white"
+                  onClick={handleLogout}
+                >
+                  <LogOut className="h-4 w-4 mr-1" />
+                  Sair
+                </Button>
+              </div>
+            )}
           </div>
         </div>
 
@@ -106,28 +136,52 @@ const Navbar = () => {
               >
                 Meus Palpites
               </Link>
-              <Link
-                to="/admin"
-                className="block py-2 px-4 hover:bg-fifa-green rounded transition-colors flex items-center"
-                onClick={() => setIsMenuOpen(false)}
-              >
-                <ShieldIcon className="w-4 h-4 mr-1" />
-                Admin
-              </Link>
-              <Link
-                to="/cadastro"
-                className="block py-2 px-4 hover:bg-fifa-gold text-fifa-blue rounded font-medium transition-colors"
-                onClick={() => setIsMenuOpen(false)}
-              >
-                Cadastrar
-              </Link>
-              <Link
-                to="/login"
-                className="block py-2 px-4 bg-fifa-gold text-fifa-blue rounded font-medium transition-colors"
-                onClick={() => setIsMenuOpen(false)}
-              >
-                Entrar
-              </Link>
+              
+              {isAdmin && (
+                <Link
+                  to="/admin"
+                  className="block py-2 px-4 hover:bg-fifa-green rounded transition-colors flex items-center"
+                  onClick={() => setIsMenuOpen(false)}
+                >
+                  <ShieldIcon className="w-4 h-4 mr-1" />
+                  Admin
+                </Link>
+              )}
+              
+              {!isAuthenticated ? (
+                <>
+                  <Link
+                    to="/cadastro"
+                    className="block py-2 px-4 hover:bg-fifa-gold text-fifa-blue rounded font-medium transition-colors"
+                    onClick={() => setIsMenuOpen(false)}
+                  >
+                    Cadastrar
+                  </Link>
+                  <Link
+                    to="/login"
+                    className="block py-2 px-4 bg-fifa-gold text-fifa-blue rounded font-medium transition-colors"
+                    onClick={() => setIsMenuOpen(false)}
+                  >
+                    Entrar
+                  </Link>
+                </>
+              ) : (
+                <>
+                  <div className="px-4 py-2 text-sm">
+                    Olá, {user?.name}
+                  </div>
+                  <button
+                    className="flex items-center py-2 px-4 hover:bg-fifa-gold hover:text-fifa-blue rounded transition-colors"
+                    onClick={() => {
+                      handleLogout();
+                      setIsMenuOpen(false);
+                    }}
+                  >
+                    <LogOut className="w-4 h-4 mr-1" />
+                    Sair
+                  </button>
+                </>
+              )}
             </div>
           </div>
         )}

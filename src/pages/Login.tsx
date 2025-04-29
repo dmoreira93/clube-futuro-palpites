@@ -1,5 +1,6 @@
 
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import Layout from "@/components/layout/Layout";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -11,13 +12,14 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { useToast } from "@/hooks/use-toast";
 import { Label } from "@/components/ui/label";
 import { LogInIcon } from "lucide-react";
 import { Link } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
 
 const Login = () => {
-  const { toast } = useToast();
+  const navigate = useNavigate();
+  const { login } = useAuth();
   const [formData, setFormData] = useState({
     email: "",
     password: "",
@@ -32,32 +34,20 @@ const Login = () => {
     }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!formData.email || !formData.password) {
-      toast({
-        title: "Dados incompletos",
-        description: "Por favor, preencha seu e-mail e senha.",
-        variant: "destructive",
-      });
       return;
     }
 
-    // In a real application, we would authenticate with a server
     setIsSubmitting(true);
+    const success = await login(formData.email, formData.password);
+    setIsSubmitting(false);
     
-    // Simulate API call
-    setTimeout(() => {
-      toast({
-        title: "Login realizado com sucesso!",
-        description: "Bem-vindo de volta ao bolão.",
-      });
-      
-      setIsSubmitting(false);
-      
-      // In a real app, we would redirect to dashboard or home page
-    }, 1500);
+    if (success) {
+      navigate("/palpites");
+    }
   };
 
   return (
@@ -127,11 +117,19 @@ const Login = () => {
             </form>
           </CardContent>
           <CardFooter>
-            <div className="text-center w-full text-sm">
-              Não tem uma conta?{" "}
-              <Link to="/cadastro" className="text-fifa-blue hover:underline font-medium">
-                Cadastre-se
-              </Link>
+            <div className="text-center w-full">
+              <div className="text-sm mb-2">
+                Não tem uma conta?{" "}
+                <Link to="/cadastro" className="text-fifa-blue hover:underline font-medium">
+                  Cadastre-se
+                </Link>
+              </div>
+              <div className="text-xs text-gray-500 mt-2">
+                Se você é administrador,{" "}
+                <Link to="/admin-login" className="text-fifa-blue hover:underline">
+                  acesse a área administrativa
+                </Link>
+              </div>
             </div>
           </CardFooter>
         </Card>
