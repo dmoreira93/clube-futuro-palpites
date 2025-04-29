@@ -5,7 +5,8 @@ import { Button } from "@/components/ui/button";
 import { 
   Volleyball as SoccerBallIcon,
   Trophy as TrophyIcon,
-  User as UserIcon
+  User as UserIcon,
+  Shield as ShieldIcon
 } from "lucide-react";
 
 const Navbar = () => {
@@ -63,6 +64,10 @@ const Navbar = () => {
             <Link to="/palpites" className="hover:text-fifa-gold transition-colors">
               Meus Palpites
             </Link>
+            <Link to="/admin" className="hover:text-fifa-gold transition-colors flex items-center">
+              <ShieldIcon className="w-4 h-4 mr-1" />
+              Admin
+            </Link>
             <Link to="/cadastro">
               <Button variant="outline" className="border-fifa-gold text-fifa-gold hover:bg-fifa-gold hover:text-white">
                 Cadastrar
@@ -100,6 +105,14 @@ const Navbar = () => {
                 onClick={() => setIsMenuOpen(false)}
               >
                 Meus Palpites
+              </Link>
+              <Link
+                to="/admin"
+                className="block py-2 px-4 hover:bg-fifa-green rounded transition-colors flex items-center"
+                onClick={() => setIsMenuOpen(false)}
+              >
+                <ShieldIcon className="w-4 h-4 mr-1" />
+                Admin
               </Link>
               <Link
                 to="/cadastro"
