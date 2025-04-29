@@ -3,7 +3,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { 
-  Ball as SoccerBallIcon,
+  Football as SoccerBallIcon,
   Trophy as TrophyIcon,
   User as UserIcon
 } from "lucide-react";

@@ -1,6 +1,7 @@
+
 import Layout from "@/components/layout/Layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Trophy as TrophyIcon, Users as UsersIcon, Ball as SoccerBallIcon } from "lucide-react";
+import { Trophy as TrophyIcon, Users as UsersIcon, Football as SoccerBallIcon } from "lucide-react";
 
 const Criterios = () => {
   return (

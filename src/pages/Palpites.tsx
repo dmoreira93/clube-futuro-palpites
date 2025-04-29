@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { Label } from "@/components/ui/label";
-import { Ball as SoccerBallIcon, Trophy as TrophyIcon, Users as UsersIcon } from "lucide-react";
+import { Football as SoccerBallIcon, Trophy as TrophyIcon, Users as UsersIcon } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
