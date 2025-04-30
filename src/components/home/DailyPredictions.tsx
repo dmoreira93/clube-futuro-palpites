@@ -61,7 +61,7 @@ const DailyPredictions = () => {
       const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1).toISOString();
       
       try {
-        // Buscar jogos do dia atual
+        // Buscar jogos do dia atual com especificação clara das colunas
         const { data: matchesData, error: matchesError } = await supabase
           .from('matches')
           .select(`
@@ -108,15 +108,16 @@ const DailyPredictions = () => {
                 predictions: [],
                 home_team: match.home_team || { name: "Time não definido" },
                 away_team: match.away_team || { name: "Time não definido" }
-              };
+              } as Match;
             }
 
+            // Garantir que todos os campos estão presentes e com o tipo correto
             return { 
               ...match, 
               predictions: predictionsData || [],
               home_team: match.home_team || { name: "Time não definido" },
               away_team: match.away_team || { name: "Time não definido" }
-            };
+            } as Match;
           })
         );
 
