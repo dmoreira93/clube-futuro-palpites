@@ -2,6 +2,7 @@
 import Layout from "@/components/layout/Layout";
 import RankingTable from "@/components/home/RankingTable";
 import NextMatches from "@/components/home/NextMatches";
+import DailyPredictions from "@/components/home/DailyPredictions";
 import StatsCard from "@/components/home/StatsCard";
 import { Trophy as TrophyIcon, User as UserIcon, Volleyball as SoccerBallIcon, Flag as FlagIcon, Users } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -44,6 +45,9 @@ const Index = () => {
             </div>
           </div>
         </div>
+
+        {/* Componente de palpites diários (só aparecerá após 14/06/2025) */}
+        <DailyPredictions />
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
           <StatsCard 
