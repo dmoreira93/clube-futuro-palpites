@@ -1,6 +1,8 @@
 
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 type AuthContextType = {
   isAuthenticated: boolean;
@@ -44,12 +46,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, []);
 
-  // Regular user login
+  // Regular user login (modificado para usar Supabase)
   const login = async (email: string, password: string) => {
-    // In a real app, this would authenticate against a backend
-    // For this demo, we'll use a simple simulation
-    
     try {
+      // Em uma versão futura, vamos conectar com autenticação real do Supabase
+      // Por agora, manteremos o mock para compatibilidade
+      
       // Simulate API call delay
       await new Promise(resolve => setTimeout(resolve, 1000));
       
@@ -80,35 +82,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // Admin-specific login
+  // Admin-specific login (atualizado para usar o Supabase)
   const adminLogin = async (username: string, password: string) => {
-    // Hard-coded admin credentials - in a real app these would be stored securely
-    // and verified on a backend server
-    const ADMIN_USERNAME = "admin";
-    const ADMIN_PASSWORD = "copa2025";
-    
     try {
-      // Simulate API call delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Verificar se o administrador existe no banco de dados do Supabase
+      const { data, error } = await supabase
+        .from('administrators')
+        .select('*')
+        .eq('email', username)
+        .eq('password', password)
+        .single();
       
-      if (username === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
-        const adminUser = {
-          id: "admin1",
-          name: "Administrador",
-          email: "admin@example.com",
-          isAdmin: true,
-        };
-        
-        setUser(adminUser);
-        localStorage.setItem("bolao_user", JSON.stringify(adminUser));
-        
-        toast({
-          title: "Login de administrador concluído",
-          description: "Você agora tem acesso à área de administração.",
-        });
-        
-        return true;
-      } else {
+      if (error || !data) {
         toast({
           title: "Acesso negado",
           description: "Credenciais de administrador inválidas.",
@@ -116,6 +101,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         });
         return false;
       }
+      
+      const adminUser = {
+        id: data.id,
+        name: data.name,
+        email: data.email,
+        isAdmin: true,
+      };
+      
+      setUser(adminUser);
+      localStorage.setItem("bolao_user", JSON.stringify(adminUser));
+      
+      toast({
+        title: "Login de administrador concluído",
+        description: "Você agora tem acesso à área de administração.",
+      });
+      
+      return true;
     } catch (error) {
       toast({
         title: "Erro ao fazer login",

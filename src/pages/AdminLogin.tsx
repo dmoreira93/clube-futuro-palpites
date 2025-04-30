@@ -92,12 +92,12 @@ const AdminLogin = () => {
               
               <div className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="username">Nome de usuário</Label>
+                  <Label htmlFor="username">Email</Label>
                   <Input
                     id="username"
                     name="username"
                     type="text"
-                    placeholder="Usuário administrador"
+                    placeholder="Email de administrador"
                     value={formData.username}
                     onChange={handleChange}
                     required
@@ -115,6 +115,12 @@ const AdminLogin = () => {
                     onChange={handleChange}
                     required
                   />
+                </div>
+                
+                <div className="text-sm text-muted-foreground">
+                  <p>Credenciais padrão:</p>
+                  <p>Email: admin@copamundial.com</p>
+                  <p>Senha: admin123</p>
                 </div>
                 
                 <Button 
@@ -143,8 +149,6 @@ const AdminLogin = () => {
           <CardFooter className="flex justify-center">
             <div className="text-center text-sm text-gray-500">
               Acesso restrito para administradores autorizados.
-              <br />
-              Entre em contato com o organizador para obter acesso.
             </div>
           </CardFooter>
         </Card>

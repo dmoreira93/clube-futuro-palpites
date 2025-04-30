@@ -6,6 +6,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import AdminTeams from "@/components/admin/AdminTeams";
 import AdminGroups from "@/components/admin/AdminGroups";
 import AdminMatches from "@/components/admin/AdminMatches";
+import AdminUsers from "@/components/admin/AdminUsers";
+import AdminPredictions from "@/components/admin/AdminPredictions";
+import AdminScoringCriteria from "@/components/admin/AdminScoringCriteria";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Shield, AlertTriangle, LogOut } from "lucide-react";
 import { Card } from "@/components/ui/card";
@@ -97,10 +100,13 @@ const Admin = () => {
 
         <Card className="p-4">
           <Tabs defaultValue="teams" className="space-y-4">
-            <TabsList className="grid grid-cols-3 md:w-[400px]">
+            <TabsList className="grid grid-cols-6 md:w-[800px]">
               <TabsTrigger value="teams">Times</TabsTrigger>
               <TabsTrigger value="groups">Grupos</TabsTrigger>
               <TabsTrigger value="matches">Partidas</TabsTrigger>
+              <TabsTrigger value="users">Usuários</TabsTrigger>
+              <TabsTrigger value="predictions">Palpites</TabsTrigger>
+              <TabsTrigger value="scoring">Pontuação</TabsTrigger>
             </TabsList>
             <TabsContent value="teams" className="space-y-4">
               <AdminTeams />
@@ -110,6 +116,15 @@ const Admin = () => {
             </TabsContent>
             <TabsContent value="matches" className="space-y-4">
               <AdminMatches />
+            </TabsContent>
+            <TabsContent value="users" className="space-y-4">
+              <AdminUsers />
+            </TabsContent>
+            <TabsContent value="predictions" className="space-y-4">
+              <AdminPredictions />
+            </TabsContent>
+            <TabsContent value="scoring" className="space-y-4">
+              <AdminScoringCriteria />
             </TabsContent>
           </Tabs>
         </Card>
