@@ -10,24 +10,26 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Calendar } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
+type User = {
+  name: string;
+};
+
 type Prediction = {
   id: string;
   home_score: number;
   away_score: number;
-  user: {
-    name: string;
-  };
+  user: User;
+};
+
+type Team = {
+  name: string;
 };
 
 type Match = {
   id: string;
   match_date: string;
-  home_team: {
-    name: string;
-  };
-  away_team: {
-    name: string;
-  };
+  home_team: Team;
+  away_team: Team;
   home_score: number | null;
   away_score: number | null;
   is_finished: boolean;
@@ -101,10 +103,20 @@ const DailyPredictions = () => {
 
             if (predictionsError) {
               console.error(`Erro ao buscar palpites para o jogo ${match.id}:`, predictionsError);
-              return { ...match, predictions: [] };
+              return { 
+                ...match, 
+                predictions: [],
+                home_team: match.home_team || { name: "Time não definido" },
+                away_team: match.away_team || { name: "Time não definido" }
+              };
             }
 
-            return { ...match, predictions: predictionsData || [] };
+            return { 
+              ...match, 
+              predictions: predictionsData || [],
+              home_team: match.home_team || { name: "Time não definido" },
+              away_team: match.away_team || { name: "Time não definido" }
+            };
           })
         );
 
