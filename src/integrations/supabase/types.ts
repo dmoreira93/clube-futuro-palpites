@@ -189,6 +189,99 @@ export type Database = {
         }
         Relationships: []
       }
+      user_points: {
+        Row: {
+          created_at: string
+          id: string
+          match_id: string
+          points: number
+          points_type: string | null
+          prediction_id: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          match_id: string
+          points?: number
+          points_type?: string | null
+          prediction_id?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          match_id?: string
+          points?: number
+          points_type?: string | null
+          prediction_id?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_points_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "matches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_points_prediction_id_fkey"
+            columns: ["prediction_id"]
+            isOneToOne: false
+            referencedRelation: "predictions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_points_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_stats: {
+        Row: {
+          accuracy_percentage: number
+          created_at: string
+          id: string
+          matches_played: number
+          total_points: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          accuracy_percentage?: number
+          created_at?: string
+          id?: string
+          matches_played?: number
+          total_points?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          accuracy_percentage?: number
+          created_at?: string
+          id?: string
+          matches_played?: number
+          total_points?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_stats_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       users: {
         Row: {
           auth_id: string | null

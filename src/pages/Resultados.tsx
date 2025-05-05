@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import Layout from "@/components/layout/Layout";
 import { Input } from "@/components/ui/input";
@@ -101,7 +102,7 @@ const Resultados = () => {
       // Simulação para ambiente de desenvolvimento
       await new Promise(resolve => setTimeout(resolve, 1000));
       
-      // Atualizar o resultado da partida (em implementação real)
+      // Em ambiente de produção, descomentar este código:
       // const { error } = await supabase
       //   .from('matches')
       //   .update({
@@ -117,7 +118,7 @@ const Resultados = () => {
       // }
       
       // Chamada para atualizar pontuações dos usuários
-      // await updateUserPoints(selectedMatch);
+      // await updateUserPoints(String(selectedMatch));
       
       toast({
         title: "Resultado registrado",

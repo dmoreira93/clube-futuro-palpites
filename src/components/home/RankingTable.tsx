@@ -33,26 +33,38 @@ const RankingTable = () => {
         // Buscar usuários com suas estatísticas
         const { data, error } = await supabase
           .from('users')
-          .select(`
-            id, 
-            name,
-            stats:user_stats(total_points, matches_played, accuracy_percentage)
-          `)
-          .order('stats.total_points', { ascending: false, foreignTable: 'user_stats' });
+          .select('id, name');
           
         if (error) throw error;
         
-        if (data) {
-          // Transformar os dados para o formato esperado
-          const formattedData: Participant[] = data.map(user => ({
-            id: user.id,
-            name: user.name,
-            nickname: user.name.split(' ')[0],
-            points: user.stats?.[0]?.total_points || 0,
-            matches: user.stats?.[0]?.matches_played || 0,
-            accuracy: `${user.stats?.[0]?.accuracy_percentage || 0}%`
-          }));
-          setParticipants(formattedData);
+        if (data && data.length > 0) {
+          // Buscar estatísticas para cada usuário
+          const usersWithStats = await Promise.all(
+            data.map(async (user) => {
+              const { data: statsData, error: statsError } = await supabase
+                .from('user_stats')
+                .select('total_points, matches_played, accuracy_percentage')
+                .eq('user_id', user.id)
+                .single();
+                
+              if (statsError && statsError.code !== 'PGRST116') {
+                console.error(`Erro ao buscar estatísticas para usuário ${user.id}:`, statsError);
+              }
+
+              return {
+                id: user.id,
+                name: user.name,
+                nickname: user.name.split(' ')[0],
+                points: statsData?.total_points || 0,
+                matches: statsData?.matches_played || 0,
+                accuracy: statsData ? `${statsData.accuracy_percentage || 0}%` : "0%"
+              };
+            })
+          );
+          
+          // Ordenar por pontos (do maior para o menor)
+          const sortedData = usersWithStats.sort((a, b) => b.points - a.points);
+          setParticipants(sortedData);
         } else {
           // Usar dados de amostra se não houver dados reais
           setParticipants([

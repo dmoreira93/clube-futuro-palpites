@@ -1,4 +1,3 @@
-
 /**
  * Utilitário para cálculo de pontos com base nos critérios definidos
  */
@@ -248,7 +247,7 @@ export const updateUserPoints = async (matchId: string) => {
     // Buscar o resultado da partida
     const { data: matchData, error: matchError } = await supabase
       .from('matches')
-      .select('*, home_team:home_team_id(*), away_team:away_team_id(*)')
+      .select('*, home_team_id(id, name), away_team_id(id, name)')
       .eq('id', matchId)
       .single();
 
@@ -269,7 +268,7 @@ export const updateUserPoints = async (matchId: string) => {
     // Buscar todos os palpites para esta partida
     const { data: predictionsData, error: predictionsError } = await supabase
       .from('predictions')
-      .select('*, user:user_id(*)')
+      .select('*')
       .eq('match_id', matchId);
 
     if (predictionsError) {
@@ -315,51 +314,50 @@ export const updateUserPoints = async (matchId: string) => {
           pointsConfig
         );
 
-        // Verificar se o usuário já tem pontos registrados para esta partida
-        const { data: existingPoints, error: existingPointsError } = await supabase
-          .from('user_points')
-          .select('*')
-          .eq('user_id', prediction.user_id)
-          .eq('match_id', matchId)
-          .single();
-
-        if (existingPointsError && existingPointsError.code !== 'PGRST116') {
-          console.error(`Erro ao verificar pontos existentes para usuário ${prediction.user_id}:`, existingPointsError);
-          continue;
-        }
-
-        // Se já existir registro, atualizar. Caso contrário, inserir novo
-        if (existingPoints) {
-          const { error: updateError } = await supabase
+        try {
+          // Verificar se o usuário já tem pontos registrados para esta partida
+          const { data: existingPoints } = await supabase
             .from('user_points')
-            .update({
-              points: result.points,
-              points_type: result.type,
-              updated_at: new Date().toISOString()
-            })
-            .eq('id', existingPoints.id);
+            .select('id')
+            .eq('user_id', prediction.user_id)
+            .eq('match_id', matchId)
+            .maybeSingle();
 
-          if (updateError) {
-            console.error(`Erro ao atualizar pontos para usuário ${prediction.user_id}:`, updateError);
-          }
-        } else {
-          const { error: insertError } = await supabase
-            .from('user_points')
-            .insert({
-              user_id: prediction.user_id,
-              match_id: matchId,
-              points: result.points,
-              points_type: result.type,
-              prediction_id: prediction.id
-            });
+          // Se já existir registro, atualizar. Caso contrário, inserir novo
+          if (existingPoints) {
+            const { error: updateError } = await supabase
+              .from('user_points')
+              .update({
+                points: result.points,
+                points_type: result.type,
+                updated_at: new Date().toISOString()
+              })
+              .eq('id', existingPoints.id);
 
-          if (insertError) {
-            console.error(`Erro ao inserir pontos para usuário ${prediction.user_id}:`, insertError);
+            if (updateError) {
+              console.error(`Erro ao atualizar pontos para usuário ${prediction.user_id}:`, updateError);
+            }
+          } else {
+            const { error: insertError } = await supabase
+              .from('user_points')
+              .insert({
+                user_id: prediction.user_id,
+                match_id: matchId,
+                points: result.points,
+                points_type: result.type,
+                prediction_id: prediction.id
+              });
+
+            if (insertError) {
+              console.error(`Erro ao inserir pontos para usuário ${prediction.user_id}:`, insertError);
+            }
           }
+
+          // Atualizar o total de pontos do usuário
+          await updateUserTotalPoints(prediction.user_id);
+        } catch (error) {
+          console.error(`Erro ao processar pontos para usuário ${prediction.user_id}:`, error);
         }
-
-        // Atualizar o total de pontos do usuário
-        await updateUserTotalPoints(prediction.user_id);
       }
     }
 
@@ -393,16 +391,11 @@ export const updateUserTotalPoints = async (userId: string) => {
     const totalPoints = pointsData?.reduce((sum, item) => sum + (item.points || 0), 0) || 0;
     
     // Verificar se o usuário já tem um registro na tabela user_stats
-    const { data: existingStats, error: statsError } = await supabase
+    const { data: existingStats } = await supabase
       .from('user_stats')
-      .select('*')
+      .select('id')
       .eq('user_id', userId)
-      .single();
-
-    if (statsError && statsError.code !== 'PGRST116') {
-      console.error(`Erro ao verificar estatísticas do usuário ${userId}:`, statsError);
-      return;
-    }
+      .maybeSingle();
 
     // Buscar quantidade de partidas previstas pelo usuário
     const { count, error: countError } = await supabase
@@ -420,34 +413,38 @@ export const updateUserTotalPoints = async (userId: string) => {
       ? Math.round((totalPoints / (matchesPlayed * 10)) * 100)  // considerando 10 como pontuação máxima por jogo
       : 0;
 
-    // Atualizar ou inserir estatísticas do usuário
-    if (existingStats) {
-      const { error: updateError } = await supabase
-        .from('user_stats')
-        .update({
-          total_points: totalPoints,
-          matches_played: matchesPlayed,
-          accuracy_percentage: accuracy,
-          updated_at: new Date().toISOString()
-        })
-        .eq('user_id', userId);
+    try {
+      // Atualizar ou inserir estatísticas do usuário
+      if (existingStats) {
+        const { error: updateError } = await supabase
+          .from('user_stats')
+          .update({
+            total_points: totalPoints,
+            matches_played: matchesPlayed,
+            accuracy_percentage: accuracy,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', existingStats.id);
 
-      if (updateError) {
-        console.error(`Erro ao atualizar estatísticas do usuário ${userId}:`, updateError);
-      }
-    } else {
-      const { error: insertError } = await supabase
-        .from('user_stats')
-        .insert({
-          user_id: userId,
-          total_points: totalPoints,
-          matches_played: matchesPlayed,
-          accuracy_percentage: accuracy
-        });
+        if (updateError) {
+          console.error(`Erro ao atualizar estatísticas do usuário ${userId}:`, updateError);
+        }
+      } else {
+        const { error: insertError } = await supabase
+          .from('user_stats')
+          .insert({
+            user_id: userId,
+            total_points: totalPoints,
+            matches_played: matchesPlayed,
+            accuracy_percentage: accuracy
+          });
 
-      if (insertError) {
-        console.error(`Erro ao inserir estatísticas do usuário ${userId}:`, insertError);
+        if (insertError) {
+          console.error(`Erro ao inserir estatísticas do usuário ${userId}:`, insertError);
+        }
       }
+    } catch (error) {
+      console.error(`Erro ao processar estatísticas do usuário ${userId}:`, error);
     }
   } catch (error) {
     console.error(`Erro ao atualizar total de pontos do usuário ${userId}:`, error);

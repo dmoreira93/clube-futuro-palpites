@@ -18,18 +18,22 @@ type Prediction = {
   id: string;
   home_score: number;
   away_score: number;
-  user: User;
+  user_id: string;
+  user?: User;
 };
 
 type Team = {
+  id: string;
   name: string;
 };
 
 type Match = {
   id: string;
   match_date: string;
-  home_team: Team;
-  away_team: Team;
+  home_team_id: string;
+  away_team_id: string;
+  home_team?: Team;
+  away_team?: Team;
   home_score: number | null;
   away_score: number | null;
   is_finished: boolean;
@@ -61,7 +65,7 @@ const DailyPredictions = () => {
       const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1).toISOString();
       
       try {
-        // Buscar jogos do dia atual com especificação explícita das tabelas relacionadas
+        // Buscar jogos do dia atual com especificação dos ids para as relações
         const { data: matchesData, error: matchesError } = await supabase
           .from('matches')
           .select(`
@@ -71,8 +75,8 @@ const DailyPredictions = () => {
             away_score,
             is_finished,
             stage,
-            home_team:home_team_id(id, name),
-            away_team:away_team_id(id, name)
+            home_team_id,
+            away_team_id
           `)
           .gte('match_date', startOfDay)
           .lt('match_date', endOfDay);
@@ -88,59 +92,81 @@ const DailyPredictions = () => {
           return;
         }
 
-        // Para cada jogo, buscar os palpites relacionados
-        const matchesWithPredictions = await Promise.all(
+        // Para cada jogo, buscar os times e os palpites relacionados
+        const matchesWithDetails = await Promise.all(
           matchesData.map(async (match) => {
+            // Buscar time da casa
+            const { data: homeTeam, error: homeTeamError } = await supabase
+              .from('teams')
+              .select('id, name')
+              .eq('id', match.home_team_id)
+              .single();
+            
+            if (homeTeamError) {
+              console.error(`Erro ao buscar time da casa para o jogo ${match.id}:`, homeTeamError);
+            }
+
+            // Buscar time visitante
+            const { data: awayTeam, error: awayTeamError } = await supabase
+              .from('teams')
+              .select('id, name')
+              .eq('id', match.away_team_id)
+              .single();
+            
+            if (awayTeamError) {
+              console.error(`Erro ao buscar time visitante para o jogo ${match.id}:`, awayTeamError);
+            }
+
+            // Buscar palpites para este jogo
             const { data: predictionsData, error: predictionsError } = await supabase
               .from('predictions')
-              .select(`
-                id,
-                home_score,
-                away_score,
-                user:user_id(name)
-              `)
+              .select('id, home_score, away_score, user_id')
               .eq('match_id', match.id);
 
             if (predictionsError) {
               console.error(`Erro ao buscar palpites para o jogo ${match.id}:`, predictionsError);
               return {
                 ...match,
-                predictions: [],
-                home_team: match.home_team || { name: "Time não definido" },
-                away_team: match.away_team || { name: "Time não definido" }
-              } as unknown as Match;
+                home_team: homeTeam || { id: match.home_team_id, name: "Time não definido" },
+                away_team: awayTeam || { id: match.away_team_id, name: "Time não definido" },
+                predictions: []
+              };
             }
 
-            // Garantir tipos corretos para evitar erros de TypeScript
-            const typedPredictions: Prediction[] = predictionsData?.map(pred => ({
-              id: pred.id,
-              home_score: pred.home_score,
-              away_score: pred.away_score,
-              user: {
-                name: pred.user?.name || "Usuário desconhecido"
-              }
-            })) || [];
+            // Buscar usuários para todos os palpites
+            const predictionsWithUsers = await Promise.all(
+              (predictionsData || []).map(async (prediction) => {
+                const { data: userData, error: userError } = await supabase
+                  .from('users')
+                  .select('name')
+                  .eq('id', prediction.user_id)
+                  .single();
+                
+                if (userError) {
+                  console.error(`Erro ao buscar usuário ${prediction.user_id}:`, userError);
+                  return {
+                    ...prediction,
+                    user: { name: "Usuário desconhecido" }
+                  };
+                }
 
-            // Garantir que todos os campos estão presentes e com o tipo correto
+                return {
+                  ...prediction,
+                  user: userData
+                };
+              })
+            );
+
             return {
-              id: match.id,
-              match_date: match.match_date,
-              home_score: match.home_score,
-              away_score: match.away_score,
-              is_finished: match.is_finished,
-              stage: match.stage,
-              home_team: {
-                name: match.home_team?.name || "Time não definido"
-              },
-              away_team: {
-                name: match.away_team?.name || "Time não definido"
-              },
-              predictions: typedPredictions
-            } as Match;
+              ...match,
+              home_team: homeTeam || { id: match.home_team_id, name: "Time não definido" },
+              away_team: awayTeam || { id: match.away_team_id, name: "Time não definido" },
+              predictions: predictionsWithUsers || []
+            };
           })
         );
 
-        setTodaysMatches(matchesWithPredictions);
+        setTodaysMatches(matchesWithDetails);
       } catch (error) {
         console.error("Erro ao buscar dados:", error);
       } finally {
@@ -217,11 +243,11 @@ const DailyPredictions = () => {
                     <span className="text-sm text-gray-500">{formatMatchDate(match.match_date)}</span>
                   </div>
                   <div className="flex items-center gap-3">
-                    <span className="font-semibold">{match.home_team.name}</span>
+                    <span className="font-semibold">{match.home_team?.name || "Time da Casa"}</span>
                     <div className="bg-gray-100 px-3 py-1 rounded-lg">
                       {match.is_finished ? `${match.home_score} - ${match.away_score}` : "vs"}
                     </div>
-                    <span className="font-semibold">{match.away_team.name}</span>
+                    <span className="font-semibold">{match.away_team?.name || "Time Visitante"}</span>
                   </div>
                 </div>
               </AccordionTrigger>
@@ -236,14 +262,14 @@ const DailyPredictions = () => {
                         <TableHeader>
                           <TableRow>
                             <TableHead>Participante</TableHead>
-                            <TableHead className="text-center">{match.home_team.name}</TableHead>
-                            <TableHead className="text-center">{match.away_team.name}</TableHead>
+                            <TableHead className="text-center">{match.home_team?.name || "Time da Casa"}</TableHead>
+                            <TableHead className="text-center">{match.away_team?.name || "Time Visitante"}</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
                           {match.predictions.map((prediction) => (
                             <TableRow key={prediction.id}>
-                              <TableCell>{prediction.user.name}</TableCell>
+                              <TableCell>{prediction.user?.name || "Usuário desconhecido"}</TableCell>
                               <TableCell className="text-center font-semibold">{prediction.home_score}</TableCell>
                               <TableCell className="text-center font-semibold">{prediction.away_score}</TableCell>
                             </TableRow>
