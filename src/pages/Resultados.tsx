@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import Layout from "@/components/layout/Layout";
 import { Input } from "@/components/ui/input";
@@ -21,7 +20,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Volleyball as SoccerBallIcon } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { supabase } from "@/integrations/supabase/client";
-import { calculatePoints } from "@/utils/pointsCalculator";
+import { updateUserPoints } from "@/utils/pointsCalculator";
 
 // Sample matches data
 const matchesData = [
@@ -74,83 +73,6 @@ const Resultados = () => {
     setAwayScore("");
   };
 
-  // Função para atualizar pontos de todos os usuários que fizeram palpites para a partida
-  const updateUserScores = async (matchId: string) => {
-    try {
-      // Buscar o resultado da partida
-      const { data: matchData, error: matchError } = await supabase
-        .from('matches')
-        .select('*')
-        .eq('id', matchId)
-        .single();
-
-      if (matchError || !matchData) {
-        console.error("Erro ao buscar dados da partida:", matchError);
-        return;
-      }
-
-      // Verificar se a partida está finalizada e tem resultados
-      if (!matchData.is_finished || matchData.home_score === null || matchData.away_score === null) {
-        console.error("Partida não finalizada ou sem resultados");
-        return;
-      }
-
-      const actualHome = matchData.home_score;
-      const actualAway = matchData.away_score;
-
-      // Buscar todos os palpites para esta partida
-      const { data: predictionsData, error: predictionsError } = await supabase
-        .from('predictions')
-        .select('*, user_id')
-        .eq('match_id', matchId);
-
-      if (predictionsError) {
-        console.error("Erro ao buscar palpites:", predictionsError);
-        return;
-      }
-
-      // Buscar critérios de pontuação do banco de dados
-      const { data: criteriaData, error: criteriaError } = await supabase
-        .from('scoring_criteria')
-        .select('*');
-
-      if (criteriaError) {
-        console.error("Erro ao buscar critérios de pontuação:", criteriaError);
-        return;
-      }
-
-      // Converter critérios para o formato usado pela função de cálculo
-      const pointsConfig = {
-        EXACT_SCORE: criteriaData.find(c => c.name === 'Acerto Exato')?.points || 10,
-        CORRECT_WINNER: criteriaData.find(c => c.name === 'Acerto Vencedor')?.points || 7,
-        CORRECT_DRAW: criteriaData.find(c => c.name === 'Acerto Empate')?.points || 7,
-        PARTIAL_SCORE: criteriaData.find(c => c.name === 'Acerto Gols')?.points || 2,
-        NO_POINTS: 0
-      };
-
-      // Para cada palpite, calcular os pontos
-      if (predictionsData && predictionsData.length > 0) {
-        for (const prediction of predictionsData) {
-          const result = calculatePoints(
-            prediction.home_score,
-            prediction.away_score,
-            actualHome,
-            actualAway,
-            pointsConfig
-          );
-
-          // Aqui adicionaríamos os pontos ao usuário no banco de dados
-          console.log(`Usuário ${prediction.user_id} ganhou ${result.points} pontos (${result.type}) pelo jogo ${matchId}`);
-
-          // Futura implementação: atualizar pontuação do usuário no banco de dados
-        }
-      }
-
-    } catch (error) {
-      console.error("Erro ao atualizar pontuações:", error);
-    }
-  };
-
   const handleSubmitResult = async () => {
     // In a real app, we would validate the admin password and send the data to a server
     if (adminPassword !== "admin123") {
@@ -175,13 +97,27 @@ const Resultados = () => {
 
     try {
       // Em uma implementação real, atualiza o resultado no Supabase
-      // e após isso, chama a função para atualizar os pontos
       
-      // Simulação do processo
+      // Simulação para ambiente de desenvolvimento
       await new Promise(resolve => setTimeout(resolve, 1000));
       
-      // Aqui chamaríamos a função para atualizar pontuações
-      // updateUserScores(selectedMatch);
+      // Atualizar o resultado da partida (em implementação real)
+      // const { error } = await supabase
+      //   .from('matches')
+      //   .update({
+      //     home_score: parseInt(homeScore),
+      //     away_score: parseInt(awayScore),
+      //     is_finished: true,
+      //     updated_at: new Date().toISOString()
+      //   })
+      //   .eq('id', selectedMatch);
+      
+      // if (error) {
+      //   throw error;
+      // }
+      
+      // Chamada para atualizar pontuações dos usuários
+      // await updateUserPoints(selectedMatch);
       
       toast({
         title: "Resultado registrado",

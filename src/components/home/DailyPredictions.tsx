@@ -61,7 +61,7 @@ const DailyPredictions = () => {
       const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1).toISOString();
       
       try {
-        // Buscar jogos do dia atual com especificação clara das colunas
+        // Buscar jogos do dia atual com especificação explícita das tabelas relacionadas
         const { data: matchesData, error: matchesError } = await supabase
           .from('matches')
           .select(`
@@ -103,20 +103,39 @@ const DailyPredictions = () => {
 
             if (predictionsError) {
               console.error(`Erro ao buscar palpites para o jogo ${match.id}:`, predictionsError);
-              return { 
-                ...match, 
+              return {
+                ...match,
                 predictions: [],
                 home_team: match.home_team || { name: "Time não definido" },
                 away_team: match.away_team || { name: "Time não definido" }
-              } as Match;
+              } as unknown as Match;
             }
 
+            // Garantir tipos corretos para evitar erros de TypeScript
+            const typedPredictions: Prediction[] = predictionsData?.map(pred => ({
+              id: pred.id,
+              home_score: pred.home_score,
+              away_score: pred.away_score,
+              user: {
+                name: pred.user?.name || "Usuário desconhecido"
+              }
+            })) || [];
+
             // Garantir que todos os campos estão presentes e com o tipo correto
-            return { 
-              ...match, 
-              predictions: predictionsData || [],
-              home_team: match.home_team || { name: "Time não definido" },
-              away_team: match.away_team || { name: "Time não definido" }
+            return {
+              id: match.id,
+              match_date: match.match_date,
+              home_score: match.home_score,
+              away_score: match.away_score,
+              is_finished: match.is_finished,
+              stage: match.stage,
+              home_team: {
+                name: match.home_team?.name || "Time não definido"
+              },
+              away_team: {
+                name: match.away_team?.name || "Time não definido"
+              },
+              predictions: typedPredictions
             } as Match;
           })
         );

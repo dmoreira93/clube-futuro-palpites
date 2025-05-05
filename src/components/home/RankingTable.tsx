@@ -22,58 +22,62 @@ type Participant = {
   accuracy: string;
 };
 
-// Sample data for demonstration
-const sampleParticipants = [
-  { id: "1", name: "Carlos Silva", nickname: "Carlão", points: 145, matches: 12, accuracy: "80%" },
-  { id: "2", name: "Ana Souza", nickname: "Ana Gol", points: 132, matches: 12, accuracy: "75%" },
-  { id: "3", name: "Pedro Santos", nickname: "Pedrinho", points: 120, matches: 12, accuracy: "65%" },
-  { id: "4", name: "Mariana Lima", nickname: "Mari", points: 118, matches: 12, accuracy: "63%" },
-  { id: "5", name: "João Ferreira", nickname: "JF", points: 105, matches: 12, accuracy: "58%" },
-  { id: "6", name: "Luciana Costa", nickname: "Lu", points: 98, matches: 12, accuracy: "55%" },
-  { id: "7", name: "Rafael Oliveira", nickname: "Rafa", points: 92, matches: 12, accuracy: "50%" },
-  { id: "8", name: "Fernanda Alves", nickname: "Nanda", points: 85, matches: 12, accuracy: "48%" },
-];
-
 const RankingTable = () => {
-  const [participants, setParticipants] = useState<Participant[]>(sampleParticipants);
-  const [loading, setLoading] = useState(false);
+  const [participants, setParticipants] = useState<Participant[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  // Futura implementação: buscar dados reais do Supabase
-  // useEffect(() => {
-  //   const fetchParticipants = async () => {
-  //     setLoading(true);
-  //     try {
-  //       // Aqui buscaria os usuários com suas pontuações
-  //       const { data, error } = await supabase
-  //         .from('users')
-  //         .select('*')
-  //         .order('points', { ascending: false });
-  //         
-  //       if (error) throw error;
-  //       
-  //       if (data) {
-  //         // Transformar os dados para o formato esperado
-  //         const formattedData = data.map(user => ({
-  //           id: user.id,
-  //           name: user.name,
-  //           nickname: user.nickname || user.name.split(' ')[0],
-  //           points: user.points || 0,
-  //           matches: user.matches_played || 0,
-  //           accuracy: user.matches_played > 0 
-  //             ? `${Math.round((user.points / (user.matches_played * 10)) * 100)}%` 
-  //             : '0%'
-  //         }));
-  //         setParticipants(formattedData);
-  //       }
-  //     } catch (error) {
-  //       console.error('Erro ao carregar ranking:', error);
-  //     } finally {
-  //       setLoading(false);
-  //     }
-  //   };
-  //   
-  //   fetchParticipants();
-  // }, []);
+  useEffect(() => {
+    const fetchParticipants = async () => {
+      setLoading(true);
+      try {
+        // Buscar usuários com suas estatísticas
+        const { data, error } = await supabase
+          .from('users')
+          .select(`
+            id, 
+            name,
+            stats:user_stats(total_points, matches_played, accuracy_percentage)
+          `)
+          .order('stats.total_points', { ascending: false, foreignTable: 'user_stats' });
+          
+        if (error) throw error;
+        
+        if (data) {
+          // Transformar os dados para o formato esperado
+          const formattedData: Participant[] = data.map(user => ({
+            id: user.id,
+            name: user.name,
+            nickname: user.name.split(' ')[0],
+            points: user.stats?.[0]?.total_points || 0,
+            matches: user.stats?.[0]?.matches_played || 0,
+            accuracy: `${user.stats?.[0]?.accuracy_percentage || 0}%`
+          }));
+          setParticipants(formattedData);
+        } else {
+          // Usar dados de amostra se não houver dados reais
+          setParticipants([
+            { id: "1", name: "Carlos Silva", nickname: "Carlão", points: 145, matches: 12, accuracy: "80%" },
+            { id: "2", name: "Ana Souza", nickname: "Ana Gol", points: 132, matches: 12, accuracy: "75%" },
+            { id: "3", name: "Pedro Santos", nickname: "Pedrinho", points: 120, matches: 12, accuracy: "65%" },
+            { id: "4", name: "Mariana Lima", nickname: "Mari", points: 118, matches: 12, accuracy: "63%" },
+            { id: "5", name: "João Ferreira", nickname: "JF", points: 105, matches: 12, accuracy: "58%" },
+          ]);
+        }
+      } catch (error) {
+        console.error('Erro ao carregar ranking:', error);
+        // Usar dados de amostra em caso de erro
+        setParticipants([
+          { id: "1", name: "Carlos Silva", nickname: "Carlão", points: 145, matches: 12, accuracy: "80%" },
+          { id: "2", name: "Ana Souza", nickname: "Ana Gol", points: 132, matches: 12, accuracy: "75%" },
+          { id: "3", name: "Pedro Santos", nickname: "Pedrinho", points: 120, matches: 12, accuracy: "65%" },
+        ]);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchParticipants();
+  }, []);
 
   if (loading) {
     return (
