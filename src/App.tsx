@@ -14,6 +14,7 @@ import Cadastro from "./pages/Cadastro";
 import Login from "./pages/Login";
 import Admin from "./pages/Admin";
 import AdminLogin from "./pages/AdminLogin";
+import UserPredictions from "./pages/UserPredictions";
 
 const queryClient = new QueryClient();
 
@@ -29,6 +30,7 @@ const App = () => (
             <Route path="/criterios" element={<Criterios />} />
             <Route path="/resultados" element={<Resultados />} />
             <Route path="/palpites" element={<Palpites />} />
+            <Route path="/palpites-usuarios" element={<UserPredictions />} />
             <Route path="/cadastro" element={<Cadastro />} />
             <Route path="/login" element={<Login />} />
             <Route path="/admin" element={<Admin />} />

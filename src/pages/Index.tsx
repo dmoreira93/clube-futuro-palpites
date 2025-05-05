@@ -79,14 +79,17 @@ const Index = () => {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="md:col-span-2">
             <RankingTable />
-            <div className="mt-4">
+            <div className="mt-4 flex gap-2">
               <Link to="/palpites">
                 <Button size="wide" className="bg-fifa-blue hover:bg-fifa-blue/90 text-white gap-2">
+                  <SoccerBallIcon className="h-4 w-4" />
+                  Fazer Meus Palpites
+                </Button>
+              </Link>
+              <Link to="/palpites-usuarios">
+                <Button size="wide" className="bg-fifa-green hover:bg-fifa-green/90 text-white gap-2">
                   <Users className="h-4 w-4" />
-                  Ver Palpites de Todos os Usuários 
-                  <span className="bg-white text-fifa-blue px-2 py-0.5 text-xs font-bold rounded-full">
-                    Limite: 20 Participantes
-                  </span>
+                  Ver Todos os Palpites
                 </Button>
               </Link>
             </div>
