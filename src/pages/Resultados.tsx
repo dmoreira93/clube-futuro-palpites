@@ -17,11 +17,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useToast } from "@/hooks/use-toast";
 import { Volleyball as SoccerBallIcon } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { supabase } from "@/integrations/supabase/client";
-import { updateUserPoints } from "@/utils/pointsCalculator";
+import { useMatchResults } from "@/hooks/useMatchResults";
 
 // Sample matches data
 const matchesData = [
@@ -60,13 +58,12 @@ const formatDate = (dateStr: string) => {
 };
 
 const Resultados = () => {
-  const { toast } = useToast();
   const [filter, setFilter] = useState("all");
   const [selectedMatch, setSelectedMatch] = useState<number | null>(null);
   const [homeScore, setHomeScore] = useState("");
   const [awayScore, setAwayScore] = useState("");
   const [adminPassword, setAdminPassword] = useState("");
-  const [isProcessing, setIsProcessing] = useState(false);
+  const { submitResult, isProcessing } = useMatchResults();
 
   const handleSelectMatch = (matchId: number) => {
     setSelectedMatch(matchId);
@@ -75,72 +72,17 @@ const Resultados = () => {
   };
 
   const handleSubmitResult = async () => {
-    // In a real app, we would validate the admin password and send the data to a server
-    if (adminPassword !== "admin123") {
-      toast({
-        title: "Erro de autenticação",
-        description: "Senha do administrador incorreta",
-        variant: "destructive",
-      });
+    if (!selectedMatch) {
       return;
     }
 
-    if (!homeScore || !awayScore) {
-      toast({
-        title: "Dados incompletos",
-        description: "Por favor, informe o placar de ambos os times",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setIsProcessing(true);
-
-    try {
-      // Em uma implementação real, atualiza o resultado no Supabase
-      
-      // Simulação para ambiente de desenvolvimento
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Em ambiente de produção, descomentar este código:
-      // const { error } = await supabase
-      //   .from('matches')
-      //   .update({
-      //     home_score: parseInt(homeScore),
-      //     away_score: parseInt(awayScore),
-      //     is_finished: true,
-      //     updated_at: new Date().toISOString()
-      //   })
-      //   .eq('id', selectedMatch);
-      
-      // if (error) {
-      //   throw error;
-      // }
-      
-      // Chamada para atualizar pontuações dos usuários
-      // await updateUserPoints(String(selectedMatch));
-      
-      toast({
-        title: "Resultado registrado",
-        description: "O resultado foi salvo e os pontos foram calculados com sucesso!",
-      });
-      
-      // Reset form
-      setSelectedMatch(null);
-      setHomeScore("");
-      setAwayScore("");
-      setAdminPassword("");
-      
-    } catch (error) {
-      toast({
-        title: "Erro ao processar",
-        description: "Houve um erro ao registrar o resultado",
-        variant: "destructive",
-      });
-      console.error("Erro:", error);
-    } finally {
-      setIsProcessing(false);
-    }
+    await submitResult(selectedMatch, homeScore, awayScore, adminPassword);
+    
+    // Reset form
+    setSelectedMatch(null);
+    setHomeScore("");
+    setAwayScore("");
+    setAdminPassword("");
   };
 
   const filteredMatches = filter === "all" 

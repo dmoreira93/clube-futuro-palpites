@@ -63,7 +63,6 @@ export const useMatchResults = () => {
       }
       
       // Chamada para atualizar pontuações dos usuários
-      // Convert matchId to string before passing to updateUserPoints
       await updateUserPoints(String(matchId));
       
       toast({
