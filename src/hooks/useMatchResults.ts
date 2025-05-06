@@ -64,7 +64,7 @@ export const useMatchResults = () => {
       
       // Chamada para atualizar pontuações dos usuários
       // Convertendo o matchId para string conforme esperado pela função updateUserPoints
-      await updateUserPoints(String(matchId));
+      await updateUserPoints(matchId.toString());
       
       toast({
         title: "Resultado registrado",
