@@ -3,8 +3,9 @@ import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { updateUserPoints } from "@/utils/pointsCalculator";
+import { useAuth } from "@/contexts/AuthContext";
 
-// Exemplo de tipo para as partidas
+// Tipo para as partidas
 export type Match = {
   id: string;
   homeTeam: string;
@@ -17,6 +18,7 @@ export type Match = {
 
 export const useMatchResults = () => {
   const { toast } = useToast();
+  const { isAdmin } = useAuth();
   const [isProcessing, setIsProcessing] = useState(false);
   
   const submitResult = async (
@@ -25,11 +27,12 @@ export const useMatchResults = () => {
     awayScore: string, 
     adminPassword: string
   ) => {
-    // Validar senha
-    if (adminPassword !== "admin123") {
+    // Verificar se é administrador pelo contexto Auth
+    // Mantemos a senha como fallback para compatibilidade
+    if (!isAdmin && adminPassword !== "admin123") {
       toast({
         title: "Erro de autenticação",
-        description: "Senha do administrador incorreta",
+        description: "Você não possui permissão para esta ação",
         variant: "destructive",
       });
       return false;

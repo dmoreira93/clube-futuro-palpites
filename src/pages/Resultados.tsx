@@ -1,28 +1,14 @@
 
 import { useState } from "react";
 import Layout from "@/components/layout/Layout";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Volleyball as SoccerBallIcon } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { useMatchResults } from "@/hooks/useMatchResults";
+import { MatchCard } from "@/components/results/MatchCard";
+import { ResultForm } from "@/components/results/ResultForm";
+import { MatchFilter } from "@/components/results/MatchFilter";
+import { Match } from "@/hooks/useMatchResults";
 
 // Sample matches data
-const matchesData = [
+const matchesData: Match[] = [
   {
     id: "1",
     homeTeam: "Real Madrid",
@@ -52,42 +38,23 @@ const matchesData = [
   },
 ];
 
-const formatDate = (dateStr: string) => {
-  const date = new Date(dateStr);
-  return date.toLocaleDateString("pt-BR");
-};
-
 const Resultados = () => {
   const [filter, setFilter] = useState("all");
   const [selectedMatch, setSelectedMatch] = useState<string | null>(null);
-  const [homeScore, setHomeScore] = useState("");
-  const [awayScore, setAwayScore] = useState("");
-  const [adminPassword, setAdminPassword] = useState("");
-  const { submitResult, isProcessing } = useMatchResults();
 
   const handleSelectMatch = (matchId: string) => {
     setSelectedMatch(matchId);
-    setHomeScore("");
-    setAwayScore("");
   };
 
-  const handleSubmitResult = async () => {
-    if (!selectedMatch) {
-      return;
-    }
-
-    await submitResult(selectedMatch, homeScore, awayScore, adminPassword);
-    
-    // Reset form
+  const handleFormComplete = () => {
     setSelectedMatch(null);
-    setHomeScore("");
-    setAwayScore("");
-    setAdminPassword("");
   };
 
   const filteredMatches = filter === "all" 
     ? matchesData 
     : matchesData.filter(match => match.group === filter);
+
+  const selectedMatchData = matchesData.find(m => m.id === selectedMatch);
 
   return (
     <Layout>
@@ -109,122 +76,29 @@ const Resultados = () => {
           </AlertDescription>
         </Alert>
 
-        <div className="mb-6">
-          <div className="flex justify-between items-center">
-            <h2 className="text-xl font-bold text-fifa-blue">Jogos</h2>
-            <Select value={filter} onValueChange={setFilter}>
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Filtrar por grupo" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos os jogos</SelectItem>
-                <SelectItem value="A">Grupo A</SelectItem>
-                <SelectItem value="B">Grupo B</SelectItem>
-                <SelectItem value="C">Grupo C</SelectItem>
-                <SelectItem value="D">Grupo D</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
+        <MatchFilter value={filter} onValueChange={setFilter} />
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
           {filteredMatches.map((match) => (
-            <Card 
-              key={match.id} 
-              className={`cursor-pointer transition-all ${
-                selectedMatch === match.id ? "ring-2 ring-fifa-blue" : ""
-              }`}
-              onClick={() => handleSelectMatch(match.id)}
-            >
-              <CardHeader className="pb-2">
-                <div className="flex justify-between items-center">
-                  <div>
-                    <CardTitle className="text-sm font-medium">Grupo {match.group}</CardTitle>
-                    <CardDescription>
-                      {formatDate(match.date)} • {match.time}
-                    </CardDescription>
-                  </div>
-                  <SoccerBallIcon className="h-5 w-5 text-fifa-blue" />
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="flex justify-between items-center">
-                  <span className="font-semibold">{match.homeTeam}</span>
-                  <div className="mx-3 px-4 py-1 bg-gray-100 rounded-lg font-bold">
-                    vs
-                  </div>
-                  <span className="font-semibold">{match.awayTeam}</span>
-                </div>
-              </CardContent>
-            </Card>
+            <MatchCard 
+              key={match.id}
+              id={match.id}
+              homeTeam={match.homeTeam}
+              awayTeam={match.awayTeam}
+              date={match.date}
+              time={match.time}
+              group={match.group}
+              selected={selectedMatch === match.id}
+              onClick={handleSelectMatch}
+            />
           ))}
         </div>
 
         {selectedMatch && (
-          <Card className="shadow-lg mb-8">
-            <CardHeader className="bg-fifa-blue text-white">
-              <CardTitle className="text-lg">Inserir Resultado</CardTitle>
-              <CardDescription className="text-gray-200">
-                Adicione o placar final da partida selecionada e os pontos serão calculados automaticamente
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="p-6">
-              {matchesData.find(m => m.id === selectedMatch) && (
-                <div className="space-y-6">
-                  <div className="text-center font-semibold">
-                    {matchesData.find(m => m.id === selectedMatch)?.homeTeam} vs {matchesData.find(m => m.id === selectedMatch)?.awayTeam}
-                  </div>
-
-                  <div className="flex items-center justify-center gap-4">
-                    <div className="text-center">
-                      <p className="text-sm mb-1">{matchesData.find(m => m.id === selectedMatch)?.homeTeam}</p>
-                      <Input
-                        type="number"
-                        min="0"
-                        className="text-center w-20"
-                        value={homeScore}
-                        onChange={(e) => setHomeScore(e.target.value)}
-                      />
-                    </div>
-                    <div className="text-2xl font-bold">×</div>
-                    <div className="text-center">
-                      <p className="text-sm mb-1">{matchesData.find(m => m.id === selectedMatch)?.awayTeam}</p>
-                      <Input
-                        type="number"
-                        min="0"
-                        className="text-center w-20"
-                        value={awayScore}
-                        onChange={(e) => setAwayScore(e.target.value)}
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label htmlFor="admin-password" className="block text-sm font-medium mb-1">
-                      Senha do Administrador
-                    </label>
-                    <Input
-                      id="admin-password"
-                      type="password"
-                      placeholder="Digite a senha de administrador"
-                      value={adminPassword}
-                      onChange={(e) => setAdminPassword(e.target.value)}
-                    />
-                  </div>
-
-                  <div className="flex justify-center">
-                    <Button 
-                      className="bg-fifa-blue hover:bg-opacity-90"
-                      onClick={handleSubmitResult}
-                      disabled={isProcessing}
-                    >
-                      {isProcessing ? "Processando..." : "Registrar Resultado e Calcular Pontos"}
-                    </Button>
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+          <ResultForm 
+            match={selectedMatchData} 
+            onComplete={handleFormComplete}
+          />
         )}
       </div>
     </Layout>
