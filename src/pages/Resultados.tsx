@@ -24,7 +24,7 @@ import { useMatchResults } from "@/hooks/useMatchResults";
 // Sample matches data
 const matchesData = [
   {
-    id: 1,
+    id: "1",
     homeTeam: "Real Madrid",
     awayTeam: "Manchester City",
     date: "2025-06-15",
@@ -33,7 +33,7 @@ const matchesData = [
     status: "upcoming",
   },
   {
-    id: 2,
+    id: "2",
     homeTeam: "Fluminense",
     awayTeam: "Bayern Munich",
     date: "2025-06-15",
@@ -42,7 +42,7 @@ const matchesData = [
     status: "upcoming",
   },
   {
-    id: 3,
+    id: "3",
     homeTeam: "Inter Miami",
     awayTeam: "Al-Hilal",
     date: "2025-06-16",
@@ -59,13 +59,13 @@ const formatDate = (dateStr: string) => {
 
 const Resultados = () => {
   const [filter, setFilter] = useState("all");
-  const [selectedMatch, setSelectedMatch] = useState<number | null>(null);
+  const [selectedMatch, setSelectedMatch] = useState<string | null>(null);
   const [homeScore, setHomeScore] = useState("");
   const [awayScore, setAwayScore] = useState("");
   const [adminPassword, setAdminPassword] = useState("");
   const { submitResult, isProcessing } = useMatchResults();
 
-  const handleSelectMatch = (matchId: number) => {
+  const handleSelectMatch = (matchId: string) => {
     setSelectedMatch(matchId);
     setHomeScore("");
     setAwayScore("");

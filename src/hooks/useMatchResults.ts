@@ -20,7 +20,7 @@ export const useMatchResults = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   
   const submitResult = async (
-    matchId: number, 
+    matchId: string, 
     homeScore: string, 
     awayScore: string, 
     adminPassword: string
@@ -63,8 +63,7 @@ export const useMatchResults = () => {
       }
       
       // Chamada para atualizar pontuações dos usuários
-      // Convertendo o matchId para string conforme esperado pela função updateUserPoints
-      await updateUserPoints(matchId.toString());
+      await updateUserPoints(matchId);
       
       toast({
         title: "Resultado registrado",
