@@ -16,6 +16,7 @@ import { Label } from "@/components/ui/label";
 import { LogInIcon } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
+import { toast } from "sonner";
 
 const Login = () => {
   const navigate = useNavigate();
@@ -38,15 +39,23 @@ const Login = () => {
     e.preventDefault();
     
     if (!formData.email || !formData.password) {
+      toast.error("Por favor, preencha todos os campos");
       return;
     }
 
     setIsSubmitting(true);
-    const success = await login(formData.email, formData.password);
-    setIsSubmitting(false);
     
-    if (success) {
-      navigate("/palpites");
+    try {
+      const success = await login(formData.email, formData.password);
+      
+      if (success) {
+        navigate("/palpites");
+      }
+    } catch (error) {
+      console.error("Erro ao fazer login:", error);
+      toast.error("Ocorreu um erro no login. Tente novamente.");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -113,6 +122,10 @@ const Login = () => {
                 >
                   {isSubmitting ? "Entrando..." : "Entrar"}
                 </Button>
+
+                <div className="text-center text-sm text-gray-600">
+                  <p>Em modo de desenvolvimento, você pode usar qualquer email/senha</p>
+                </div>
               </div>
             </form>
           </CardContent>
