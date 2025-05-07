@@ -17,6 +17,11 @@ import { LogInIcon } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
+import {
+  Alert,
+  AlertDescription,
+} from "@/components/ui/alert";
+import { InfoIcon } from "lucide-react";
 
 const Login = () => {
   const navigate = useNavigate();
@@ -49,6 +54,7 @@ const Login = () => {
       const success = await login(formData.email, formData.password);
       
       if (success) {
+        toast.success("Login realizado com sucesso!");
         navigate("/palpites");
       }
     } catch (error) {
@@ -82,6 +88,13 @@ const Login = () => {
             </CardDescription>
           </CardHeader>
           <CardContent>
+            <Alert className="mb-4 bg-yellow-50 border-yellow-300">
+              <InfoIcon className="h-4 w-4 text-yellow-600" />
+              <AlertDescription className="text-yellow-800">
+                <strong>Modo de desenvolvimento:</strong> Você pode usar qualquer email e senha para entrar.
+              </AlertDescription>
+            </Alert>
+            
             <form onSubmit={handleSubmit}>
               <div className="space-y-4">
                 <div className="space-y-2">
@@ -122,10 +135,6 @@ const Login = () => {
                 >
                   {isSubmitting ? "Entrando..." : "Entrar"}
                 </Button>
-
-                <div className="text-center text-sm text-gray-600">
-                  <p>Em modo de desenvolvimento, você pode usar qualquer email/senha</p>
-                </div>
               </div>
             </form>
           </CardContent>
