@@ -7,7 +7,7 @@ import { toast } from "sonner";
 type AuthContextType = {
   isAuthenticated: boolean;
   isAdmin: boolean;
-  login: (email: string, password: string) => Promise<boolean>;
+  login: (username: string, password: string) => Promise<boolean>;
   adminLogin: (username: string, password: string) => Promise<boolean>;
   logout: () => void;
   user: UserType | null;
@@ -16,7 +16,7 @@ type AuthContextType = {
 type UserType = {
   id: string;
   name: string;
-  email: string;
+  username: string;
   isAdmin: boolean;
 };
 
@@ -37,40 +37,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Check for existing session on mount
   useEffect(() => {
     const checkSession = async () => {
-      // Verificar se há uma sessão ativa no Supabase
-      const { data } = await supabase.auth.getSession();
-      
-      if (data.session) {
-        const { user: authUser } = data.session;
-        
-        // Buscar informações adicionais do usuário se necessário
-        if (authUser) {
-          // Verificar se é admin
-          const { data: adminData } = await supabase
-            .from('administrators')
-            .select('*')
-            .eq('email', authUser.email)
-            .single();
-          
-          const userProfile = {
-            id: authUser.id,
-            name: authUser.user_metadata.name || authUser.email?.split('@')[0] || 'Usuário',
-            email: authUser.email || '',
-            isAdmin: !!adminData
-          };
-          
-          setUser(userProfile);
-          localStorage.setItem("bolao_user", JSON.stringify(userProfile));
-        }
-      } else {
-        // Verificar o armazenamento local como fallback
-        const storedUser = localStorage.getItem("bolao_user");
-        if (storedUser) {
-          try {
-            setUser(JSON.parse(storedUser));
-          } catch (e) {
-            localStorage.removeItem("bolao_user");
-          }
+      // Verificar o armazenamento local como primeiro método
+      const storedUser = localStorage.getItem("bolao_user");
+      if (storedUser) {
+        try {
+          setUser(JSON.parse(storedUser));
+          console.log("Usuário restaurado do localStorage");
+        } catch (e) {
+          localStorage.removeItem("bolao_user");
+          console.error("Erro ao restaurar usuário do localStorage:", e);
         }
       }
     };
@@ -78,65 +53,54 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     checkSession();
   }, []);
 
-  // Regular user login
-  const login = async (email: string, password: string) => {
+  // Regular user login using username/password
+  const login = async (username: string, password: string) => {
     try {
-      // Tentar login via Supabase
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-      
-      if (error) {
-        // Se estamos em desenvolvimento ou testando, permitir um login mock
-        if (import.meta.env.DEV) {
-          console.warn("Login via Supabase falhou, usando mock para desenvolvimento:", error.message);
-          const mockUser = {
-            id: "user1",
-            name: "Usuário Teste",
-            email,
-            isAdmin: false,
-          };
-          
-          setUser(mockUser);
-          localStorage.setItem("bolao_user", JSON.stringify(mockUser));
-          
-          toast({
-            title: "Login de desenvolvimento",
-            description: `Bem-vindo, ${mockUser.name}! (Modo de desenvolvimento)`,
-          });
-          
-          return true;
-        }
-        
+      if (!username || !password) {
         toast({
-          title: "Erro ao fazer login",
-          description: error.message,
+          title: "Dados incompletos",
+          description: "Por favor, preencha o nome de usuário e a senha",
           variant: "destructive",
         });
         return false;
       }
       
-      if (data.user) {
-        const userProfile = {
-          id: data.user.id,
-          name: data.user.user_metadata.name || data.user.email?.split('@')[0] || 'Usuário',
-          email: data.user.email || '',
-          isAdmin: false // Assumimos que não é admin por padrão
-        };
-        
-        setUser(userProfile);
-        localStorage.setItem("bolao_user", JSON.stringify(userProfile));
-        
+      // Consultar tabela personalizada de usuários
+      const { data, error } = await supabase
+        .from('users_custom')
+        .select('*')
+        .eq('username', username)
+        .eq('password', password)
+        .single();
+
+      if (error || !data) {
+        console.error("Erro ao fazer login:", error);
         toast({
-          title: "Login realizado com sucesso",
-          description: `Bem-vindo, ${userProfile.name}!`,
+          title: "Erro ao fazer login",
+          description: "Nome de usuário ou senha incorretos",
+          variant: "destructive",
         });
-        
-        return true;
+        return false;
       }
       
-      return false;
+      // Criar objeto de usuário
+      const userProfile = {
+        id: data.id,
+        name: data.name,
+        username: data.username,
+        isAdmin: data.is_admin || false
+      };
+      
+      // Salvar usuário na sessão
+      setUser(userProfile);
+      localStorage.setItem("bolao_user", JSON.stringify(userProfile));
+      
+      toast({
+        title: "Login realizado com sucesso",
+        description: `Bem-vindo, ${userProfile.name}!`,
+      });
+      
+      return true;
     } catch (error: any) {
       toast({
         title: "Erro ao fazer login",
@@ -171,7 +135,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const adminUser = {
         id: data.id,
         name: data.name,
-        email: data.email,
+        username: data.email,
         isAdmin: true,
       };
       
@@ -197,9 +161,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Logout function
   const logout = async () => {
-    // Fazer logout no Supabase
-    await supabase.auth.signOut();
-    
     // Limpar os dados locais
     setUser(null);
     localStorage.removeItem("bolao_user");

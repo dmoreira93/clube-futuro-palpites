@@ -92,12 +92,12 @@ const AdminLogin = () => {
               
               <div className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="username">Email</Label>
+                  <Label htmlFor="username">Nome de usuário</Label>
                   <Input
                     id="username"
                     name="username"
                     type="text"
-                    placeholder="Email de administrador"
+                    placeholder="Nome de usuário de administrador"
                     value={formData.username}
                     onChange={handleChange}
                     required
@@ -119,7 +119,7 @@ const AdminLogin = () => {
                 
                 <div className="text-sm text-muted-foreground">
                   <p>Credenciais padrão:</p>
-                  <p>Email: admin@copamundial.com</p>
+                  <p>Usuário: admin</p>
                   <p>Senha: admin123</p>
                 </div>
                 
