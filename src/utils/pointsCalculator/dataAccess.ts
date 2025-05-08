@@ -49,7 +49,7 @@ export async function fetchPredictions(matchId: string): Promise<Prediction[]> {
 }
 
 /**
- * Busca os critérios de pontuação
+ * Busca os critérios de pontuação do banco de dados
  */
 export async function fetchScoringCriteria(): Promise<{
   exactScore: number;
@@ -61,15 +61,28 @@ export async function fetchScoringCriteria(): Promise<{
       .from('scoring_criteria')
       .select('name, points');
     
-    if (error || !data) {
+    if (error) {
       console.error('Erro ao buscar critérios de pontuação:', error);
       // Valores padrão
       return { exactScore: 10, winner: 7, partialScore: 2 };
     }
     
+    if (!data || data.length === 0) {
+      console.warn('Nenhum critério de pontuação encontrado, usando valores padrão');
+      return { exactScore: 10, winner: 7, partialScore: 2 };
+    }
+    
+    // Log para debug
+    console.log('Critérios de pontuação encontrados:', data);
+    
     const exactScoreCriteria = data.find(c => c.name === 'exact_score');
     const winnerCriteria = data.find(c => c.name === 'correct_winner');
     const partialScoreCriteria = data.find(c => c.name === 'partial_score');
+    
+    // Verificar se todos os critérios foram encontrados
+    if (!exactScoreCriteria || !winnerCriteria || !partialScoreCriteria) {
+      console.warn('Alguns critérios de pontuação não foram encontrados, usando valores padrão para os ausentes');
+    }
     
     return {
       exactScore: exactScoreCriteria?.points || 10,
