@@ -43,7 +43,7 @@ const UserPredictions = () => {
   useEffect(() => {
     const fetchUsers = async () => {
       const { data } = await supabase
-        .from('users')
+        .from('users_custom')
         .select('id, name')
         .order('name');
       
@@ -66,32 +66,93 @@ const UserPredictions = () => {
             id, 
             home_score, 
             away_score,
-            user:user_id(id, name),
-            match:match_id(
-              home_team:home_team_id(name),
-              away_team:away_team_id(name),
-              match_date,
-              stage
-            )
-          `)
-          .order('match:match_id(match_date)', { ascending: true });
+            user_id,
+            match_id
+          `);
         
         // Filtrar por usuário se necessário
         if (filter !== "all") {
           query = query.eq('user_id', filter);
         }
         
-        const { data, error } = await query;
+        const { data: predictionsData, error } = await query;
         
         if (error) {
           throw error;
         }
         
-        if (data) {
-          setPredictions(data as unknown as PredictionWithUserAndMatch[]);
+        if (predictionsData && predictionsData.length > 0) {
+          // Obter informações detalhadas para cada palpite
+          const detailedPredictions = await Promise.all(
+            predictionsData.map(async (prediction) => {
+              // Obter usuário
+              const { data: userData } = await supabase
+                .from('users_custom')
+                .select('name')
+                .eq('id', prediction.user_id)
+                .single();
+              
+              // Obter partida
+              const { data: matchData } = await supabase
+                .from('matches')
+                .select(`
+                  match_date,
+                  stage,
+                  home_team_id,
+                  away_team_id
+                `)
+                .eq('id', prediction.match_id)
+                .single();
+              
+              let homeTeamName = "Time desconhecido";
+              let awayTeamName = "Time desconhecido";
+              
+              if (matchData) {
+                // Obter nome do time da casa
+                const { data: homeTeam } = await supabase
+                  .from('teams')
+                  .select('name')
+                  .eq('id', matchData.home_team_id)
+                  .single();
+                
+                if (homeTeam) {
+                  homeTeamName = homeTeam.name;
+                }
+                
+                // Obter nome do time visitante
+                const { data: awayTeam } = await supabase
+                  .from('teams')
+                  .select('name')
+                  .eq('id', matchData.away_team_id)
+                  .single();
+                
+                if (awayTeam) {
+                  awayTeamName = awayTeam.name;
+                }
+              }
+              
+              return {
+                id: prediction.id,
+                home_score: prediction.home_score,
+                away_score: prediction.away_score,
+                user: { name: userData?.name || "Usuário desconhecido" },
+                match: {
+                  home_team: { name: homeTeamName },
+                  away_team: { name: awayTeamName },
+                  match_date: matchData?.match_date || new Date().toISOString(),
+                  stage: matchData?.stage || "Fase desconhecida"
+                }
+              };
+            })
+          );
+          
+          setPredictions(detailedPredictions);
+        } else {
+          setPredictions([]);
         }
       } catch (error) {
         console.error('Erro ao buscar palpites:', error);
+        setPredictions([]);
       } finally {
         setLoading(false);
       }

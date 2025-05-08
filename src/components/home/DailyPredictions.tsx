@@ -33,7 +33,7 @@ const DailyPredictions = () => {
       const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1).toISOString();
       
       try {
-        // Buscar jogos do dia atual com especificação dos ids para as relações
+        // Buscar jogos do dia atual
         const { data: matchesData, error: matchesError } = await supabase
           .from('matches')
           .select(`
@@ -80,30 +80,20 @@ const DailyPredictions = () => {
             // Buscar palpites para este jogo
             const { data: predictionsData } = await supabase
               .from('predictions')
-              .select('id, home_score, away_score, user_id')
+              .select(`
+                id, 
+                home_score, 
+                away_score, 
+                user_id, 
+                users:user_id (name)
+              `)
               .eq('match_id', match.id);
-
-            // Buscar usuários para todos os palpites
-            const predictionsWithUsers = await Promise.all(
-              (predictionsData || []).map(async (prediction) => {
-                const { data: userData } = await supabase
-                  .from('users')
-                  .select('name')
-                  .eq('id', prediction.user_id)
-                  .single();
-                
-                return {
-                  ...prediction,
-                  user: userData
-                };
-              })
-            );
 
             return {
               ...match,
               home_team: homeTeam || { id: match.home_team_id, name: "Time não definido" },
               away_team: awayTeam || { id: match.away_team_id, name: "Time não definido" },
-              predictions: predictionsWithUsers || []
+              predictions: predictionsData || []
             };
           })
         );

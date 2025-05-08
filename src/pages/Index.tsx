@@ -1,4 +1,6 @@
 
+import { useEffect, useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
 import Layout from "@/components/layout/Layout";
 import RankingTable from "@/components/home/RankingTable";
 import NextMatches from "@/components/home/NextMatches";
@@ -10,6 +12,116 @@ import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
 
 const Index = () => {
+  const [stats, setStats] = useState({
+    totalUsers: 0,
+    matchesPlayed: 0,
+    totalMatches: 0,
+    topScore: {
+      points: 0,
+      userName: ""
+    },
+    nextMatch: {
+      date: "",
+      teams: ""
+    }
+  });
+
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        // Contar usuários
+        const { count: userCount } = await supabase
+          .from('users_custom')
+          .select('*', { count: 'exact', head: true });
+
+        // Contar partidas realizadas
+        const { count: finishedMatchCount } = await supabase
+          .from('matches')
+          .select('*', { count: 'exact', head: true })
+          .eq('is_finished', true);
+
+        // Contar total de partidas
+        const { count: totalMatchCount } = await supabase
+          .from('matches')
+          .select('*', { count: 'exact', head: true });
+
+        // Buscar usuário com maior pontuação
+        const { data: topScoreUser } = await supabase
+          .from('user_stats')
+          .select('total_points, user_id')
+          .order('total_points', { ascending: false })
+          .limit(1)
+          .single();
+
+        let topUserName = "Não disponível";
+        if (topScoreUser) {
+          const { data: userData } = await supabase
+            .from('users_custom')
+            .select('name')
+            .eq('id', topScoreUser.user_id)
+            .single();
+          
+          if (userData) {
+            topUserName = userData.name;
+          }
+        }
+
+        // Buscar próxima partida
+        const now = new Date().toISOString();
+        const { data: nextMatchData } = await supabase
+          .from('matches')
+          .select('id, match_date, home_team_id, away_team_id')
+          .gt('match_date', now)
+          .eq('is_finished', false)
+          .order('match_date')
+          .limit(1)
+          .single();
+
+        let nextMatchInfo = {
+          date: "Não agendado",
+          teams: "Não definido"
+        };
+
+        if (nextMatchData) {
+          const matchDate = new Date(nextMatchData.match_date);
+          const formattedDate = `${matchDate.getDate().toString().padStart(2, '0')}/${(matchDate.getMonth() + 1).toString().padStart(2, '0')}`;
+
+          const { data: homeTeam } = await supabase
+            .from('teams')
+            .select('name')
+            .eq('id', nextMatchData.home_team_id)
+            .single();
+
+          const { data: awayTeam } = await supabase
+            .from('teams')
+            .select('name')
+            .eq('id', nextMatchData.away_team_id)
+            .single();
+
+          nextMatchInfo = {
+            date: formattedDate,
+            teams: `${homeTeam?.name || 'Time A'} vs ${awayTeam?.name || 'Time B'}`
+          };
+        }
+
+        setStats({
+          totalUsers: userCount || 0,
+          matchesPlayed: finishedMatchCount || 0,
+          totalMatches: totalMatchCount || 0,
+          topScore: {
+            points: topScoreUser?.total_points || 0,
+            userName: topUserName
+          },
+          nextMatch: nextMatchInfo
+        });
+      } catch (error) {
+        console.error("Erro ao buscar estatísticas:", error);
+      }
+    };
+
+    fetchStats();
+  }, []);
+
   return (
     <Layout>
       <div className="mb-8">
@@ -52,27 +164,27 @@ const Index = () => {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
           <StatsCard 
             title="Total de Participantes" 
-            value="127" 
+            value={stats.totalUsers.toString()} 
             icon={<UserIcon className="h-4 w-4" />}
             description="Jogadores registrados" 
           />
           <StatsCard 
             title="Jogos Realizados" 
-            value="12/32" 
+            value={`${stats.matchesPlayed}/${stats.totalMatches}`} 
             icon={<SoccerBallIcon className="h-4 w-4" />}
-            description="37% concluído" 
+            description={stats.totalMatches > 0 ? `${Math.round((stats.matchesPlayed / stats.totalMatches) * 100)}% concluído` : "0% concluído"} 
           />
           <StatsCard 
             title="Maior Pontuação" 
-            value="145" 
+            value={stats.topScore.points.toString()} 
             icon={<TrophyIcon className="h-4 w-4" />}
-            description="Carlos Silva" 
+            description={stats.topScore.userName} 
           />
           <StatsCard 
             title="Próximo Jogo" 
-            value="15/06" 
+            value={stats.nextMatch.date} 
             icon={<FlagIcon className="h-4 w-4" />}
-            description="Real Madrid vs Man. City" 
+            description={stats.nextMatch.teams} 
           />
         </div>
 

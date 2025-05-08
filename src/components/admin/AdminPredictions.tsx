@@ -36,7 +36,7 @@ type Prediction = {
   updated_at: string;
   users: {
     name: string;
-    email: string;
+    username: string;
   };
   matches: {
     home_team: { name: string };
@@ -49,13 +49,15 @@ type Prediction = {
 type User = {
   id: string;
   name: string;
-  email: string;
+  username: string;
 };
 
 type Match = {
   id: string;
-  home_team: { name: string };
-  away_team: { name: string };
+  home_team_id: string;
+  away_team_id: string;
+  home_team_name?: string;
+  away_team_name?: string;
   match_date: string;
   stage: string;
 };
@@ -78,46 +80,125 @@ const AdminPredictions = () => {
       setLoading(true);
       
       // Buscar usuários para o filtro
-      const { data: usersData } = await supabase
-        .from("users")
-        .select("id, name, email");
+      const { data: usersData, error: usersError } = await supabase
+        .from("users_custom")
+        .select("id, name, username");
       
+      if (usersError) throw usersError;
       setUsers(usersData || []);
       
-      // Buscar partidas para o filtro (simulado com dados para exemplo)
-      // Na implementação real, substituir pelo código para buscar as partidas do Supabase
-      setMatches([
-        { id: "1", home_team: { name: "Brasil" }, away_team: { name: "Argentina" }, match_date: "2025-06-15T16:00:00Z", stage: "Fase de Grupos" },
-        { id: "2", home_team: { name: "Alemanha" }, away_team: { name: "França" }, match_date: "2025-06-16T19:00:00Z", stage: "Fase de Grupos" },
-      ]);
+      // Buscar partidas para o filtro
+      const { data: matchesData, error: matchesError } = await supabase
+        .from("matches")
+        .select("id, home_team_id, away_team_id, match_date, stage");
+      
+      if (matchesError) throw matchesError;
+      
+      // Buscar nomes dos times para cada partida
+      const matchesWithTeams = await Promise.all(
+        (matchesData || []).map(async (match) => {
+          let homeTeamName = "Time desconhecido";
+          let awayTeamName = "Time desconhecido";
+          
+          if (match.home_team_id) {
+            const { data: homeTeam } = await supabase
+              .from("teams")
+              .select("name")
+              .eq("id", match.home_team_id)
+              .single();
+              
+            if (homeTeam) {
+              homeTeamName = homeTeam.name;
+            }
+          }
+          
+          if (match.away_team_id) {
+            const { data: awayTeam } = await supabase
+              .from("teams")
+              .select("name")
+              .eq("id", match.away_team_id)
+              .single();
+              
+            if (awayTeam) {
+              awayTeamName = awayTeam.name;
+            }
+          }
+          
+          return {
+            ...match,
+            home_team_name: homeTeamName,
+            away_team_name: awayTeamName
+          };
+        })
+      );
+      
+      setMatches(matchesWithTeams);
       
       // Buscar palpites
-      const { data: predictionsData, error } = await supabase
+      const { data: predictionsData, error: predictionsError } = await supabase
         .from("predictions")
-        .select(`
-          id, 
-          user_id, 
-          match_id, 
-          home_score, 
-          away_score, 
-          created_at, 
-          updated_at,
-          users:user_id (name, email)
-        `)
-        .order("created_at", { ascending: false });
+        .select("id, user_id, match_id, home_score, away_score, created_at, updated_at");
 
-      if (error) throw error;
+      if (predictionsError) throw predictionsError;
 
-      // Simulação das relações com partidas até integrarmos completamente
-      const enhancedPredictions = predictionsData.map((prediction: any) => ({
-        ...prediction,
-        matches: {
-          home_team: { name: "Time da Casa" },
-          away_team: { name: "Time Visitante" },
-          match_date: "2025-06-15T16:00:00Z",
-          stage: "Fase de Grupos"
-        }
-      }));
+      // Enriquecer palpites com dados de usuários e partidas
+      const enhancedPredictions = await Promise.all(
+        (predictionsData || []).map(async (prediction) => {
+          // Buscar dados do usuário
+          const { data: userData } = await supabase
+            .from("users_custom")
+            .select("name, username")
+            .eq("id", prediction.user_id)
+            .single();
+          
+          // Buscar dados da partida
+          const { data: matchData } = await supabase
+            .from("matches")
+            .select("match_date, stage, home_team_id, away_team_id")
+            .eq("id", prediction.match_id)
+            .single();
+          
+          let homeTeamName = "Time desconhecido";
+          let awayTeamName = "Time desconhecido";
+          
+          if (matchData) {
+            if (matchData.home_team_id) {
+              const { data: homeTeam } = await supabase
+                .from("teams")
+                .select("name")
+                .eq("id", matchData.home_team_id)
+                .single();
+                
+              if (homeTeam) {
+                homeTeamName = homeTeam.name;
+              }
+            }
+            
+            if (matchData.away_team_id) {
+              const { data: awayTeam } = await supabase
+                .from("teams")
+                .select("name")
+                .eq("id", matchData.away_team_id)
+                .single();
+                
+              if (awayTeam) {
+                awayTeamName = awayTeam.name;
+              }
+            }
+          }
+          
+          return {
+            ...prediction,
+            users: userData || { name: "Usuário desconhecido", username: "" },
+            matches: {
+              home_team: { name: homeTeamName },
+              away_team: { name: awayTeamName },
+              match_date: matchData?.match_date || new Date().toISOString(),
+              stage: matchData?.stage || "Fase desconhecida"
+            }
+          };
+        })
+      );
 
       setPredictions(enhancedPredictions);
     } catch (error) {
@@ -149,7 +230,7 @@ const AdminPredictions = () => {
   const filteredPredictions = predictions.filter((prediction) => {
     // Filtro por termo de busca (procura no nome do usuário)
     const searchMatch = prediction.users?.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                       prediction.users?.email.toLowerCase().includes(searchTerm.toLowerCase());
+                       prediction.users?.username.toLowerCase().includes(searchTerm.toLowerCase());
     
     // Filtro por usuário
     const userMatch = userFilter ? prediction.user_id === userFilter : true;
@@ -175,7 +256,7 @@ const AdminPredictions = () => {
       
       <div className="flex flex-col md:flex-row gap-4">
         <Input
-          placeholder="Buscar por nome ou email..."
+          placeholder="Buscar por nome ou usuário..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           className="max-w-xs"
@@ -201,7 +282,7 @@ const AdminPredictions = () => {
             <SelectItem value="">Todas as partidas</SelectItem>
             {matches.map(match => (
               <SelectItem key={match.id} value={match.id}>
-                {match.home_team.name} vs {match.away_team.name}
+                {match.home_team_name} vs {match.away_team_name}
               </SelectItem>
             ))}
           </SelectContent>
@@ -231,7 +312,7 @@ const AdminPredictions = () => {
                     <TableCell>
                       <div>
                         <div className="font-medium">{prediction.users?.name || "Usuário desconhecido"}</div>
-                        <div className="text-sm text-muted-foreground">{prediction.users?.email}</div>
+                        <div className="text-sm text-muted-foreground">{prediction.users?.username}</div>
                       </div>
                     </TableCell>
                     <TableCell>
