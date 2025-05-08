@@ -1,5 +1,5 @@
 
-import { MatchResult, Prediction, PointsResult } from "./types";
+import { MatchResult, Prediction, PointsResult, PointsType } from "./types";
 
 /**
  * Calcula os pontos para um acerto exato (placar e vencedor corretos)
@@ -18,7 +18,7 @@ export function calculateExactScorePoints(
       matchId: prediction.match_id,
       predictionId: prediction.id,
       points: exactScorePoints,
-      pointsType: "exact_score",
+      pointsType: PointsType.EXACT_SCORE,
     };
   }
   return null;
@@ -33,12 +33,10 @@ export function calculateWinnerPoints(
   winnerPoints: number
 ): PointsResult | null {
   // Resultado real
-  const actualWinner = match.home_score > match.away_score ? "home" : 
-                        match.home_score < match.away_score ? "away" : "draw";
+  const actualWinner = getWinner(match.home_score, match.away_score);
   
   // Palpite
-  const predictedWinner = prediction.home_score > prediction.away_score ? "home" : 
-                          prediction.home_score < prediction.away_score ? "away" : "draw";
+  const predictedWinner = getWinner(prediction.home_score, prediction.away_score);
   
   if (actualWinner === predictedWinner) {
     return {
@@ -46,10 +44,19 @@ export function calculateWinnerPoints(
       matchId: prediction.match_id,
       predictionId: prediction.id,
       points: winnerPoints,
-      pointsType: "correct_winner",
+      pointsType: PointsType.CORRECT_WINNER,
     };
   }
   return null;
+}
+
+/**
+ * Função auxiliar para determinar o vencedor com base no placar
+ */
+function getWinner(homeScore: number, awayScore: number): 'home' | 'away' | 'draw' {
+  if (homeScore > awayScore) return 'home';
+  if (homeScore < awayScore) return 'away';
+  return 'draw';
 }
 
 /**
@@ -60,6 +67,7 @@ export function calculatePartialScorePoints(
   match: MatchResult,
   partialScorePoints: number
 ): PointsResult | null {
+  // Se acertou o placar de um dos times, mas não ambos
   if (
     (prediction.home_score === match.home_score || 
      prediction.away_score === match.away_score) &&
@@ -71,7 +79,7 @@ export function calculatePartialScorePoints(
       matchId: prediction.match_id,
       predictionId: prediction.id,
       points: partialScorePoints,
-      pointsType: "partial_score",
+      pointsType: PointsType.PARTIAL_SCORE,
     };
   }
   return null;
@@ -86,7 +94,7 @@ export function calculateMaximumPoints(
   exactScorePoints: number,
   winnerPoints: number,
   partialScorePoints: number
-): PointsResult | null {
+): PointsResult {
   // Tentar aplicar as regras em ordem de prioridade
   const exactScore = calculateExactScorePoints(prediction, match, exactScorePoints);
   if (exactScore) return exactScore;
@@ -103,6 +111,6 @@ export function calculateMaximumPoints(
     matchId: prediction.match_id,
     predictionId: prediction.id,
     points: 0,
-    pointsType: "no_points",
+    pointsType: PointsType.NO_POINTS,
   };
 }
