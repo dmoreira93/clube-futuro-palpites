@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -63,15 +62,17 @@ const MatchAccordionItem = ({ match }: MatchAccordionItemProps) => {
           </div>
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-2">
-              <Avatar className="h-6 w-6">
-                {match.home_team?.flag_url ? (
-                  <AvatarImage src={match.home_team.flag_url} alt={match.home_team?.name || ""} />
-                ) : (
-                  <AvatarFallback className="text-xs">
-                    {match.home_team?.name?.substring(0, 2) || ""}
-                  </AvatarFallback>
-                )}
-              </Avatar>
+              <div className="w-6 h-6 flex justify-center">
+                <Avatar className="h-6 w-6">
+                  {match.home_team?.flag_url ? (
+                    <AvatarImage src={match.home_team.flag_url} alt={match.home_team?.name || ""} />
+                  ) : (
+                    <AvatarFallback className="text-xs">
+                      {match.home_team?.name?.substring(0, 2) || ""}
+                    </AvatarFallback>
+                  )}
+                </Avatar>
+              </div>
               <span className="font-semibold">{match.home_team?.name || "Time da Casa"}</span>
             </div>
             <div className="bg-gray-100 px-3 py-1 rounded-lg">
@@ -79,15 +80,17 @@ const MatchAccordionItem = ({ match }: MatchAccordionItemProps) => {
             </div>
             <div className="flex items-center gap-2">
               <span className="font-semibold">{match.away_team?.name || "Time Visitante"}</span>
-              <Avatar className="h-6 w-6">
-                {match.away_team?.flag_url ? (
-                  <AvatarImage src={match.away_team.flag_url} alt={match.away_team?.name || ""} />
-                ) : (
-                  <AvatarFallback className="text-xs">
-                    {match.away_team?.name?.substring(0, 2) || ""}
-                  </AvatarFallback>
-                )}
-              </Avatar>
+              <div className="w-6 h-6 flex justify-center">
+                <Avatar className="h-6 w-6">
+                  {match.away_team?.flag_url ? (
+                    <AvatarImage src={match.away_team.flag_url} alt={match.away_team?.name || ""} />
+                  ) : (
+                    <AvatarFallback className="text-xs">
+                      {match.away_team?.name?.substring(0, 2) || ""}
+                    </AvatarFallback>
+                  )}
+                </Avatar>
+              </div>
             </div>
           </div>
         </div>

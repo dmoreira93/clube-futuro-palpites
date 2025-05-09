@@ -111,15 +111,17 @@ const NextMatches = () => {
                 </div>
                 <div className="flex justify-between items-center">
                   <div className="flex-1 text-right flex items-center justify-end gap-2">
-                    <Avatar className="h-6 w-6">
-                      {match.home_team?.flag_url ? (
-                        <AvatarImage src={match.home_team.flag_url} alt={match.home_team?.name} />
-                      ) : (
-                        <AvatarFallback className="text-xs">
-                          {match.home_team?.name?.substring(0, 2) || ""}
-                        </AvatarFallback>
-                      )}
-                    </Avatar>
+                    <div className="w-6 h-6 flex justify-center">
+                      <Avatar className="h-6 w-6">
+                        {match.home_team?.flag_url ? (
+                          <AvatarImage src={match.home_team.flag_url} alt={match.home_team?.name} />
+                        ) : (
+                          <AvatarFallback className="text-xs">
+                            {match.home_team?.name?.substring(0, 2) || ""}
+                          </AvatarFallback>
+                        )}
+                      </Avatar>
+                    </div>
                     <span className="font-semibold">{match.home_team?.name}</span>
                   </div>
                   <div className="mx-3 px-4 py-1 bg-gray-100 rounded-lg font-bold">
@@ -127,15 +129,17 @@ const NextMatches = () => {
                   </div>
                   <div className="flex-1 flex items-center gap-2">
                     <span className="font-semibold">{match.away_team?.name}</span>
-                    <Avatar className="h-6 w-6">
-                      {match.away_team?.flag_url ? (
-                        <AvatarImage src={match.away_team.flag_url} alt={match.away_team?.name} />
-                      ) : (
-                        <AvatarFallback className="text-xs">
-                          {match.away_team?.name?.substring(0, 2) || ""}
-                        </AvatarFallback>
-                      )}
-                    </Avatar>
+                    <div className="w-6 h-6 flex justify-center">
+                      <Avatar className="h-6 w-6">
+                        {match.away_team?.flag_url ? (
+                          <AvatarImage src={match.away_team.flag_url} alt={match.away_team?.name} />
+                        ) : (
+                          <AvatarFallback className="text-xs">
+                            {match.away_team?.name?.substring(0, 2) || ""}
+                          </AvatarFallback>
+                        )}
+                      </Avatar>
+                    </div>
                   </div>
                 </div>
               </div>

@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import Layout from "@/components/layout/Layout";
 import { Input } from "@/components/ui/input";
@@ -64,7 +63,7 @@ const Palpites = () => {
     const fetchData = async () => {
       setLoading(true);
       try {
-        // Fetch matches
+        // Fetch matches - FILTERING ONLY GROUP STAGE MATCHES
         const { data: matchesData, error: matchesError } = await supabase
           .from('matches')
           .select(`
@@ -75,10 +74,11 @@ const Palpites = () => {
             stage, 
             home_team_id, 
             away_team_id,
-            home_team:home_team_id(id, name),
-            away_team:away_team_id(id, name),
+            home_team:home_team_id(id, name, flag_url),
+            away_team:away_team_id(id, name, flag_url),
             is_finished
           `)
+          .ilike('stage', '%Grupo%') // Only fetch group stage matches
           .order('match_date', { ascending: true });
           
         if (matchesError) {
@@ -232,6 +232,20 @@ const Palpites = () => {
       return;
     }
     
+    // Validate predictions
+    const invalidPredictions = Object.entries(matchBets).filter(([_, scores]) => {
+      const homeScore = parseInt(scores.home);
+      const awayScore = parseInt(scores.away);
+      return isNaN(homeScore) || isNaN(awayScore) || homeScore < 0 || awayScore < 0;
+    });
+    
+    if (invalidPredictions.length > 0) {
+      toast("Palpites inválidos", { 
+        description: "Alguns palpites possuem valores inválidos. Verifique e tente novamente." 
+      });
+      return;
+    }
+    
     // Save predictions to the database
     try {
       const predictions = Object.entries(matchBets).map(([matchId, scores]) => ({
@@ -294,7 +308,7 @@ const Palpites = () => {
       }
       
       toast("Palpites registrados", { 
-        description: "Seus palpites foram salvos com sucesso!" 
+        description: `Seus palpites foram salvos com sucesso! Total de ${newPredictions.length} novos palpites e ${updatePredictions.length} atualizados.` 
       });
       
       // Reset password field
@@ -332,7 +346,7 @@ const Palpites = () => {
         <Alert className="mb-6">
           <AlertTitle>Atenção</AlertTitle>
           <AlertDescription>
-            Os palpites só podem ser registrados antes do início da competição. Após confirmar seus palpites, eles não poderão ser alterados.
+            Registre seus palpites para a fase de grupos antes do início da competição. Após confirmar seus palpites, eles não poderão ser alterados.
           </AlertDescription>
         </Alert>
 
@@ -357,7 +371,7 @@ const Palpites = () => {
               <CardHeader>
                 <CardTitle>Palpites para Jogos</CardTitle>
                 <CardDescription>
-                  Registre o placar que você acredita para cada jogo da competição
+                  Registre o placar que você acredita para cada jogo da fase de grupos
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
@@ -372,7 +386,17 @@ const Palpites = () => {
                         </span>
                       </div>
                       <div className="flex items-center justify-between gap-3">
-                        <div className="flex-1 text-right">
+                        <div className="flex-1 text-right flex items-center justify-end gap-2">
+                          {match.home_team?.flag_url && (
+                            <div className="w-6 h-6 flex justify-center">
+                              <Avatar className="h-6 w-6">
+                                <AvatarImage src={match.home_team.flag_url} alt={match.home_team?.name || ""} />
+                                <AvatarFallback className="text-xs">
+                                  {match.home_team?.name?.substring(0, 2) || ""}
+                                </AvatarFallback>
+                              </Avatar>
+                            </div>
+                          )}
                           <p className="font-medium mb-1">{match.home_team?.name}</p>
                           <Input 
                             type="number" 
@@ -384,16 +408,26 @@ const Palpites = () => {
                           />
                         </div>
                         <div className="mx-2">vs</div>
-                        <div className="flex-1">
-                          <p className="font-medium mb-1">{match.away_team?.name}</p>
+                        <div className="flex-1 flex items-center">
                           <Input 
                             type="number" 
                             min="0"
-                            className="w-16" 
+                            className="w-16 mr-2" 
                             value={matchBets[match.id]?.away || ""}
                             onChange={(e) => handleMatchBetChange(match.id, 'away', e.target.value)}
                             disabled={match.is_finished}
                           />
+                          <p className="font-medium mb-1">{match.away_team?.name}</p>
+                          {match.away_team?.flag_url && (
+                            <div className="w-6 h-6 ml-2 flex justify-center">
+                              <Avatar className="h-6 w-6">
+                                <AvatarImage src={match.away_team.flag_url} alt={match.away_team?.name || ""} />
+                                <AvatarFallback className="text-xs">
+                                  {match.away_team?.name?.substring(0, 2) || ""}
+                                </AvatarFallback>
+                              </Avatar>
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>

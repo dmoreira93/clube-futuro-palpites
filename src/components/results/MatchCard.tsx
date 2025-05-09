@@ -73,28 +73,32 @@ export const MatchCard = ({
       </CardHeader>
       <CardContent>
         <div className="flex justify-between items-center">
-          <div className="flex items-center gap-2">
-            <Avatar className="h-6 w-6">
-              {homeTeamFlag ? (
-                <AvatarImage src={homeTeamFlag} alt={homeTeam} />
-              ) : (
-                <AvatarFallback className="text-xs">{homeTeam.substring(0, 2)}</AvatarFallback>
-              )}
-            </Avatar>
-            <span className="font-semibold">{homeTeam}</span>
+          <div className="flex items-center gap-2 w-2/5">
+            <div className="w-6 h-6 flex justify-center">
+              <Avatar className="h-6 w-6">
+                {homeTeamFlag ? (
+                  <AvatarImage src={homeTeamFlag} alt={homeTeam} />
+                ) : (
+                  <AvatarFallback className="text-xs">{homeTeam.substring(0, 2)}</AvatarFallback>
+                )}
+              </Avatar>
+            </div>
+            <span className="font-semibold truncate">{homeTeam}</span>
           </div>
           <div className="mx-3 px-4 py-1 bg-gray-100 rounded-lg font-bold">
             vs
           </div>
-          <div className="flex items-center gap-2">
-            <span className="font-semibold">{awayTeam}</span>
-            <Avatar className="h-6 w-6">
-              {awayTeamFlag ? (
-                <AvatarImage src={awayTeamFlag} alt={awayTeam} />
-              ) : (
-                <AvatarFallback className="text-xs">{awayTeam.substring(0, 2)}</AvatarFallback>
-              )}
-            </Avatar>
+          <div className="flex items-center gap-2 justify-end w-2/5">
+            <span className="font-semibold truncate">{awayTeam}</span>
+            <div className="w-6 h-6 flex justify-center">
+              <Avatar className="h-6 w-6">
+                {awayTeamFlag ? (
+                  <AvatarImage src={awayTeamFlag} alt={awayTeam} />
+                ) : (
+                  <AvatarFallback className="text-xs">{awayTeam.substring(0, 2)}</AvatarFallback>
+                )}
+              </Avatar>
+            </div>
           </div>
         </div>
       </CardContent>

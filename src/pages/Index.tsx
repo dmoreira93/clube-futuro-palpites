@@ -146,7 +146,7 @@ const Index = () => {
                   </Button>
                 </Link>
                 <Link to="/criterios">
-                  <Button variant="outline" className="border-white text-white hover:bg-white hover:bg-opacity-20">
+                  <Button variant="outline" className="border-white text-fifa-gold hover:bg-white hover:bg-opacity-20 font-semibold">
                     Ver Critérios
                   </Button>
                 </Link>
