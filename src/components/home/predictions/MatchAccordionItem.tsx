@@ -1,17 +1,51 @@
 
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Badge } from "@/components/ui/badge";
 import { AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion";
 import PredictionsList from "./PredictionsList";
 import { Match } from "@/types/matches";
+import { supabase } from "@/integrations/supabase/client";
 
 type MatchAccordionItemProps = {
   match: Match;
 };
 
 const MatchAccordionItem = ({ match }: MatchAccordionItemProps) => {
+  const [predictions, setPredictions] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  
+  useEffect(() => {
+    const fetchPredictions = async () => {
+      setLoading(true);
+      try {
+        const { data, error } = await supabase
+          .from('predictions')
+          .select(`
+            id,
+            home_score,
+            away_score,
+            user_id,
+            users:user_id(name)
+          `)
+          .eq('match_id', match.id);
+          
+        if (error) {
+          console.error("Error fetching predictions:", error);
+        } else {
+          setPredictions(data || []);
+        }
+      } catch (error) {
+        console.error("Error:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchPredictions();
+  }, [match.id]);
+  
   const formatMatchDate = (dateString: string) => {
     return format(new Date(dateString), "dd 'de' MMMM 'às' HH:mm", { locale: ptBR });
   };
@@ -39,7 +73,7 @@ const MatchAccordionItem = ({ match }: MatchAccordionItemProps) => {
         <div className="px-4 py-2">
           <h3 className="font-medium mb-2">Palpites dos participantes:</h3>
           <PredictionsList 
-            predictions={match.predictions} 
+            predictions={predictions} 
             homeTeamName={match.home_team?.name || "Time da Casa"} 
             awayTeamName={match.away_team?.name || "Time Visitante"} 
           />

@@ -1,5 +1,5 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Layout from "@/components/layout/Layout";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -16,69 +16,24 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/components/ui/tabs";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { Label } from "@/components/ui/label";
-import { Volleyball as SoccerBallIcon, Trophy as TrophyIcon, Users as UsersIcon } from "lucide-react";
+import { Volleyball as SoccerBallIcon, Trophy as TrophyIcon, Users as UsersIcon, Loader2 } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-
-// Sample teams data
-const teams = [
-  "Real Madrid",
-  "Manchester City",
-  "Bayern Munich",
-  "Fluminense",
-  "Inter Miami",
-  "Al-Hilal",
-  "Urawa Red Diamonds",
-  "Auckland City",
-];
-
-// Sample group matches data
-const groupMatches = [
-  {
-    id: 101,
-    homeTeam: "Real Madrid",
-    awayTeam: "Manchester City",
-    date: "2025-06-15",
-    group: "A",
-  },
-  {
-    id: 102,
-    homeTeam: "Bayern Munich",
-    awayTeam: "Fluminense",
-    date: "2025-06-15",
-    group: "B",
-  },
-  {
-    id: 103,
-    homeTeam: "Inter Miami",
-    awayTeam: "Al-Hilal",
-    date: "2025-06-16",
-    group: "C",
-  },
-  {
-    id: 104,
-    homeTeam: "Urawa Red Diamonds",
-    awayTeam: "Auckland City",
-    date: "2025-06-16",
-    group: "D",
-  },
-];
-
-const groups = [
-  { id: "A", teams: ["Real Madrid", "Manchester City", "Urawa Red Diamonds", "Auckland City"] },
-  { id: "B", teams: ["Bayern Munich", "Fluminense", "Al-Hilal", "Inter Miami"] },
-];
-
-const formatDate = (dateStr: string) => {
-  const date = new Date(dateStr);
-  return date.toLocaleDateString("pt-BR");
-};
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
+import { useNavigate } from "react-router-dom";
 
 const Palpites = () => {
-  const { toast } = useToast();
-  const [matchBets, setMatchBets] = useState<{ [key: number]: { home: string, away: string } }>({});
+  const { user, isAuthenticated } = useAuth();
+  const navigate = useNavigate();
+  
+  // State for data loading
+  const [loading, setLoading] = useState(true);
+  
+  // State for all data
+  const [matchBets, setMatchBets] = useState<{ [key: string]: { home: string, away: string } }>({});
   const [groupPredictions, setGroupPredictions] = useState<{ [key: string]: { first: string, second: string } }>({});
   const [finalPredictions, setFinalPredictions] = useState({
     champion: "",
@@ -87,8 +42,140 @@ const Palpites = () => {
     fourth: "",
   });
   const [userPassword, setUserPassword] = useState("");
+  
+  // State for matches and teams from database
+  const [matches, setMatches] = useState<any[]>([]);
+  const [teams, setTeams] = useState<any[]>([]);
+  const [groups, setGroups] = useState<any[]>([]);
+  const [existingPredictions, setExistingPredictions] = useState<any[]>([]);
+  
+  // Redirect if not authenticated
+  useEffect(() => {
+    if (!isAuthenticated) {
+      toast("Você precisa estar logado para acessar esta página", {
+        description: "Redirecionando para a página de login"
+      });
+      navigate("/login");
+    }
+  }, [isAuthenticated, navigate]);
+  
+  // Load data from the database
+  useEffect(() => {
+    const fetchData = async () => {
+      setLoading(true);
+      try {
+        // Fetch matches
+        const { data: matchesData, error: matchesError } = await supabase
+          .from('matches')
+          .select(`
+            id, 
+            match_date, 
+            home_score, 
+            away_score, 
+            stage, 
+            home_team_id, 
+            away_team_id,
+            home_team:home_team_id(id, name),
+            away_team:away_team_id(id, name),
+            is_finished
+          `)
+          .order('match_date', { ascending: true });
+          
+        if (matchesError) {
+          console.error("Error fetching matches:", matchesError);
+          toast("Erro ao carregar jogos", { 
+            description: "Ocorreu um erro ao buscar os jogos no banco de dados" 
+          });
+        } else {
+          setMatches(matchesData || []);
+        }
+        
+        // Fetch teams
+        const { data: teamsData, error: teamsError } = await supabase
+          .from('teams')
+          .select('id, name, group_id')
+          .order('name', { ascending: true });
+          
+        if (teamsError) {
+          console.error("Error fetching teams:", teamsError);
+        } else {
+          setTeams(teamsData || []);
+        }
+        
+        // Fetch groups
+        const { data: groupsData, error: groupsError } = await supabase
+          .from('groups')
+          .select('id, name');
+          
+        if (groupsError) {
+          console.error("Error fetching groups:", groupsError);
+        } else {
+          setGroups(groupsData || []);
+        }
+        
+        // Fetch user's existing predictions if the user is logged in
+        if (user?.id) {
+          const { data: predictionsData, error: predictionsError } = await supabase
+            .from('predictions')
+            .select('*')
+            .eq('user_id', user.id);
+            
+          if (predictionsError) {
+            console.error("Error fetching predictions:", predictionsError);
+          } else {
+            setExistingPredictions(predictionsData || []);
+            
+            // Populate the matchBets state with existing predictions
+            const existingBets: { [key: string]: { home: string, away: string } } = {};
+            predictionsData?.forEach((prediction) => {
+              existingBets[prediction.match_id] = {
+                home: prediction.home_score.toString(),
+                away: prediction.away_score.toString()
+              };
+            });
+            setMatchBets(existingBets);
+          }
+        }
+        
+      } catch (error) {
+        console.error("Error fetching data:", error);
+        toast("Erro ao carregar dados", { 
+          description: "Ocorreu um erro ao buscar os dados no banco de dados" 
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    if (isAuthenticated) {
+      fetchData();
+    }
+  }, [isAuthenticated, user?.id]);
 
-  const handleMatchBetChange = (matchId: number, team: 'home' | 'away', value: string) => {
+  // Format date for display
+  const formatDate = (dateStr: string) => {
+    const date = new Date(dateStr);
+    return date.toLocaleDateString("pt-BR");
+  };
+  
+  // Group teams by their group_id
+  const teamsByGroup = teams.reduce((acc: any, team) => {
+    if (!team.group_id) return acc;
+    
+    if (!acc[team.group_id]) {
+      acc[team.group_id] = [];
+    }
+    acc[team.group_id].push(team);
+    return acc;
+  }, {});
+  
+  // Process groups with their teams for display
+  const groupsWithTeams = groups.map(group => ({
+    ...group,
+    teams: teamsByGroup[group.id] || []
+  }));
+
+  const handleMatchBetChange = (matchId: string, team: 'home' | 'away', value: string) => {
     setMatchBets(prev => ({
       ...prev,
       [matchId]: {
@@ -115,25 +202,122 @@ const Palpites = () => {
     }));
   };
 
-  const handleSubmitBets = () => {
-    if (!userPassword) {
-      toast({
-        title: "Senha não informada",
-        description: "Por favor, digite sua senha para confirmar os palpites.",
-        variant: "destructive",
+  const handleSubmitBets = async () => {
+    if (!user?.id) {
+      toast("Você precisa estar logado para salvar palpites", { 
+        description: "Faça login e tente novamente" 
       });
       return;
     }
-
-    // In a real app, we would validate the password and save the bets to a server
-    toast({
-      title: "Palpites registrados com sucesso!",
-      description: "Seus palpites foram salvos e não poderão mais ser alterados.",
-    });
-
-    // Reset password field
-    setUserPassword("");
+    
+    if (!userPassword) {
+      toast("Senha não informada", { 
+        description: "Por favor, digite sua senha para confirmar os palpites" 
+      });
+      return;
+    }
+    
+    // Verify the user's password
+    const { data: userData, error: userError } = await supabase
+      .from('users_custom')
+      .select('id')
+      .eq('id', user.id)
+      .eq('password', userPassword)
+      .single();
+      
+    if (userError || !userData) {
+      toast("Senha incorreta", { 
+        description: "A senha informada não confere. Tente novamente." 
+      });
+      return;
+    }
+    
+    // Save predictions to the database
+    try {
+      const predictions = Object.entries(matchBets).map(([matchId, scores]) => ({
+        match_id: matchId,
+        user_id: user.id,
+        home_score: parseInt(scores.home),
+        away_score: parseInt(scores.away),
+      }));
+      
+      // Check which predictions are new and which ones are updates
+      const newPredictions = [];
+      const updatePredictions = [];
+      
+      for (const prediction of predictions) {
+        const existingPrediction = existingPredictions.find(p => 
+          p.match_id === prediction.match_id && p.user_id === user.id
+        );
+        
+        if (existingPrediction) {
+          updatePredictions.push({
+            ...prediction,
+            id: existingPrediction.id
+          });
+        } else {
+          newPredictions.push(prediction);
+        }
+      }
+      
+      // Insert new predictions
+      if (newPredictions.length > 0) {
+        const { error: insertError } = await supabase
+          .from('predictions')
+          .insert(newPredictions);
+          
+        if (insertError) {
+          console.error("Error inserting predictions:", insertError);
+          toast("Erro ao salvar palpites", { 
+            description: "Ocorreu um erro ao inserir novos palpites" 
+          });
+          return;
+        }
+      }
+      
+      // Update existing predictions
+      for (const prediction of updatePredictions) {
+        const { id, ...updateData } = prediction;
+        
+        const { error: updateError } = await supabase
+          .from('predictions')
+          .update(updateData)
+          .eq('id', id);
+          
+        if (updateError) {
+          console.error(`Error updating prediction ${id}:`, updateError);
+          toast("Erro ao atualizar palpites", { 
+            description: "Ocorreu um erro ao atualizar palpites existentes" 
+          });
+          return;
+        }
+      }
+      
+      toast("Palpites registrados", { 
+        description: "Seus palpites foram salvos com sucesso!" 
+      });
+      
+      // Reset password field
+      setUserPassword("");
+      
+    } catch (error) {
+      console.error("Error saving predictions:", error);
+      toast("Erro ao salvar palpites", { 
+        description: "Ocorreu um erro ao processar seus palpites" 
+      });
+    }
   };
+
+  if (loading) {
+    return (
+      <Layout>
+        <div className="max-w-4xl mx-auto text-center py-12">
+          <Loader2 className="mx-auto h-12 w-12 animate-spin text-fifa-blue" />
+          <p className="mt-4 text-lg text-gray-600">Carregando dados...</p>
+        </div>
+      </Layout>
+    );
+  }
 
   return (
     <Layout>
@@ -177,38 +361,44 @@ const Palpites = () => {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
-                {groupMatches.map((match) => (
-                  <div key={match.id} className="p-4 border rounded-md">
-                    <div className="flex justify-between items-center mb-3">
-                      <span className="text-sm text-gray-500">
-                        {formatDate(match.date)} • Grupo {match.group}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="flex-1 text-right">
-                        <p className="font-medium mb-1">{match.homeTeam}</p>
-                        <Input 
-                          type="number" 
-                          min="0"
-                          className="w-16 ml-auto" 
-                          value={matchBets[match.id]?.home || ""}
-                          onChange={(e) => handleMatchBetChange(match.id, 'home', e.target.value)}
-                        />
+                {matches.length === 0 ? (
+                  <p className="text-center py-4 text-gray-500">Nenhum jogo encontrado</p>
+                ) : (
+                  matches.map((match) => (
+                    <div key={match.id} className="p-4 border rounded-md">
+                      <div className="flex justify-between items-center mb-3">
+                        <span className="text-sm text-gray-500">
+                          {formatDate(match.match_date)} • {match.stage}
+                        </span>
                       </div>
-                      <div className="mx-2">vs</div>
-                      <div className="flex-1">
-                        <p className="font-medium mb-1">{match.awayTeam}</p>
-                        <Input 
-                          type="number" 
-                          min="0"
-                          className="w-16" 
-                          value={matchBets[match.id]?.away || ""}
-                          onChange={(e) => handleMatchBetChange(match.id, 'away', e.target.value)}
-                        />
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex-1 text-right">
+                          <p className="font-medium mb-1">{match.home_team?.name}</p>
+                          <Input 
+                            type="number" 
+                            min="0"
+                            className="w-16 ml-auto" 
+                            value={matchBets[match.id]?.home || ""}
+                            onChange={(e) => handleMatchBetChange(match.id, 'home', e.target.value)}
+                            disabled={match.is_finished}
+                          />
+                        </div>
+                        <div className="mx-2">vs</div>
+                        <div className="flex-1">
+                          <p className="font-medium mb-1">{match.away_team?.name}</p>
+                          <Input 
+                            type="number" 
+                            min="0"
+                            className="w-16" 
+                            value={matchBets[match.id]?.away || ""}
+                            onChange={(e) => handleMatchBetChange(match.id, 'away', e.target.value)}
+                            disabled={match.is_finished}
+                          />
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  ))
+                )}
               </CardContent>
             </Card>
           </TabsContent>
@@ -222,50 +412,54 @@ const Palpites = () => {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
-                {groups.map(group => (
-                  <div key={group.id} className="p-4 border rounded-md">
-                    <h3 className="font-bold mb-3">Grupo {group.id}</h3>
-                    <div className="space-y-3">
-                      <div className="space-y-2">
-                        <Label htmlFor={`group-${group.id}-1st`}>1º Lugar</Label>
-                        <Select 
-                          value={groupPredictions[group.id]?.first || ""} 
-                          onValueChange={(value) => handleGroupPredictionChange(group.id, 'first', value)}
-                        >
-                          <SelectTrigger id={`group-${group.id}-1st`}>
-                            <SelectValue placeholder="Selecione um time" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {group.teams.map(team => (
-                              <SelectItem key={team} value={team}>
-                                {team}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      
-                      <div className="space-y-2">
-                        <Label htmlFor={`group-${group.id}-2nd`}>2º Lugar</Label>
-                        <Select 
-                          value={groupPredictions[group.id]?.second || ""} 
-                          onValueChange={(value) => handleGroupPredictionChange(group.id, 'second', value)}
-                        >
-                          <SelectTrigger id={`group-${group.id}-2nd`}>
-                            <SelectValue placeholder="Selecione um time" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {group.teams.map(team => (
-                              <SelectItem key={team} value={team}>
-                                {team}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                {groupsWithTeams.length === 0 ? (
+                  <p className="text-center py-4 text-gray-500">Nenhum grupo encontrado</p>
+                ) : (
+                  groupsWithTeams.map(group => (
+                    <div key={group.id} className="p-4 border rounded-md">
+                      <h3 className="font-bold mb-3">Grupo {group.name}</h3>
+                      <div className="space-y-3">
+                        <div className="space-y-2">
+                          <Label htmlFor={`group-${group.id}-1st`}>1º Lugar</Label>
+                          <Select 
+                            value={groupPredictions[group.id]?.first || ""} 
+                            onValueChange={(value) => handleGroupPredictionChange(group.id, 'first', value)}
+                          >
+                            <SelectTrigger id={`group-${group.id}-1st`}>
+                              <SelectValue placeholder="Selecione um time" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {group.teams.map((team: any) => (
+                                <SelectItem key={team.id} value={team.id}>
+                                  {team.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        
+                        <div className="space-y-2">
+                          <Label htmlFor={`group-${group.id}-2nd`}>2º Lugar</Label>
+                          <Select 
+                            value={groupPredictions[group.id]?.second || ""} 
+                            onValueChange={(value) => handleGroupPredictionChange(group.id, 'second', value)}
+                          >
+                            <SelectTrigger id={`group-${group.id}-2nd`}>
+                              <SelectValue placeholder="Selecione um time" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {group.teams.map((team: any) => (
+                                <SelectItem key={team.id} value={team.id}>
+                                  {team.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  ))
+                )}
               </CardContent>
             </Card>
           </TabsContent>
@@ -293,8 +487,8 @@ const Palpites = () => {
                       </SelectTrigger>
                       <SelectContent>
                         {teams.map(team => (
-                          <SelectItem key={team} value={team}>
-                            {team}
+                          <SelectItem key={team.id} value={team.id}>
+                            {team.name}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -312,8 +506,8 @@ const Palpites = () => {
                       </SelectTrigger>
                       <SelectContent>
                         {teams.map(team => (
-                          <SelectItem key={team} value={team}>
-                            {team}
+                          <SelectItem key={team.id} value={team.id}>
+                            {team.name}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -331,8 +525,8 @@ const Palpites = () => {
                       </SelectTrigger>
                       <SelectContent>
                         {teams.map(team => (
-                          <SelectItem key={team} value={team}>
-                            {team}
+                          <SelectItem key={team.id} value={team.id}>
+                            {team.name}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -350,8 +544,8 @@ const Palpites = () => {
                       </SelectTrigger>
                       <SelectContent>
                         {teams.map(team => (
-                          <SelectItem key={team} value={team}>
-                            {team}
+                          <SelectItem key={team.id} value={team.id}>
+                            {team.name}
                           </SelectItem>
                         ))}
                       </SelectContent>

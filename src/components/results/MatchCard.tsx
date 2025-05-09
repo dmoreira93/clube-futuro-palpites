@@ -1,21 +1,25 @@
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Volleyball as SoccerBallIcon } from "lucide-react";
+import { format } from "date-fns";
+import { ptBR } from "date-fns/locale";
 
 type MatchCardProps = {
   id: string;
   homeTeam: string;
   awayTeam: string;
   date: string;
-  time: string;
-  group: string;
+  stage: string;
   selected: boolean;
   onClick: (id: string) => void;
 };
 
 const formatDate = (dateStr: string) => {
-  const date = new Date(dateStr);
-  return date.toLocaleDateString("pt-BR");
+  return format(new Date(dateStr), "dd/MM/yyyy", { locale: ptBR });
+};
+
+const formatTime = (dateStr: string) => {
+  return format(new Date(dateStr), "HH:mm", { locale: ptBR });
 };
 
 export const MatchCard = ({
@@ -23,8 +27,7 @@ export const MatchCard = ({
   homeTeam,
   awayTeam,
   date,
-  time,
-  group,
+  stage,
   selected,
   onClick,
 }: MatchCardProps) => {
@@ -38,9 +41,9 @@ export const MatchCard = ({
       <CardHeader className="pb-2">
         <div className="flex justify-between items-center">
           <div>
-            <CardTitle className="text-sm font-medium">Grupo {group}</CardTitle>
+            <CardTitle className="text-sm font-medium">{stage}</CardTitle>
             <CardDescription>
-              {formatDate(date)} • {time}
+              {formatDate(date)} • {formatTime(date)}
             </CardDescription>
           </div>
           <SoccerBallIcon className="h-5 w-5 text-fifa-blue" />

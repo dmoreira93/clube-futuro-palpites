@@ -22,7 +22,7 @@ const PredictionItem = ({ prediction, homeTeamName, awayTeamName }: PredictionIt
                   "Usuário desconhecido";
 
   return (
-    <TableRow key={prediction.id}>
+    <TableRow>
       <TableCell>{userName}</TableCell>
       <TableCell className="text-center font-semibold">{prediction.home_score}</TableCell>
       <TableCell className="text-center font-semibold">{prediction.away_score}</TableCell>
