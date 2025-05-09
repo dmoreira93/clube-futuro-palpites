@@ -1,4 +1,3 @@
-
 import { Prediction } from "./predictions";
 
 export type Team = {
@@ -19,3 +18,4 @@ export type Match = {
   predictions: Prediction[];
   stage: string;
 };
+

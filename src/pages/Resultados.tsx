@@ -17,6 +17,7 @@ const matchesData: Match[] = [
     time: "15:00",
     group: "A",
     status: "upcoming",
+    stage: "Fase de Grupos", // Adding stage property
   },
   {
     id: "2",
@@ -26,6 +27,7 @@ const matchesData: Match[] = [
     time: "18:00",
     group: "B",
     status: "upcoming",
+    stage: "Fase de Grupos", // Adding stage property
   },
   {
     id: "3",
@@ -35,6 +37,7 @@ const matchesData: Match[] = [
     time: "15:00",
     group: "C",
     status: "upcoming",
+    stage: "Fase de Grupos", // Adding stage property
   },
 ];
 
@@ -88,6 +91,7 @@ const Resultados = () => {
               date={match.date}
               time={match.time}
               group={match.group}
+              stage={match.stage} // Adding the required stage property
               selected={selectedMatch === match.id}
               onClick={handleSelectMatch}
             />
