@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -14,6 +13,7 @@ export type Match = {
   time: string;
   group: string;
   status: string;
+  stage: string; // Adding the stage property to the Match type
 };
 
 export const useMatchResults = () => {
