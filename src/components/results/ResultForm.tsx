@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useMatchResults } from "@/hooks/useMatchResults";
-import { Match } from "@/hooks/useMatchResults";
+import { Match } from "@/types/matches";
 
 type ResultFormProps = {
   match: Match | undefined;
@@ -41,12 +41,12 @@ export const ResultForm = ({ match, onComplete }: ResultFormProps) => {
       <CardContent className="p-6">
         <div className="space-y-6">
           <div className="text-center font-semibold">
-            {match.homeTeam} vs {match.awayTeam}
+            {match.home_team?.name || ""} vs {match.away_team?.name || ""}
           </div>
 
           <div className="flex items-center justify-center gap-4">
             <div className="text-center">
-              <p className="text-sm mb-1">{match.homeTeam}</p>
+              <p className="text-sm mb-1">{match.home_team?.name || ""}</p>
               <Input
                 type="number"
                 min="0"
@@ -57,7 +57,7 @@ export const ResultForm = ({ match, onComplete }: ResultFormProps) => {
             </div>
             <div className="text-2xl font-bold">×</div>
             <div className="text-center">
-              <p className="text-sm mb-1">{match.awayTeam}</p>
+              <p className="text-sm mb-1">{match.away_team?.name || ""}</p>
               <Input
                 type="number"
                 min="0"

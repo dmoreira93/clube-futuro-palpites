@@ -1,20 +1,10 @@
+
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { updateUserPoints } from "@/utils/pointsCalculator";
 import { useAuth } from "@/contexts/AuthContext";
-
-// Tipo para as partidas
-export type Match = {
-  id: string;
-  homeTeam: string;
-  awayTeam: string;
-  date: string;
-  time: string;
-  group: string;
-  status: string;
-  stage: string; // Adding the stage property to the Match type
-};
+import { Match } from "@/types/matches";
 
 export const useMatchResults = () => {
   const { toast } = useToast();
