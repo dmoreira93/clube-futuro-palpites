@@ -10,6 +10,7 @@ type MatchCardProps = {
   awayTeam: string;
   date: string;
   stage: string;
+  time?: string; // Add optional time prop
   selected: boolean;
   onClick: (id: string) => void;
 };
@@ -28,6 +29,7 @@ export const MatchCard = ({
   awayTeam,
   date,
   stage,
+  time,
   selected,
   onClick,
 }: MatchCardProps) => {
@@ -43,7 +45,7 @@ export const MatchCard = ({
           <div>
             <CardTitle className="text-sm font-medium">{stage}</CardTitle>
             <CardDescription>
-              {formatDate(date)} • {formatTime(date)}
+              {formatDate(date)} • {time || formatTime(date)}
             </CardDescription>
           </div>
           <SoccerBallIcon className="h-5 w-5 text-fifa-blue" />
