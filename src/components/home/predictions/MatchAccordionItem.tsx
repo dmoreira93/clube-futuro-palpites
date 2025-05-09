@@ -7,6 +7,7 @@ import { AccordionItem, AccordionTrigger, AccordionContent } from "@/components/
 import PredictionsList from "./PredictionsList";
 import { Match } from "@/types/matches";
 import { supabase } from "@/integrations/supabase/client";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 
 type MatchAccordionItemProps = {
   match: Match;
@@ -61,11 +62,33 @@ const MatchAccordionItem = ({ match }: MatchAccordionItemProps) => {
             <span className="text-sm text-gray-500">{formatMatchDate(match.match_date)}</span>
           </div>
           <div className="flex items-center gap-3">
-            <span className="font-semibold">{match.home_team?.name || "Time da Casa"}</span>
+            <div className="flex items-center gap-2">
+              <Avatar className="h-6 w-6">
+                {match.home_team?.flag_url ? (
+                  <AvatarImage src={match.home_team.flag_url} alt={match.home_team?.name || ""} />
+                ) : (
+                  <AvatarFallback className="text-xs">
+                    {match.home_team?.name?.substring(0, 2) || ""}
+                  </AvatarFallback>
+                )}
+              </Avatar>
+              <span className="font-semibold">{match.home_team?.name || "Time da Casa"}</span>
+            </div>
             <div className="bg-gray-100 px-3 py-1 rounded-lg">
               {match.is_finished ? `${match.home_score} - ${match.away_score}` : "vs"}
             </div>
-            <span className="font-semibold">{match.away_team?.name || "Time Visitante"}</span>
+            <div className="flex items-center gap-2">
+              <span className="font-semibold">{match.away_team?.name || "Time Visitante"}</span>
+              <Avatar className="h-6 w-6">
+                {match.away_team?.flag_url ? (
+                  <AvatarImage src={match.away_team.flag_url} alt={match.away_team?.name || ""} />
+                ) : (
+                  <AvatarFallback className="text-xs">
+                    {match.away_team?.name?.substring(0, 2) || ""}
+                  </AvatarFallback>
+                )}
+              </Avatar>
+            </div>
           </div>
         </div>
       </AccordionTrigger>

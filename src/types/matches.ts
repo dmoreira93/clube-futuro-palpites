@@ -4,7 +4,8 @@ import { Prediction } from "./predictions";
 export type Team = {
   id: string;
   name: string;
-  group_id?: string; // Added group_id as optional
+  group_id?: string; // Group ID as optional
+  flag_url?: string; // Flag URL as optional
 };
 
 export type Match = {

@@ -32,8 +32,8 @@ const Resultados = () => {
           away_score,
           home_team_id, 
           away_team_id,
-          home_team:teams!home_team_id(id, name, group_id),
-          away_team:teams!away_team_id(id, name, group_id)
+          home_team:teams!home_team_id(id, name, group_id, flag_url),
+          away_team:teams!away_team_id(id, name, group_id, flag_url)
         `)
         .order('match_date', { ascending: true });
         
@@ -127,6 +127,8 @@ const Resultados = () => {
                 date={match.match_date ? new Date(match.match_date).toLocaleDateString() : ""}
                 time={match.match_date ? new Date(match.match_date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ""}
                 group={match.home_team?.group_id || ""}
+                homeTeamFlag={match.home_team?.flag_url || ""}
+                awayTeamFlag={match.away_team?.flag_url || ""}
                 stage={match.stage || ""}
                 selected={selectedMatch === match.id}
                 onClick={isAdmin ? handleSelectMatch : undefined}

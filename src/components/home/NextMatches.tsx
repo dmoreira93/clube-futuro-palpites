@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 
 const NextMatches = () => {
   const [matches, setMatches] = useState<any[]>([]);
@@ -31,8 +32,8 @@ const NextMatches = () => {
             id,
             match_date,
             stage,
-            home_team:home_team_id(id, name),
-            away_team:away_team_id(id, name)
+            home_team:home_team_id(id, name, flag_url),
+            away_team:away_team_id(id, name, flag_url)
           `)
           .gt('match_date', now.toISOString())
           .is('is_finished', false)
@@ -109,14 +110,32 @@ const NextMatches = () => {
                   </Badge>
                 </div>
                 <div className="flex justify-between items-center">
-                  <div className="flex-1 text-right">
+                  <div className="flex-1 text-right flex items-center justify-end gap-2">
+                    <Avatar className="h-6 w-6">
+                      {match.home_team?.flag_url ? (
+                        <AvatarImage src={match.home_team.flag_url} alt={match.home_team?.name} />
+                      ) : (
+                        <AvatarFallback className="text-xs">
+                          {match.home_team?.name?.substring(0, 2) || ""}
+                        </AvatarFallback>
+                      )}
+                    </Avatar>
                     <span className="font-semibold">{match.home_team?.name}</span>
                   </div>
                   <div className="mx-3 px-4 py-1 bg-gray-100 rounded-lg font-bold">
                     vs
                   </div>
-                  <div className="flex-1">
+                  <div className="flex-1 flex items-center gap-2">
                     <span className="font-semibold">{match.away_team?.name}</span>
+                    <Avatar className="h-6 w-6">
+                      {match.away_team?.flag_url ? (
+                        <AvatarImage src={match.away_team.flag_url} alt={match.away_team?.name} />
+                      ) : (
+                        <AvatarFallback className="text-xs">
+                          {match.away_team?.name?.substring(0, 2) || ""}
+                        </AvatarFallback>
+                      )}
+                    </Avatar>
                   </div>
                 </div>
               </div>

@@ -3,6 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Volleyball as SoccerBallIcon } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 
 type MatchCardProps = {
   id: string;
@@ -14,6 +15,8 @@ type MatchCardProps = {
   group?: string; // Add optional group prop
   selected: boolean;
   onClick?: (id: string) => void; // Made onClick optional
+  homeTeamFlag?: string; // Add optional flag URL for home team
+  awayTeamFlag?: string; // Add optional flag URL for away team
 };
 
 const formatDate = (dateStr: string) => {
@@ -42,6 +45,8 @@ export const MatchCard = ({
   group,
   selected,
   onClick,
+  homeTeamFlag,
+  awayTeamFlag,
 }: MatchCardProps) => {
   const handleClick = () => {
     if (onClick) onClick(id);
@@ -68,11 +73,29 @@ export const MatchCard = ({
       </CardHeader>
       <CardContent>
         <div className="flex justify-between items-center">
-          <span className="font-semibold">{homeTeam}</span>
+          <div className="flex items-center gap-2">
+            <Avatar className="h-6 w-6">
+              {homeTeamFlag ? (
+                <AvatarImage src={homeTeamFlag} alt={homeTeam} />
+              ) : (
+                <AvatarFallback className="text-xs">{homeTeam.substring(0, 2)}</AvatarFallback>
+              )}
+            </Avatar>
+            <span className="font-semibold">{homeTeam}</span>
+          </div>
           <div className="mx-3 px-4 py-1 bg-gray-100 rounded-lg font-bold">
             vs
           </div>
-          <span className="font-semibold">{awayTeam}</span>
+          <div className="flex items-center gap-2">
+            <span className="font-semibold">{awayTeam}</span>
+            <Avatar className="h-6 w-6">
+              {awayTeamFlag ? (
+                <AvatarImage src={awayTeamFlag} alt={awayTeam} />
+              ) : (
+                <AvatarFallback className="text-xs">{awayTeam.substring(0, 2)}</AvatarFallback>
+              )}
+            </Avatar>
+          </div>
         </div>
       </CardContent>
     </Card>
