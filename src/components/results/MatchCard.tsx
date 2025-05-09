@@ -13,15 +13,23 @@ type MatchCardProps = {
   time?: string; // Optional time prop
   group?: string; // Add optional group prop
   selected: boolean;
-  onClick: (id: string) => void;
+  onClick?: (id: string) => void; // Made onClick optional
 };
 
 const formatDate = (dateStr: string) => {
-  return format(new Date(dateStr), "dd/MM/yyyy", { locale: ptBR });
+  try {
+    return format(new Date(dateStr), "dd/MM/yyyy", { locale: ptBR });
+  } catch (e) {
+    return dateStr;
+  }
 };
 
 const formatTime = (dateStr: string) => {
-  return format(new Date(dateStr), "HH:mm", { locale: ptBR });
+  try {
+    return format(new Date(dateStr), "HH:mm", { locale: ptBR });
+  } catch (e) {
+    return "";
+  }
 };
 
 export const MatchCard = ({
@@ -35,12 +43,16 @@ export const MatchCard = ({
   selected,
   onClick,
 }: MatchCardProps) => {
+  const handleClick = () => {
+    if (onClick) onClick(id);
+  };
+
   return (
     <Card 
       className={`cursor-pointer transition-all ${
         selected ? "ring-2 ring-fifa-blue" : ""
       }`}
-      onClick={() => onClick(id)}
+      onClick={handleClick}
     >
       <CardHeader className="pb-2">
         <div className="flex justify-between items-center">

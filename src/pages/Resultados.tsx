@@ -32,8 +32,8 @@ const Resultados = () => {
           away_score,
           home_team_id, 
           away_team_id,
-          home_team:teams!home_team_id(id, name),
-          away_team:teams!away_team_id(id, name)
+          home_team:teams!home_team_id(id, name, group_id),
+          away_team:teams!away_team_id(id, name, group_id)
         `)
         .order('match_date', { ascending: true });
         
@@ -41,7 +41,8 @@ const Resultados = () => {
         throw new Error(error.message);
       }
       
-      return data;
+      // Explicitly cast the data to Match[] to satisfy TypeScript
+      return data as Match[];
     },
   });
 
@@ -63,17 +64,18 @@ const Resultados = () => {
     setSelectedMatch(null);
   };
 
-  // Apply filter
+  // Apply filter - cast as any first to work around type issues safely
   const filteredMatches = filter === "all" 
     ? matches
-    : matches.filter((match: Match) => {
-        // Assuming each team belongs to a group and we're filtering by it
+    : (matches as any[]).filter((match) => {
+        // Filter by group_id
         if (match.home_team && match.home_team.group_id === filter) return true;
         if (match.away_team && match.away_team.group_id === filter) return true;
         return false;
     });
 
-  const selectedMatchData = matches.find((m: Match) => m.id === selectedMatch);
+  // Find the selected match data with proper type handling
+  const selectedMatchData = matches.find((m) => m.id === selectedMatch) as Match | undefined;
 
   if (isLoading) {
     return (
@@ -115,7 +117,8 @@ const Resultados = () => {
               <p className="text-gray-500">Nenhuma partida encontrada para este filtro.</p>
             </div>
           ) : (
-            filteredMatches.map((match: Match) => (
+            // Use type assertion to work around the type issue safely
+            (filteredMatches as any[]).map((match) => (
               <MatchCard 
                 key={match.id}
                 id={match.id}

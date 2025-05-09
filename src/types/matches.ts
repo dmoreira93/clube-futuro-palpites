@@ -1,8 +1,10 @@
+
 import { Prediction } from "./predictions";
 
 export type Team = {
   id: string;
   name: string;
+  group_id?: string; // Added group_id as optional
 };
 
 export type Match = {
@@ -15,7 +17,6 @@ export type Match = {
   home_score: number | null;
   away_score: number | null;
   is_finished: boolean;
-  predictions: Prediction[];
+  predictions?: Prediction[]; // Made predictions optional
   stage: string;
 };
-
