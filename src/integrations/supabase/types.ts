@@ -460,6 +460,14 @@ export type Database = {
         Args: { pred_id: string; first_id: string; second_id: string }
         Returns: undefined
       }
+      update_user_points_for_match: {
+        Args: { match_id_param: string }
+        Returns: undefined
+      }
+      update_user_stats_function: {
+        Args: { user_id_param: string }
+        Returns: undefined
+      }
     }
     Enums: {
       [_ in never]: never

@@ -20,4 +20,5 @@ export type Match = {
   is_finished: boolean;
   predictions?: Prediction[]; // Made predictions optional
   stage: string;
+  stadium?: string | null; // Add stadium property
 };

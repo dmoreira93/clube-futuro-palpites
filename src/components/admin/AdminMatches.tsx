@@ -370,12 +370,13 @@ const AdminMatches = () => {
       
       // Call function to update user points
       try {
-        const { error: pointsError } = await supabase.rpc('update_user_points_for_match', {
+        // Use the stored procedure to calculate points
+        const { error: rpcError } = await supabase.rpc('update_user_points_for_match', {
           match_id_param: editingResult.id
         });
         
-        if (pointsError) {
-          console.error("Error updating user points:", pointsError);
+        if (rpcError) {
+          console.error("Error updating user points:", rpcError);
           toast({
             title: "Resultado registrado",
             description: "Resultado salvo com sucesso, mas houve um erro ao calcular os pontos",
