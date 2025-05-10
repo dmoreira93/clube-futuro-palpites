@@ -164,53 +164,81 @@ const Palpites = () => {
             setMatchBets(existingBets);
           }
           
-          // Check if group_predictions table exists, if not we'll handle the error
+          // Check if group_predictions table exists
           try {
-            const { data: groupPredictionsData, error: groupPredictionsError } = await supabase
-              .from('group_predictions')
-              .select('*')
-              .eq('user_id', user.id);
+            // Use RPC to check if table exists
+            const hasGroupPredictionsTable = await checkTableExists('group_predictions');
+          
+            if (hasGroupPredictionsTable) {
+              // Fetch using raw SQL to avoid type errors with tables not in the types definition
+              const { data: groupPredictions, error: groupPredictionsError } = await supabase
+                .rpc('get_user_group_predictions', { user_id_param: user.id });
               
-            if (!groupPredictionsError && groupPredictionsData) {
-              setExistingGroupPredictions(groupPredictionsData);
-              
-              // Populate the groupPredictions state with existing predictions
-              const existingGroupPreds: { [key: string]: { first: string, second: string } } = {};
-              groupPredictionsData.forEach((prediction: GroupPrediction) => {
-                existingGroupPreds[prediction.group_id] = {
-                  first: prediction.first_team_id,
-                  second: prediction.second_team_id
-                };
-              });
-              setGroupPredictions(existingGroupPreds);
+              if (!groupPredictionsError && groupPredictions) {
+                // Cast the data to our expected type
+                const typedGroupPredictions: GroupPrediction[] = groupPredictions.map((item: any) => ({
+                  id: item.id,
+                  group_id: item.group_id,
+                  first_team_id: item.first_team_id,
+                  second_team_id: item.second_team_id,
+                  user_id: item.user_id,
+                  created_at: item.created_at,
+                  updated_at: item.updated_at
+                }));
+                
+                setExistingGroupPredictions(typedGroupPredictions);
+                
+                // Populate the groupPredictions state with existing predictions
+                const existingGroupPreds: { [key: string]: { first: string, second: string } } = {};
+                typedGroupPredictions.forEach((prediction: GroupPrediction) => {
+                  existingGroupPreds[prediction.group_id] = {
+                    first: prediction.first_team_id,
+                    second: prediction.second_team_id
+                  };
+                });
+                setGroupPredictions(existingGroupPreds);
+              }
             }
           } catch (error) {
-            console.error("Group predictions table may not exist yet:", error);
+            console.error("Error checking group predictions table:", error);
           }
           
-          // Check if final_predictions table exists, if not we'll handle the error
+          // Check if final_predictions table exists
           try {
-            const { data: finalPredictionsData, error: finalPredictionsError } = await supabase
-              .from('final_predictions')
-              .select('*')
-              .eq('user_id', user.id)
-              .maybeSingle();
+            // Use RPC to check if table exists
+            const hasFinalPredictionsTable = await checkTableExists('final_predictions');
+            
+            if (hasFinalPredictionsTable) {
+              // Fetch using raw SQL to avoid type errors with tables not in the types definition
+              const { data: finalPredictionsData, error: finalPredictionsError } = await supabase
+                .rpc('get_user_final_prediction', { user_id_param: user.id });
               
-            if (!finalPredictionsError && finalPredictionsData) {
-              setExistingFinalPredictions(finalPredictionsData ? [finalPredictionsData] : []);
-              
-              // Populate finalPredictions state with existing predictions
-              if (finalPredictionsData) {
+              if (!finalPredictionsError && finalPredictionsData && finalPredictionsData.length > 0) {
+                // Cast the data to our expected type
+                const typedFinalPrediction: FinalPrediction = {
+                  id: finalPredictionsData[0].id,
+                  champion_id: finalPredictionsData[0].champion_id,
+                  vice_champion_id: finalPredictionsData[0].vice_champion_id,
+                  third_place_id: finalPredictionsData[0].third_place_id,
+                  fourth_place_id: finalPredictionsData[0].fourth_place_id,
+                  user_id: finalPredictionsData[0].user_id,
+                  created_at: finalPredictionsData[0].created_at,
+                  updated_at: finalPredictionsData[0].updated_at
+                };
+                
+                setExistingFinalPredictions([typedFinalPrediction]);
+                
+                // Populate finalPredictions state with existing predictions
                 setFinalPredictions({
-                  champion: finalPredictionsData.champion_id || "",
-                  viceChampion: finalPredictionsData.vice_champion_id || "",
-                  third: finalPredictionsData.third_place_id || "",
-                  fourth: finalPredictionsData.fourth_place_id || ""
+                  champion: typedFinalPrediction.champion_id || "",
+                  viceChampion: typedFinalPrediction.vice_champion_id || "",
+                  third: typedFinalPrediction.third_place_id || "",
+                  fourth: typedFinalPrediction.fourth_place_id || ""
                 });
               }
             }
           } catch (error) {
-            console.error("Final predictions table may not exist yet:", error);
+            console.error("Error checking final predictions table:", error);
           }
         }
         
@@ -228,6 +256,25 @@ const Palpites = () => {
       fetchData();
     }
   }, [isAuthenticated, user?.id]);
+
+  // Helper function to check if a table exists
+  const checkTableExists = async (tableName: string): Promise<boolean> => {
+    const { data, error } = await supabase.rpc('check_table_exists', {
+      table_name: tableName
+    });
+    
+    if (error) {
+      // If RPC doesn't exist, create it first time
+      await supabase.rpc('create_check_table_exists_function');
+      // Then try again
+      const { data: retryData } = await supabase.rpc('check_table_exists', {
+        table_name: tableName
+      });
+      return !!retryData;
+    }
+    
+    return !!data;
+  };
 
   // Format date for display
   const formatDate = (dateStr: string) => {
@@ -382,13 +429,11 @@ const Palpites = () => {
       let newGroupPredictions = 0;
       let updatedGroupPredictions = 0;
       
-      try {
-        // Check if the group_predictions table exists
-        const { count } = await supabase
-          .from('group_predictions')
-          .select('id', { count: 'exact', head: true });
-
-        // If we got here, the table exists
+      // Check if the group_predictions table exists
+      const hasGroupPredictionsTable = await checkTableExists('group_predictions');
+      
+      if (hasGroupPredictionsTable) {
+        // Process group predictions
         for (const [groupId, positions] of Object.entries(groupPredictions)) {
           if (!positions.first || !positions.second) continue;
           
@@ -397,32 +442,27 @@ const Palpites = () => {
           );
           
           if (existingGroupPrediction) {
-            // Update existing prediction
-            const { error: updateError } = await supabase
-              .from('group_predictions')
-              .update({
-                first_team_id: positions.first,
-                second_team_id: positions.second,
-                updated_at: new Date().toISOString()
-              })
-              .eq('id', existingGroupPrediction.id);
-              
+            // Use raw SQL for the update to avoid typing issues
+            const { error: updateError } = await supabase.rpc('update_group_prediction', {
+              pred_id: existingGroupPrediction.id,
+              first_id: positions.first,
+              second_id: positions.second
+            });
+            
             if (updateError) {
               console.error(`Error updating group prediction:`, updateError);
             } else {
               updatedGroupPredictions++;
             }
           } else {
-            // Insert new prediction
-            const { error: insertError } = await supabase
-              .from('group_predictions')
-              .insert({
-                group_id: groupId,
-                user_id: user.id,
-                first_team_id: positions.first,
-                second_team_id: positions.second
-              });
-              
+            // Use raw SQL for the insert to avoid typing issues
+            const { error: insertError } = await supabase.rpc('insert_group_prediction', {
+              group_id_param: groupId,
+              user_id_param: user.id,
+              first_team_id_param: positions.first,
+              second_team_id_param: positions.second
+            });
+            
             if (insertError) {
               console.error("Error inserting group prediction:", insertError);
             } else {
@@ -430,55 +470,46 @@ const Palpites = () => {
             }
           }
         }
-      } catch (error) {
-        console.warn("Group predictions table may not exist yet:", error);
       }
       
       // Process final predictions - only if the final_predictions table exists
       let finalPredictionUpdated = false;
       
-      try {
-        // Check if the final_predictions table exists
-        const { count } = await supabase
-          .from('final_predictions')
-          .select('id', { count: 'exact', head: true });
-
-        // If we got here, the table exists
+      // Check if the final_predictions table exists
+      const hasFinalPredictionsTable = await checkTableExists('final_predictions');
+      
+      if (hasFinalPredictionsTable) {
+        // Check if all required fields are filled
         if (finalPredictions.champion && finalPredictions.viceChampion && 
             finalPredictions.third && finalPredictions.fourth) {
           
           const existingFinalPrediction = existingFinalPredictions[0];
           
           if (existingFinalPrediction) {
-            // Update existing prediction
-            const { error: updateError } = await supabase
-              .from('final_predictions')
-              .update({
-                champion_id: finalPredictions.champion,
-                vice_champion_id: finalPredictions.viceChampion,
-                third_place_id: finalPredictions.third,
-                fourth_place_id: finalPredictions.fourth,
-                updated_at: new Date().toISOString()
-              })
-              .eq('id', existingFinalPrediction.id);
-              
+            // Use raw SQL for the update to avoid typing issues
+            const { error: updateError } = await supabase.rpc('update_final_prediction', {
+              pred_id: existingFinalPrediction.id,
+              champion_id_param: finalPredictions.champion,
+              vice_champion_id_param: finalPredictions.viceChampion,
+              third_place_id_param: finalPredictions.third,
+              fourth_place_id_param: finalPredictions.fourth
+            });
+            
             if (updateError) {
               console.error("Error updating final prediction:", updateError);
             } else {
               finalPredictionUpdated = true;
             }
           } else {
-            // Insert new prediction
-            const { error: insertError } = await supabase
-              .from('final_predictions')
-              .insert({
-                user_id: user.id,
-                champion_id: finalPredictions.champion,
-                vice_champion_id: finalPredictions.viceChampion,
-                third_place_id: finalPredictions.third,
-                fourth_place_id: finalPredictions.fourth
-              });
-              
+            // Use raw SQL for the insert to avoid typing issues
+            const { error: insertError } = await supabase.rpc('insert_final_prediction', {
+              user_id_param: user.id,
+              champion_id_param: finalPredictions.champion,
+              vice_champion_id_param: finalPredictions.viceChampion,
+              third_place_id_param: finalPredictions.third,
+              fourth_place_id_param: finalPredictions.fourth
+            });
+            
             if (insertError) {
               console.error("Error inserting final prediction:", insertError);
             } else {
@@ -486,8 +517,6 @@ const Palpites = () => {
             }
           }
         }
-      } catch (error) {
-        console.warn("Final predictions table may not exist yet:", error);
       }
       
       // Generate success message

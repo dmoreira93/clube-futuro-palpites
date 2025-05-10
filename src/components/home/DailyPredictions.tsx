@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Calendar } from "lucide-react";
 import { Match } from "@/types/matches";
+import { Prediction } from "@/types/predictions";
 import MatchesPredictionsList from "./predictions/MatchesPredictionsList";
 
 const DailyPredictions = () => {
@@ -61,19 +62,19 @@ const DailyPredictions = () => {
         }
 
         // Para cada jogo, buscar os times e os palpites relacionados
-        const matchesWithDetails = await Promise.all(
+        const matchesWithDetails: Match[] = await Promise.all(
           matchesData.map(async (match) => {
             // Buscar time da casa
             const { data: homeTeam } = await supabase
               .from('teams')
-              .select('id, name')
+              .select('id, name, flag_url')
               .eq('id', match.home_team_id)
               .single();
             
             // Buscar time visitante
             const { data: awayTeam } = await supabase
               .from('teams')
-              .select('id, name')
+              .select('id, name, flag_url')
               .eq('id', match.away_team_id)
               .single();
             
@@ -86,16 +87,33 @@ const DailyPredictions = () => {
                 away_score, 
                 user_id,
                 match_id,
-                users:user_id (name)
+                users (name)
               `)
               .eq('match_id', match.id);
 
+            // Convert predictions data to match our Prediction type
+            const typedPredictions: Prediction[] = (predictionsData || []).map((pred: any) => ({
+              id: pred.id,
+              home_score: pred.home_score,
+              away_score: pred.away_score,
+              user_id: pred.user_id,
+              match_id: pred.match_id,
+              users: pred.users ? { name: pred.users.name } : undefined
+            }));
+
             return {
-              ...match,
+              id: match.id,
+              match_date: match.match_date,
+              home_team_id: match.home_team_id,
+              away_team_id: match.away_team_id,
+              home_score: match.home_score,
+              away_score: match.away_score,
+              is_finished: match.is_finished,
+              stage: match.stage,
               home_team: homeTeam || { id: match.home_team_id, name: "Time não definido" },
               away_team: awayTeam || { id: match.away_team_id, name: "Time não definido" },
-              predictions: predictionsData || []
-            } as Match;
+              predictions: typedPredictions
+            };
           })
         );
 

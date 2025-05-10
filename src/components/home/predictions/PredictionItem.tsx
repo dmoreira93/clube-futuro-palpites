@@ -1,16 +1,10 @@
 
 import React from "react";
 import { TableRow, TableCell } from "@/components/ui/table";
+import { Prediction } from "@/types/predictions";
 
 type PredictionItemProps = {
-  prediction: {
-    id: string;
-    home_score: number;
-    away_score: number;
-    user?: { name: string };
-    user_id?: string;
-    users?: { name: string };
-  };
+  prediction: Prediction;
   homeTeamName: string;
   awayTeamName: string;
 };
@@ -18,8 +12,7 @@ type PredictionItemProps = {
 const PredictionItem = ({ prediction, homeTeamName, awayTeamName }: PredictionItemProps) => {
   // Handles different structures of user data that may come from the database
   const userName = prediction.user?.name || 
-                  prediction.users?.name || 
-                  "Usuário desconhecido";
+                  (prediction.users && 'name' in prediction.users ? prediction.users.name : "Usuário desconhecido");
 
   return (
     <TableRow>
