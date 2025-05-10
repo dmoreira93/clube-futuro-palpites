@@ -13,6 +13,7 @@ export type Prediction = {
   created_at?: string;
   updated_at?: string;
   user?: User;
+  users?: { name: string }; // Adding this to accommodate both formats from the database
 };
 
 export type GroupPrediction = {

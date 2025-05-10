@@ -84,7 +84,8 @@ const DailyPredictions = () => {
                 id, 
                 home_score, 
                 away_score, 
-                user_id, 
+                user_id,
+                match_id,
                 users:user_id (name)
               `)
               .eq('match_id', match.id);
@@ -94,7 +95,7 @@ const DailyPredictions = () => {
               home_team: homeTeam || { id: match.home_team_id, name: "Time não definido" },
               away_team: awayTeam || { id: match.away_team_id, name: "Time não definido" },
               predictions: predictionsData || []
-            };
+            } as Match;
           })
         );
 
