@@ -4,7 +4,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { updateUserPoints } from "@/utils/pointsCalculator";
 import { useAuth } from "@/contexts/AuthContext";
-import { Match } from "@/types/matches";
 
 export const useMatchResults = () => {
   const { toast } = useToast();
