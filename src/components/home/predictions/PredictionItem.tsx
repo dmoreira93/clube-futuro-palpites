@@ -11,12 +11,19 @@ type PredictionItemProps = {
 
 const PredictionItem = ({ prediction, homeTeamName, awayTeamName }: PredictionItemProps) => {
   // Handles different structures of user data that may come from the database
-  const userName = prediction.user?.name || 
-                  (prediction.users && 'name' in prediction.users ? prediction.users.name : "Usuário desconhecido");
+  const getUserName = () => {
+    if (prediction.user && prediction.user.name) {
+      return prediction.user.name;
+    }
+    if (prediction.users && typeof prediction.users === 'object' && 'name' in prediction.users) {
+      return prediction.users.name;
+    }
+    return "Usuário desconhecido";
+  };
 
   return (
     <TableRow>
-      <TableCell>{userName}</TableCell>
+      <TableCell>{getUserName()}</TableCell>
       <TableCell className="text-center font-semibold">{prediction.home_score}</TableCell>
       <TableCell className="text-center font-semibold">{prediction.away_score}</TableCell>
     </TableRow>

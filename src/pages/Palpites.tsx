@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import Layout from "@/components/layout/Layout";
 import { Input } from "@/components/ui/input";
@@ -26,7 +25,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { Match } from "@/types/matches";
-import { Prediction, GroupPrediction, FinalPrediction } from "@/types/predictions";
+import { Prediction, GroupPrediction, FinalPrediction, RawGroupPrediction, RawFinalPrediction } from "@/types/predictions";
+import { checkTableExists } from "@/utils/RPCHelperFunctions";
 
 const Palpites = () => {
   const { user, isAuthenticated } = useAuth();
@@ -165,18 +165,17 @@ const Palpites = () => {
           }
           
           // Check if group_predictions table exists
-          try {
-            // Use RPC to check if table exists
-            const hasGroupPredictionsTable = await checkTableExists('group_predictions');
+          const hasGroupPredictionsTable = await checkTableExists('group_predictions');
           
-            if (hasGroupPredictionsTable) {
-              // Fetch using raw SQL to avoid type errors with tables not in the types definition
-              const { data: groupPredictions, error: groupPredictionsError } = await supabase
+          if (hasGroupPredictionsTable) {
+            try {
+              // Use the RPC function to get user group predictions
+              const { data: groupPredictionsData, error: groupPredictionsError } = await supabase
                 .rpc('get_user_group_predictions', { user_id_param: user.id });
               
-              if (!groupPredictionsError && groupPredictions) {
-                // Cast the data to our expected type
-                const typedGroupPredictions: GroupPrediction[] = groupPredictions.map((item: any) => ({
+              if (!groupPredictionsError && groupPredictionsData) {
+                // Parse the JSON data returned from the RPC function
+                const parsedGroupPredictions: GroupPrediction[] = groupPredictionsData.map((item: RawGroupPrediction) => ({
                   id: item.id,
                   group_id: item.group_id,
                   first_team_id: item.first_team_id,
@@ -186,11 +185,11 @@ const Palpites = () => {
                   updated_at: item.updated_at
                 }));
                 
-                setExistingGroupPredictions(typedGroupPredictions);
+                setExistingGroupPredictions(parsedGroupPredictions);
                 
                 // Populate the groupPredictions state with existing predictions
                 const existingGroupPreds: { [key: string]: { first: string, second: string } } = {};
-                typedGroupPredictions.forEach((prediction: GroupPrediction) => {
+                parsedGroupPredictions.forEach((prediction: GroupPrediction) => {
                   existingGroupPreds[prediction.group_id] = {
                     first: prediction.first_team_id,
                     second: prediction.second_team_id
@@ -198,47 +197,49 @@ const Palpites = () => {
                 });
                 setGroupPredictions(existingGroupPreds);
               }
+            } catch (error) {
+              console.error("Error fetching group predictions:", error);
             }
-          } catch (error) {
-            console.error("Error checking group predictions table:", error);
           }
           
           // Check if final_predictions table exists
-          try {
-            // Use RPC to check if table exists
-            const hasFinalPredictionsTable = await checkTableExists('final_predictions');
-            
-            if (hasFinalPredictionsTable) {
-              // Fetch using raw SQL to avoid type errors with tables not in the types definition
+          const hasFinalPredictionsTable = await checkTableExists('final_predictions');
+          
+          if (hasFinalPredictionsTable) {
+            try {
+              // Use the RPC function to get user final prediction
               const { data: finalPredictionsData, error: finalPredictionsError } = await supabase
                 .rpc('get_user_final_prediction', { user_id_param: user.id });
               
               if (!finalPredictionsError && finalPredictionsData && finalPredictionsData.length > 0) {
-                // Cast the data to our expected type
-                const typedFinalPrediction: FinalPrediction = {
-                  id: finalPredictionsData[0].id,
-                  champion_id: finalPredictionsData[0].champion_id,
-                  vice_champion_id: finalPredictionsData[0].vice_champion_id,
-                  third_place_id: finalPredictionsData[0].third_place_id,
-                  fourth_place_id: finalPredictionsData[0].fourth_place_id,
-                  user_id: finalPredictionsData[0].user_id,
-                  created_at: finalPredictionsData[0].created_at,
-                  updated_at: finalPredictionsData[0].updated_at
-                };
+                // Parse the JSON data returned from the RPC function
+                const parsedFinalPredictions: FinalPrediction[] = finalPredictionsData.map((item: RawFinalPrediction) => ({
+                  id: item.id,
+                  champion_id: item.champion_id,
+                  vice_champion_id: item.vice_champion_id,
+                  third_place_id: item.third_place_id,
+                  fourth_place_id: item.fourth_place_id,
+                  user_id: item.user_id,
+                  created_at: item.created_at,
+                  updated_at: item.updated_at
+                }));
                 
-                setExistingFinalPredictions([typedFinalPrediction]);
-                
-                // Populate finalPredictions state with existing predictions
-                setFinalPredictions({
-                  champion: typedFinalPrediction.champion_id || "",
-                  viceChampion: typedFinalPrediction.vice_champion_id || "",
-                  third: typedFinalPrediction.third_place_id || "",
-                  fourth: typedFinalPrediction.fourth_place_id || ""
-                });
+                if (parsedFinalPredictions.length > 0) {
+                  setExistingFinalPredictions(parsedFinalPredictions);
+                  
+                  const finalPred = parsedFinalPredictions[0];
+                  // Populate finalPredictions state with existing predictions
+                  setFinalPredictions({
+                    champion: finalPred.champion_id || "",
+                    viceChampion: finalPred.vice_champion_id || "",
+                    third: finalPred.third_place_id || "",
+                    fourth: finalPred.fourth_place_id || ""
+                  });
+                }
               }
+            } catch (error) {
+              console.error("Error fetching final predictions:", error);
             }
-          } catch (error) {
-            console.error("Error checking final predictions table:", error);
           }
         }
         
@@ -256,25 +257,6 @@ const Palpites = () => {
       fetchData();
     }
   }, [isAuthenticated, user?.id]);
-
-  // Helper function to check if a table exists
-  const checkTableExists = async (tableName: string): Promise<boolean> => {
-    const { data, error } = await supabase.rpc('check_table_exists', {
-      table_name: tableName
-    });
-    
-    if (error) {
-      // If RPC doesn't exist, create it first time
-      await supabase.rpc('create_check_table_exists_function');
-      // Then try again
-      const { data: retryData } = await supabase.rpc('check_table_exists', {
-        table_name: tableName
-      });
-      return !!retryData;
-    }
-    
-    return !!data;
-  };
 
   // Format date for display
   const formatDate = (dateStr: string) => {
@@ -442,7 +424,7 @@ const Palpites = () => {
           );
           
           if (existingGroupPrediction) {
-            // Use raw SQL for the update to avoid typing issues
+            // Use the RPC function for the update
             const { error: updateError } = await supabase.rpc('update_group_prediction', {
               pred_id: existingGroupPrediction.id,
               first_id: positions.first,
@@ -455,7 +437,7 @@ const Palpites = () => {
               updatedGroupPredictions++;
             }
           } else {
-            // Use raw SQL for the insert to avoid typing issues
+            // Use the RPC function for the insert
             const { error: insertError } = await supabase.rpc('insert_group_prediction', {
               group_id_param: groupId,
               user_id_param: user.id,
@@ -483,10 +465,10 @@ const Palpites = () => {
         if (finalPredictions.champion && finalPredictions.viceChampion && 
             finalPredictions.third && finalPredictions.fourth) {
           
-          const existingFinalPrediction = existingFinalPredictions[0];
+          const existingFinalPrediction = existingFinalPredictions.length > 0 ? existingFinalPredictions[0] : null;
           
           if (existingFinalPrediction) {
-            // Use raw SQL for the update to avoid typing issues
+            // Use the RPC function for the update
             const { error: updateError } = await supabase.rpc('update_final_prediction', {
               pred_id: existingFinalPrediction.id,
               champion_id_param: finalPredictions.champion,
@@ -501,7 +483,7 @@ const Palpites = () => {
               finalPredictionUpdated = true;
             }
           } else {
-            // Use raw SQL for the insert to avoid typing issues
+            // Use the RPC function for the insert
             const { error: insertError } = await supabase.rpc('insert_final_prediction', {
               user_id_param: user.id,
               champion_id_param: finalPredictions.champion,

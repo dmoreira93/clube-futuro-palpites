@@ -33,6 +33,69 @@ export type Database = {
         }
         Relationships: []
       }
+      final_predictions: {
+        Row: {
+          champion_id: string
+          created_at: string | null
+          fourth_place_id: string
+          id: string
+          third_place_id: string
+          updated_at: string | null
+          user_id: string
+          vice_champion_id: string
+        }
+        Insert: {
+          champion_id: string
+          created_at?: string | null
+          fourth_place_id: string
+          id?: string
+          third_place_id: string
+          updated_at?: string | null
+          user_id: string
+          vice_champion_id: string
+        }
+        Update: {
+          champion_id?: string
+          created_at?: string | null
+          fourth_place_id?: string
+          id?: string
+          third_place_id?: string
+          updated_at?: string | null
+          user_id?: string
+          vice_champion_id?: string
+        }
+        Relationships: []
+      }
+      group_predictions: {
+        Row: {
+          created_at: string | null
+          first_team_id: string
+          group_id: string
+          id: string
+          second_team_id: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          first_team_id: string
+          group_id: string
+          id?: string
+          second_team_id: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          first_team_id?: string
+          group_id?: string
+          id?: string
+          second_team_id?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       groups: {
         Row: {
           created_at: string
@@ -344,7 +407,59 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      check_table_exists: {
+        Args: { table_name: string }
+        Returns: boolean
+      }
+      create_check_table_exists_function: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
+      create_necessary_functions: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
+      get_user_final_prediction: {
+        Args: { user_id_param: string }
+        Returns: Json[]
+      }
+      get_user_group_predictions: {
+        Args: { user_id_param: string }
+        Returns: Json[]
+      }
+      insert_final_prediction: {
+        Args: {
+          user_id_param: string
+          champion_id_param: string
+          vice_champion_id_param: string
+          third_place_id_param: string
+          fourth_place_id_param: string
+        }
+        Returns: undefined
+      }
+      insert_group_prediction: {
+        Args: {
+          group_id_param: string
+          user_id_param: string
+          first_team_id_param: string
+          second_team_id_param: string
+        }
+        Returns: undefined
+      }
+      update_final_prediction: {
+        Args: {
+          pred_id: string
+          champion_id_param: string
+          vice_champion_id_param: string
+          third_place_id_param: string
+          fourth_place_id_param: string
+        }
+        Returns: undefined
+      }
+      update_group_prediction: {
+        Args: { pred_id: string; first_id: string; second_id: string }
+        Returns: undefined
+      }
     }
     Enums: {
       [_ in never]: never

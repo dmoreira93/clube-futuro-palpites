@@ -91,15 +91,26 @@ const DailyPredictions = () => {
               `)
               .eq('match_id', match.id);
 
-            // Convert predictions data to match our Prediction type
-            const typedPredictions: Prediction[] = (predictionsData || []).map((pred: any) => ({
-              id: pred.id,
-              home_score: pred.home_score,
-              away_score: pred.away_score,
-              user_id: pred.user_id,
-              match_id: pred.match_id,
-              users: pred.users ? { name: pred.users.name } : undefined
-            }));
+            // Process the predictions data to make it compatible with our type
+            const typedPredictions: Prediction[] = (predictionsData || []).map((pred: any) => {
+              // Create a properly structured prediction object
+              const prediction: Prediction = {
+                id: pred.id,
+                home_score: pred.home_score,
+                away_score: pred.away_score,
+                user_id: pred.user_id,
+                match_id: pred.match_id
+              };
+
+              // Handle the user data structure correctly
+              if (pred.users && typeof pred.users === 'object') {
+                prediction.user = { name: pred.users.name };
+              } else if (typeof pred.users === 'string') {
+                prediction.user = { name: pred.users };
+              }
+
+              return prediction;
+            });
 
             return {
               id: match.id,
