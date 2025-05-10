@@ -25,6 +25,8 @@ import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
+import { Match } from "@/types/matches";
+import { Prediction, GroupPrediction, FinalPrediction } from "@/types/predictions";
 
 const Palpites = () => {
   const { user, isAuthenticated } = useAuth();
@@ -45,10 +47,14 @@ const Palpites = () => {
   const [userPassword, setUserPassword] = useState("");
   
   // State for matches and teams from database
-  const [matches, setMatches] = useState<any[]>([]);
+  const [matches, setMatches] = useState<Match[]>([]);
   const [teams, setTeams] = useState<any[]>([]);
   const [groups, setGroups] = useState<any[]>([]);
-  const [existingPredictions, setExistingPredictions] = useState<any[]>([]);
+  const [existingPredictions, setExistingPredictions] = useState<Prediction[]>([]);
+  const [existingGroupPredictions, setExistingGroupPredictions] = useState<GroupPrediction[]>([]);
+  const [existingFinalPredictions, setExistingFinalPredictions] = useState<FinalPrediction[]>([]);
+  
+  const [submitting, setSubmitting] = useState(false);
   
   // Redirect if not authenticated
   useEffect(() => {
@@ -95,7 +101,7 @@ const Palpites = () => {
         // Fetch teams
         const { data: teamsData, error: teamsError } = await supabase
           .from('teams')
-          .select('id, name, group_id')
+          .select('id, name, group_id, flag_url')
           .order('name', { ascending: true });
           
         if (teamsError) {
@@ -117,25 +123,69 @@ const Palpites = () => {
         
         // Fetch user's existing predictions if the user is logged in
         if (user?.id) {
+          // Match predictions
           const { data: predictionsData, error: predictionsError } = await supabase
             .from('predictions')
             .select('*')
             .eq('user_id', user.id);
             
           if (predictionsError) {
-            console.error("Error fetching predictions:", predictionsError);
+            console.error("Error fetching match predictions:", predictionsError);
           } else {
             setExistingPredictions(predictionsData || []);
             
             // Populate the matchBets state with existing predictions
             const existingBets: { [key: string]: { home: string, away: string } } = {};
-            predictionsData?.forEach((prediction) => {
+            predictionsData?.forEach((prediction: Prediction) => {
               existingBets[prediction.match_id] = {
                 home: prediction.home_score.toString(),
                 away: prediction.away_score.toString()
               };
             });
             setMatchBets(existingBets);
+          }
+          
+          // Group predictions
+          const { data: groupPredictionsData, error: groupPredictionsError } = await supabase
+            .from('group_predictions')
+            .select('*')
+            .eq('user_id', user.id);
+            
+          if (groupPredictionsError) {
+            console.error("Error fetching group predictions:", groupPredictionsError);
+          } else {
+            setExistingGroupPredictions(groupPredictionsData || []);
+            
+            // Populate the groupPredictions state with existing predictions
+            const existingGroupPreds: { [key: string]: { first: string, second: string } } = {};
+            groupPredictionsData?.forEach((prediction: GroupPrediction) => {
+              existingGroupPreds[prediction.group_id] = {
+                first: prediction.first_team_id,
+                second: prediction.second_team_id
+              };
+            });
+            setGroupPredictions(existingGroupPreds);
+          }
+          
+          // Final predictions
+          const { data: finalPredictionsData, error: finalPredictionsError } = await supabase
+            .from('final_predictions')
+            .select('*')
+            .eq('user_id', user.id)
+            .maybeSingle();
+            
+          if (finalPredictionsError) {
+            console.error("Error fetching final predictions:", finalPredictionsError);
+          } else if (finalPredictionsData) {
+            setExistingFinalPredictions([finalPredictionsData]);
+            
+            // Populate finalPredictions state with existing predictions
+            setFinalPredictions({
+              champion: finalPredictionsData.champion_id || "",
+              viceChampion: finalPredictionsData.vice_champion_id || "",
+              third: finalPredictionsData.third_place_id || "",
+              fourth: finalPredictionsData.fourth_place_id || ""
+            });
           }
         }
         
@@ -219,99 +269,206 @@ const Palpites = () => {
       return;
     }
     
-    // Verify the user's password
-    const { data: userData, error: userError } = await supabase
-      .from('users_custom')
-      .select('id')
-      .eq('id', user.id)
-      .eq('password', userPassword)
-      .single();
-      
-    if (userError || !userData) {
-      toast("Senha incorreta", { 
-        description: "A senha informada não confere. Tente novamente." 
-      });
-      return;
-    }
+    setSubmitting(true);
     
-    // Validate predictions
-    const invalidPredictions = Object.entries(matchBets).filter(([_, scores]) => {
-      const homeScore = parseInt(scores.home);
-      const awayScore = parseInt(scores.away);
-      return isNaN(homeScore) || isNaN(awayScore) || homeScore < 0 || awayScore < 0;
-    });
-    
-    if (invalidPredictions.length > 0) {
-      toast("Palpites inválidos", { 
-        description: "Alguns palpites possuem valores inválidos. Verifique e tente novamente." 
-      });
-      return;
-    }
-    
-    // Save predictions to the database
     try {
-      const predictions = Object.entries(matchBets).map(([matchId, scores]) => ({
-        match_id: matchId,
-        user_id: user.id,
-        home_score: parseInt(scores.home),
-        away_score: parseInt(scores.away),
-      }));
+      // Verify the user's password
+      const { data: userData, error: userError } = await supabase
+        .from('users_custom')
+        .select('id')
+        .eq('id', user.id)
+        .eq('password', userPassword)
+        .single();
+        
+      if (userError || !userData) {
+        toast("Senha incorreta", { 
+          description: "A senha informada não confere. Tente novamente." 
+        });
+        setSubmitting(false);
+        return;
+      }
       
-      // Check which predictions are new and which ones are updates
-      const newPredictions = [];
-      const updatePredictions = [];
+      // Validate match predictions
+      const invalidPredictions = Object.entries(matchBets).filter(([_, scores]) => {
+        const homeScore = parseInt(scores.home);
+        const awayScore = parseInt(scores.away);
+        return isNaN(homeScore) || isNaN(awayScore) || homeScore < 0 || awayScore < 0;
+      });
       
-      for (const prediction of predictions) {
+      if (invalidPredictions.length > 0) {
+        toast("Palpites inválidos", { 
+          description: "Alguns palpites possuem valores inválidos. Verifique e tente novamente." 
+        });
+        setSubmitting(false);
+        return;
+      }
+      
+      // Save match predictions to the database
+      let newMatchPredictions = 0;
+      let updatedMatchPredictions = 0;
+      
+      // Process match predictions
+      for (const [matchId, scores] of Object.entries(matchBets)) {
+        const homeScore = parseInt(scores.home);
+        const awayScore = parseInt(scores.away);
+        
+        if (isNaN(homeScore) || isNaN(awayScore)) continue;
+        
         const existingPrediction = existingPredictions.find(p => 
-          p.match_id === prediction.match_id && p.user_id === user.id
+          p.match_id === matchId && p.user_id === user.id
         );
         
         if (existingPrediction) {
-          updatePredictions.push({
-            ...prediction,
-            id: existingPrediction.id
-          });
+          // Update existing prediction
+          const { error: updateError } = await supabase
+            .from('predictions')
+            .update({
+              home_score: homeScore,
+              away_score: awayScore,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', existingPrediction.id);
+            
+          if (updateError) {
+            console.error(`Error updating prediction ${existingPrediction.id}:`, updateError);
+          } else {
+            updatedMatchPredictions++;
+          }
         } else {
-          newPredictions.push(prediction);
+          // Insert new prediction
+          const { error: insertError } = await supabase
+            .from('predictions')
+            .insert({
+              match_id: matchId,
+              user_id: user.id,
+              home_score: homeScore,
+              away_score: awayScore
+            });
+            
+          if (insertError) {
+            console.error("Error inserting match prediction:", insertError);
+          } else {
+            newMatchPredictions++;
+          }
         }
       }
       
-      // Insert new predictions
-      if (newPredictions.length > 0) {
-        const { error: insertError } = await supabase
-          .from('predictions')
-          .insert(newPredictions);
-          
-        if (insertError) {
-          console.error("Error inserting predictions:", insertError);
-          toast("Erro ao salvar palpites", { 
-            description: "Ocorreu um erro ao inserir novos palpites" 
-          });
-          return;
-        }
-      }
+      // Process group predictions
+      let newGroupPredictions = 0;
+      let updatedGroupPredictions = 0;
       
-      // Update existing predictions
-      for (const prediction of updatePredictions) {
-        const { id, ...updateData } = prediction;
+      for (const [groupId, positions] of Object.entries(groupPredictions)) {
+        if (!positions.first || !positions.second) continue;
         
-        const { error: updateError } = await supabase
-          .from('predictions')
-          .update(updateData)
-          .eq('id', id);
-          
-        if (updateError) {
-          console.error(`Error updating prediction ${id}:`, updateError);
-          toast("Erro ao atualizar palpites", { 
-            description: "Ocorreu um erro ao atualizar palpites existentes" 
-          });
-          return;
+        const existingGroupPrediction = existingGroupPredictions.find(p => 
+          p.group_id === groupId && p.user_id === user.id
+        );
+        
+        if (existingGroupPrediction) {
+          // Update existing prediction
+          const { error: updateError } = await supabase
+            .from('group_predictions')
+            .update({
+              first_team_id: positions.first,
+              second_team_id: positions.second,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', existingGroupPrediction.id);
+            
+          if (updateError) {
+            console.error(`Error updating group prediction:`, updateError);
+          } else {
+            updatedGroupPredictions++;
+          }
+        } else {
+          // Insert new prediction
+          const { error: insertError } = await supabase
+            .from('group_predictions')
+            .insert({
+              group_id: groupId,
+              user_id: user.id,
+              first_team_id: positions.first,
+              second_team_id: positions.second
+            });
+            
+          if (insertError) {
+            console.error("Error inserting group prediction:", insertError);
+          } else {
+            newGroupPredictions++;
+          }
         }
       }
       
-      toast("Palpites registrados", { 
-        description: `Seus palpites foram salvos com sucesso! Total de ${newPredictions.length} novos palpites e ${updatePredictions.length} atualizados.` 
-      });
+      // Process final predictions
+      let finalPredictionUpdated = false;
+      
+      if (finalPredictions.champion && finalPredictions.viceChampion && 
+          finalPredictions.third && finalPredictions.fourth) {
+        
+        const existingFinalPrediction = existingFinalPredictions[0];
+        
+        if (existingFinalPrediction) {
+          // Update existing prediction
+          const { error: updateError } = await supabase
+            .from('final_predictions')
+            .update({
+              champion_id: finalPredictions.champion,
+              vice_champion_id: finalPredictions.viceChampion,
+              third_place_id: finalPredictions.third,
+              fourth_place_id: finalPredictions.fourth,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', existingFinalPrediction.id);
+            
+          if (updateError) {
+            console.error("Error updating final prediction:", updateError);
+          } else {
+            finalPredictionUpdated = true;
+          }
+        } else {
+          // Insert new prediction
+          const { error: insertError } = await supabase
+            .from('final_predictions')
+            .insert({
+              user_id: user.id,
+              champion_id: finalPredictions.champion,
+              vice_champion_id: finalPredictions.viceChampion,
+              third_place_id: finalPredictions.third,
+              fourth_place_id: finalPredictions.fourth
+            });
+            
+          if (insertError) {
+            console.error("Error inserting final prediction:", insertError);
+          } else {
+            finalPredictionUpdated = true;
+          }
+        }
+      }
+      
+      // Generate success message
+      let successMessage = "";
+      
+      if (newMatchPredictions > 0 || updatedMatchPredictions > 0) {
+        successMessage += `Palpites de jogos: ${newMatchPredictions} novos, ${updatedMatchPredictions} atualizados. `;
+      }
+      
+      if (newGroupPredictions > 0 || updatedGroupPredictions > 0) {
+        successMessage += `Classificações de grupos: ${newGroupPredictions} novas, ${updatedGroupPredictions} atualizadas. `;
+      }
+      
+      if (finalPredictionUpdated) {
+        successMessage += "Previsão do resultado final salva. ";
+      }
+      
+      if (successMessage) {
+        toast("Palpites registrados com sucesso!", { 
+          description: successMessage
+        });
+      } else {
+        toast("Nenhum palpite foi alterado", { 
+          description: "Nenhuma alteração foi detectada nos palpites"
+        });
+      }
       
       // Reset password field
       setUserPassword("");
@@ -319,8 +476,10 @@ const Palpites = () => {
     } catch (error) {
       console.error("Error saving predictions:", error);
       toast("Erro ao salvar palpites", { 
-        description: "Ocorreu um erro ao processar seus palpites" 
+        description: "Ocorreu um erro ao processar seus palpites"
       });
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -390,8 +549,8 @@ const Palpites = () => {
                       <div className="flex items-center justify-between gap-3">
                         <div className="flex-1 text-right flex items-center justify-end gap-2">
                           {match.home_team?.flag_url && (
-                            <div className="w-6 h-6 flex justify-center">
-                              <Avatar className="h-6 w-6">
+                            <div className="w-8 h-8 flex justify-center">
+                              <Avatar className="h-8 w-8">
                                 <AvatarImage src={match.home_team.flag_url} alt={match.home_team?.name || ""} />
                                 <AvatarFallback className="text-xs">
                                   {match.home_team?.name?.substring(0, 2) || ""}
@@ -399,7 +558,7 @@ const Palpites = () => {
                               </Avatar>
                             </div>
                           )}
-                          <p className="font-medium mb-1">{match.home_team?.name}</p>
+                          <p className="font-medium">{match.home_team?.name}</p>
                           <Input 
                             type="number" 
                             min="0"
@@ -419,10 +578,10 @@ const Palpites = () => {
                             onChange={(e) => handleMatchBetChange(match.id, 'away', e.target.value)}
                             disabled={match.is_finished}
                           />
-                          <p className="font-medium mb-1">{match.away_team?.name}</p>
+                          <p className="font-medium">{match.away_team?.name}</p>
                           {match.away_team?.flag_url && (
-                            <div className="w-6 h-6 ml-2 flex justify-center">
-                              <Avatar className="h-6 w-6">
+                            <div className="w-8 h-8 ml-2 flex justify-center">
+                              <Avatar className="h-8 w-8">
                                 <AvatarImage src={match.away_team.flag_url} alt={match.away_team?.name || ""} />
                                 <AvatarFallback className="text-xs">
                                   {match.away_team?.name?.substring(0, 2) || ""}
@@ -615,8 +774,16 @@ const Palpites = () => {
             <Button 
               className="w-full bg-fifa-blue hover:bg-opacity-90"
               onClick={handleSubmitBets}
+              disabled={submitting}
             >
-              Confirmar Palpites
+              {submitting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Processando...
+                </>
+              ) : (
+                'Confirmar Palpites'
+              )}
             </Button>
 
             <p className="text-sm text-gray-500 text-center">
