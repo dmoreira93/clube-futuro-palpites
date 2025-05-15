@@ -6,4 +6,5 @@ export type Participant = {
   points: number;
   matches: number;
   accuracy: string;
+  avatar_url?: string;
 };

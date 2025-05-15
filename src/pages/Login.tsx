@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { LogInIcon } from "lucide-react";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
@@ -153,29 +154,64 @@ const Login = () => {
         <div className="mt-6 p-4 bg-gray-50 rounded-md border border-gray-200">
           <h3 className="text-lg font-medium mb-2">Usuários disponíveis para teste</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
-            <div className="p-2 bg-white rounded border border-gray-200">
-              <p className="font-medium">Diego Moreira</p>
-              <p className="text-gray-600">Usuário: dmoreira</p>
+            <div className="p-2 bg-white rounded border border-gray-200 flex items-center gap-3">
+              <Avatar className="h-10 w-10">
+                <AvatarImage src="https://github.com/diegomoreira.png" />
+                <AvatarFallback>DM</AvatarFallback>
+              </Avatar>
+              <div>
+                <p className="font-medium">Diego Moreira</p>
+                <p className="text-gray-600">Usuário: dmoreira</p>
+              </div>
             </div>
-            <div className="p-2 bg-white rounded border border-gray-200">
-              <p className="font-medium">Jeferson Fernando Neumann</p>
-              <p className="text-gray-600">Usuário: jneumann</p>
+            <div className="p-2 bg-white rounded border border-gray-200 flex items-center gap-3">
+              <Avatar className="h-10 w-10">
+                <AvatarImage src="https://github.com/jeferson.png" />
+                <AvatarFallback>JN</AvatarFallback>
+              </Avatar>
+              <div>
+                <p className="font-medium">Jeferson Fernando Neumann</p>
+                <p className="text-gray-600">Usuário: jneumann</p>
+              </div>
             </div>
-            <div className="p-2 bg-white rounded border border-gray-200">
-              <p className="font-medium">Alexandre Brandalize</p>
-              <p className="text-gray-600">Usuário: abrandalize</p>
+            <div className="p-2 bg-white rounded border border-gray-200 flex items-center gap-3">
+              <Avatar className="h-10 w-10">
+                <AvatarImage src="https://github.com/abrandalize.png" />
+                <AvatarFallback>AB</AvatarFallback>
+              </Avatar>
+              <div>
+                <p className="font-medium">Alexandre Brandalize</p>
+                <p className="text-gray-600">Usuário: abrandalize</p>
+              </div>
             </div>
-            <div className="p-2 bg-white rounded border border-gray-200">
-              <p className="font-medium">Marcelo da Silva Matiaze</p>
-              <p className="text-gray-600">Usuário: mmatiaze</p>
+            <div className="p-2 bg-white rounded border border-gray-200 flex items-center gap-3">
+              <Avatar className="h-10 w-10">
+                <AvatarImage src="https://github.com/mmatiaze.png" />
+                <AvatarFallback>MM</AvatarFallback>
+              </Avatar>
+              <div>
+                <p className="font-medium">Marcelo da Silva Matiaze</p>
+                <p className="text-gray-600">Usuário: mmatiaze</p>
+              </div>
             </div>
-            <div className="p-2 bg-white rounded border border-gray-200">
-              <p className="font-medium">Leticia de Souza</p>
-              <p className="text-gray-600">Usuário: lsouza</p>
+            <div className="p-2 bg-white rounded border border-gray-200 flex items-center gap-3">
+              <Avatar className="h-10 w-10">
+                <AvatarImage src="https://github.com/lsouza.png" />
+                <AvatarFallback>LS</AvatarFallback>
+              </Avatar>
+              <div>
+                <p className="font-medium">Leticia de Souza</p>
+                <p className="text-gray-600">Usuário: lsouza</p>
+              </div>
             </div>
-            <div className="p-2 bg-white rounded border border-gray-200">
-              <p className="font-medium">E outros usuários...</p>
-              <p className="text-gray-600">Ver detalhes no login</p>
+            <div className="p-2 bg-white rounded border border-gray-200 flex items-center gap-3">
+              <Avatar className="h-10 w-10">
+                <AvatarFallback>...</AvatarFallback>
+              </Avatar>
+              <div>
+                <p className="font-medium">E outros usuários...</p>
+                <p className="text-gray-600">Ver detalhes no login</p>
+              </div>
             </div>
           </div>
         </div>
