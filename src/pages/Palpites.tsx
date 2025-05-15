@@ -345,8 +345,7 @@ const Palpites = () => {
       const { error } = await supabase
         .from('predictions')
         .upsert(predictions, {
-          onConflict: 'user_id,match_id',
-          ignoreDuplicates: false
+          onConflict: 'match_id,user_id'
         });
 
       if (error) {
