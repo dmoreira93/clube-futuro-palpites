@@ -14,7 +14,7 @@ export const useParticipantsRanking = () => {
         // Buscar usuários com seus palpites
         const { data: usersData, error: usersError } = await supabase
           .from('users_custom')
-          .select('id, name, username')
+          .select('id, name, username, avatar_url')
           .order('name');
           
         if (usersError) throw usersError;
@@ -37,7 +37,8 @@ export const useParticipantsRanking = () => {
                 nickname: user.username || user.name.split(' ')[0],
                 points: statsData?.total_points || 0,
                 matches: statsData?.matches_played || 0,
-                accuracy: statsData ? `${statsData.accuracy_percentage || 0}%` : "0%"
+                accuracy: statsData ? `${statsData.accuracy_percentage || 0}%` : "0%",
+                avatar_url: user.avatar_url
               };
             })
           );
