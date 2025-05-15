@@ -343,22 +343,12 @@ const Palpites = () => {
           updated_at: new Date().toISOString()
         };
 
-        // Check if prediction already exists
-        const { data: existingPrediction } = await supabase
+        const { error } = await supabase
           .from('predictions')
-          .select('id')
-          .eq('match_id', matchId)
-          .eq('user_id', user.id)
-          .single();
-
-        const { error } = existingPrediction 
-          ? await supabase
-              .from('predictions')
-              .update(prediction)
-              .eq('id', existingPrediction.id)
-          : await supabase
-              .from('predictions')
-              .insert(prediction);
+          .upsert(prediction, {
+            onConflict: 'match_id,user_id',
+            ignoreDuplicates: false
+          });
 
         if (error) {
           console.error('Erro ao salvar palpite:', error);
