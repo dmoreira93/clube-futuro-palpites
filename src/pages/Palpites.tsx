@@ -335,15 +335,30 @@ const Palpites = () => {
 
       // Salvar os palpites
       for (const [matchId, scores] of Object.entries(matchBets)) {
-        const { error } = await supabase
+        const prediction = {
+          match_id: matchId,
+          user_id: user.id,
+          home_score: parseInt(scores.home),
+          away_score: parseInt(scores.away),
+          updated_at: new Date().toISOString()
+        };
+
+        // Check if prediction already exists
+        const { data: existingPrediction } = await supabase
           .from('predictions')
-          .upsert({
-            match_id: matchId,
-            user_id: user.id,
-            home_score: parseInt(scores.home),
-            away_score: parseInt(scores.away),
-            updated_at: new Date().toISOString()
-          });
+          .select('id')
+          .eq('match_id', matchId)
+          .eq('user_id', user.id)
+          .single();
+
+        const { error } = existingPrediction 
+          ? await supabase
+              .from('predictions')
+              .update(prediction)
+              .eq('id', existingPrediction.id)
+          : await supabase
+              .from('predictions')
+              .insert(prediction);
 
         if (error) {
           console.error('Erro ao salvar palpite:', error);
