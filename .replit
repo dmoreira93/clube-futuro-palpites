@@ -22,3 +22,7 @@ args = "npm install"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "npm run dev -- --host 0.0.0.0"
+
+[[ports]]
+localPort = 8080
+externalPort = 80
