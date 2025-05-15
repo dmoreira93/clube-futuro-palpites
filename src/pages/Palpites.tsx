@@ -335,38 +335,19 @@ const Palpites = () => {
 
       // Salvar os palpites
       for (const [matchId, scores] of Object.entries(matchBets)) {
-        // Primeiro verifica se já existe um palpite
-        const { data: existingPrediction } = await supabase
+        const { error } = await supabase
           .from('predictions')
-          .select('id')
-          .eq('match_id', matchId)
-          .eq('user_id', user.id)
-          .single();
+          .upsert({
+            match_id: matchId,
+            user_id: user.id,
+            home_score: parseInt(scores.home),
+            away_score: parseInt(scores.away),
+            updated_at: new Date().toISOString()
+          });
 
-        if (existingPrediction) {
-          // Atualiza o palpite existente
-          const { error } = await supabase
-            .from('predictions')
-            .update({
-              home_score: parseInt(scores.home),
-              away_score: parseInt(scores.away),
-              updated_at: new Date().toISOString()
-            })
-            .eq('id', existingPrediction.id);
-
-          if (error) throw error;
-        } else {
-          // Insere um novo palpite
-          const { error } = await supabase
-            .from('predictions')
-            .insert({
-              match_id: matchId,
-              user_id: user.id,
-              home_score: parseInt(scores.home),
-              away_score: parseInt(scores.away)
-            });
-
-          if (error) throw error;
+        if (error) {
+          console.error('Erro ao salvar palpite:', error);
+          throw error;
         }
       }
 
