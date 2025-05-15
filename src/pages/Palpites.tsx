@@ -31,10 +31,10 @@ import { checkTableExists } from "@/utils/RPCHelperFunctions";
 const Palpites = () => {
   const { user, isAuthenticated } = useAuth();
   const navigate = useNavigate();
-  
+
   // State for data loading
   const [loading, setLoading] = useState(true);
-  
+
   // State for all data
   const [matchBets, setMatchBets] = useState<{ [key: string]: { home: string, away: string } }>({});
   const [groupPredictions, setGroupPredictions] = useState<{ [key: string]: { first: string, second: string } }>({});
@@ -45,7 +45,7 @@ const Palpites = () => {
     fourth: "",
   });
   const [userPassword, setUserPassword] = useState("");
-  
+
   // State for matches and teams from database
   const [matches, setMatches] = useState<Match[]>([]);
   const [teams, setTeams] = useState<any[]>([]);
@@ -53,9 +53,9 @@ const Palpites = () => {
   const [existingPredictions, setExistingPredictions] = useState<Prediction[]>([]);
   const [existingGroupPredictions, setExistingGroupPredictions] = useState<GroupPrediction[]>([]);
   const [existingFinalPredictions, setExistingFinalPredictions] = useState<FinalPrediction[]>([]);
-  
+
   const [submitting, setSubmitting] = useState(false);
-  
+
   // Redirect if not authenticated
   useEffect(() => {
     if (!isAuthenticated) {
@@ -65,7 +65,7 @@ const Palpites = () => {
       navigate("/login");
     }
   }, [isAuthenticated, navigate]);
-  
+
   // Load data from the database
   useEffect(() => {
     const fetchData = async () => {
@@ -86,7 +86,7 @@ const Palpites = () => {
           `)
           .ilike('stage', '%Grupo%') // Only fetch group stage matches
           .order('match_date', { ascending: true });
-          
+
         if (matchesError) {
           console.error("Error fetching matches:", matchesError);
           toast("Erro ao carregar jogos", { 
@@ -100,46 +100,46 @@ const Palpites = () => {
               .select('id, name, flag_url')
               .eq('id', match.home_team_id)
               .single();
-              
+
             const { data: awayTeam } = await supabase
               .from('teams')
               .select('id, name, flag_url')
               .eq('id', match.away_team_id)
               .single();
-              
+
             return {
               ...match,
               home_team: homeTeam || { id: match.home_team_id, name: "Time não definido" },
               away_team: awayTeam || { id: match.away_team_id, name: "Time não definido" }
             } as Match;
           }));
-          
+
           setMatches(matchesWithTeams);
         }
-        
+
         // Fetch teams
         const { data: teamsData, error: teamsError } = await supabase
           .from('teams')
           .select('id, name, group_id, flag_url')
           .order('name', { ascending: true });
-          
+
         if (teamsError) {
           console.error("Error fetching teams:", teamsError);
         } else {
           setTeams(teamsData || []);
         }
-        
+
         // Fetch groups
         const { data: groupsData, error: groupsError } = await supabase
           .from('groups')
           .select('id, name');
-          
+
         if (groupsError) {
           console.error("Error fetching groups:", groupsError);
         } else {
           setGroups(groupsData || []);
         }
-        
+
         // Fetch user's existing predictions if the user is logged in
         if (user?.id) {
           // Match predictions
@@ -147,12 +147,12 @@ const Palpites = () => {
             .from('predictions')
             .select('*')
             .eq('user_id', user.id);
-            
+
           if (predictionsError) {
             console.error("Error fetching match predictions:", predictionsError);
           } else {
             setExistingPredictions(predictionsData || []);
-            
+
             // Populate the matchBets state with existing predictions
             const existingBets: { [key: string]: { home: string, away: string } } = {};
             predictionsData?.forEach((prediction: Prediction) => {
@@ -163,16 +163,16 @@ const Palpites = () => {
             });
             setMatchBets(existingBets);
           }
-          
+
           // Check if group_predictions table exists
           const hasGroupPredictionsTable = await checkTableExists('group_predictions');
-          
+
           if (hasGroupPredictionsTable) {
             try {
               // Use the RPC function to get user group predictions
               const { data: groupPredictionsData, error: groupPredictionsError } = await supabase
                 .rpc('get_user_group_predictions', { user_id_param: user.id });
-              
+
               if (!groupPredictionsError && groupPredictionsData) {
                 // Parse the JSON data returned from the RPC function
                 const parsedGroupPredictions: GroupPrediction[] = groupPredictionsData.map((item: RawGroupPrediction) => ({
@@ -184,9 +184,9 @@ const Palpites = () => {
                   created_at: item.created_at,
                   updated_at: item.updated_at
                 }));
-                
+
                 setExistingGroupPredictions(parsedGroupPredictions);
-                
+
                 // Populate the groupPredictions state with existing predictions
                 const existingGroupPreds: { [key: string]: { first: string, second: string } } = {};
                 parsedGroupPredictions.forEach((prediction: GroupPrediction) => {
@@ -201,16 +201,16 @@ const Palpites = () => {
               console.error("Error fetching group predictions:", error);
             }
           }
-          
+
           // Check if final_predictions table exists
           const hasFinalPredictionsTable = await checkTableExists('final_predictions');
-          
+
           if (hasFinalPredictionsTable) {
             try {
               // Use the RPC function to get user final prediction
               const { data: finalPredictionsData, error: finalPredictionsError } = await supabase
                 .rpc('get_user_final_prediction', { user_id_param: user.id });
-              
+
               if (!finalPredictionsError && finalPredictionsData && finalPredictionsData.length > 0) {
                 // Parse the JSON data returned from the RPC function
                 const parsedFinalPredictions: FinalPrediction[] = finalPredictionsData.map((item: RawFinalPrediction) => ({
@@ -223,10 +223,10 @@ const Palpites = () => {
                   created_at: item.created_at,
                   updated_at: item.updated_at
                 }));
-                
+
                 if (parsedFinalPredictions.length > 0) {
                   setExistingFinalPredictions(parsedFinalPredictions);
-                  
+
                   const finalPred = parsedFinalPredictions[0];
                   // Populate finalPredictions state with existing predictions
                   setFinalPredictions({
@@ -242,7 +242,7 @@ const Palpites = () => {
             }
           }
         }
-        
+
       } catch (error) {
         console.error("Error fetching data:", error);
         toast("Erro ao carregar dados", { 
@@ -252,7 +252,7 @@ const Palpites = () => {
         setLoading(false);
       }
     };
-    
+
     if (isAuthenticated) {
       fetchData();
     }
@@ -263,18 +263,18 @@ const Palpites = () => {
     const date = new Date(dateStr);
     return date.toLocaleDateString("pt-BR");
   };
-  
+
   // Group teams by their group_id
   const teamsByGroup = teams.reduce((acc: any, team) => {
     if (!team.group_id) return acc;
-    
+
     if (!acc[team.group_id]) {
       acc[team.group_id] = [];
     }
     acc[team.group_id].push(team);
     return acc;
   }, {});
-  
+
   // Process groups with their teams for display
   const groupsWithTeams = groups.map(group => ({
     ...group,
@@ -315,224 +315,51 @@ const Palpites = () => {
       });
       return;
     }
-    
-    if (!userPassword) {
-      toast("Senha não informada", { 
-        description: "Por favor, digite sua senha para confirmar os palpites" 
-      });
-      return;
-    }
-    
+
     setSubmitting(true);
-    
+
     try {
-      // Verify the user's password
-      const { data: userData, error: userError } = await supabase
-        .from('users_custom')
-        .select('id')
-        .eq('id', user.id)
-        .eq('password', userPassword)
-        .single();
-        
-      if (userError || !userData) {
-        toast("Senha incorreta", { 
-          description: "A senha informada não confere. Tente novamente." 
-        });
-        setSubmitting(false);
-        return;
-      }
-      
-      // Validate match predictions
+      // Validar os palpites
       const invalidPredictions = Object.entries(matchBets).filter(([_, scores]) => {
         const homeScore = parseInt(scores.home);
         const awayScore = parseInt(scores.away);
         return isNaN(homeScore) || isNaN(awayScore) || homeScore < 0 || awayScore < 0;
       });
-      
+
       if (invalidPredictions.length > 0) {
-        toast("Palpites inválidos", { 
-          description: "Alguns palpites possuem valores inválidos. Verifique e tente novamente." 
+        toast("Palpites inválidos", {
+          description: "Verifique se todos os placares são números válidos"
         });
-        setSubmitting(false);
         return;
       }
-      
-      // Save match predictions to the database
-      let newMatchPredictions = 0;
-      let updatedMatchPredictions = 0;
-      
-      // Process match predictions
+
+      // Salvar os palpites
       for (const [matchId, scores] of Object.entries(matchBets)) {
-        const homeScore = parseInt(scores.home);
-        const awayScore = parseInt(scores.away);
-        
-        if (isNaN(homeScore) || isNaN(awayScore)) continue;
-        
-        const existingPrediction = existingPredictions.find(p => 
-          p.match_id === matchId && p.user_id === user.id
-        );
-        
-        if (existingPrediction) {
-          // Update existing prediction
-          const { error: updateError } = await supabase
-            .from('predictions')
-            .update({
-              home_score: homeScore,
-              away_score: awayScore,
-              updated_at: new Date().toISOString()
-            })
-            .eq('id', existingPrediction.id);
-            
-          if (updateError) {
-            console.error(`Error updating prediction ${existingPrediction.id}:`, updateError);
-          } else {
-            updatedMatchPredictions++;
-          }
-        } else {
-          // Insert new prediction
-          const { error: insertError } = await supabase
-            .from('predictions')
-            .insert({
-              match_id: matchId,
-              user_id: user.id,
-              home_score: homeScore,
-              away_score: awayScore
-            });
-            
-          if (insertError) {
-            console.error("Error inserting match prediction:", insertError);
-          } else {
-            newMatchPredictions++;
-          }
+        const { error } = await supabase
+          .from('predictions')
+          .upsert({
+            match_id: matchId,
+            user_id: user.id,
+            home_score: parseInt(scores.home),
+            away_score: parseInt(scores.away),
+            updated_at: new Date().toISOString()
+          }, {
+            onConflict: 'user_id,match_id'
+          });
+
+        if (error) {
+          throw error;
         }
       }
-      
-      // Process group predictions - only if the group_predictions table exists
-      let newGroupPredictions = 0;
-      let updatedGroupPredictions = 0;
-      
-      // Check if the group_predictions table exists
-      const hasGroupPredictionsTable = await checkTableExists('group_predictions');
-      
-      if (hasGroupPredictionsTable) {
-        // Process group predictions
-        for (const [groupId, positions] of Object.entries(groupPredictions)) {
-          if (!positions.first || !positions.second) continue;
-          
-          const existingGroupPrediction = existingGroupPredictions.find(p => 
-            p.group_id === groupId && p.user_id === user.id
-          );
-          
-          if (existingGroupPrediction) {
-            // Use the RPC function for the update
-            const { error: updateError } = await supabase.rpc('update_group_prediction', {
-              pred_id: existingGroupPrediction.id,
-              first_id: positions.first,
-              second_id: positions.second
-            });
-            
-            if (updateError) {
-              console.error(`Error updating group prediction:`, updateError);
-            } else {
-              updatedGroupPredictions++;
-            }
-          } else {
-            // Use the RPC function for the insert
-            const { error: insertError } = await supabase.rpc('insert_group_prediction', {
-              group_id_param: groupId,
-              user_id_param: user.id,
-              first_team_id_param: positions.first,
-              second_team_id_param: positions.second
-            });
-            
-            if (insertError) {
-              console.error("Error inserting group prediction:", insertError);
-            } else {
-              newGroupPredictions++;
-            }
-          }
-        }
-      }
-      
-      // Process final predictions - only if the final_predictions table exists
-      let finalPredictionUpdated = false;
-      
-      // Check if the final_predictions table exists
-      const hasFinalPredictionsTable = await checkTableExists('final_predictions');
-      
-      if (hasFinalPredictionsTable) {
-        // Check if all required fields are filled
-        if (finalPredictions.champion && finalPredictions.viceChampion && 
-            finalPredictions.third && finalPredictions.fourth) {
-          
-          const existingFinalPrediction = existingFinalPredictions.length > 0 ? existingFinalPredictions[0] : null;
-          
-          if (existingFinalPrediction) {
-            // Use the RPC function for the update
-            const { error: updateError } = await supabase.rpc('update_final_prediction', {
-              pred_id: existingFinalPrediction.id,
-              champion_id_param: finalPredictions.champion,
-              vice_champion_id_param: finalPredictions.viceChampion,
-              third_place_id_param: finalPredictions.third,
-              fourth_place_id_param: finalPredictions.fourth
-            });
-            
-            if (updateError) {
-              console.error("Error updating final prediction:", updateError);
-            } else {
-              finalPredictionUpdated = true;
-            }
-          } else {
-            // Use the RPC function for the insert
-            const { error: insertError } = await supabase.rpc('insert_final_prediction', {
-              user_id_param: user.id,
-              champion_id_param: finalPredictions.champion,
-              vice_champion_id_param: finalPredictions.viceChampion,
-              third_place_id_param: finalPredictions.third,
-              fourth_place_id_param: finalPredictions.fourth
-            });
-            
-            if (insertError) {
-              console.error("Error inserting final prediction:", insertError);
-            } else {
-              finalPredictionUpdated = true;
-            }
-          }
-        }
-      }
-      
-      // Generate success message
-      let successMessage = "";
-      
-      if (newMatchPredictions > 0 || updatedMatchPredictions > 0) {
-        successMessage += `Palpites de jogos: ${newMatchPredictions} novos, ${updatedMatchPredictions} atualizados. `;
-      }
-      
-      if (newGroupPredictions > 0 || updatedGroupPredictions > 0) {
-        successMessage += `Classificações de grupos: ${newGroupPredictions} novas, ${updatedGroupPredictions} atualizadas. `;
-      }
-      
-      if (finalPredictionUpdated) {
-        successMessage += "Previsão do resultado final salva. ";
-      }
-      
-      if (successMessage) {
-        toast("Palpites registrados com sucesso!", { 
-          description: successMessage
-        });
-      } else {
-        toast("Nenhum palpite foi alterado", { 
-          description: "Nenhuma alteração foi detectada nos palpites"
-        });
-      }
-      
-      // Reset password field
-      setUserPassword("");
-      
+
+      toast("Palpites salvos com sucesso!", {
+        description: "Seus palpites foram registrados e serão computados quando os resultados forem inseridos"
+      });
+
     } catch (error) {
-      console.error("Error saving predictions:", error);
-      toast("Erro ao salvar palpites", { 
-        description: "Ocorreu um erro ao processar seus palpites"
+      console.error('Erro ao salvar palpites:', error);
+      toast("Erro ao salvar palpites", {
+        description: "Ocorreu um erro ao tentar salvar seus palpites. Tente novamente."
       });
     } finally {
       setSubmitting(false);
@@ -582,7 +409,7 @@ const Palpites = () => {
               Final
             </TabsTrigger>
           </TabsList>
-          
+
           <TabsContent value="matches" className="space-y-4">
             <Card>
               <CardHeader>
@@ -653,7 +480,7 @@ const Palpites = () => {
               </CardContent>
             </Card>
           </TabsContent>
-          
+
           <TabsContent value="groups" className="space-y-4">
             <Card>
               <CardHeader>
@@ -688,7 +515,7 @@ const Palpites = () => {
                             </SelectContent>
                           </Select>
                         </div>
-                        
+
                         <div className="space-y-2">
                           <Label htmlFor={`group-${group.id}-2nd`}>2º Lugar</Label>
                           <Select 
@@ -714,7 +541,7 @@ const Palpites = () => {
               </CardContent>
             </Card>
           </TabsContent>
-          
+
           <TabsContent value="finals" className="space-y-4">
             <Card>
               <CardHeader>
@@ -745,7 +572,7 @@ const Palpites = () => {
                       </SelectContent>
                     </Select>
                   </div>
-                  
+
                   <div className="space-y-2">
                     <Label htmlFor="vice-champion">Vice-Campeão</Label>
                     <Select 
@@ -764,7 +591,7 @@ const Palpites = () => {
                       </SelectContent>
                     </Select>
                   </div>
-                  
+
                   <div className="space-y-2">
                     <Label htmlFor="third-place">Terceiro Lugar</Label>
                     <Select 
@@ -783,7 +610,7 @@ const Palpites = () => {
                       </SelectContent>
                     </Select>
                   </div>
-                  
+
                   <div className="space-y-2">
                     <Label htmlFor="fourth-place">Quarto Lugar</Label>
                     <Select 
@@ -826,7 +653,7 @@ const Palpites = () => {
                 onChange={(e) => setUserPassword(e.target.value)}
               />
             </div>
-            
+
             <Button 
               className="w-full bg-fifa-blue hover:bg-opacity-90"
               onClick={handleSubmitBets}

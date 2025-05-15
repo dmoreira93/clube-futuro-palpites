@@ -1,4 +1,3 @@
-
 export type User = {
   name: string;
   id?: string;
@@ -13,7 +12,9 @@ export type Prediction = {
   created_at?: string;
   updated_at?: string;
   user?: User;
-  users?: User; // Changed from { name: string } to User type
+  users?: User;
+  points?: number;
+  points_type?: string;
 };
 
 export type GroupPrediction = {

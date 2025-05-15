@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Participant } from "@/types/participants";
@@ -11,38 +10,42 @@ export const useParticipantsRanking = () => {
     const fetchParticipants = async () => {
       setLoading(true);
       try {
-        // Buscar usuários com seus palpites
+        // Buscar usuários com seus palpites e pontuação
         const { data: usersData, error: usersError } = await supabase
           .from('users_custom')
-          .select('id, name, username, avatar_url')
+          .select(`
+            id, 
+            name, 
+            username, 
+            avatar_url,
+            user_stats (
+              total_points,
+              matches_played,
+              accuracy_percentage
+            )
+          `)
           .order('name');
-          
+
         if (usersError) throw usersError;
-        
+
         if (usersData && usersData.length > 0) {
           // Buscar estatísticas para cada usuário
           const usersWithStats = await Promise.all(
             usersData.map(async (user) => {
               // Tentar obter estatísticas existentes
-              const { data: statsData } = await supabase
-                .from('user_stats')
-                .select('total_points, matches_played, accuracy_percentage')
-                .eq('user_id', user.id)
-                .maybeSingle();
-
               // Se não houver estatísticas, criar valores padrão
               return {
                 id: user.id,
                 name: user.name,
                 nickname: user.username || user.name.split(' ')[0],
-                points: statsData?.total_points || 0,
-                matches: statsData?.matches_played || 0,
-                accuracy: statsData ? `${statsData.accuracy_percentage || 0}%` : "0%",
+                points: user.user_stats?.[0]?.total_points || 0,
+                matches: user.user_stats?.[0]?.matches_played || 0,
+                accuracy: user.user_stats ? `${user.user_stats[0]?.accuracy_percentage || 0}%` : "0%",
                 avatar_url: user.avatar_url
               };
             })
           );
-          
+
           // Ordenar por pontos (do maior para o menor)
           const sortedData = usersWithStats.sort((a, b) => b.points - a.points);
           setParticipants(sortedData);
@@ -56,7 +59,7 @@ export const useParticipantsRanking = () => {
         setLoading(false);
       }
     };
-    
+
     fetchParticipants();
   }, []);
 
