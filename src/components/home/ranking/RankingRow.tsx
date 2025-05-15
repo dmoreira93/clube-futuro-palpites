@@ -1,6 +1,7 @@
 
 import React from "react";
 import { TableCell, TableRow } from "@/components/ui/table";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Participant } from "@/types/participants";
 
 type RankingRowProps = {
@@ -22,7 +23,15 @@ const RankingRow = ({ participant, index }: RankingRowProps) => {
           index + 1
         )}
       </TableCell>
-      <TableCell className="font-medium">{participant.name}</TableCell>
+      <TableCell className="font-medium">
+        <div className="flex items-center gap-2">
+          <Avatar className="h-8 w-8">
+            <AvatarImage src={participant.avatar_url} />
+            <AvatarFallback>{participant.name.substring(0, 2)}</AvatarFallback>
+          </Avatar>
+          {participant.name}
+        </div>
+      </TableCell>
       <TableCell>{participant.nickname}</TableCell>
       <TableCell className="text-right font-bold">{participant.points}</TableCell>
       <TableCell className="text-right">{participant.matches}</TableCell>
