@@ -334,46 +334,24 @@ const Palpites = () => {
       }
 
       // Salvar os palpites
-      for (const [matchId, scores] of Object.entries(matchBets)) {
-        // Primeiro verifica se já existe um palpite
-        const { data: existingPrediction } = await supabase
-          .from('predictions')
-          .select('id')
-          .eq('match_id', matchId)
-          .eq('user_id', user.id)
-          .single();
+      const predictions = Object.entries(matchBets).map(([matchId, scores]) => ({
+        match_id: matchId,
+        user_id: user.id,
+        home_score: parseInt(scores.home),
+        away_score: parseInt(scores.away),
+        updated_at: new Date().toISOString()
+      }));
 
-        if (existingPrediction) {
-          // Atualiza palpite existente
-          const { error } = await supabase
-            .from('predictions')
-            .update({
-              home_score: parseInt(scores.home),
-              away_score: parseInt(scores.away),
-              updated_at: new Date().toISOString()
-            })
-            .eq('id', existingPrediction.id);
+      const { error } = await supabase
+        .from('predictions')
+        .upsert(predictions, {
+          onConflict: 'user_id,match_id',
+          ignoreDuplicates: false
+        });
 
-          if (error) {
-            console.error('Erro ao atualizar palpite:', error);
-            throw error;
-          }
-        } else {
-          // Insere novo palpite
-          const { error } = await supabase
-            .from('predictions')
-            .insert({
-              match_id: matchId,
-              user_id: user.id,
-              home_score: parseInt(scores.home),
-              away_score: parseInt(scores.away)
-            });
-
-          if (error) {
-            console.error('Erro ao inserir palpite:', error);
-            throw error;
-          }
-        }
+      if (error) {
+        console.error('Erro ao salvar palpites:', error);
+        throw error;
       }
 
       toast("Palpites salvos com sucesso!", {
