@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '@/utils/supabaseClient';
+import { useUser } from '../../node_modules/@supabase/auth-helpers-react/dist/index';
 import { toast } from 'react-toastify';
 
 const Palpites = () => {
