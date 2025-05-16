@@ -1,15 +1,29 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '../utils/supabaseClient';
+import { supabase } from '@/utils/supabaseClient';
 import { toast } from 'react-toastify';
-import { useUser } from '@supabase/auth-helpers-react';
 
 const Palpites = () => {
-  const user = useUser(); // Obtem o usuário autenticado
+  const [user, setUser] = useState(null);
   const [predictions, setPredictions] = useState([]);
 
   useEffect(() => {
+    // Pega o usuário autenticado
+    const sessionUser = supabase.auth.getUser().then(({ data }) => {
+      setUser(data.user);
+    });
+
+    // Também escuta mudanças de autenticação
+    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+    });
+
+    return () => {
+      authListener?.subscription.unsubscribe();
+    };
+  }, []);
+
+  useEffect(() => {
     if (user) {
-      // Buscar palpites existentes do usuário
       const fetchPredictions = async () => {
         const { data, error } = await supabase
           .from('predictions')
@@ -42,7 +56,7 @@ const Palpites = () => {
     const { error } = await supabase
       .from('predictions')
       .upsert(predictionsToSave, {
-        onConflict: ['user_id', 'match_id'] // Constraint composta
+        onConflict: ['user_id', 'match_id']
       });
 
     if (error) {
