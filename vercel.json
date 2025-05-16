@@ -3,5 +3,8 @@
     "env": {
       "TS_NODE_PROJECT": "tsconfig.json"
     }
-  }
+  },
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/" }
+  ]
 }
