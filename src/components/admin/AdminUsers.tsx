@@ -30,7 +30,7 @@ type User = {
   username: string;
   created_at: string;
   is_admin: boolean;
-  avatar_url?: string;
+  avatar_url: string | null;
   first_login: boolean;
 };
 
@@ -47,11 +47,15 @@ const AdminUsers = () => {
     try {
       setLoading(true);
       const { data, error } = await supabase
-        .from("user_custom")
-        .select("id, name, username, created_at, is_admin, avatar_url, first_login")
+        .from("users_custom")
+        .select(
+          "id, name, username, created_at, is_admin, avatar_url, first_login"
+        )
         .order("created_at", { ascending: false });
 
-      if (error) throw error;
+      if (error) {
+        throw error;
+      }
 
       setUsers(data || []);
     } catch (error) {
@@ -65,13 +69,19 @@ const AdminUsers = () => {
   const handleDelete = async (userId: string) => {
     try {
       const { error } = await supabase
-        .from("user_custom")
+        .from("users_custom")
         .delete()
         .eq("id", userId);
 
-      if (error) throw error;
+      if (error) {
+        throw error;
+      }
 
-      // Se precisar deletar outras coisas relacionadas ao usuário, adicione aqui
+      // Se houver tabela de palpites relacionada, ajuste aqui
+      await supabase
+        .from("predictions")
+        .delete()
+        .eq("user_id", userId);
 
       toast.success("Usuário excluído com sucesso");
       setUsers((prev) => prev.filter((user) => user.id !== userId));
@@ -98,11 +108,7 @@ const AdminUsers = () => {
             onChange={(e) => setSearchTerm(e.target.value)}
             className="max-w-xs"
           />
-          <Button
-            variant="outline"
-            onClick={fetchUsers}
-            disabled={loading}
-          >
+          <Button variant="outline" onClick={fetchUsers} disabled={loading}>
             Atualizar
           </Button>
         </div>
@@ -119,7 +125,8 @@ const AdminUsers = () => {
               <TableRow>
                 <TableHead>Nome</TableHead>
                 <TableHead>Username</TableHead>
-                <TableHead>Status</TableHead>
+                <TableHead>Status Admin</TableHead>
+                <TableHead>Primeiro Login</TableHead>
                 <TableHead>Data de Cadastro</TableHead>
                 <TableHead className="text-right">Ações</TableHead>
               </TableRow>
@@ -142,16 +149,23 @@ const AdminUsers = () => {
                       </span>
                     </TableCell>
                     <TableCell>
+                      <span
+                        className={`px-2 py-1 rounded-full text-xs ${
+                          user.first_login
+                            ? "bg-yellow-100 text-yellow-800"
+                            : "bg-gray-100 text-gray-800"
+                        }`}
+                      >
+                        {user.first_login ? "Sim" : "Não"}
+                      </span>
+                    </TableCell>
+                    <TableCell>
                       {new Date(user.created_at).toLocaleDateString("pt-BR")}
                     </TableCell>
                     <TableCell className="text-right">
                       <AlertDialog>
                         <AlertDialogTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="text-red-500"
-                          >
+                          <Button variant="ghost" size="icon" className="text-red-500">
                             <UserX className="h-5 w-5" />
                           </Button>
                         </AlertDialogTrigger>
@@ -159,8 +173,7 @@ const AdminUsers = () => {
                           <AlertDialogHeader>
                             <AlertDialogTitle>Excluir usuário</AlertDialogTitle>
                             <AlertDialogDescription>
-                              Tem certeza que deseja excluir o usuário "
-                              {user.name}"? Esta ação não pode ser desfeita.
+                              Tem certeza que deseja excluir o usuário "{user.name}"? Esta ação não pode ser desfeita e também removerá todos os palpites associados a este usuário.
                             </AlertDialogDescription>
                           </AlertDialogHeader>
                           <AlertDialogFooter>
@@ -179,7 +192,7 @@ const AdminUsers = () => {
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center py-4">
+                  <TableCell colSpan={6} className="text-center py-4">
                     Nenhum usuário encontrado
                   </TableCell>
                 </TableRow>
