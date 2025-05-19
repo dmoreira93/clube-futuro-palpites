@@ -92,7 +92,7 @@ const Login = () => {
             <Alert className="mb-4 bg-yellow-50 border-yellow-300">
               <InfoIcon className="h-4 w-4 text-yellow-600" />
               <AlertDescription className="text-yellow-800">
-                <strong>Usuários predefinidos:</strong> Utilize seu nome de usuário e senha para entrar (ex: dmoreira/dmoreira).
+                <strong>Usuários predefinidos:</strong>
               </AlertDescription>
             </Alert>
             
