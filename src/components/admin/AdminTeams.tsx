@@ -1,5 +1,4 @@
-
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { 
   Table, 
   TableBody, 
@@ -13,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Edit, Trash, Save, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { supabase } from "@/integrations/supabase/client";  // Import conforme pedido
 
 // Types
 interface Team {
@@ -24,28 +24,47 @@ interface Team {
 
 const AdminTeams = () => {
   const { toast } = useToast();
-  const [teams, setTeams] = useState<Team[]>([
-    { id: 1, name: "Real Madrid", shortName: "RMA", country: "Espanha" },
-    { id: 2, name: "Manchester City", shortName: "MCI", country: "Inglaterra" },
-    { id: 3, name: "Bayern Munich", shortName: "BAY", country: "Alemanha" },
-    { id: 4, name: "Fluminense", shortName: "FLU", country: "Brasil" },
-  ]);
-  
+  const [teams, setTeams] = useState<Team[]>([]);
   const [editingTeam, setEditingTeam] = useState<Team | null>(null);
   const [newTeam, setNewTeam] = useState<Omit<Team, "id">>({
     name: "",
     shortName: "",
     country: ""
   });
+  const [loading, setLoading] = useState(false);
+
+  // Carregar times do Supabase ao montar o componente
+  useEffect(() => {
+    const fetchTeams = async () => {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from<Team>("teams")
+        .select("*")
+        .order("id", { ascending: true });
+
+      if (error) {
+        toast({
+          title: "Erro ao carregar times",
+          description: error.message,
+          variant: "destructive"
+        });
+      } else if (data) {
+        setTeams(data);
+      }
+      setLoading(false);
+    };
+
+    fetchTeams();
+  }, [toast]);
 
   const handleEditTeam = (team: Team) => {
     setEditingTeam(team);
   };
 
-  const handleSaveEdit = () => {
+  const handleSaveEdit = async () => {
     if (!editingTeam) return;
-    
-    // Validate
+
+    // Validação
     if (!editingTeam.name || !editingTeam.shortName || !editingTeam.country) {
       toast({
         title: "Erro ao salvar",
@@ -54,17 +73,36 @@ const AdminTeams = () => {
       });
       return;
     }
-    
-    // Update team
+
+    // Atualizar no Supabase
+    const { error } = await supabase
+      .from("teams")
+      .update({
+        name: editingTeam.name,
+        shortName: editingTeam.shortName,
+        country: editingTeam.country,
+      })
+      .eq("id", editingTeam.id);
+
+    if (error) {
+      toast({
+        title: "Erro ao atualizar time",
+        description: error.message,
+        variant: "destructive"
+      });
+      return;
+    }
+
+    // Atualizar localmente
     setTeams(teams.map(team => 
       team.id === editingTeam.id ? editingTeam : team
     ));
-    
+
     toast({
       title: "Time atualizado",
       description: `${editingTeam.name} foi atualizado com sucesso`
     });
-    
+
     setEditingTeam(null);
   };
 
@@ -72,20 +110,34 @@ const AdminTeams = () => {
     setEditingTeam(null);
   };
 
-  const handleDeleteTeam = (id: number) => {
+  const handleDeleteTeam = async (id: number) => {
     const teamToDelete = teams.find(team => team.id === id);
     if (!teamToDelete) return;
-    
+
+    const { error } = await supabase
+      .from("teams")
+      .delete()
+      .eq("id", id);
+
+    if (error) {
+      toast({
+        title: "Erro ao remover time",
+        description: error.message,
+        variant: "destructive"
+      });
+      return;
+    }
+
     setTeams(teams.filter(team => team.id !== id));
-    
+
     toast({
       title: "Time removido",
       description: `${teamToDelete.name} foi removido com sucesso`
     });
   };
 
-  const handleAddTeam = () => {
-    // Validate
+  const handleAddTeam = async () => {
+    // Validação
     if (!newTeam.name || !newTeam.shortName || !newTeam.country) {
       toast({
         title: "Erro ao adicionar",
@@ -94,23 +146,35 @@ const AdminTeams = () => {
       });
       return;
     }
-    
-    // Create new team with unique ID
-    const maxId = teams.length > 0 ? Math.max(...teams.map(t => t.id)) : 0;
-    const team = { ...newTeam, id: maxId + 1 };
-    
-    setTeams([...teams, team]);
-    
-    // Reset form
+
+    // Inserir no Supabase
+    const { data, error } = await supabase
+      .from("teams")
+      .insert([newTeam])
+      .select()
+      .single();
+
+    if (error) {
+      toast({
+        title: "Erro ao adicionar time",
+        description: error.message,
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setTeams([...teams, data]);
+
+    // Resetar formulário
     setNewTeam({
       name: "",
       shortName: "",
       country: ""
     });
-    
+
     toast({
       title: "Time adicionado",
-      description: `${newTeam.name} foi adicionado com sucesso`
+      description: `${data.name} foi adicionado com sucesso`
     });
   };
 
@@ -130,6 +194,7 @@ const AdminTeams = () => {
               placeholder="Ex: Manchester City" 
               value={newTeam.name}
               onChange={(e) => setNewTeam({...newTeam, name: e.target.value})}
+              disabled={loading}
             />
           </div>
           <div>
@@ -139,6 +204,7 @@ const AdminTeams = () => {
               maxLength={3}
               value={newTeam.shortName}
               onChange={(e) => setNewTeam({...newTeam, shortName: e.target.value.toUpperCase()})}
+              disabled={loading}
             />
           </div>
           <div>
@@ -147,11 +213,12 @@ const AdminTeams = () => {
               placeholder="Ex: Inglaterra" 
               value={newTeam.country}
               onChange={(e) => setNewTeam({...newTeam, country: e.target.value})}
+              disabled={loading}
             />
           </div>
         </div>
         <div className="mt-3 flex justify-end">
-          <Button onClick={handleAddTeam} className="bg-fifa-blue">
+          <Button onClick={handleAddTeam} className="bg-fifa-blue" disabled={loading}>
             <Plus className="h-4 w-4 mr-1" /> Adicionar Time
           </Button>
         </div>
@@ -180,7 +247,6 @@ const AdminTeams = () => {
                 teams.map(team => (
                   <TableRow key={team.id}>
                     {editingTeam?.id === team.id ? (
-                      // Editing mode
                       <>
                         <TableCell>
                           <Input 
@@ -203,21 +269,18 @@ const AdminTeams = () => {
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-2">
-                            <Button variant="outline" size="sm" onClick={handleSaveEdit}>
+                            <Button variant="outline" size="sm" onClick={handleSaveEdit} disabled={loading}>
                               <Save className="h-4 w-4" />
                             </Button>
-                            <Button variant="outline" size="sm" onClick={handleCancelEdit}>
+                            <Button variant="outline" size="sm" onClick={handleCancelEdit} disabled={loading}>
                               <X className="h-4 w-4" />
                             </Button>
                           </div>
                         </TableCell>
                       </>
                     ) : (
-                      // Display mode
                       <>
-                        <TableCell>
-                          {team.name}
-                        </TableCell>
+                        <TableCell>{team.name}</TableCell>
                         <TableCell>
                           <Badge variant="outline" className="bg-gray-100">
                             {team.shortName}
@@ -226,10 +289,10 @@ const AdminTeams = () => {
                         <TableCell>{team.country}</TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-2">
-                            <Button variant="outline" size="sm" onClick={() => handleEditTeam(team)}>
+                            <Button variant="outline" size="sm" onClick={() => handleEditTeam(team)} disabled={loading}>
                               <Edit className="h-4 w-4" />
                             </Button>
-                            <Button variant="outline" size="sm" onClick={() => handleDeleteTeam(team.id)}>
+                            <Button variant="outline" size="sm" onClick={() => handleDeleteTeam(team.id)} disabled={loading}>
                               <Trash className="h-4 w-4" />
                             </Button>
                           </div>
