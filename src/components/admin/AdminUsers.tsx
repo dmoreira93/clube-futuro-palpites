@@ -28,10 +28,10 @@ type User = {
   id: string;
   name: string;
   username: string;
-  is_admin: boolean;
-  avatar_url: string | null;
-  first_login: boolean;
   created_at: string;
+  is_admin: boolean;
+  avatar_url?: string;
+  first_login: boolean;
 };
 
 const AdminUsers = () => {
@@ -48,12 +48,10 @@ const AdminUsers = () => {
       setLoading(true);
       const { data, error } = await supabase
         .from("user_custom")
-        .select("id, name, username, is_admin, avatar_url, first_login, created_at")
+        .select("id, name, username, created_at, is_admin, avatar_url, first_login")
         .order("created_at", { ascending: false });
 
-      if (error) {
-        throw error;
-      }
+      if (error) throw error;
 
       setUsers(data || []);
     } catch (error) {
@@ -66,25 +64,14 @@ const AdminUsers = () => {
 
   const handleDelete = async (userId: string) => {
     try {
-      // Primeiro deletar os palpites associados, se ainda estiverem na tabela "predictions"
-      const { error: predictionError } = await supabase
-        .from("predictions")
-        .delete()
-        .eq("user_id", userId);
-
-      if (predictionError) {
-        throw predictionError;
-      }
-
-      // Depois deletar o usuário da tabela "user_custom"
       const { error } = await supabase
         .from("user_custom")
         .delete()
         .eq("id", userId);
 
-      if (error) {
-        throw error;
-      }
+      if (error) throw error;
+
+      // Se precisar deletar outras coisas relacionadas ao usuário, adicione aqui
 
       toast.success("Usuário excluído com sucesso");
       setUsers((prev) => prev.filter((user) => user.id !== userId));
@@ -94,7 +81,6 @@ const AdminUsers = () => {
     }
   };
 
-  // Filtro busca por name ou username, pois email não existe mais
   const filteredUsers = users.filter(
     (user) =>
       user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -131,11 +117,9 @@ const AdminUsers = () => {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Avatar</TableHead>
                 <TableHead>Nome</TableHead>
                 <TableHead>Username</TableHead>
-                <TableHead>Admin</TableHead>
-                <TableHead>Primeiro Login</TableHead>
+                <TableHead>Status</TableHead>
                 <TableHead>Data de Cadastro</TableHead>
                 <TableHead className="text-right">Ações</TableHead>
               </TableRow>
@@ -144,34 +128,18 @@ const AdminUsers = () => {
               {filteredUsers.length > 0 ? (
                 filteredUsers.map((user) => (
                   <TableRow key={user.id}>
-                    <TableCell>
-                      {user.avatar_url ? (
-                        <img
-                          src={user.avatar_url}
-                          alt={user.name}
-                          className="h-8 w-8 rounded-full object-cover"
-                        />
-                      ) : (
-                        <div className="h-8 w-8 rounded-full bg-gray-300 flex items-center justify-center text-gray-600">
-                          ?
-                        </div>
-                      )}
-                    </TableCell>
                     <TableCell className="font-medium">{user.name}</TableCell>
                     <TableCell>{user.username}</TableCell>
                     <TableCell>
-                      {user.is_admin ? (
-                        <span className="text-green-600 font-semibold">Sim</span>
-                      ) : (
-                        <span className="text-gray-500">Não</span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      {user.first_login ? (
-                        <span className="text-blue-600 font-semibold">Sim</span>
-                      ) : (
-                        <span className="text-gray-500">Não</span>
-                      )}
+                      <span
+                        className={`px-2 py-1 rounded-full text-xs ${
+                          user.is_admin
+                            ? "bg-green-100 text-green-800"
+                            : "bg-red-100 text-red-800"
+                        }`}
+                      >
+                        {user.is_admin ? "Admin" : "Usuário"}
+                      </span>
                     </TableCell>
                     <TableCell>
                       {new Date(user.created_at).toLocaleDateString("pt-BR")}
@@ -179,7 +147,11 @@ const AdminUsers = () => {
                     <TableCell className="text-right">
                       <AlertDialog>
                         <AlertDialogTrigger asChild>
-                          <Button variant="ghost" size="icon" className="text-red-500">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="text-red-500"
+                          >
                             <UserX className="h-5 w-5" />
                           </Button>
                         </AlertDialogTrigger>
@@ -187,12 +159,13 @@ const AdminUsers = () => {
                           <AlertDialogHeader>
                             <AlertDialogTitle>Excluir usuário</AlertDialogTitle>
                             <AlertDialogDescription>
-                              Tem certeza que deseja excluir o usuário "{user.name}"? Esta ação não pode ser desfeita e também removerá todos os palpites associados a este usuário.
+                              Tem certeza que deseja excluir o usuário "
+                              {user.name}"? Esta ação não pode ser desfeita.
                             </AlertDialogDescription>
                           </AlertDialogHeader>
                           <AlertDialogFooter>
                             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                            <AlertDialogAction 
+                            <AlertDialogAction
                               className="bg-red-500 hover:bg-red-600"
                               onClick={() => handleDelete(user.id)}
                             >
@@ -206,7 +179,7 @@ const AdminUsers = () => {
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-4">
+                  <TableCell colSpan={5} className="text-center py-4">
                     Nenhum usuário encontrado
                   </TableCell>
                 </TableRow>
