@@ -116,13 +116,8 @@ const AdminLogin = () => {
                     required
                   />
                 </div>
-                
-                <div className="text-sm text-muted-foreground">
-                  <p>Credenciais padrão:</p>
-                  <p>Usuário: admin</p>
-                  <p>Senha: admin123</p>
-                </div>
-                
+              
+                         
                 <Button 
                   type="submit" 
                   className="w-full bg-fifa-blue hover:bg-opacity-90"
