@@ -1,6 +1,6 @@
 
 import { useEffect, useState } from "react";
-import { supabase } from "@/utils/supabaseClient";
+import { supabase } from "@/integrations/supabase/client";
 import Layout from "@/components/layout/Layout";
 import RankingTable from "@/components/home/RankingTable";
 import NextMatches from "@/components/home/NextMatches";
