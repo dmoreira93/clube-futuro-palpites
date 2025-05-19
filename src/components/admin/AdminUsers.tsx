@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -23,13 +22,15 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
-import { Trash2, UserX } from "lucide-react";
+import { UserX } from "lucide-react";
 
 type User = {
   id: string;
   name: string;
-  email: string;
-  is_active: boolean;
+  username: string;
+  is_admin: boolean;
+  avatar_url: string | null;
+  first_login: boolean;
   created_at: string;
 };
 
@@ -46,8 +47,8 @@ const AdminUsers = () => {
     try {
       setLoading(true);
       const { data, error } = await supabase
-        .from("users")
-        .select("*")
+        .from("user_custom")
+        .select("id, name, username, is_admin, avatar_url, first_login, created_at")
         .order("created_at", { ascending: false });
 
       if (error) {
@@ -65,20 +66,25 @@ const AdminUsers = () => {
 
   const handleDelete = async (userId: string) => {
     try {
+      // Primeiro deletar os palpites associados, se ainda estiverem na tabela "predictions"
+      const { error: predictionError } = await supabase
+        .from("predictions")
+        .delete()
+        .eq("user_id", userId);
+
+      if (predictionError) {
+        throw predictionError;
+      }
+
+      // Depois deletar o usuário da tabela "user_custom"
       const { error } = await supabase
-        .from("users")
+        .from("user_custom")
         .delete()
         .eq("id", userId);
 
       if (error) {
         throw error;
       }
-
-      // Também excluímos os palpites do usuário
-      await supabase
-        .from("predictions")
-        .delete()
-        .eq("user_id", userId);
 
       toast.success("Usuário excluído com sucesso");
       setUsers((prev) => prev.filter((user) => user.id !== userId));
@@ -88,10 +94,11 @@ const AdminUsers = () => {
     }
   };
 
+  // Filtro busca por name ou username, pois email não existe mais
   const filteredUsers = users.filter(
     (user) =>
       user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      user.email.toLowerCase().includes(searchTerm.toLowerCase())
+      user.username.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   return (
@@ -100,7 +107,7 @@ const AdminUsers = () => {
         <h2 className="text-xl font-semibold">Gerenciamento de Usuários</h2>
         <div className="flex items-center gap-2">
           <Input
-            placeholder="Buscar por nome ou email..."
+            placeholder="Buscar por nome ou username..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="max-w-xs"
@@ -124,9 +131,11 @@ const AdminUsers = () => {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead>Avatar</TableHead>
                 <TableHead>Nome</TableHead>
-                <TableHead>Email</TableHead>
-                <TableHead>Status</TableHead>
+                <TableHead>Username</TableHead>
+                <TableHead>Admin</TableHead>
+                <TableHead>Primeiro Login</TableHead>
                 <TableHead>Data de Cadastro</TableHead>
                 <TableHead className="text-right">Ações</TableHead>
               </TableRow>
@@ -135,12 +144,34 @@ const AdminUsers = () => {
               {filteredUsers.length > 0 ? (
                 filteredUsers.map((user) => (
                   <TableRow key={user.id}>
-                    <TableCell className="font-medium">{user.name}</TableCell>
-                    <TableCell>{user.email}</TableCell>
                     <TableCell>
-                      <span className={`px-2 py-1 rounded-full text-xs ${user.is_active ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}`}>
-                        {user.is_active ? "Ativo" : "Inativo"}
-                      </span>
+                      {user.avatar_url ? (
+                        <img
+                          src={user.avatar_url}
+                          alt={user.name}
+                          className="h-8 w-8 rounded-full object-cover"
+                        />
+                      ) : (
+                        <div className="h-8 w-8 rounded-full bg-gray-300 flex items-center justify-center text-gray-600">
+                          ?
+                        </div>
+                      )}
+                    </TableCell>
+                    <TableCell className="font-medium">{user.name}</TableCell>
+                    <TableCell>{user.username}</TableCell>
+                    <TableCell>
+                      {user.is_admin ? (
+                        <span className="text-green-600 font-semibold">Sim</span>
+                      ) : (
+                        <span className="text-gray-500">Não</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {user.first_login ? (
+                        <span className="text-blue-600 font-semibold">Sim</span>
+                      ) : (
+                        <span className="text-gray-500">Não</span>
+                      )}
                     </TableCell>
                     <TableCell>
                       {new Date(user.created_at).toLocaleDateString("pt-BR")}
@@ -175,7 +206,7 @@ const AdminUsers = () => {
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center py-4">
+                  <TableCell colSpan={7} className="text-center py-4">
                     Nenhum usuário encontrado
                   </TableCell>
                 </TableRow>
