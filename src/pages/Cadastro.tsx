@@ -15,6 +15,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Label } from "@/components/ui/label";
 import { UserIcon } from "lucide-react";
 import { Link } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
 
 const Cadastro = () => {
   const { toast } = useToast();
@@ -35,7 +36,7 @@ const Cadastro = () => {
     }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     // Basic validation
@@ -57,17 +58,31 @@ const Cadastro = () => {
       return;
     }
 
-    // In a real application, we would send this data to a server
     setIsSubmitting(true);
-    
-    // Simulate API call
-    setTimeout(() => {
+
+    const { error } = await supabase.auth.signUp({
+      email: formData.email,
+      password: formData.password,
+      options: {
+        data: {
+          name: formData.name,
+          nickname: formData.nickname,
+        },
+      },
+    });
+
+    if (error) {
+      toast({
+        title: "Erro ao cadastrar",
+        description: error.message,
+        variant: "destructive",
+      });
+    } else {
       toast({
         title: "Cadastro realizado com sucesso!",
         description: "Você já pode fazer login e começar a participar do bolão.",
       });
-      
-      // Reset form
+
       setFormData({
         name: "",
         nickname: "",
@@ -75,9 +90,9 @@ const Cadastro = () => {
         password: "",
         confirmPassword: "",
       });
-      
-      setIsSubmitting(false);
-    }, 1500);
+    }
+
+    setIsSubmitting(false);
   };
 
   return (
@@ -193,3 +208,4 @@ const Cadastro = () => {
 };
 
 export default Cadastro;
+
