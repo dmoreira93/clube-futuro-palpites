@@ -165,7 +165,10 @@ const Palpites = () => {
           }
           
           // Check if group_predictions table exists
-          const hasGroupPredictionsTable = await checkTableExists('group_predictions');
+const { data: hasGroupPredictionsTable, error: groupTableError } = await supabase.rpc('check_table_exists', { table_name: 'group_predictions' });
+if (groupTableError) {
+    console.error("Erro ao verificar tabela group_predictions:", groupTableError);
+} else if (hasGroupPredictionsTable) {
           
           if (hasGroupPredictionsTable) {
             try {
@@ -203,7 +206,10 @@ const Palpites = () => {
           }
           
           // Check if final_predictions table exists
-          const hasFinalPredictionsTable = await checkTableExists('final_predictions');
+const { data: hasFinalPredictionsTable, error: finalTableError } = await supabase.rpc('check_table_exists', { table_name: 'final_predictions' });
+if (finalTableError) {
+    console.error("Erro ao verificar tabela final_predictions:", finalTableError);
+} else if (hasFinalPredictionsTable) {
           
           if (hasFinalPredictionsTable) {
             try {
@@ -412,7 +418,10 @@ const Palpites = () => {
       let updatedGroupPredictions = 0;
       
       // Check if the group_predictions table exists
-      const hasGroupPredictionsTable = await checkTableExists('group_predictions');
+const { data: hasGroupPredictionsTable, error: groupTableError } = await supabase.rpc('check_table_exists', { table_name: 'group_predictions' });
+if (groupTableError) {
+    console.error("Erro ao verificar tabela group_predictions:", groupTableError);
+} else if (hasGroupPredictionsTable) {
       
       if (hasGroupPredictionsTable) {
         // Process group predictions
@@ -458,7 +467,10 @@ const Palpites = () => {
       let finalPredictionUpdated = false;
       
       // Check if the final_predictions table exists
-      const hasFinalPredictionsTable = await checkTableExists('final_predictions');
+const { data: hasFinalPredictionsTable, error: finalTableError } = await supabase.rpc('check_table_exists', { table_name: 'final_predictions' });
+if (finalTableError) {
+    console.error("Erro ao verificar tabela final_predictions:", finalTableError);
+} else if (hasFinalPredictionsTable) {
       
       if (hasFinalPredictionsTable) {
         // Check if all required fields are filled
