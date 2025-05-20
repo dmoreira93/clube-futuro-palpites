@@ -29,15 +29,6 @@ import { Prediction, GroupPrediction, FinalPrediction, RawGroupPrediction, RawFi
 import { checkTableExists } from "@/utils/RPCHelperFunctions";
 
 const Palpites = () => {
-
-useEffect(() => {
-    supabase.auth.getSession().then(({ data, error }) => {
-        console.log("Sessão atual do Supabase:", data?.session);
-        if (!data?.session) {
-            toast.error("Você não está autenticado no Supabase. Faça login novamente.");
-        }
-    });
-}, []);
   const { user, isAuthenticated } = useAuth();
   const navigate = useNavigate();
   
@@ -175,8 +166,6 @@ useEffect(() => {
           
           // Check if group_predictions table exists
           const hasGroupPredictionsTable = await checkTableExists('group_predictions');
-
-const hasGroupPredictionsTable = await supabase.rpc('check_table_exists', { table_name: 'group_predictions' });
           
           if (hasGroupPredictionsTable) {
             try {
@@ -215,8 +204,6 @@ const hasGroupPredictionsTable = await supabase.rpc('check_table_exists', { tabl
           
           // Check if final_predictions table exists
           const hasFinalPredictionsTable = await checkTableExists('final_predictions');
-
-const hasFinalPredictionsTable = await supabase.rpc('check_table_exists', { table_name: 'final_predictions' });
           
           if (hasFinalPredictionsTable) {
             try {
@@ -426,8 +413,6 @@ const hasFinalPredictionsTable = await supabase.rpc('check_table_exists', { tabl
       
       // Check if the group_predictions table exists
       const hasGroupPredictionsTable = await checkTableExists('group_predictions');
-
-const hasGroupPredictionsTable = await supabase.rpc('check_table_exists', { table_name: 'group_predictions' });
       
       if (hasGroupPredictionsTable) {
         // Process group predictions
@@ -474,8 +459,6 @@ const hasGroupPredictionsTable = await supabase.rpc('check_table_exists', { tabl
       
       // Check if the final_predictions table exists
       const hasFinalPredictionsTable = await checkTableExists('final_predictions');
-
-const hasFinalPredictionsTable = await supabase.rpc('check_table_exists', { table_name: 'final_predictions' });
       
       if (hasFinalPredictionsTable) {
         // Check if all required fields are filled
