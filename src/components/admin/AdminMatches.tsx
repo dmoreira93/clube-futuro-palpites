@@ -1,110 +1,66 @@
-import { useState, useEffect } from "react";
-import { 
-  Table, 
-  TableBody, 
-  TableCell, 
-  TableHead, 
-  TableHeader, 
-  TableRow 
-} from "@/components/ui/table";
-import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Button } from "@/components/ui/button";
-import { 
-  Card, 
-  CardContent, 
-  CardHeader, 
-  CardTitle,
-  CardDescription
-} from "@/components/ui/card";
-import { useToast } from "@/hooks/use-toast";
-import { Plus, Trash, Calendar, Clock, Edit, Save, X } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
-import { format, parseISO } from "date-fns";
+import React, { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { Match } from "@/types/matches";
-
-interface Team {
-  id: string;
-  name: string;
-  flag_url?: string;
-  group_id?: string;
-}
+import { Button } from "@/components/ui/button";
 
 const AdminMatches = () => {
-  const { toast } = useToast();
-  
-  const [matches, setMatches] = useState<Match[]>([]);
-  const [teams, setTeams] = useState<Team[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [editingMatch, setEditingMatch] = useState<Match | null>(null);
-  const [editingResult, setEditingResult] = useState<{id: string, homeScore: string, awayScore: string} | null>(null);
-  
-  const [newMatch, setNewMatch] = useState<Partial<Match>>({
-    home_team_id: "",
-    away_team_id: "",
-    match_date: format(new Date(), "yyyy-MM-dd'T'HH:mm"),
-    stage: "Fase de Grupos",
-    stadium: "",
-  });
+  const [matches, setMatches] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
 
-  const stages = ["Fase de Grupos", "Oitavas de Final", "Quartas de Final", "Semifinal", "Final"];
+  const fetchMatches = async () => {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from("matches")
+      .select(
+        "id, home_team_id, away_team_id, home_score, away_score, match_date, stage, stadium, is_finished, created_at, update_at"
+      )
+      .order("match_date", { ascending: true });
+
+    if (error) {
+      console.error("Erro ao buscar partidas:", error.message);
+    } else {
+      setMatches(data);
+    }
+    setLoading(false);
+  };
 
   useEffect(() => {
-    const fetchTeamsAndMatches = async () => {
-      setIsLoading(true);
-      try {
-        const { data: teamsData, error: teamsError } = await supabase
-          .from('teams')
-          .select('*')
-          .order('name');
-        
-        if (teamsError) throw teamsError;
-        setTeams(teamsData || []);
+    fetchMatches();
+  }, []);
 
-        const { data: matchesData, error: matchesError } = await supabase
-          .from('matches')
-          .select(`
-            id, 
-            match_date, 
-            home_score, 
-            away_score, 
-            is_finished,
-            stage,
-            stadium,
-            home_team_id, 
-            away_team_id,
-            home_team:teams!home_team_id(id, name, group_id, flag_url),
-            away_team:teams!away_team_id(id, name, group_id, flag_url)
-          `)
-          .order('match_date', { ascending: true });
-        
-        if (matchesError) throw matchesError;
-        setMatches(matchesData || []);
-      } catch (error) {
-        console.error("Error fetching data:", error);
-        toast({
-          title: "Erro ao carregar dados",
-          description: "Não foi possível carregar as equipes ou partidas",
-          variant: "destructive"
-        });
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    fetchTeamsAndMatches();
-  }, [toast]);
-
-  const getTeamById = (id: string): Team | undefined => teams.find(team => team.id === id);
-
-  // As funções handleAddMatch, handleDeleteMatch, handleEditMatch, handleSaveEdit, handleEditResult, handleSaveResult seguem abaixo
-  // ...
+  return (
+    <div className="p-4">
+      <h1 className="text-2xl font-bold mb-4">Administração de Partidas</h1>
+      {loading ? (
+        <p>Carregando partidas...</p>
+      ) : (
+        <div className="grid gap-4">
+          {matches.map((match) => (
+            <div
+              key={match.id}
+              className="border rounded-xl p-4 shadow-sm bg-white"
+            >
+              <p className="font-semibold text-lg">{match.stage}</p>
+              <p className="text-sm text-gray-600">
+                {new Date(match.match_date).toLocaleString()}
+              </p>
+              <p>
+                <strong>Times:</strong> {match.home_team_id} vs {match.away_team_id}
+              </p>
+              <p>
+                <strong>Placar:</strong> {match.home_score} x {match.away_score}
+              </p>
+              <p>
+                <strong>Estádio:</strong> {match.stadium}
+              </p>
+              <p>
+                <strong>Finalizado:</strong> {match.is_finished ? "Sim" : "Não"}
+              </p>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 };
 
 export default AdminMatches;
