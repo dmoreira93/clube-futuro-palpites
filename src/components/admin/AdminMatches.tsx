@@ -28,7 +28,12 @@ const AdminMatches = () => {
     if (error) {
       console.error("Erro ao buscar partidas:", error.message);
     } else {
-      setMatches(data);
+      const formattedMatches = data.map((match) => ({
+        ...match,
+        home_team_name: match.home_team?.name ?? "Time não encontrado",
+        away_team_name: match.away_team?.name ?? "Time não encontrado",
+      }));
+      setMatches(formattedMatches);
     }
     setLoading(false);
   };
@@ -54,7 +59,7 @@ const AdminMatches = () => {
                 {new Date(match.match_date).toLocaleString()}
               </p>
               <p>
-                <strong>Times:</strong> {match.home_team?.name} vs {match.away_team?.name}
+                <strong>Times:</strong> {match.home_team_name} vs {match.away_team_name}
               </p>
               <p>
                 <strong>Placar:</strong> {match.home_score} x {match.away_score}
