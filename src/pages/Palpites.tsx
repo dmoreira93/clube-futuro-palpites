@@ -327,12 +327,7 @@ const Palpites = () => {
     
     try {
       // Verify the user's password
-      const { data: userData, error: userError } = await supabase
-        .from('users_custom')
-        .select('id')
-        .eq('id', user.id)
-        .eq('password', userPassword)
-        .single();
+      // Verificação de senha removida. Confie na autenticação existente.
         
       if (userError || !userData) {
         toast("Senha incorreta", { 
@@ -369,7 +364,7 @@ const Palpites = () => {
         if (isNaN(homeScore) || isNaN(awayScore)) continue;
         
         const existingPrediction = existingPredictions.find(p => 
-          p.match_id === matchId && p.user_id === user.id
+          String(p.match_id) === String(matchId) && p.user_id === user.id
         );
         
         if (existingPrediction) {
@@ -385,8 +380,10 @@ const Palpites = () => {
             
           if (updateError) {
             console.error(`Error updating prediction ${existingPrediction.id}:`, updateError);
+toast.error("Erro ao atualizar palpite");
           } else {
             updatedMatchPredictions++;
+setExistingPredictions(prev => prev.map(p => p.id === existingPrediction.id ? { ...p, home_score: homeScore, away_score: awayScore } : p));
           }
         } else {
           // Insert new prediction
@@ -401,8 +398,10 @@ const Palpites = () => {
             
           if (insertError) {
             console.error("Error inserting match prediction:", insertError);
+toast.error("Erro ao inserir palpite");
           } else {
             newMatchPredictions++;
+setExistingPredictions(prev => [...prev, { match_id: matchId, user_id: user.id, home_score: homeScore, away_score: awayScore }]);
           }
         }
       }
@@ -433,6 +432,7 @@ const Palpites = () => {
             
             if (updateError) {
               console.error(`Error updating group prediction:`, updateError);
+toast.error("Erro ao atualizar palpite");
             } else {
               updatedGroupPredictions++;
             }
@@ -447,6 +447,7 @@ const Palpites = () => {
             
             if (insertError) {
               console.error("Error inserting group prediction:", insertError);
+toast.error("Erro ao inserir palpite");
             } else {
               newGroupPredictions++;
             }
@@ -479,6 +480,7 @@ const Palpites = () => {
             
             if (updateError) {
               console.error("Error updating final prediction:", updateError);
+toast.error("Erro ao atualizar palpite");
             } else {
               finalPredictionUpdated = true;
             }
@@ -494,6 +496,7 @@ const Palpites = () => {
             
             if (insertError) {
               console.error("Error inserting final prediction:", insertError);
+toast.error("Erro ao inserir palpite");
             } else {
               finalPredictionUpdated = true;
             }
@@ -505,14 +508,17 @@ const Palpites = () => {
       let successMessage = "";
       
       if (newMatchPredictions > 0 || updatedMatchPredictions > 0) {
+console.log(`Jogos: ${newMatchPredictions} novos, ${updatedMatchPredictions} atualizados`);
         successMessage += `Palpites de jogos: ${newMatchPredictions} novos, ${updatedMatchPredictions} atualizados. `;
       }
       
       if (newGroupPredictions > 0 || updatedGroupPredictions > 0) {
+console.log(`Classificações de grupos: ${newGroupPredictions} novas, ${updatedGroupPredictions} atualizadas`);
         successMessage += `Classificações de grupos: ${newGroupPredictions} novas, ${updatedGroupPredictions} atualizadas. `;
       }
       
       if (finalPredictionUpdated) {
+console.log("Previsão do resultado final salva.");
         successMessage += "Previsão do resultado final salva. ";
       }
       
