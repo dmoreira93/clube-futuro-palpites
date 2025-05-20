@@ -69,7 +69,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
 
       if (error || !data.session) {
-        toast.error("Erro ao fazer login. Verifique suas credenciais.");
+        toast.error(error?.message || "Erro ao fazer login. Verifique suas credenciais.");
         return false;
       }
 

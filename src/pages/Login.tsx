@@ -43,25 +43,24 @@ const Login = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
 
-    if (error || !data.session) {
-      toast.error(error?.message || "Erro ao fazer login. Verifique suas credenciais.");
-      return false;
+    if (!formData.email || !formData.password) {
+      toast.error("Por favor, preencha todos os campos");
+      return;
     }
 
     setIsSubmitting(true);
-    
+
     try {
       const success = await login(formData.email, formData.password);
-      
+
       if (success) {
         toast.success("Login realizado com sucesso!");
         navigate("/palpites");
       }
     } catch (error) {
       console.error("Erro ao fazer login:", error);
-      toast.error("Ocorreu um erro no login. Tente novamente.");
+      toast.error(error?.message || "Ocorreu um erro no login. Tente novamente.");
     } finally {
       setIsSubmitting(false);
     }
@@ -96,7 +95,7 @@ const Login = () => {
                 <strong>Usuários predefinidos:</strong>
               </AlertDescription>
             </Alert>
-            
+
             <form onSubmit={handleSubmit}>
               <div className="space-y-4">
                 <div className="space-y-2">
@@ -111,7 +110,7 @@ const Login = () => {
                     required
                   />
                 </div>
-                
+
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
                     <Label htmlFor="password">Senha</Label>
@@ -129,9 +128,9 @@ const Login = () => {
                     required
                   />
                 </div>
-                
-                <Button 
-                  type="submit" 
+
+                <Button
+                  type="submit"
                   className="w-full bg-fifa-blue hover:bg-opacity-90"
                   disabled={isSubmitting}
                 >
@@ -151,8 +150,6 @@ const Login = () => {
             </div>
           </CardFooter>
         </Card>
-
-       
       </div>
     </Layout>
   );
