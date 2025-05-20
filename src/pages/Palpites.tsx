@@ -165,10 +165,7 @@ const Palpites = () => {
           }
           
           // Check if group_predictions table exists
-const { data: hasGroupPredictionsTable, error: groupTableError } = await supabase.rpc('check_table_exists', { table_name: 'group_predictions' });
-if (groupTableError) {
-    console.error("Erro ao verificar tabela group_predictions:", groupTableError);
-} else if (hasGroupPredictionsTable) {
+          const hasGroupPredictionsTable = await checkTableExists('group_predictions');
           
           if (hasGroupPredictionsTable) {
             try {
@@ -200,16 +197,13 @@ if (groupTableError) {
                 });
                 setGroupPredictions(existingGroupPreds);
               }
-            } catch (error) {
+} catch (error) {
               console.error("Error fetching group predictions:", error);
             }
           }
           
           // Check if final_predictions table exists
-const { data: hasFinalPredictionsTable, error: finalTableError } = await supabase.rpc('check_table_exists', { table_name: 'final_predictions' });
-if (finalTableError) {
-    console.error("Erro ao verificar tabela final_predictions:", finalTableError);
-} else if (hasFinalPredictionsTable) {
+          const hasFinalPredictionsTable = await checkTableExists('final_predictions');
           
           if (hasFinalPredictionsTable) {
             try {
@@ -243,13 +237,12 @@ if (finalTableError) {
                   });
                 }
               }
-            } catch (error) {
+} catch (error) {
               console.error("Error fetching final predictions:", error);
             }
           }
         }
-        
-      } catch (error) {
+} catch (error) {
         console.error("Error fetching data:", error);
         toast("Erro ao carregar dados", { 
           description: "Ocorreu um erro ao buscar os dados no banco de dados" 
@@ -418,10 +411,7 @@ if (finalTableError) {
       let updatedGroupPredictions = 0;
       
       // Check if the group_predictions table exists
-const { data: hasGroupPredictionsTable, error: groupTableError } = await supabase.rpc('check_table_exists', { table_name: 'group_predictions' });
-if (groupTableError) {
-    console.error("Erro ao verificar tabela group_predictions:", groupTableError);
-} else if (hasGroupPredictionsTable) {
+      const hasGroupPredictionsTable = await checkTableExists('group_predictions');
       
       if (hasGroupPredictionsTable) {
         // Process group predictions
@@ -467,10 +457,7 @@ if (groupTableError) {
       let finalPredictionUpdated = false;
       
       // Check if the final_predictions table exists
-const { data: hasFinalPredictionsTable, error: finalTableError } = await supabase.rpc('check_table_exists', { table_name: 'final_predictions' });
-if (finalTableError) {
-    console.error("Erro ao verificar tabela final_predictions:", finalTableError);
-} else if (hasFinalPredictionsTable) {
+      const hasFinalPredictionsTable = await checkTableExists('final_predictions');
       
       if (hasFinalPredictionsTable) {
         // Check if all required fields are filled
@@ -540,8 +527,7 @@ if (finalTableError) {
       
       // Reset password field
       setUserPassword("");
-      
-    } catch (error) {
+} catch (error) {
       console.error("Error saving predictions:", error);
       toast("Erro ao salvar palpites", { 
         description: "Ocorreu um erro ao processar seus palpites"
