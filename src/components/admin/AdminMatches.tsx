@@ -10,9 +10,19 @@ const AdminMatches = () => {
     setLoading(true);
     const { data, error } = await supabase
       .from("matches")
-      .select(
-        "id, home_team_id, away_team_id, home_score, away_score, match_date, stage, stadium, is_finished, created_at, update_at"
-      )
+      .select(`
+        id, 
+        home_score, 
+        away_score, 
+        match_date, 
+        stage, 
+        stadium, 
+        is_finished, 
+        created_at, 
+        update_at,
+        home_team:home_team_id (id, name),
+        away_team:away_team_id (id, name)
+      `)
       .order("match_date", { ascending: true });
 
     if (error) {
@@ -44,7 +54,7 @@ const AdminMatches = () => {
                 {new Date(match.match_date).toLocaleString()}
               </p>
               <p>
-                <strong>Times:</strong> {match.home_team_id} vs {match.away_team_id}
+                <strong>Times:</strong> {match.home_team?.name} vs {match.away_team?.name}
               </p>
               <p>
                 <strong>Placar:</strong> {match.home_score} x {match.away_score}
