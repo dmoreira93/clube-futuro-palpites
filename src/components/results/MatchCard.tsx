@@ -1,4 +1,3 @@
-
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Volleyball as SoccerBallIcon } from "lucide-react";
 import { format } from "date-fns";
@@ -11,12 +10,12 @@ type MatchCardProps = {
   awayTeam: string;
   date: string;
   stage: string;
-  time?: string; // Optional time prop
-  group?: string; // Add optional group prop
+  time?: string;
+  groupText?: string;
   selected: boolean;
-  onClick?: (id: string) => void; // Made onClick optional
-  homeTeamFlag?: string; // Add optional flag URL for home team
-  awayTeamFlag?: string; // Add optional flag URL for away team
+  onClick?: (id: string) => void;
+  homeTeamFlag?: string;
+  awayTeamFlag?: string;
 };
 
 const formatDate = (dateStr: string) => {
@@ -42,7 +41,7 @@ export const MatchCard = ({
   date,
   stage,
   time,
-  group,
+  groupText,
   selected,
   onClick,
   homeTeamFlag,
@@ -65,7 +64,7 @@ export const MatchCard = ({
             <CardTitle className="text-sm font-medium">{stage}</CardTitle>
             <CardDescription>
               {formatDate(date)} • {time || formatTime(date)}
-              {group && <span className="ml-2">• Grupo {group}</span>}
+              {groupText && <span className="ml-2">• Grupo {groupText}</span>}
             </CardDescription>
           </div>
           <SoccerBallIcon className="h-5 w-5 text-fifa-blue" />
