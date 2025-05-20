@@ -29,6 +29,15 @@ import { Prediction, GroupPrediction, FinalPrediction, RawGroupPrediction, RawFi
 import { checkTableExists } from "@/utils/RPCHelperFunctions";
 
 const Palpites = () => {
+
+useEffect(() => {
+    supabase.auth.getSession().then(({ data, error }) => {
+        console.log("Sessão atual do Supabase:", data?.session);
+        if (!data?.session) {
+            toast.error("Você não está autenticado no Supabase. Faça login novamente.");
+        }
+    });
+}, []);
   const { user, isAuthenticated } = useAuth();
   const navigate = useNavigate();
   
@@ -88,9 +97,9 @@ const Palpites = () => {
           .order('match_date', { ascending: true });
           
         if (matchesError) {
-          console.error("Erro ao buscar jogos:", matchesError);
-          toast.error("Erro ao carregar jogos", { 
-            description: matchesError?.message || "Erro desconhecido" 
+          console.error("Error fetching matches:", matchesError);
+          toast("Erro ao carregar jogos", { 
+            description: "Ocorreu um erro ao buscar os jogos no banco de dados" 
           });
         } else {
           // Fetch home team information for each match
@@ -124,7 +133,7 @@ const Palpites = () => {
           .order('name', { ascending: true });
           
         if (teamsError) {
-          console.error("Erro ao buscar times:", teamsError);
+          console.error("Error fetching teams:", teamsError);
         } else {
           setTeams(teamsData || []);
         }
@@ -135,7 +144,7 @@ const Palpites = () => {
           .select('id, name');
           
         if (groupsError) {
-          console.error("Erro ao buscar grupos:", groupsError);
+          console.error("Error fetching groups:", groupsError);
         } else {
           setGroups(groupsData || []);
         }
@@ -149,7 +158,7 @@ const Palpites = () => {
             .eq('user_id', user.id);
             
           if (predictionsError) {
-            console.error("Erro ao buscar palpites de jogos:", predictionsError);
+            console.error("Error fetching match predictions:", predictionsError);
           } else {
             setExistingPredictions(predictionsData || []);
             
@@ -166,6 +175,8 @@ const Palpites = () => {
           
           // Check if group_predictions table exists
           const hasGroupPredictionsTable = await checkTableExists('group_predictions');
+
+const hasGroupPredictionsTable = await supabase.rpc('check_table_exists', { table_name: 'group_predictions' });
           
           if (hasGroupPredictionsTable) {
             try {
@@ -198,12 +209,14 @@ const Palpites = () => {
                 setGroupPredictions(existingGroupPreds);
               }
             } catch (error) {
-              console.error("Erro ao buscar palpites de grupos:", error);
+              console.error("Error fetching group predictions:", error);
             }
           }
           
           // Check if final_predictions table exists
           const hasFinalPredictionsTable = await checkTableExists('final_predictions');
+
+const hasFinalPredictionsTable = await supabase.rpc('check_table_exists', { table_name: 'final_predictions' });
           
           if (hasFinalPredictionsTable) {
             try {
@@ -238,15 +251,15 @@ const Palpites = () => {
                 }
               }
             } catch (error) {
-              console.error("Erro ao buscar palpites finais:", error);
+              console.error("Error fetching final predictions:", error);
             }
           }
         }
         
       } catch (error) {
-        console.error("Erro ao buscar dados:", error);
-        toast.error("Erro ao carregar dados", { 
-          description: error?.message || "Erro desconhecido" 
+        console.error("Error fetching data:", error);
+        toast("Erro ao carregar dados", { 
+          description: "Ocorreu um erro ao buscar os dados no banco de dados" 
         });
       } finally {
         setLoading(false);
@@ -384,7 +397,7 @@ const Palpites = () => {
             .eq('id', existingPrediction.id);
             
           if (updateError) {
-            console.error(`Erro ao atualizar palpite ${existingPrediction.id}:`, updateError);
+            console.error(`Error updating prediction ${existingPrediction.id}:`, updateError);
           } else {
             updatedMatchPredictions++;
           }
@@ -400,7 +413,7 @@ const Palpites = () => {
             });
             
           if (insertError) {
-            console.error("Erro ao inserir palpite de jogo:", insertError);
+            console.error("Error inserting match prediction:", insertError);
           } else {
             newMatchPredictions++;
           }
@@ -413,6 +426,8 @@ const Palpites = () => {
       
       // Check if the group_predictions table exists
       const hasGroupPredictionsTable = await checkTableExists('group_predictions');
+
+const hasGroupPredictionsTable = await supabase.rpc('check_table_exists', { table_name: 'group_predictions' });
       
       if (hasGroupPredictionsTable) {
         // Process group predictions
@@ -432,7 +447,7 @@ const Palpites = () => {
             });
             
             if (updateError) {
-              console.error(`Erro ao atualizar palpite de grupo:`, updateError);
+              console.error(`Error updating group prediction:`, updateError);
             } else {
               updatedGroupPredictions++;
             }
@@ -446,7 +461,7 @@ const Palpites = () => {
             });
             
             if (insertError) {
-              console.error("Erro ao inserir palpite de grupo:", insertError);
+              console.error("Error inserting group prediction:", insertError);
             } else {
               newGroupPredictions++;
             }
@@ -459,6 +474,8 @@ const Palpites = () => {
       
       // Check if the final_predictions table exists
       const hasFinalPredictionsTable = await checkTableExists('final_predictions');
+
+const hasFinalPredictionsTable = await supabase.rpc('check_table_exists', { table_name: 'final_predictions' });
       
       if (hasFinalPredictionsTable) {
         // Check if all required fields are filled
@@ -478,7 +495,7 @@ const Palpites = () => {
             });
             
             if (updateError) {
-              console.error("Erro ao atualizar palpite final:", updateError);
+              console.error("Error updating final prediction:", updateError);
             } else {
               finalPredictionUpdated = true;
             }
@@ -493,7 +510,7 @@ const Palpites = () => {
             });
             
             if (insertError) {
-              console.error("Erro ao inserir palpite final:", insertError);
+              console.error("Error inserting final prediction:", insertError);
             } else {
               finalPredictionUpdated = true;
             }
@@ -530,9 +547,9 @@ const Palpites = () => {
       setUserPassword("");
       
     } catch (error) {
-      console.error("Erro ao salvar palpites:", error);
-      toast.error("Erro ao salvar palpites", { 
-        description: error?.message || "Erro desconhecido"
+      console.error("Error saving predictions:", error);
+      toast("Erro ao salvar palpites", { 
+        description: "Ocorreu um erro ao processar seus palpites"
       });
     } finally {
       setSubmitting(false);
