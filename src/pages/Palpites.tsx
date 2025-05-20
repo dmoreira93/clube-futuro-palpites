@@ -44,7 +44,7 @@ const Palpites = () => {
     third: "",
     fourth: "",
   });
-  const [userPassword, setUserPassword] = useState("");
+  // REMOVED: const [userPassword, setUserPassword] = useState("");
   
   // State for matches and teams from database
   const [matches, setMatches] = useState<Match[]>([]);
@@ -197,7 +197,7 @@ const Palpites = () => {
                 });
                 setGroupPredictions(existingGroupPreds);
               }
-} catch (error) {
+            } catch (error) {
               console.error("Error fetching group predictions:", error);
             }
           }
@@ -237,12 +237,12 @@ const Palpites = () => {
                   });
                 }
               }
-} catch (error) {
+            } catch (error) {
               console.error("Error fetching final predictions:", error);
             }
           }
         }
-} catch (error) {
+      } catch (error) {
         console.error("Error fetching data:", error);
         toast("Erro ao carregar dados", { 
           description: "Ocorreu um erro ao buscar os dados no banco de dados" 
@@ -315,31 +315,10 @@ const Palpites = () => {
       return;
     }
     
-    if (!userPassword) {
-      toast("Senha não informada", { 
-        description: "Por favor, digite sua senha para confirmar os palpites" 
-      });
-      return;
-    }
-    
     setSubmitting(true);
     
     try {
-      // Verify the user's password
-      const { data: userData, error: userError } = await supabase
-        .from('users_custom')
-        .select('id')
-        .eq('id', user.id)
-        .eq('password', userPassword)
-        .single();
-        
-      if (userError || !userData) {
-        toast("Senha incorreta", { 
-          description: "A senha informada não confere. Tente novamente." 
-        });
-        setSubmitting(false);
-        return;
-      }
+      // REMOVED: Password verification logic
       
       // Validate match predictions
       const invalidPredictions = Object.entries(matchBets).filter(([_, scores]) => {
@@ -525,9 +504,8 @@ const Palpites = () => {
         });
       }
       
-      // Reset password field
-      setUserPassword("");
-} catch (error) {
+      // REMOVED: setUserPassword("");
+    } catch (error) {
       console.error("Error saving predictions:", error);
       toast("Erro ao salvar palpites", { 
         description: "Ocorreu um erro ao processar seus palpites"
@@ -810,20 +788,11 @@ const Palpites = () => {
           <CardHeader className="bg-fifa-blue text-white">
             <CardTitle>Confirme seus Palpites</CardTitle>
             <CardDescription className="text-gray-200">
-              Para salvar seus palpites, digite sua senha e confirme
+              Clique no botão abaixo para salvar seus palpites
             </CardDescription>
           </CardHeader>
           <CardContent className="p-6 space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="password">Digite sua senha</Label>
-              <Input
-                id="password"
-                type="password"
-                placeholder="Senha para confirmar seus palpites"
-                value={userPassword}
-                onChange={(e) => setUserPassword(e.target.value)}
-              />
-            </div>
+            {/* REMOVED: Password input field */}
             
             <Button 
               className="w-full bg-fifa-blue hover:bg-opacity-90"
