@@ -1,21 +1,20 @@
-
-import { useState, useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
-import Layout from "@/components/layout/Layout";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { MatchCard } from "@/components/results/MatchCard";
-import { ResultForm } from "@/components/results/ResultForm";
-import { MatchFilter } from "@/components/results/MatchFilter";
-import { Match } from "@/types/matches";
-import { supabase } from "@/integrations/supabase/client";
-import { useToast } from "@/hooks/use-toast";
-import { useAuth } from "@/contexts/AuthContext";
+// ... imports existentes ...
 
 const Resultados = () => {
   const { isAdmin } = useAuth();
   const { toast } = useToast();
   const [filter, setFilter] = useState("all");
   const [selectedMatch, setSelectedMatch] = useState<string | null>(null);
+
+  // Defina os grupos aqui. Você pode carregar isso dinamicamente do Supabase,
+  // mas para resolver o erro 'map', vamos usar um exemplo estático por enquanto.
+  // Supondo que seus grupos sejam A, B, C, etc.
+  const groups = [
+    { id: 'A', text: 'A' },
+    { id: 'B', text: 'B' },
+    { id: 'C', text: 'C' },
+    // ... adicione todos os grupos relevantes do seu jogo
+  ];
 
   // Fetch matches from the database
   const { data: matches = [], isLoading, error } = useQuery({
@@ -24,23 +23,23 @@ const Resultados = () => {
       const { data, error } = await supabase
         .from('matches')
         .select(`
-          id, 
-          match_date, 
+          id,
+          match_date,
           is_finished,
           stage,
-          home_score, 
+          home_score,
           away_score,
-          home_team_id, 
+          home_team_id,
           away_team_id,
           home_team:teams!home_team_id(id, name, group_id, flag_url),
           away_team:teams!away_team_id(id, name, group_id, flag_url)
         `)
         .order('match_date', { ascending: true });
-        
+
       if (error) {
         throw new Error(error.message);
       }
-      
+
       // Explicitly cast the data to Match[] to satisfy TypeScript
       return data as Match[];
     },
@@ -65,14 +64,15 @@ const Resultados = () => {
   };
 
   // Apply filter - cast as any first to work around type issues safely
-  const filteredMatches = filter === "all" 
+  const filteredMatches = filter === "all"
     ? matches
     : (matches as any[]).filter((match) => {
         // Filter by group_id
+        // Certifique-se de que home_team e away_team existem antes de acessar group_id
         if (match.home_team && match.home_team.group_id === filter) return true;
         if (match.away_team && match.away_team.group_id === filter) return true;
         return false;
-    });
+      });
 
   // Find the selected match data with proper type handling
   const selectedMatchData = matches.find((m) => m.id === selectedMatch) as Match | undefined;
@@ -109,7 +109,8 @@ const Resultados = () => {
           </Alert>
         )}
 
-        <MatchFilter value={filter} onValueChange={setFilter} />
+        {/* **AQUI ESTÁ A MUDANÇA PRINCIPAL:** Passe a prop 'groups' */}
+        <MatchFilter value={filter} onValueChange={setFilter} groups={groups} />
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
           {filteredMatches.length === 0 ? (
@@ -119,14 +120,15 @@ const Resultados = () => {
           ) : (
             // Use type assertion to work around the type issue safely
             (filteredMatches as any[]).map((match) => (
-              <MatchCard 
+              <MatchCard
                 key={match.id}
                 id={match.id}
                 homeTeam={match.home_team?.name || ""}
                 awayTeam={match.away_team?.name || ""}
-                date={match.match_date ? new Date(match.match_date).toLocaleDateString() : ""}
+                date={match.match_date ? new Date(match.match_date).toISOString() : ""} // Use ISOString para garantir formato consistente
                 time={match.match_date ? new Date(match.match_date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ""}
-                group={match.home_team?.group_id || ""}
+                // Certifique-se de que 'group' esteja no formato { name: string }
+                group={match.home_team?.group_id ? { name: match.home_team.group_id } : undefined}
                 homeTeamFlag={match.home_team?.flag_url || ""}
                 awayTeamFlag={match.away_team?.flag_url || ""}
                 stage={match.stage || ""}
@@ -138,8 +140,8 @@ const Resultados = () => {
         </div>
 
         {selectedMatch && isAdmin && (
-          <ResultForm 
-            match={selectedMatchData} 
+          <ResultForm
+            match={selectedMatchData}
             onComplete={handleFormComplete}
           />
         )}
