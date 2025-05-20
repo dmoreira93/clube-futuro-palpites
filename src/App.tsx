@@ -15,6 +15,7 @@ import Login from "./pages/Login";
 import Admin from "./pages/Admin";
 import AdminLogin from "./pages/AdminLogin";
 import UserPredictions from "./pages/UserPredictions";
+import Register from "@/pages/Register"; // ou o caminho relativo correto
 
 const queryClient = new QueryClient();
 
