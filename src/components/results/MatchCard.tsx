@@ -11,7 +11,7 @@ type MatchCardProps = {
   date: string;
   stage: string;
   time?: string;
-  groupText?: string;
+  group?: { name: string };
   selected: boolean;
   onClick?: (id: string) => void;
   homeTeamFlag?: string;
@@ -41,7 +41,7 @@ export const MatchCard = ({
   date,
   stage,
   time,
-  groupText,
+  group,
   selected,
   onClick,
   homeTeamFlag,
@@ -53,9 +53,7 @@ export const MatchCard = ({
 
   return (
     <Card 
-      className={`cursor-pointer transition-all ${
-        selected ? "ring-2 ring-fifa-blue" : ""
-      }`}
+      className={`cursor-pointer transition-all ${selected ? "ring-2 ring-fifa-blue" : ""}`}
       onClick={handleClick}
     >
       <CardHeader className="pb-2">
@@ -64,7 +62,7 @@ export const MatchCard = ({
             <CardTitle className="text-sm font-medium">{stage}</CardTitle>
             <CardDescription>
               {formatDate(date)} • {time || formatTime(date)}
-              {groupText && <span className="ml-2">• Grupo {groupText}</span>}
+              {group?.name && <span className="ml-2">• Grupo {group.name}</span>}
             </CardDescription>
           </div>
           <SoccerBallIcon className="h-5 w-5 text-fifa-blue" />
