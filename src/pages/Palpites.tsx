@@ -44,7 +44,6 @@ const Palpites = () => {
     third: "",
     fourth: "",
   });
-  // REMOVED: const [userPassword, setUserPassword] = useState("");
   
   // State for matches and teams from database
   const [matches, setMatches] = useState<Match[]>([]);
@@ -196,6 +195,8 @@ const Palpites = () => {
                   };
                 });
                 setGroupPredictions(existingGroupPreds);
+              } else if (groupPredictionsError) {
+                console.error("Error fetching group predictions:", groupPredictionsError);
               }
             } catch (error) {
               console.error("Error fetching group predictions:", error);
@@ -236,6 +237,8 @@ const Palpites = () => {
                     fourth: finalPred.fourth_place_id || ""
                   });
                 }
+              } else if (finalPredictionsError) {
+                console.error("Error fetching final predictions:", finalPredictionsError);
               }
             } catch (error) {
               console.error("Error fetching final predictions:", error);
@@ -318,8 +321,6 @@ const Palpites = () => {
     setSubmitting(true);
     
     try {
-      // REMOVED: Password verification logic
-      
       // Validate match predictions
       const invalidPredictions = Object.entries(matchBets).filter(([_, scores]) => {
         const homeScore = parseInt(scores.home);
@@ -329,7 +330,7 @@ const Palpites = () => {
       
       if (invalidPredictions.length > 0) {
         toast("Palpites inválidos", { 
-          description: "Alguns palpites possuem valores inválidos. Verifique e tente novamente." 
+          description: "Alguns palpites de jogos possuem valores inválidos (não são números ou são negativos). Verifique e tente novamente." 
         });
         setSubmitting(false);
         return;
@@ -344,7 +345,7 @@ const Palpites = () => {
         const homeScore = parseInt(scores.home);
         const awayScore = parseInt(scores.away);
         
-        if (isNaN(homeScore) || isNaN(awayScore)) continue;
+        if (isNaN(homeScore) || isNaN(awayScore)) continue; // Já validado, mas uma checagem extra não faz mal
         
         const existingPrediction = existingPredictions.find(p => 
           p.match_id === matchId && p.user_id === user.id
@@ -363,6 +364,7 @@ const Palpites = () => {
             
           if (updateError) {
             console.error(`Error updating prediction ${existingPrediction.id}:`, updateError);
+            toast(`Erro ao atualizar palpite de jogo ${matchId}`, { description: updateError.message });
           } else {
             updatedMatchPredictions++;
           }
@@ -378,7 +380,8 @@ const Palpites = () => {
             });
             
           if (insertError) {
-            console.error("Error inserting match prediction:", insertError);
+            console.error(`Error inserting match prediction for match ${matchId}:`, insertError);
+            toast(`Erro ao inserir palpite de jogo ${matchId}`, { description: insertError.message });
           } else {
             newMatchPredictions++;
           }
@@ -389,131 +392,178 @@ const Palpites = () => {
       let newGroupPredictions = 0;
       let updatedGroupPredictions = 0;
       
-      // Check if the group_predictions table exists
       const hasGroupPredictionsTable = await checkTableExists('group_predictions');
       
       if (hasGroupPredictionsTable) {
-        // Process group predictions
-        for (const [groupId, positions] of Object.entries(groupPredictions)) {
-          if (!positions.first || !positions.second) continue;
-          
-          const existingGroupPrediction = existingGroupPredictions.find(p => 
-            p.group_id === groupId && p.user_id === user.id
-          );
-          
-          if (existingGroupPrediction) {
-            // Use the RPC function for the update
-            const { error: updateError } = await supabase.rpc('update_group_prediction', {
-              pred_id: existingGroupPrediction.id,
-              first_id: positions.first,
-              second_id: positions.second
-            });
-            
-            if (updateError) {
-              console.error(`Error updating group prediction:`, updateError);
-            } else {
-              updatedGroupPredictions++;
+        try {
+            for (const [groupId, positions] of Object.entries(groupPredictions)) {
+                // VERIFICAÇÃO ADICIONAL: Pule se o palpite de grupo estiver incompleto
+                if (!positions.first || !positions.second || positions.first === "" || positions.second === "") {
+                    console.warn(`Palpite de grupo incompleto para o grupo ${groupId}. Ignorando.`);
+                    continue; 
+                }
+                // Verificação adicional para garantir que os times são diferentes, se aplicável
+                if (positions.first === positions.second) {
+                    toast(`Palpite de grupo ${groupId} inválido`, { description: "O 1º e 2º lugar não podem ser o mesmo time." });
+                    console.warn(`Palpite de grupo ${groupId} inválido: 1º e 2º lugar são o mesmo time.`);
+                    continue; 
+                }
+
+                const existingGroupPrediction = existingGroupPredictions.find(p => 
+                    p.group_id === groupId && p.user_id === user.id
+                );
+                
+                if (existingGroupPrediction) {
+                    const { error: updateError } = await supabase.rpc('update_group_prediction', {
+                        pred_id: existingGroupPrediction.id,
+                        first_id: positions.first,
+                        second_id: positions.second
+                    });
+                    
+                    if (updateError) {
+                        console.error(`Error updating group prediction for group ${groupId}:`, updateError);
+                        toast(`Erro ao atualizar previsão do grupo ${groupId}`, { description: updateError.message });
+                    } else {
+                        updatedGroupPredictions++;
+                    }
+                } else {
+                    const { error: insertError } = await supabase.rpc('insert_group_prediction', {
+                        group_id_param: groupId,
+                        user_id_param: user.id,
+                        first_team_id_param: positions.first,
+                        second_team_id_param: positions.second
+                    });
+                    
+                    if (insertError) {
+                        console.error(`Error inserting group prediction for group ${groupId}:`, insertError);
+                        toast(`Erro ao inserir previsão do grupo ${groupId}`, { description: insertError.message });
+                    } else {
+                        newGroupPredictions++;
+                    }
+                }
             }
-          } else {
-            // Use the RPC function for the insert
-            const { error: insertError } = await supabase.rpc('insert_group_prediction', {
-              group_id_param: groupId,
-              user_id_param: user.id,
-              first_team_id_param: positions.first,
-              second_team_id_param: positions.second
-            });
-            
-            if (insertError) {
-              console.error("Error inserting group prediction:", insertError);
-            } else {
-              newGroupPredictions++;
-            }
-          }
+        } catch (error) {
+            console.error("Erro geral no processamento de previsões de grupo:", error);
+            toast("Erro geral ao salvar previsões de grupo", { description: (error as Error).message });
         }
+      } else {
+          console.warn("Tabela 'group_predictions' não existe ou não foi detectada. Palpites de grupo não serão salvos.");
+          toast("Aviso: Tabela de previsões de grupo não encontrada. Palpites de grupo não serão salvos.", { duration: 5000 });
       }
       
       // Process final predictions - only if the final_predictions table exists
       let finalPredictionUpdated = false;
+      let finalPredictionInserted = false; // Adicionar para rastrear inserções
       
-      // Check if the final_predictions table exists
       const hasFinalPredictionsTable = await checkTableExists('final_predictions');
       
       if (hasFinalPredictionsTable) {
-        // Check if all required fields are filled
-        if (finalPredictions.champion && finalPredictions.viceChampion && 
-            finalPredictions.third && finalPredictions.fourth) {
-          
-          const existingFinalPrediction = existingFinalPredictions.length > 0 ? existingFinalPredictions[0] : null;
-          
-          if (existingFinalPrediction) {
-            // Use the RPC function for the update
-            const { error: updateError } = await supabase.rpc('update_final_prediction', {
-              pred_id: existingFinalPrediction.id,
-              champion_id_param: finalPredictions.champion,
-              vice_champion_id_param: finalPredictions.viceChampion,
-              third_place_id_param: finalPredictions.third,
-              fourth_place_id_param: finalPredictions.fourth
-            });
-            
-            if (updateError) {
-              console.error("Error updating final prediction:", updateError);
+        try {
+            // Check if all required fields are filled
+            if (finalPredictions.champion && finalPredictions.viceChampion && 
+                finalPredictions.third && finalPredictions.fourth) {
+              
+              // Verificação adicional para garantir que os times finais são diferentes
+              const finalTeams = new Set([
+                finalPredictions.champion,
+                finalPredictions.viceChampion,
+                finalPredictions.third,
+                finalPredictions.fourth
+              ]);
+              if (finalTeams.size < 4) {
+                toast("Palpite final inválido", { description: "Os times para Campeão, Vice, 3º e 4º lugar devem ser diferentes." });
+                console.warn("Palpite final inválido: Times repetidos.");
+                setSubmitting(false);
+                return;
+              }
+
+              const existingFinalPrediction = existingFinalPredictions.length > 0 ? existingFinalPredictions[0] : null;
+              
+              if (existingFinalPrediction) {
+                  const { error: updateError } = await supabase.rpc('update_final_prediction', {
+                      pred_id: existingFinalPrediction.id,
+                      champion_id_param: finalPredictions.champion,
+                      vice_champion_id_param: finalPredictions.viceChampion,
+                      third_place_id_param: finalPredictions.third,
+                      fourth_place_id_param: finalPredictions.fourth
+                  });
+                  
+                  if (updateError) {
+                      console.error("Error updating final prediction:", updateError);
+                      toast("Erro ao atualizar previsão final", { description: updateError.message });
+                  } else {
+                      finalPredictionUpdated = true;
+                  }
+              } else {
+                  const { error: insertError } = await supabase.rpc('insert_final_prediction', {
+                      user_id_param: user.id,
+                      champion_id_param: finalPredictions.champion,
+                      vice_champion_id_param: finalPredictions.viceChampion,
+                      third_place_id_param: finalPredictions.third,
+                      fourth_place_id_param: finalPredictions.fourth
+                  });
+                  
+                  if (insertError) {
+                      console.error("Error inserting final prediction:", insertError);
+                      toast("Erro ao inserir previsão final", { description: insertError.message });
+                  } else {
+                      finalPredictionInserted = true; 
+                  }
+              }
             } else {
-              finalPredictionUpdated = true;
+                console.warn("Palpite final incompleto. Não será salvo.");
+                toast("Palpite final incompleto", { description: "Preencha todos os 4 campos da previsão final." });
             }
-          } else {
-            // Use the RPC function for the insert
-            const { error: insertError } = await supabase.rpc('insert_final_prediction', {
-              user_id_param: user.id,
-              champion_id_param: finalPredictions.champion,
-              vice_champion_id_param: finalPredictions.viceChampion,
-              third_place_id_param: finalPredictions.third,
-              fourth_place_id_param: finalPredictions.fourth
-            });
-            
-            if (insertError) {
-              console.error("Error inserting final prediction:", insertError);
-            } else {
-              finalPredictionUpdated = true;
-            }
-          }
+        } catch (error) {
+            console.error("Erro geral no processamento de previsão final:", error);
+            toast("Erro geral ao salvar previsão final", { description: (error as Error).message });
         }
+      } else {
+          console.warn("Tabela 'final_predictions' não existe ou não foi detectada. Palpites finais não serão salvos.");
+          toast("Aviso: Tabela de previsões finais não encontrada. Palpites finais não serão salvos.", { duration: 5000 });
       }
       
       // Generate success message
       let successMessage = "";
+      let hasChanges = false;
       
       if (newMatchPredictions > 0 || updatedMatchPredictions > 0) {
         successMessage += `Palpites de jogos: ${newMatchPredictions} novos, ${updatedMatchPredictions} atualizados. `;
+        hasChanges = true;
       }
       
       if (newGroupPredictions > 0 || updatedGroupPredictions > 0) {
         successMessage += `Classificações de grupos: ${newGroupPredictions} novas, ${updatedGroupPredictions} atualizadas. `;
+        hasChanges = true;
       }
       
-      if (finalPredictionUpdated) {
+      if (finalPredictionUpdated || finalPredictionInserted) {
         successMessage += "Previsão do resultado final salva. ";
+        hasChanges = true;
       }
       
-      if (successMessage) {
+      if (hasChanges) { // Usar hasChanges para verificar se algo foi alterado
         toast("Palpites registrados com sucesso!", { 
-          description: successMessage
+          description: successMessage.trim() // trim() para remover espaço extra no final
         });
       } else {
         toast("Nenhum palpite foi alterado", { 
-          description: "Nenhuma alteração foi detectada nos palpites"
+          description: "Nenhuma alteração foi detectada nos palpites ou eles estavam incompletos/inválidos."
         });
       }
       
-      // REMOVED: setUserPassword("");
     } catch (error) {
-      console.error("Error saving predictions:", error);
+      console.error("Erro ao salvar palpites:", error);
       toast("Erro ao salvar palpites", { 
-        description: "Ocorreu um erro ao processar seus palpites"
+        description: "Ocorreu um erro ao processar seus palpites. Verifique o console para mais detalhes."
       });
     } finally {
       setSubmitting(false);
     }
   };
+
+  // O restante do código (renderização, useEffects, etc.) permanece o mesmo.
+  // ... (código anterior) ...
 
   if (loading) {
     return (
@@ -792,7 +842,6 @@ const Palpites = () => {
             </CardDescription>
           </CardHeader>
           <CardContent className="p-6 space-y-4">
-            {/* REMOVED: Password input field */}
             
             <Button 
               className="w-full bg-fifa-blue hover:bg-opacity-90"
