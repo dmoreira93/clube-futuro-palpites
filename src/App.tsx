@@ -1,29 +1,39 @@
+// src/App.tsx (ou o local do seu arquivo principal de App.tsx)
 
-import { Toaster } from "@/components/ui/toaster";
-import { Toaster as Sonner } from "@/components/ui/sonner";
+import { Toaster } from "@/components/ui/toaster"; // Do Shadcn UI, para toasts imperativos
+import { Toaster as Sonner } from "@/components/ui/sonner"; // Do Sonner, para toasts declarativos
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import { AuthProvider } from "./contexts/AuthContext";
-import Index from "./pages/Index";
-import NotFound from "./pages/NotFound";
-import Criterios from "./pages/Criterios";
-import Resultados from "./pages/Resultados";
-import Palpites from "./pages/Palpites";
-import Cadastro from "./pages/Cadastro";
-import Login from "./pages/Login";
-import Admin from "./pages/Admin";
-import AdminLogin from "./pages/AdminLogin";
-import UserPredictions from "./pages/UserPredictions";
 
+// AQUI ESTÁ A ALTERAÇÃO CHAVE:
+// Usando o alias '@/' para o caminho do AuthProvider para consistência
+import { AuthProvider } from "@/contexts/AuthContext";
+
+// Importe suas páginas
+import Index from "@/pages/Index";
+import NotFound from "@/pages/NotFound";
+import Criterios from "@/pages/Criterios";
+import Resultados from "@/pages/Resultados";
+import Palpites from "@/pages/Palpites";
+import Cadastro from "@/pages/Cadastro";
+import Login from "@/pages/Login";
+import Admin from "@/pages/Admin";
+import AdminLogin from "@/pages/AdminLogin";
+import UserPredictions from "@/pages/UserPredictions";
+
+// Crie uma instância do QueryClient fora do componente para evitar recriações
 const queryClient = new QueryClient();
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
+      {/* AuthProvider deve envolver as rotas e todos os componentes que usam useAuth */}
       <AuthProvider>
-        <Toaster />
-        <Sonner />
+        {/* Os Toasters podem estar aqui ou mais abaixo, dependendo de onde você os chama */}
+        <Toaster /> {/* Toaster do Shadcn UI */}
+        <Sonner /> {/* Toaster do Sonner */}
+        
         <BrowserRouter>
           <Routes>
             <Route path="/" element={<Index />} />
