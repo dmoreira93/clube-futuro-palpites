@@ -44,9 +44,10 @@ const Login = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!formData.email || !formData.password) {
-      toast.error("Por favor, preencha todos os campos");
-      return;
+
+    if (error || !data.session) {
+      toast.error(error?.message || "Erro ao fazer login. Verifique suas credenciais.");
+      return false;
     }
 
     setIsSubmitting(true);

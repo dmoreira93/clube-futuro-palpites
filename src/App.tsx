@@ -35,6 +35,7 @@ const App = () => (
             <Route path="/login" element={<Login />} />
             <Route path="/admin" element={<Admin />} />
             <Route path="/admin-login" element={<AdminLogin />} />
+            <Route path="/register" element={<Register />} />
             {/* Catch-all route for 404 */}
             <Route path="*" element={<NotFound />} />
           </Routes>
