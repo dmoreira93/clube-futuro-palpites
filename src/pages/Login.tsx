@@ -28,7 +28,7 @@ const Login = () => {
   const navigate = useNavigate();
   const { login } = useAuth();
   const [formData, setFormData] = useState({
-    username: "",
+    email: "",
     password: "",
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -44,7 +44,7 @@ const Login = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!formData.username || !formData.password) {
+    if (!formData.email || !formData.password) {
       toast.error("Por favor, preencha todos os campos");
       return;
     }
@@ -52,7 +52,7 @@ const Login = () => {
     setIsSubmitting(true);
     
     try {
-      const success = await login(formData.username, formData.password);
+      const success = await login(formData.email, formData.password);
       
       if (success) {
         toast.success("Login realizado com sucesso!");
@@ -99,13 +99,13 @@ const Login = () => {
             <form onSubmit={handleSubmit}>
               <div className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="username">Nome de Usuário</Label>
+                  <Label htmlFor="email">Email</Label>
                   <Input
-                    id="username"
-                    name="username"
-                    type="text"
-                    placeholder="Digite seu nome de usuário"
-                    value={formData.username}
+                    id="email"
+                    name="email"
+                    type="email"
+                    placeholder="Digite seu email"
+                    value={formData.email}
                     onChange={handleChange}
                     required
                   />
