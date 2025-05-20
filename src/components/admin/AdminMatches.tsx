@@ -8,23 +8,23 @@ const AdminMatches = () => {
 
   const fetchMatches = async () => {
     setLoading(true);
-    const { data, error } = await supabase
-      .from("matches")
-      .select(`
-        id, 
-        home_score, 
-        away_score, 
-        match_date, 
-        stage, 
-        stadium, 
-        is_finished, 
-        created_at, 
-        update_at,
-        home_team:home_team_id (id, name),
-        away_team:away_team_id (id, name)
-      `)
-      .order("match_date", { ascending: true });
-
+        const { data, error } = await supabase
+          .from("matches")
+            .select(`
+                  id, 
+                  home_score,
+                  away_score,
+                  match_date,
+                  stage,
+                  stadium,
+                  is_finished,
+                  created_at,
+                  updated_at,
+                  home_team:home_team_id (id, name),
+                  away_team:away_team_id (id, name)
+                  `)
+                  .order("match_date", { ascending: true });
+                  
     if (error) {
       console.error("Erro ao buscar partidas:", error.message);
     } else {
