@@ -1,41 +1,41 @@
-// src/pages/Resultados.tsx
 import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useToast } from "@/components/ui/use-toast";
-import Layout from "@/components/layout/Layout"; // <-- Importe o componente Layout
+import Layout from "@/components/layout/Layout"; // Importe o componente Layout
 import { MatchCard } from "@/components/results/MatchCard";
 import { MatchFilter } from "@/components/results/MatchFilter";
 import { ResultForm } from "@/components/results/ResultForm";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { Link } from "react-router-dom"; // <-- Importe Link para o botão Voltar
-import { Button } from "@/components/ui/button"; // <-- Importe Button
-import { ChevronLeft } from "lucide-react"; // <-- Ícone para o botão Voltar
+import { Link } from "react-router-dom"; // Importe Link para o botão Voltar
+import { Button } from "@/components/ui/button"; // Importe Button
+import { ChevronLeft } from "lucide-react"; // Ícone para o botão Voltar
 
 // Definindo tipos para os dados que virão do Supabase para melhor tipagem
 interface Team {
   id: string;
   name: string;
   flag_url: string;
-  group_id: string; // ID do grupo, que será usado para fazer join com a tabela groups
+  group_id: string; // Este será o NOME do grupo após o join, não o ID
 }
 
 interface Group {
-  id: string;
+  id: string; // ID do grupo no DB
   name: string; // Nome do grupo (e.g., 'A', 'B', 'C')
 }
 
+// Tipo para a partida com os dados do join
 interface Match {
   id: string;
   match_date: string;
-  home_score: number | null;
-  away_score: number | null;
+  home_score: number | null; // Pode ser null se o jogo não ocorreu
+  away_score: number | null; // Pode ser null se o jogo não ocorreu
   is_finished: boolean;
   stage: string;
-  home_team: Team; // Agora puxa todas as infos do time, incluindo group_id
-  away_team: Team;
-  group: Group; // Novo campo para o nome do grupo
+  home_team: Team; // Inclui os dados do time da casa (com group_id sendo o nome)
+  away_team: Team; // Inclui os dados do time de fora (com group_id sendo o nome)
+  group: { name: string }; // Propriedade para o nome do grupo para o MatchCard e filtro
 }
 
 const Resultados = () => {
@@ -44,18 +44,7 @@ const Resultados = () => {
   const [filter, setFilter] = useState("all");
   const [selectedMatch, setSelectedMatch] = useState<string | null>(null);
 
-  // Removendo a definição estática de 'groups' daqui, pois será buscada do Supabase
-  // const groups = [
-  //   { id: 'A', text: 'A' },
-  //   { id: 'B', text: 'B' },
-  //   { id: 'C', text: 'C' },
-  //   { id: 'D', text: 'D' },
-  //   { id: 'E', text: 'E' },
-  //   { id: 'F', text: 'F' },
-  //   { id: 'G', text: 'G' },
-  //   { id: 'H', text: 'H' },
-  // ];
-
+  // Query para buscar as partidas e os nomes dos grupos
   const { data: matches = [], isLoading, error } = useQuery<Match[]>({
     queryKey: ['matches'],
     queryFn: async () => {
@@ -68,11 +57,11 @@ const Resultados = () => {
           away_score,
           is_finished,
           stage,
-          home_team:teams!home_team_id(id, name, flag_url, group_id:groups(name)),  // <-- JOIN com teams e groups
-          away_team:teams!away_team_id(id, name, flag_url, group_id:groups(name))   // <-- JOIN com teams e groups
+          home_team:teams!home_team_id(id, name, flag_url, group_id:groups(name)),   
+          away_team:teams!away_team_id(id, name, flag_url, group_id:groups(name))    
         `)
-        .not('home_team_id', 'is', null) // <-- Filtro para times não nulos
-        .not('away_team_id', 'is', null); // <-- Filtro para times não nulos
+        .not('home_team_id', 'is', null) // Filtra para jogos com times preenchidos
+        .not('away_team_id', 'is', null); // Filtra para jogos com times preenchidos
 
       if (error) {
         console.error("Erro ao buscar partidas:", error);
@@ -83,16 +72,9 @@ const Resultados = () => {
       // e garantir que os scores sejam exibidos apenas se a partida estiver finalizada
       const formattedMatches = data.map((match: any) => ({
         ...match,
-        home_team: {
-            ...match.home_team,
-            group_id: match.home_team.group_id?.name // Extrai o nome do grupo
-        },
-        away_team: {
-            ...match.away_team,
-            group_id: match.away_team.group_id?.name // Extrai o nome do grupo
-        },
-        // Adiciona a propriedade 'group' diretamente no objeto da partida para facilitar o filtro
-        group: match.home_team?.group_id ? { name: match.home_team.group_id } : undefined,
+        // home_team e away_team já vêm com group_id como um objeto { name: '...' }
+        // Se houver group_id, extraímos o nome para o MatchCard e filtro
+        group: match.home_team?.group_id ? { name: match.home_team.group_id.name } : undefined,
         home_score: match.is_finished ? match.home_score : null, // Mostrar score apenas se finalizado
         away_score: match.is_finished ? match.away_score : null, // Mostrar score apenas se finalizado
       }));
@@ -101,7 +83,7 @@ const Resultados = () => {
     },
   });
 
-  // Fetch groups dynamically for the filter dropdown
+  // Query para buscar os grupos dinamicamente para o dropdown de filtro
   const { data: groupsData = [], isLoading: groupsLoading } = useQuery<Group[]>({
     queryKey: ['groups'],
     queryFn: async () => {
@@ -110,7 +92,7 @@ const Resultados = () => {
         .select('id, name'); // Assumindo que sua tabela de grupos tem 'id' e 'name'
 
       if (error) {
-        console.error("Erro ao buscar grupos:", error);
+        console.error("Erro ao buscar grupos para filtro:", error);
         throw new Error(error.message);
       }
       return data as Group[];
@@ -132,13 +114,13 @@ const Resultados = () => {
 
   // Mapeia os grupos para o formato esperado pelo MatchFilter
   const filterGroups = groupsData.map(group => ({
-    id: group.id,
+    id: group.name, // Usamos o nome do grupo como ID para o filtro
     text: group.name
   }));
 
 
   return (
-    <Layout> {/* <-- Envolva a página com o componente Layout */}
+    <Layout> {/* Envolva a página com o componente Layout */}
       <div className="container mx-auto p-4 md:p-6 lg:p-8">
         {/* Adiciona a barra de navegação/botão de voltar */}
         <div className="flex items-center justify-between mb-6">
