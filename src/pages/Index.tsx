@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import Layout from "@/components/layout/Layout";
@@ -30,36 +29,52 @@ const Index = () => {
     const fetchStats = async () => {
       try {
         // Contar usuários
-        const { count: userCount } = await supabase
+        const { count: userCount, error: userCountError } = await supabase
           .from('users_custom')
           .select('*', { count: 'exact', head: true });
+        if (userCountError) throw userCountError;
 
         // Contar partidas realizadas
-        const { count: finishedMatchCount } = await supabase
+        const { count: finishedMatchCount, error: finishedMatchCountError } = await supabase
           .from('matches')
           .select('*', { count: 'exact', head: true })
           .eq('is_finished', true);
+        if (finishedMatchCountError) throw finishedMatchCountError;
 
         // Contar total de partidas
-        const { count: totalMatchCount } = await supabase
+        const { count: totalMatchCount, error: totalMatchCountError } = await supabase
           .from('matches')
           .select('*', { count: 'exact', head: true });
+        if (totalMatchCountError) throw totalMatchCountError;
 
         // Buscar usuário com maior pontuação
-        const { data: topScoreUser } = await supabase
+        // Esta é a query que estava causando o 406. 
+        // A política RLS já foi confirmada, então a causa provável é a falta de dados ou o .single() com 0 resultados.
+        const { data: topScoreUser, error: topScoreUserError } = await supabase
           .from('user_stats')
           .select('total_points, user_id')
           .order('total_points', { ascending: false })
           .limit(1)
-          .single();
+          .single(); // Mantém o .single()
+
+        if (topScoreUserError) {
+          // Logar o erro, mas não impedir o carregamento da página inteira
+          console.error("Erro ao buscar o usuário com maior pontuação da tabela user_stats:", topScoreUserError);
+          // Podemos definir valores padrão ou vazios para topScore caso haja erro
+        }
 
         let topUserName = "Não disponível";
         if (topScoreUser) {
-          const { data: userData } = await supabase
+          // Buscar o nome do usuário a partir do user_id obtido de user_stats
+          const { data: userData, error: userDataError } = await supabase
             .from('users_custom')
             .select('name')
             .eq('id', topScoreUser.user_id)
             .single();
+          
+          if (userDataError) {
+            console.error("Erro ao buscar nome do usuário com maior pontuação:", userDataError);
+          }
           
           if (userData) {
             topUserName = userData.name;
@@ -68,7 +83,7 @@ const Index = () => {
 
         // Buscar próxima partida
         const now = new Date().toISOString();
-        const { data: nextMatchData } = await supabase
+        const { data: nextMatchData, error: nextMatchDataError } = await supabase
           .from('matches')
           .select('id, match_date, home_team_id, away_team_id')
           .gt('match_date', now)
@@ -76,6 +91,10 @@ const Index = () => {
           .order('match_date')
           .limit(1)
           .single();
+
+        if (nextMatchDataError && nextMatchDataError.code !== 'PGRST116') { // PGRST116 é para "não encontrado" (No rows found)
+            console.error("Erro ao buscar próxima partida:", nextMatchDataError);
+        }
 
         let nextMatchInfo = {
           date: "Não agendado",
@@ -86,17 +105,19 @@ const Index = () => {
           const matchDate = new Date(nextMatchData.match_date);
           const formattedDate = `${matchDate.getDate().toString().padStart(2, '0')}/${(matchDate.getMonth() + 1).toString().padStart(2, '0')}`;
 
-          const { data: homeTeam } = await supabase
+          const { data: homeTeam, error: homeTeamError } = await supabase
             .from('teams')
             .select('name')
             .eq('id', nextMatchData.home_team_id)
             .single();
+          if (homeTeamError) console.error("Erro ao buscar home team:", homeTeamError);
 
-          const { data: awayTeam } = await supabase
+          const { data: awayTeam, error: awayTeamError } = await supabase
             .from('teams')
             .select('name')
             .eq('id', nextMatchData.away_team_id)
             .single();
+          if (awayTeamError) console.error("Erro ao buscar away team:", awayTeamError);
 
           nextMatchInfo = {
             date: formattedDate,
@@ -115,7 +136,7 @@ const Index = () => {
           nextMatch: nextMatchInfo
         });
       } catch (error) {
-        console.error("Erro ao buscar estatísticas:", error);
+        console.error("Erro geral ao buscar estatísticas:", error);
       }
     };
 
