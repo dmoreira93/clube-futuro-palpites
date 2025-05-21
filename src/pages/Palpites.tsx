@@ -25,8 +25,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { Match } from "@/types/matches";
+// Importações de Prediction, GroupPrediction, FinalPrediction (elas se referem a como os dados são tratados no frontend)
 import { Prediction, GroupPrediction, FinalPrediction } from "@/types/predictions"; 
-// Removidos RawGroupPrediction, RawFinalPrediction pois não são estritamente necessários para este código.
 
 // Adicione as interfaces para Teams e Groups, caso não existam em outro lugar
 interface Team {
@@ -54,7 +54,7 @@ const Palpites = () => {
   const [matches, setMatches] = useState<Match[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
-  const [teamsByGroup, setTeamsByGroup] = useState<{ [groupId: string]: Team[] }>({}); // NOVO: para filtrar times por grupo
+  const [teamsByGroup, setTeamsByGroup] = useState<{ [groupId: string]: Team[] }>({}); 
 
   // Predictions states
   const [matchPredictions, setMatchPredictions] = useState<{ [matchId: string]: { homeGoals: number; awayGoals: number } }>({});
@@ -86,15 +86,15 @@ const Palpites = () => {
         // Fetch Teams
         const { data: teamsData, error: teamsError } = await supabase
           .from('teams')
-          .select('id, name, flag_url, group_id'); // Adicionado group_id para filtro de grupos
+          .select('id, name, flag_url, group_id'); 
 
         if (teamsError) throw teamsError;
         setTeams(teamsData || []);
 
-        // NOVO: Organizar times por grupo
+        // Organizar times por grupo
         const organizedTeamsByGroup: { [groupId: string]: Team[] } = {};
         teamsData?.forEach(team => {
-            if (team.group_id) { // Apenas se o time tiver um grupo associado
+            if (team.group_id) { 
                 if (!organizedTeamsByGroup[team.group_id]) {
                     organizedTeamsByGroup[team.group_id] = [];
                 }
@@ -108,7 +108,7 @@ const Palpites = () => {
         const { data: groupsData, error: groupsError } = await supabase
           .from('groups')
           .select('id, name')
-          .order('name', { ascending: true }); // ORDENAR GRUPOS ALFABETICAMENTE
+          .order('name', { ascending: true }); 
 
         if (groupsError) throw groupsError;
         setGroups(groupsData || []);
@@ -121,16 +121,17 @@ const Palpites = () => {
           .order('match_date', { ascending: true });
 
         if (matchesError) throw matchesError;
-        // FILTRAR PARTIDAS COM TIMES NULL
         const filteredMatches = matchesData?.filter(match => match.home_team_id !== null && match.away_team_id !== null) || [];
         setMatches(filteredMatches);
 
 
         // Fetch existing Match Predictions for the user
+        // ALTERADO AQUI: supabase.from('predictions') para carregar palpites de partida
         const { data: userMatchPredictions, error: userMatchPredictionsError } = await supabase
-          .from('match_predictions')
+          .from('predictions') 
           .select('id, match_id, home_score, away_score')
-          .eq('user_id', user.id);
+          .eq('user_id', user.id)
+          .not('match_id', 'is', null); // Filtra para pegar apenas linhas que são palpites de partida
 
         if (userMatchPredictionsError) throw userMatchPredictionsError;
         const initialMatchPredictions = userMatchPredictions.reduce((acc, pred) => {
@@ -141,10 +142,12 @@ const Palpites = () => {
 
 
         // Fetch existing Group Predictions for the user
+        // ALTERADO AQUI: supabase.from('predictions') para carregar palpites de grupo
         const { data: userGroupPredictions, error: userGroupPredictionsError } = await supabase
-            .from('group_predictions')
-            .select('*')
-            .eq('user_id', user.id);
+            .from('predictions')
+            .select('id, group_id, predicted_first_team_id, predicted_second_team_id')
+            .eq('user_id', user.id)
+            .not('group_id', 'is', null); // Filtra para pegar apenas linhas que são palpites de grupo
 
         if (userGroupPredictionsError) throw userGroupPredictionsError;
         setGroupPredictions(userGroupPredictions || []);
@@ -160,10 +163,12 @@ const Palpites = () => {
 
 
         // Fetch existing Final Prediction for the user
+        // ALTERADO AQUI: supabase.from('predictions') para carregar o palpite final
         const { data: userFinalPrediction, error: userFinalPredictionError } = await supabase
-            .from('final_predictions')
-            .select('*')
+            .from('predictions') 
+            .select('id, champion_id, vice_champion_id, third_place_id, fourth_place_id, final_home_score, final_away_score')
             .eq('user_id', user.id)
+            .not('champion_id', 'is', null) // Filtra para pegar apenas a linha que é o palpite final
             .single(); 
 
         if (userFinalPredictionError && userFinalPredictionError.code !== 'PGRST116') { // PGRST116 é "no rows found"
@@ -247,9 +252,13 @@ const Palpites = () => {
 
     try {
       // --- SUBMISSÃO DE PALPITES DE PARTIDA ---
-      const loadedMatchPredictions = (await supabase.from('match_predictions')
+      // IMPORTANTE: precisamos do ID do palpite existente para update_match_prediction
+      // ALTERADO AQUI:supabase.from('predictions') para carregar palpites de partida existentes
+      const loadedMatchPredictions = (await supabase.from('predictions')
           .select('id, match_id, home_score, away_score')
-          .eq('user_id', user.id)).data || [];
+          .eq('user_id', user.id)
+          .not('match_id', 'is', null) // Filtra para pegar apenas linhas que são palpites de partida
+          ).data || [];
 
       for (const matchId in matchPredictions) {
         const prediction = matchPredictions[matchId];
@@ -275,15 +284,20 @@ const Palpites = () => {
 
       // --- SUBMISSÃO DE PALPITES DE GRUPO ---
       console.log("Submitting Group Predictions:", groupPositions);
+      // ALTERADO AQUI: supabase.from('predictions') para carregar palpites de grupo existentes
+      const loadedGroupPredictions = (await supabase.from('predictions')
+          .select('id, group_id, predicted_first_team_id, predicted_second_team_id')
+          .eq('user_id', user.id)
+          .not('group_id', 'is', null) // Filtra para pegar apenas linhas que são palpites de grupo
+          ).data || [];
+
       for (const groupId in groupPositions) {
         const positions = groupPositions[groupId];
-        const existingGroupPred = groupPredictions.find(p => p.group_id === groupId);
+        const existingGroupPred = loadedGroupPredictions.find(p => p.group_id === groupId);
 
-        // Verificação adicional para garantir que seleções foram feitas
         if (!positions.first || !positions.second) {
             toast.warning(`Por favor, selecione 1º e 2º lugar para o Grupo ${groups.find(g => g.id === groupId)?.name || 'desconhecido'}.`);
-            // Você pode decidir pular este grupo ou lançar um erro
-            continue; // Pula para o próximo grupo se as seleções estiverem incompletas
+            continue; 
         }
 
         if (existingGroupPred) {
@@ -312,10 +326,19 @@ const Palpites = () => {
 
       // --- SUBMISSÃO DE PALPITE FINAL ---
       console.log("Submitting Final Prediction:", finalPositions, finalScore);
+      // ALTERADO AQUI: supabase.from('predictions') para carregar o palpite final existente
+      const loadedFinalPrediction = (await supabase.from('predictions')
+          .select('id, champion_id, vice_champion_id, third_place_id, fourth_place_id, final_home_score, final_away_score')
+          .eq('user_id', user.id)
+          .not('champion_id', 'is', null) // Filtra para pegar apenas a linha que é o palpite final
+          .single()
+          ).data;
+
+
       if (finalPositions.champion && finalPositions.runnerUp && finalPositions.thirdPlace && finalPositions.fourthPlace) {
-        if (finalPrediction) { // Se já existe um palpite final
+        if (loadedFinalPrediction) { // Se já existe um palpite final
           const { error: updateError } = await supabase.rpc('update_final_prediction', {
-            pred_id: finalPrediction.id,
+            pred_id: loadedFinalPrediction.id,
             champion_id_param: finalPositions.champion,
             vice_champion_id_param: finalPositions.runnerUp,
             third_place_id_param: finalPositions.thirdPlace,
@@ -333,7 +356,7 @@ const Palpites = () => {
             champion_id_param: finalPositions.champion,
             vice_champion_id_param: finalPositions.runnerUp,
             third_place_id_param: finalPositions.thirdPlace,
-            fourth_place_id_param: finalPositions.fourthPlace, // Correção aqui: era fourth_place_id
+            fourth_place_id_param: finalPositions.fourthPlace,
             final_home_score_param: finalScore.homeGoals,
             final_away_score_param: finalScore.awayGoals,
           });
@@ -344,14 +367,10 @@ const Palpites = () => {
         }
       } else {
         toast.warning("Por favor, selecione os 4 primeiros colocados para o palpite final.");
-        // Se o usuário não preencheu tudo, não prosseguimos com o save do palpite final,
-        // mas as outras seções (partidas, grupos) podem ter sido salvas.
       }
 
 
       toast.success("Palpites salvos com sucesso!");
-      // Opcional: recarregar os dados para refletir as mudanças ou redirecionar
-      // fetchData(); 
     } catch (err: any) {
       console.error("Erro ao salvar palpites:", err);
       setError(err.message || "Falha ao salvar os palpites.");
@@ -385,7 +404,6 @@ const Palpites = () => {
     );
   }
 
-  // Helper para encontrar time pelo ID (para display no Select)
   const getTeamName = (teamId: string) => {
     return teams.find(t => t.id === teamId)?.name || 'Time Desconhecido';
   };
@@ -399,7 +417,6 @@ const Palpites = () => {
       <div className="container mx-auto p-4 max-w-4xl">
         <h1 className="text-3xl font-bold text-center text-fifa-blue mb-6">Meus Palpites</h1>
 
-        {/* Tabs para diferentes seções de palpites */}
         <Tabs defaultValue="matches" className="mb-8">
           <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="matches"><SoccerBallIcon className="mr-2" />Partidas</TabsTrigger>
@@ -407,7 +424,6 @@ const Palpites = () => {
             <TabsTrigger value="final"><TrophyIcon className="mr-2" />Final</TabsTrigger>
           </TabsList>
 
-          {/* Conteúdo da aba de Partidas */}
           <TabsContent value="matches">
             <Card className="shadow-lg">
               <CardHeader className="bg-fifa-blue text-white">
@@ -422,17 +438,15 @@ const Palpites = () => {
                 ) : (
                   matches.map((match) => (
                     <div key={match.id} className="flex items-center justify-between border-b pb-4 last:border-b-0 last:pb-0">
-                      {/* Flex item 1: Time da Casa */}
-                      <div className="flex items-center gap-2 w-1/3 justify-start"> {/* Ajustado para ocupar 1/3 e alinhar à esquerda */}
+                      <div className="flex items-center gap-2 w-1/3 justify-start">
                         <Avatar className="h-6 w-6 flex-shrink-0">
                           <AvatarImage src={getTeamLogo(match.home_team_id)} />
                           <AvatarFallback>{teams.find(t => t.id === match.home_team_id)?.name.substring(0,2)}</AvatarFallback>
                         </Avatar>
-                        <span className="font-medium text-gray-700 truncate">{getTeamName(match.home_team_id)}</span> {/* Adicionado truncate */}
+                        <span className="font-medium text-gray-700 truncate">{getTeamName(match.home_team_id)}</span>
                       </div>
                       
-                      {/* Flex item 2: Placar */}
-                      <div className="flex items-center gap-2 w-1/3 justify-center"> {/* Ajustado para ocupar 1/3 e centralizar */}
+                      <div className="flex items-center gap-2 w-1/3 justify-center">
                         <Input
                           type="number"
                           className="w-16 text-center"
@@ -450,9 +464,8 @@ const Palpites = () => {
                         />
                       </div>
                       
-                      {/* Flex item 3: Time Visitante */}
-                      <div className="flex items-center gap-2 w-1/3 justify-end"> {/* Ajustado para ocupar 1/3 e alinhar à direita */}
-                        <span className="font-medium text-gray-700 text-right truncate">{getTeamName(match.away_team_id)}</span> {/* Adicionado truncate e text-right */}
+                      <div className="flex items-center gap-2 w-1/3 justify-end">
+                        <span className="font-medium text-gray-700 text-right truncate">{getTeamName(match.away_team_id)}</span>
                         <Avatar className="h-6 w-6 flex-shrink-0">
                           <AvatarImage src={getTeamLogo(match.away_team_id)} />
                           <AvatarFallback>{teams.find(t => t.id === match.away_team_id)?.name.substring(0,2)}</AvatarFallback>
@@ -465,7 +478,6 @@ const Palpites = () => {
             </Card>
           </TabsContent>
 
-          {/* Conteúdo da aba de Grupos */}
           <TabsContent value="groups">
             <Card className="shadow-lg">
               <CardHeader className="bg-fifa-blue text-white">
@@ -492,7 +504,6 @@ const Palpites = () => {
                               <SelectValue placeholder="Selecione o 1º..." />
                             </SelectTrigger>
                             <SelectContent>
-                              {/* FILTRAR TIMES APENAS PARA O GRUPO ATUAL */}
                               {teamsByGroup[group.id]?.map(team => (
                                 <SelectItem key={team.id} value={team.id}>
                                   <div className="flex items-center gap-2">
@@ -517,7 +528,6 @@ const Palpites = () => {
                               <SelectValue placeholder="Selecione o 2º..." />
                             </SelectTrigger>
                             <SelectContent>
-                              {/* FILTRAR TIMES APENAS PARA O GRUPO ATUAL */}
                               {teamsByGroup[group.id]?.map(team => (
                                 <SelectItem key={team.id} value={team.id}>
                                   <div className="flex items-center gap-2">
@@ -540,7 +550,6 @@ const Palpites = () => {
             </Card>
           </TabsContent>
 
-          {/* Conteúdo da aba de Final */}
           <TabsContent value="final">
             <Card className="shadow-lg">
               <CardHeader className="bg-fifa-blue text-white">
@@ -550,7 +559,6 @@ const Palpites = () => {
                 </CardDescription>
               </CardHeader>
               <CardContent className="p-6 space-y-6">
-                {/* Campeão */}
                 <div>
                   <Label htmlFor="champion">Campeão</Label>
                   <Select
@@ -576,7 +584,6 @@ const Palpites = () => {
                   </Select>
                 </div>
 
-                {/* Vice Campeão */}
                 <div>
                   <Label htmlFor="runnerUp">Vice Campeão</Label>
                   <Select
@@ -602,7 +609,6 @@ const Palpites = () => {
                   </Select>
                 </div>
 
-                {/* Terceiro Lugar */}
                 <div>
                   <Label htmlFor="thirdPlace">3º Lugar</Label>
                   <Select
@@ -628,7 +634,6 @@ const Palpites = () => {
                   </Select>
                 </div>
 
-                {/* Quarto Lugar */}
                 <div>
                   <Label htmlFor="fourthPlace">4º Lugar</Label>
                   <Select
@@ -654,7 +659,6 @@ const Palpites = () => {
                   </Select>
                 </div>
 
-                {/* Placar da Final */}
                 <div className="flex items-center justify-between gap-4 mt-6">
                   <Label>Placar da Final:</Label>
                   <Input
