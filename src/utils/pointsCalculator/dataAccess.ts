@@ -71,12 +71,11 @@ export async function fetchScoringCriteria(): Promise<ScoringCriteria | null> {
       .order('name')
       .limit(3); // Supondo que você só precisa dos 3 principais critérios
 
-    if (error) { // Removido !data, pois data pode ser [] e ainda ser válido
+    if (error) {
       console.error('Erro ao buscar critérios de pontuação:', error);
       return null;
     }
 
-    // Se data for null ou [], garanta que os valores padrão são usados
     const criteria: ScoringCriteria = {
       exactScore: data?.find(c => c.name === 'Placar exato')?.points || 10,
       winner: data?.find(c => c.name === 'Acertar vencedor')?.points || 5,
@@ -90,6 +89,124 @@ export async function fetchScoringCriteria(): Promise<ScoringCriteria | null> {
   }
 }
 
+/**
+ * Salva os pontos de um usuário para uma partida.
+ */
+export async function saveUserPoints(pointsResult: PointsResult): Promise<boolean> {
+  try {
+    const { data, error } = await supabase
+      .from('user_points')
+      .upsert(pointsResult, { onConflict: 'prediction_id' }); // Supondo que você queira atualizar se o prediction_id já existe
+
+    if (error) {
+      console.error('Erro ao salvar pontos do usuário:', error);
+      return false;
+    }
+    return true;
+  } catch (error) {
+    console.error('Erro ao salvar pontos do usuário:', error);
+    return false;
+  }
+}
+
+/**
+ * Atualiza as estatísticas gerais de um usuário (total de pontos, partidas jogadas, etc.).
+ * Esta função deve ser chamada após calcular e salvar os pontos de uma partida.
+ */
+export async function updateUserStats(userId: string): Promise<boolean> {
+  try {
+    // 1. Calcular o total de pontos
+    const { data: userPointsData, error: pointsError } = await supabase
+      .from('user_points')
+      .select('points')
+      .eq('user_id', userId);
+
+    if (pointsError) {
+      console.error('Erro ao buscar pontos do usuário para estatísticas:', pointsError);
+      return false;
+    }
+
+    const totalPoints = userPointsData ? userPointsData.reduce((sum, current) => sum + current.points, 0) : 0;
+
+    // 2. Contar partidas jogadas (onde o usuário fez palpite e a partida foi pontuada)
+    const { count: matchesPlayedCount, error: matchesCountError } = await supabase
+      .from('user_points') // Assumindo que user_points registra uma entrada para cada palpite pontuado
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', userId);
+
+    if (matchesCountError) {
+      console.error('Erro ao contar partidas jogadas para estatísticas:', matchesCountError);
+      return false;
+    }
+
+    // 3. Calcular porcentagem de acerto (exemplo: acertos exatos)
+    const { count: exactScoresCount, error: exactScoresError } = await supabase
+      .from('user_points')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .eq('points_type', 'EXACT_SCORE'); // Supondo que 'EXACT_SCORE' é um PointsType
+
+    if (exactScoresError) {
+      console.error('Erro ao contar acertos exatos para estatísticas:', exactScoresError);
+      return false;
+    }
+
+    const accuracyPercentage = matchesPlayedCount > 0
+      ? Math.round((exactScoresCount || 0) / matchesPlayedCount * 100)
+      : 0;
+
+    // 4. Atualizar ou inserir na tabela 'user_stats'
+    const { data: existingStats, error: fetchStatsError } = await supabase
+      .from('user_stats')
+      .select('id')
+      .eq('user_id', userId)
+      .single();
+
+    if (fetchStatsError && fetchStatsError.code !== 'PGRST116') { // PGRST116 = No rows found
+      console.error('Erro ao buscar estatísticas existentes:', fetchStatsError);
+      return false;
+    }
+
+    if (existingStats) {
+      // Atualizar
+      const { error: updateError } = await supabase
+        .from('user_stats')
+        .update({
+          total_points: totalPoints,
+          matches_played: matchesPlayedCount,
+          accuracy_percentage: accuracyPercentage,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', existingStats.id);
+
+      if (updateError) {
+        console.error('Erro ao atualizar estatísticas do usuário:', updateError);
+        return false;
+      }
+    } else {
+      // Inserir
+      const { error: insertError } = await supabase
+        .from('user_stats')
+        .insert({
+          user_id: userId,
+          total_points: totalPoints,
+          matches_played: matchesPlayedCount,
+          accuracy_percentage: accuracyPercentage,
+        });
+
+      if (insertError) {
+        console.error('Erro ao inserir estatísticas do usuário:', insertError);
+        return false;
+      }
+    }
+    return true;
+  } catch (error) {
+    console.error('Erro geral ao atualizar estatísticas do usuário:', error);
+    return false;
+  }
+}
+
+
 // --- NOVAS FUNÇÕES PARA PALPITES DO DIA ---
 
 /**
@@ -98,13 +215,11 @@ export async function fetchScoringCriteria(): Promise<ScoringCriteria | null> {
  */
 export async function fetchMatchesForDate(dateString: string): Promise<SupabaseMatchResultFromMatches[] | null> {
   try {
-    // Para buscar partidas do dia, precisamos filtrar pela data exata
-    // Supabase permite funções de data no filtro
     const { data, error } = await supabase
       .from('matches')
-      .select('*, home_team:home_team_id(*), away_team:away_team_id(*)') // Inclui dados dos times
-      .gte('match_date', `${dateString}T00:00:00Z`) // Começo do dia
-      .lte('match_date', `${dateString}T23:59:59Z`) // Fim do dia
+      .select('*, home_team:home_team_id(*), away_team:away_team_id(*)')
+      .gte('match_date', `${dateString}T00:00:00Z`)
+      .lte('match_date', `${dateString}T23:59:59Z`)
       .order('match_date', { ascending: true });
 
     if (error) {
@@ -130,7 +245,7 @@ export async function fetchMatchPredictionsForMatches(matchIds: string[]): Promi
     }
 
     const { data, error } = await supabase
-      .from('match_predictions') // Usando o nome correto da tabela de palpites de partida
+      .from('match_predictions')
       .select('*')
       .in('match_id', matchIds);
 
@@ -153,7 +268,7 @@ export async function fetchUsersCustom(): Promise<User[] | null> {
   try {
     const { data, error } = await supabase
       .from('users_custom')
-      .select('id, name, username, avatar_url'); // Selecione apenas as colunas que você precisa
+      .select('id, name, username, avatar_url');
 
     if (error) {
       console.error('Erro ao buscar usuários customizados:', error);
