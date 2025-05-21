@@ -1,3 +1,4 @@
+// src/pages/Palpites.tsx
 import { useState, useEffect, useCallback } from "react";
 import Layout from "@/components/layout/Layout";
 import { Input } from "@/components/ui/input";
@@ -17,7 +18,7 @@ import {
 } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { Label } from "@/components/ui/label";
-import { Volleyball as SoccerBallIcon, Trophy as TrophyIcon, Users as UsersIcon, Loader2 } from "lucide-react";
+import { Volleyball as SoccerBallIcon, Trophy as TrophyIcon, Users as UsersIcon, Loader2, Printer } from "lucide-react"; // Adicionado 'Printer' icon
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
@@ -27,14 +28,19 @@ import { useNavigate } from "react-router-dom";
 import { Match } from "@/types/matches";
 import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import ReactDOMServer from 'react-dom/server'; // Importação NECESSÁRIA para renderizar HTML em string
+
+// Importações para o comprovante
+import { PredictionReceipt } from "@/components/predictions/PredictionReceipt"; // Componente do comprovante
+import { UserType } from "@/contexts/AuthContext"; // Importação explícita do tipo UserType
 
 // Ajustes nos tipos de importação para refletir as tabelas separadas
 import {
-  MatchPrediction,
+  MatchPrediction, // Você importou MatchPrediction, mas não está usando explicitamente aqui
   GroupPrediction,
   FinalPrediction,
-  RawGroupPrediction,
-  RawFinalPrediction
+  RawGroupPrediction, // Não usada explicitamente aqui
+  RawFinalPrediction // Não usada explicitamente aqui
 } from "@/types/predictions";
 
 interface Team {
@@ -48,6 +54,18 @@ interface Group {
   id: string;
   name: string;
 }
+
+// Novo tipo para os palpites de partida com os detalhes completos da partida
+// Necessário para o componente PredictionReceipt
+type UserMatchPredictionWithDetails = {
+  id: string;
+  user_id: string;
+  match_id: string;
+  home_score: number; // Supondo que você armazena como 'home_score' no BD
+  away_score: number; // Supondo que você armazena como 'away_score' no BD
+  match: Match; // Inclui todos os detalhes da partida, incluindo times
+};
+
 
 const Palpites = () => {
   const { user, isAuthenticated } = useAuth();
@@ -78,7 +96,7 @@ const Palpites = () => {
   // ***** DATA DE CORTE GLOBAL PARA GRUPOS E FINAL *****
   // Esta data (14/06/2025 às 18:00) é o limite para palpites de GRUPO e FINAL.
   // Use um fuso horário adequado (e.g., 'America/Sao_Paulo' ou 'UTC-03:00')
-  const globalPredictionCutoffDate = new Date('2025-06-14T18:00:00-03:00'); 
+  const globalPredictionCutoffDate = new Date('2025-06-14T18:00:00-03:00');
   // O getTime() retorna o valor em milissegundos, mais fácil para comparações
   const globalPredictionCutoffTime = globalPredictionCutoffDate.getTime();
 
@@ -131,14 +149,28 @@ const Palpites = () => {
         const filteredMatches = matchesData?.filter(match => match.home_team_id !== null && match.away_team_id !== null) || [];
         setMatches(filteredMatches);
 
-        // Fetch existing Match Predictions for the user
+        // Fetch existing Match Predictions for the user WITH MATCH DETAILS FOR RECEIPT
         const { data: userMatchPredictions, error: userMatchPredictionsError } = await supabase
           .from('match_predictions')
-          .select('id, match_id, home_score, away_score')
+          .select(`
+            id,
+            match_id,
+            home_score,
+            away_score,
+            match:matches(
+              id,
+              match_date,
+              stage,
+              home_team_id,
+              away_team_id,
+              home_team:teams!home_team_id(name),
+              away_team:teams!away_team_id(name)
+            )
+          `)
           .eq('user_id', user.id);
 
         if (userMatchPredictionsError) throw userMatchPredictionsError;
-        const initialMatchPredictions = userMatchPredictions.reduce((acc, pred) => {
+        const initialMatchPredictions = (userMatchPredictions as UserMatchPredictionWithDetails[]).reduce((acc, pred) => {
           acc[pred.match_id] = { homeGoals: pred.home_score, awayGoals: pred.away_score };
           return acc;
         }, {} as { [matchId: string]: { homeGoals: number; awayGoals: number } });
@@ -384,8 +416,8 @@ const Palpites = () => {
                       pred_id: loadedFinalPrediction.id,
                       champion_id_param: finalPositions.champion,
                       vice_champion_id_param: finalPositions.runnerUp,
-                      third_place_id_param: finalPositions.thirdPlace,
-                      fourth_place_id_param: finalPositions.fourthPlace,
+                      third_place_id_param: finalPositions.third_place_id,
+                      fourth_place_id_param: finalPositions.fourth_place_id,
                       final_home_score_param: finalScore.homeGoals,
                       final_away_score_param: finalScore.awayGoals,
                     });
@@ -423,6 +455,89 @@ const Palpites = () => {
     }
   };
 
+
+  // --- NOVO: Função para Imprimir Comprovante ---
+  const handlePrintReceipt = async () => {
+    // É importante buscar os palpites mais recentes e completos para o comprovante
+    // Não usar o estado 'userPredictions' diretamente aqui para garantir dados atualizados e completos.
+    if (!user || !isAuthenticated) {
+      toast.info("Você precisa estar logado para gerar o comprovante.");
+      return;
+    }
+
+    setSubmitting(true); // Pode setar como submitting enquanto gera o comprovante
+    try {
+      // Re-fetch dos palpites de partida com os detalhes completos dos times
+      // Isso é crucial para que o comprovante tenha todos os nomes dos times.
+      const { data: currentMatchPredictions, error: fetchError } = await supabase
+        .from('match_predictions')
+        .select(`
+          id,
+          user_id,
+          match_id,
+          home_score,
+          away_score,
+          match:matches(
+            id,
+            match_date,
+            stage,
+            home_team_id,
+            away_team_id,
+            home_team:teams!home_team_id(name),
+            away_team:teams!away_team_id(name)
+          )
+        `)
+        .eq('user_id', user.id);
+
+      if (fetchError) throw fetchError;
+
+      const predictionsForReceipt = (currentMatchPredictions as UserMatchPredictionWithDetails[]).map(p => ({
+        match: p.match,
+        home_score_prediction: p.home_score,
+        away_score_prediction: p.away_score,
+      }));
+
+
+      // 1. Renderiza o componente PredictionReceipt para uma string HTML
+      // Passa user, palpites de partida (com detalhes), e a data de geração
+      const receiptHtmlString = ReactDOMServer.renderToString(
+        <PredictionReceipt
+          user={user as UserType} // Assegura que user é do tipo UserType
+          predictions={predictionsForReceipt}
+          dateGenerated={new Date()}
+        />
+      );
+
+      // 2. Cria uma nova janela do navegador para a impressão
+      const printWindow = window.open('', '_blank', 'height=600,width=800');
+      if (printWindow) {
+        // 3. Escreve o HTML completo na nova janela, incluindo os estilos
+        printWindow.document.write('<!DOCTYPE html>');
+        printWindow.document.write('<html><head><title>Comprovante de Palpites</title>');
+        // Caminho para o seu CSS global. Ajuste se o nome/caminho for diferente!
+        printWindow.document.write('<link rel="stylesheet" href="/index.css">');
+        printWindow.document.write('</head><body>');
+        printWindow.document.write(receiptHtmlString);
+        printWindow.document.write('</body></html>');
+        printWindow.document.close();
+
+        // 4. Espera o carregamento completo da janela e então aciona a impressão
+        printWindow.onload = () => {
+          printWindow.focus();
+          printWindow.print();
+          // printWindow.close(); // Opcional: fecha a janela após a impressão/salvar
+          toast.success("Comprovante gerado com sucesso!");
+        };
+      } else {
+        toast.error("O navegador bloqueou a abertura da janela de impressão. Por favor, permita pop-ups para este site.");
+      }
+    } catch (err: any) {
+      console.error("Erro ao gerar comprovante:", err);
+      toast.error("Erro ao gerar comprovante: " + (err.message || "Verifique sua conexão."));
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   // --- Renderização do Componente ---
   if (loading) {
@@ -504,7 +619,7 @@ const Palpites = () => {
                         <div className="flex items-center gap-2 w-1/3 justify-start">
                           <Avatar className="h-6 w-6 flex-shrink-0">
                             <AvatarImage src={getTeamLogo(match.home_team_id)} />
-                            <AvatarFallback>{teams.find(t => t.id === match.home_team_id)?.name.substring(0,2)}</AvatarFallback>
+                            <AvatarFallback>{teams.find(t => t.id === match.home_team_id)?.name?.substring(0,2)}</AvatarFallback>
                           </Avatar>
                           <span className="font-medium text-gray-700 truncate">{getTeamName(match.home_team_id)}</span>
                         </div>
@@ -533,7 +648,7 @@ const Palpites = () => {
                           <span className="font-medium text-gray-700 text-right truncate">{getTeamName(match.away_team_id)}</span>
                           <Avatar className="h-6 w-6 flex-shrink-0">
                             <AvatarImage src={getTeamLogo(match.away_team_id)} />
-                            <AvatarFallback>{teams.find(t => t.id === match.away_team_id)?.name.substring(0,2)}</AvatarFallback>
+                            <AvatarFallback>{teams.find(t => t.id === match.away_team_id)?.name?.substring(0,2)}</AvatarFallback>
                           </Avatar>
                         </div>
                         {isMatchPredictionLocked && (
@@ -769,11 +884,11 @@ const Palpites = () => {
           <CardContent className="p-6 space-y-4">
 
             <Button
-              className="w-full bg-fifa-blue hover:bg-opacity-90"
+              className="w-full bg-fifa-blue hover:bg-opacity-90 mb-4" // Adicionei um mb-4 aqui para espaçamento
               onClick={handleSubmitBets}
               // O botão geral é desabilitado se houver alguma operação em andamento.
               // A validação de data ocorre internamente para cada tipo de palpite.
-              disabled={submitting} 
+              disabled={submitting}
             >
               {submitting ? (
                 <>
@@ -783,6 +898,16 @@ const Palpites = () => {
               ) : (
                 'Confirmar Palpites'
               )}
+            </Button>
+
+            {/* Botão para Imprimir Comprovante */}
+            <Button
+              className="w-full bg-gray-600 hover:bg-gray-700 text-white"
+              onClick={handlePrintReceipt}
+              disabled={submitting || !user} // Desabilita se estiver salvando ou se não houver usuário
+            >
+              <Printer className="mr-2 h-4 w-4" />
+              Imprimir Comprovante
             </Button>
 
             <p className="text-sm text-gray-500 text-center">
