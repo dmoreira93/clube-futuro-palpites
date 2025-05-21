@@ -18,8 +18,8 @@ type UserType = {
   email: string;
   name: string;
   nickname: string;
-  // Mude para isSuperAdmin para refletir o nome do campo no Supabase
-  isSuperAdmin: boolean;
+  // Voltando para 'isAdmin' para refletir o campo dentro de raw_user_meta_data
+  isAdmin: boolean;
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -39,8 +39,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           email: data.session.user.email || "",
           name: userMetadata?.name || "",
           nickname: userMetadata?.nickname || "",
-          // AQUI: Mude para ler 'is_super_admin'
-          isSuperAdmin: userMetadata?.is_super_admin || false,
+          // AQUI: Lendo 'is_admin' de userMetadata
+          isAdmin: userMetadata?.is_admin || false,
         };
         setUser(userData);
         void syncWithUsersCustom(userData);
@@ -58,8 +58,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           email: session.user.email || "",
           name: userMetadata?.name || "",
           nickname: userMetadata?.nickname || "",
-          // AQUI: Mude para ler 'is_super_admin'
-          isSuperAdmin: userMetadata?.is_super_admin || false,
+          // AQUI: Lendo 'is_admin' de userMetadata
+          isAdmin: userMetadata?.is_admin || false,
         };
         setUser(userData);
         void syncWithUsersCustom(userData);
@@ -88,8 +88,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         email: data.session.user.email || "",
         name: userMetadata?.name || "",
         nickname: userMetadata?.nickname || "",
-        // AQUI: Mude para ler 'is_super_admin'
-        isSuperAdmin: userMetadata?.is_super_admin || false,
+        // AQUI: Lendo 'is_admin' de userMetadata
+        isAdmin: userMetadata?.is_admin || false,
       };
       setUser(userData);
       void syncWithUsersCustom(userData);
@@ -130,8 +130,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           name: user.name,
           username: user.nickname,
           password: "", // campo opcional ou placeholder
-          // AQUI: Mude para usar user.isSuperAdmin
-          is_admin: user.isSuperAdmin || false,
+          is_admin: user.isAdmin || false, // Usando user.isAdmin
           avatar_url: "",
           first_login: true,
         },
@@ -149,8 +148,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const contextValue = {
     isAuthenticated: !!user,
-    // AQUI: Mude para user?.isSuperAdmin
-    isAdmin: !!user?.isSuperAdmin,
+    isAdmin: !!user?.isAdmin, // Usando user?.isAdmin
     login,
     logout,
     user,
