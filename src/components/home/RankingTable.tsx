@@ -11,9 +11,8 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import RankingRow from "@/components/ranking/RankingRow";
-// CORREÇÃO: Importar como default export
 import useParticipantsRanking from "@/hooks/useParticipantsRanking"; 
-import { Users as UsersIcon } from "lucide-react"; // Adicionado para o estado vazio
+import { Users as UsersIcon } from "lucide-react"; 
 
 
 const RankingTable = () => {
@@ -70,8 +69,9 @@ const RankingTable = () => {
                 <TableHead className="w-[50px] text-center">Pos</TableHead>
                 <TableHead>Participante</TableHead>
                 <TableHead className="text-right">Pontos</TableHead>
-                <TableHead className="text-right">Partidas Jogadas</TableHead>
+                <TableHead className="text-right">Jogos Pontuados</TableHead> {/* Alterado 'Partidas Jogadas' para 'Jogos Pontuados' */}
                 <TableHead className="text-right">Acerto</TableHead>
+                <TableHead className="text-right">Prêmio</TableHead> {/* Adicionado cabeçalho para o prêmio */}
               </TableRow>
             </TableHeader>
             <TableBody>

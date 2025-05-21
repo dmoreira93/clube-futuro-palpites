@@ -3,8 +3,7 @@
 import React from "react";
 import { TableCell, TableRow } from "@/components/ui/table";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
-// IMPORTANTE: Importar Participant de onde ele está exportado (nesse caso, do hook)
-import { Participant } from "@/hooks/useParticipantsRanking"; // <--- CORRIGIDO AQUI!
+import { Participant } from "@/hooks/useParticipantsRanking"; 
 
 type RankingRowProps = {
   participant: Participant;
@@ -34,11 +33,12 @@ const RankingRow = ({ participant, index }: RankingRowProps) => {
           {participant.name}
         </div>
       </TableCell>
-      {/* REMOVIDO: A CÉLULA ABAIXO QUE EXIBIA O APELIDO FOI REMOVIDA */}
-      {/* <TableCell>{participant.nickname}</TableCell> */}
       <TableCell className="text-right font-bold">{participant.points}</TableCell>
-      <TableCell className="text-right">{participant.matches}</TableCell>
+      <TableCell className="text-right">{participant.matches}</TableCell> {/* Agora é 'jogos pontuados' */}
       <TableCell className="text-right">{participant.accuracy}</TableCell>
+      <TableCell className="text-right font-semibold">
+        {participant.premio}
+      </TableCell> {/* Adicionada célula para o prêmio */}
     </TableRow>
   );
 };
