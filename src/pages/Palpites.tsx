@@ -32,7 +32,7 @@ import { checkTableExists } from "@/utils/RPCHelperFunctions"; // Assumindo que 
 interface Team {
   id: string;
   name: string;
-  logo_url: string; // Adicione se você tiver
+  flag_url: string; // ALTERADO: AGORA USANDO flag_url
 }
 
 interface Group {
@@ -94,7 +94,7 @@ const Palpites = () => {
         // Fetch Teams
         const { data: teamsData, error: teamsError } = await supabase
           .from('teams')
-          .select('id, name, logo_url'); // Assumindo essas colunas
+          .select('id, name, flag_url'); // ALTERADO: AQUI USANDO flag_url
 
         if (teamsError) throw teamsError;
         setTeams(teamsData || []);
@@ -111,7 +111,7 @@ const Palpites = () => {
         // Fetch existing Match Predictions for the user
         const { data: userMatchPredictions, error: userMatchPredictionsError } = await supabase
           .from('match_predictions')
-          .select('match_id, home_score, away_score')
+          .select('id, match_id, home_score, away_score') // Adicionado 'id' aqui, pois é necessário para update_match_prediction
           .eq('user_id', user.id);
 
         if (userMatchPredictionsError) throw userMatchPredictionsError;
@@ -122,10 +122,10 @@ const Palpites = () => {
         setMatchPredictions(initialMatchPredictions);
 
 
-        // --- NOVO: Fetch existing Group Predictions for the user ---
+        // --- Fetch existing Group Predictions for the user ---
         const { data: userGroupPredictions, error: userGroupPredictionsError } = await supabase
             .from('group_predictions')
-            .select('*') // Seleciona todos os campos para preencher o estado GroupPrediction
+            .select('*')
             .eq('user_id', user.id);
 
         if (userGroupPredictionsError) throw userGroupPredictionsError;
@@ -141,7 +141,7 @@ const Palpites = () => {
         setGroupPositions(initialGroupPositions);
 
 
-        // --- NOVO: Fetch existing Final Prediction for the user ---
+        // --- Fetch existing Final Prediction for the user ---
         const { data: userFinalPrediction, error: userFinalPredictionError } = await supabase
             .from('final_predictions')
             .select('*')
@@ -229,9 +229,15 @@ const Palpites = () => {
 
     try {
       // --- SUBMISSÃO DE PALPITES DE PARTIDA ---
+      // IMPORTANTE: precisamos do ID do palpite existente para update_match_prediction
+      // userMatchPredictions precisa ser uma lista de objetos com 'id' para funcionar com .find
+      const loadedMatchPredictions = (await supabase.from('match_predictions')
+          .select('id, match_id, home_score, away_score')
+          .eq('user_id', user.id)).data || [];
+
       for (const matchId in matchPredictions) {
         const prediction = matchPredictions[matchId];
-        const existingMatchPrediction = userMatchPredictions.find(p => p.match_id === matchId); // Assumindo que userMatchPredictions foi carregado
+        const existingMatchPrediction = loadedMatchPredictions.find(p => p.match_id === matchId);
 
         if (existingMatchPrediction) {
           const { error: updateError } = await supabase.rpc('update_match_prediction', {
@@ -251,7 +257,7 @@ const Palpites = () => {
         }
       }
 
-      // --- NOVO: SUBMISSÃO DE PALPITES DE GRUPO ---
+      // --- SUBMISSÃO DE PALPITES DE GRUPO ---
       console.log("Submitting Group Predictions:", groupPositions);
       for (const groupId in groupPositions) {
         const positions = groupPositions[groupId];
@@ -281,7 +287,7 @@ const Palpites = () => {
         }
       }
 
-      // --- NOVO: SUBMISSÃO DE PALPITE FINAL ---
+      // --- SUBMISSÃO DE PALPITE FINAL ---
       console.log("Submitting Final Prediction:", finalPositions, finalScore);
       if (finalPositions.champion && finalPositions.runnerUp && finalPositions.thirdPlace && finalPositions.fourthPlace) {
         if (finalPrediction) { // Se já existe um palpite final
@@ -304,7 +310,7 @@ const Palpites = () => {
             champion_id_param: finalPositions.champion,
             vice_champion_id_param: finalPositions.runnerUp,
             third_place_id_param: finalPositions.thirdPlace,
-            fourth_place_id_param: finalPositions.fourthPlace,
+            fourth_place_id_param: finalPositions.fourth_place_id,
             final_home_score_param: finalScore.homeGoals,
             final_away_score_param: finalScore.awayGoals,
           });
@@ -320,7 +326,7 @@ const Palpites = () => {
 
       toast.success("Palpites salvos com sucesso!");
       // Opcional: recarregar os dados para refletir as mudanças ou redirecionar
-      // fetchData();
+      // fetchData(); // Se você quiser recarregar os dados após salvar
     } catch (err: any) {
       console.error("Erro ao salvar palpites:", err);
       setError(err.message || "Falha ao salvar os palpites.");
@@ -360,7 +366,8 @@ const Palpites = () => {
   };
 
   const getTeamLogo = (teamId: string) => {
-    return teams.find(t => t.id === teamId)?.logo_url || '/placeholder-team-logo.png'; // Placeholder
+    // ALTERADO: AGORA USANDO team.flag_url
+    return teams.find(t => t.id === teamId)?.flag_url || '/placeholder-team-logo.png'; // Placeholder
   };
 
   // Mapear partidas por grupo para facilitar a exibição
@@ -469,7 +476,7 @@ const Palpites = () => {
                                 <SelectItem key={team.id} value={team.id}>
                                   <div className="flex items-center gap-2">
                                     <Avatar className="h-5 w-5">
-                                      <AvatarImage src={team.logo_url} />
+                                      <AvatarImage src={team.flag_url} /> {/* ALTERADO: AQUI USANDO flag_url */}
                                       <AvatarFallback>{team.name.substring(0,2)}</AvatarFallback>
                                     </Avatar>
                                     {team.name}
@@ -493,7 +500,7 @@ const Palpites = () => {
                                 <SelectItem key={team.id} value={team.id}>
                                   <div className="flex items-center gap-2">
                                     <Avatar className="h-5 w-5">
-                                      <AvatarImage src={team.logo_url} />
+                                      <AvatarImage src={team.flag_url} /> {/* ALTERADO: AQUI USANDO flag_url */}
                                       <AvatarFallback>{team.name.substring(0,2)}</AvatarFallback>
                                     </Avatar>
                                     {team.name}
@@ -536,7 +543,7 @@ const Palpites = () => {
                         <SelectItem key={team.id} value={team.id}>
                           <div className="flex items-center gap-2">
                             <Avatar className="h-5 w-5">
-                              <AvatarImage src={team.logo_url} />
+                              <AvatarImage src={team.flag_url} /> {/* ALTERADO: AQUI USANDO flag_url */}
                               <AvatarFallback>{team.name.substring(0,2)}</AvatarFallback>
                             </Avatar>
                             {team.name}
@@ -562,7 +569,7 @@ const Palpites = () => {
                         <SelectItem key={team.id} value={team.id}>
                           <div className="flex items-center gap-2">
                             <Avatar className="h-5 w-5">
-                              <AvatarImage src={team.logo_url} />
+                              <AvatarImage src={team.flag_url} /> {/* ALTERADO: AQUI USANDO flag_url */}
                               <AvatarFallback>{team.name.substring(0,2)}</AvatarFallback>
                             </Avatar>
                             {team.name}
@@ -588,7 +595,7 @@ const Palpites = () => {
                         <SelectItem key={team.id} value={team.id}>
                           <div className="flex items-center gap-2">
                             <Avatar className="h-5 w-5">
-                              <AvatarImage src={team.logo_url} />
+                              <AvatarImage src={team.flag_url} /> {/* ALTERADO: AQUI USANDO flag_url */}
                               <AvatarFallback>{team.name.substring(0,2)}</AvatarFallback>
                             </Avatar>
                             {team.name}
@@ -614,7 +621,7 @@ const Palpites = () => {
                         <SelectItem key={team.id} value={team.id}>
                           <div className="flex items-center gap-2">
                             <Avatar className="h-5 w-5">
-                              <AvatarImage src={team.logo_url} />
+                              <AvatarImage src={team.flag_url} /> {/* ALTERADO: AQUI USANDO flag_url */}
                               <AvatarFallback>{team.name.substring(0,2)}</AvatarFallback>
                             </Avatar>
                             {team.name}
