@@ -57,8 +57,8 @@ const Resultados = () => {
           away_score,
           is_finished,
           stage,
-          home_team:teams!home_team_id(id, name, flag_url, group_id:groups(name)),  // <-- Usando 'groups'
-          away_team:teams!away_team_id(id, name, flag_url, group_id:groups(name))    // <-- Usando 'groups'
+          home_team:teams!home_team_id(id, name, flag_url, group_id:groups(name)),
+          away_team:teams!away_team_id(id, name, flag_url, group_id:groups(name))
         `)
         .not('home_team_id', 'is', null)
         .not('away_team_id', 'is', null);
@@ -85,7 +85,7 @@ const Resultados = () => {
     queryKey: ['groups'],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('groups') // <-- Usando 'groups' aqui também
+        .from('groups')
         .select('id, name');
 
       if (error) {
