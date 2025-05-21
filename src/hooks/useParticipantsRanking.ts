@@ -115,48 +115,50 @@ export const useParticipantsRanking = () => {
           .from('predictions')
           .select('*');
         if (matchPredError) throw matchPredError;
+        console.log("All Match Predictions:", allMatchPredictions); // DEBUG
 
         // 3. Buscar TODOS os resultados de partidas da tabela 'matches'
         const { data: allMatchesWithResults, error: matchesError } = await supabase
           .from('matches')
           .select('id, home_score, away_score, is_finished');
         if (matchesError) throw matchesError;
+        console.log("All Matches with Results:", allMatchesWithResults); // DEBUG
 
         // Filtrar apenas partidas finalizadas para cálculo de pontos
         const finishedMatchResults = allMatchesWithResults?.filter(m => m.is_finished) || [];
+        console.log("Finished Match Results (for scoring):", finishedMatchResults); // DEBUG
+
 
         // 4. Buscar TODOS os palpites de grupos
         const { data: allGroupPredictions, error: groupPredError } = await supabase
           .from('group_predictions')
           .select('*');
-        if (groupPredError) throw groupPredError;
+        if (groupPredError) console.error("Erro ao buscar palpites de grupo:", groupPredError); // DEBUG
 
         // 5. Buscar TODOS os resultados de grupos (tabela 'groups_results', colunas corrigidas)
-        // Verifique se a tabela 'groups_results' existe e tem as colunas 'first_place_team_id', 'second_place_team_id'
         const { data: allGroupResults, error: groupResultError } = await supabase
           .from('groups_results')
           .select('id, group_id, first_place_team_id, second_place_team_id');
-        if (groupResultError) throw groupResultError;
+        if (groupResultError) console.error("Erro ao buscar resultados de grupo:", groupResultError); // DEBUG
 
         // 6. Buscar TODOS os palpites finais
         const { data: allFinalPredictions, error: finalPredError } = await supabase
           .from('final_predictions')
           .select('*');
-        if (finalPredError) throw finalPredError;
+        if (finalPredError) console.error("Erro ao buscar palpites finais:", finalPredError); // DEBUG
 
         // 7. Buscar o resultado final (tabela 'tournament_results', colunas corrigidas)
-        // Verifique se a tabela 'tournament_results' existe e tem as colunas corretas.
         const { data: tournamentResultsArray, error: finalResultError } = await supabase
           .from('tournament_results')
           .select('id, champion_id, runner_up_id, third_place_id, fourth_place_id, final_home_score, final_away_score');
-        if (finalResultError) throw finalResultError;
+        if (finalResultError) console.error("Erro ao buscar resultados do torneio:", finalResultError); // DEBUG
         const finalResults: SupabaseFinalResult | null = tournamentResultsArray && tournamentResultsArray.length > 0 ? tournamentResultsArray[0] : null;
 
         // 8. Buscar nomes de times (para mapeamento de IDs para nomes)
         const { data: teams, error: teamsError } = await supabase
           .from('teams')
           .select('id, name');
-        if (teamsError) throw teamsError;
+        if (teamsError) console.error("Erro ao buscar times:", teamsError); // DEBUG
         const teamMap = new Map(teams?.map(team => [team.id, team.name]));
 
         // --- LÓGICA DE CÁLCULO DE PONTOS POR USUÁRIO ---
@@ -168,7 +170,6 @@ export const useParticipantsRanking = () => {
 
         // Pontuação de Partidas
         allMatchPredictions?.forEach(prediction => {
-          // Apenas considere palpites de partidas que foram finalizadas e para as quais o resultado existe
           const result = finishedMatchResults.find(m => m.id === prediction.match_id);
           if (result && userPoints[prediction.user_id]) {
             const userPred: ScoringMatchPrediction = {
@@ -179,18 +180,26 @@ export const useParticipantsRanking = () => {
               homeGoals: result.home_score,
               awayGoals: result.away_score
             };
+
+            // DEPURANDO AQUI:
+            console.log(`-- Processing Match: ${prediction.match_id} for User: ${prediction.user_id}`);
+            console.log(`User Prediction: <span class="math-inline">\{userPred\.homeGoals\}x</span>{userPred.awayGoals}`);
+            console.log(`Real Result: <span class="math-inline">\{realRes\.homeGoals\}x</span>{realRes.awayGoals}`);
+
             const pointsGained = calculateMatchPoints(userPred, realRes);
+            console.log(`Points Gained: ${pointsGained}`); // <-- ESTE É O CONSOLE.LOG CHAVE
+
             userPoints[prediction.user_id].points += pointsGained;
             userPoints[prediction.user_id].matchesCount++;
-            if (pointsGained > 0) { // Se ganhou algum ponto, considera um acerto
+            if (pointsGained > 0) {
               userPoints[prediction.user_id].correctMatches++;
             }
+            console.log(`Current Total Points for User ${prediction.user_id}: ${userPoints[prediction.user_id].points}`); // DEBUG
           }
         });
 
         // Pontuação de Grupos
         allGroupPredictions?.forEach(prediction => {
-          // Certifique-se de que o grupo correspondente foi finalizado e tem resultados
           const result = allGroupResults?.find(r => r.group_id === prediction.group_id);
           if (result && userPoints[prediction.user_id]) {
             const userPredOrder = [
@@ -201,12 +210,14 @@ export const useParticipantsRanking = () => {
               teamMap.get(result.first_place_team_id) || '',
               teamMap.get(result.second_place_team_id) || ''
             ];
-            userPoints[prediction.user_id].points += calculateGroupClassificationPoints(userPredOrder, realOrder);
+            const groupPoints = calculateGroupClassificationPoints(userPredOrder, realOrder);
+            userPoints[prediction.user_id].points += groupPoints;
+            console.log(`Group Points Gained for User ${prediction.user_id}: ${groupPoints}. Total: ${userPoints[prediction.user_id].points}`); // DEBUG
           }
         });
 
         // Pontuação Final
-        if (finalResults) { // Só calcula se houver um resultado final do torneio
+        if (finalResults) {
           const realFinalRes: TournamentFinalResults = {
             champion: teamMap.get(finalResults.champion_id) || '',
             runnerUp: teamMap.get(finalResults.runner_up_id) || '',
@@ -230,7 +241,9 @@ export const useParticipantsRanking = () => {
                   awayGoals: prediction.final_away_score
                 }
               };
-              userPoints[prediction.user_id].points += calculateTournamentFinalPoints(userFinalPred, realFinalRes);
+              const finalPoints = calculateTournamentFinalPoints(userFinalPred, realFinalRes);
+              userPoints[prediction.user_id].points += finalPoints;
+              console.log(`Final Points Gained for User ${prediction.user_id}: ${finalPoints}. Total: ${userPoints[prediction.user_id].points}`); // DEBUG
             }
           });
         }
@@ -240,20 +253,20 @@ export const useParticipantsRanking = () => {
           const userStats = userPoints[user.id];
           const matchesCount = userStats?.matchesCount || 0;
           const correctMatches = userStats?.correctMatches || 0;
-          
+
           // Prevenindo divisão por zero
           const accuracy = matchesCount > 0 
             ? ((correctMatches / matchesCount) * 100).toFixed(0) // Arredonda para inteiro
-            : "0"; // Se não jogou partidas, 0% de acerto
+            : "0";
 
           return {
             id: user.id,
             name: user.name,
-            username: user.username, // <-- USANDO USERNAME
+            username: user.username, // <-- AGORA USANDO USERNAME
             avatar_url: user.avatar_url,
             points: userStats?.points || 0,
             matches: matchesCount,
-            accuracy: `${accuracy}%` // Formata como string de porcentagem
+            accuracy: `${accuracy}%`
           };
         });
 
@@ -266,6 +279,7 @@ export const useParticipantsRanking = () => {
         });
 
         setParticipants(finalRanking);
+        console.log("Final Ranking Calculated:", finalRanking); // DEBUG
 
       } catch (err) {
         console.error("Erro ao carregar o ranking:", err);
@@ -276,7 +290,7 @@ export const useParticipantsRanking = () => {
     };
 
     fetchAndCalculateRanking();
-  }, []); // Dependências vazias para executar uma vez no carregamento
+  }, []);
 
   return { participants, loading, error };
 };
