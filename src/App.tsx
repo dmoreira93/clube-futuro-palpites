@@ -21,7 +21,10 @@ import Admin from "@/pages/Admin";
 import AdminLogin from "@/pages/AdminLogin";
 import UserPredictions from "@/pages/UserPredictions";
 import DailyMatchesAndPredictions from "@/pages/DailyMatchesAndPredictions";
-import ChangePassword from "@/pages/ChangePassword"; // <-- NOVA IMPORTAÇÃO
+import ChangePassword from "@/pages/ChangePassword";
+
+// Importe o NOVO componente de Ranking
+import RankingPage from "@/pages/Ranking"; // <-- NOVO: Importe o componente da página de Ranking
 
 // Crie uma instância do QueryClient fora do componente para evitar recriações
 const queryClient = new QueryClient();
@@ -40,6 +43,7 @@ const App = () => (
             <Route path="/" element={<Index />} />
             <Route path="/criterios" element={<Criterios />} />
             <Route path="/resultados" element={<Resultados />} />
+            <Route path="/ranking" element={<RankingPage />} /> {/* <-- NOVA ROTA ADICIONADA AQUI */}
             <Route path="/palpites" element={<Palpites />} />
             <Route path="/palpites-usuarios" element={<UserPredictions />} />
             <Route path="/palpites-do-dia" element={<DailyMatchesAndPredictions />} />
@@ -47,7 +51,7 @@ const App = () => (
             <Route path="/login" element={<Login />} />
             <Route path="/admin" element={<Admin />} />
             <Route path="/admin-login" element={<AdminLogin />} />
-            <Route path="/change-password" element={<ChangePassword />} /> {/* <-- NOVA ROTA */}
+            <Route path="/change-password" element={<ChangePassword />} />
             {/* Catch-all route for 404 */}
             <Route path="*" element={<NotFound />} />
           </Routes>
