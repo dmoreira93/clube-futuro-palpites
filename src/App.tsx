@@ -20,7 +20,8 @@ import Login from "@/pages/Login";
 import Admin from "@/pages/Admin";
 import AdminLogin from "@/pages/AdminLogin";
 import UserPredictions from "@/pages/UserPredictions";
-import DailyMatchesAndPredictions from "@/pages/DailyMatchesAndPredictions"; // <--- NOVO: Importe o componente da nova tela
+import DailyMatchesAndPredictions from "@/pages/DailyMatchesAndPredictions";
+import ChangePassword from "@/pages/ChangePassword"; // <-- NOVA IMPORTAÇÃO
 
 // Crie uma instância do QueryClient fora do componente para evitar recriações
 const queryClient = new QueryClient();
@@ -41,11 +42,12 @@ const App = () => (
             <Route path="/resultados" element={<Resultados />} />
             <Route path="/palpites" element={<Palpites />} />
             <Route path="/palpites-usuarios" element={<UserPredictions />} />
-            <Route path="/palpites-do-dia" element={<DailyMatchesAndPredictions />} /> {/* <--- NOVA ROTA ADICIONADA AQUI */}
+            <Route path="/palpites-do-dia" element={<DailyMatchesAndPredictions />} />
             <Route path="/cadastro" element={<Cadastro />} />
             <Route path="/login" element={<Login />} />
             <Route path="/admin" element={<Admin />} />
             <Route path="/admin-login" element={<AdminLogin />} />
+            <Route path="/change-password" element={<ChangePassword />} /> {/* <-- NOVA ROTA */}
             {/* Catch-all route for 404 */}
             <Route path="*" element={<NotFound />} />
           </Routes>

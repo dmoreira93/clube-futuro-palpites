@@ -1,5 +1,6 @@
+// src/pages/Login.tsx
 
-import { useState } from "react";
+import { useState, useEffect } from "react"; // Adicionado useEffect
 import { useNavigate } from "react-router-dom";
 import Layout from "@/components/layout/Layout";
 import { Input } from "@/components/ui/input";
@@ -8,13 +9,11 @@ import {
   Card,
   CardContent,
   CardDescription,
-  CardFooter,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
-import { LogInIcon } from "lucide-react";
-import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import { LogInIcon, Loader2 } from "lucide-react"; // Importe Loader2
 import { Link } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
@@ -26,12 +25,28 @@ import { InfoIcon } from "lucide-react";
 
 const Login = () => {
   const navigate = useNavigate();
-  const { login } = useAuth();
+  const { login, isAuthenticated, isLoadingAuth, isFirstLogin } = useAuth(); // Obtenha isAuthenticated, isLoadingAuth, isFirstLogin
   const [formData, setFormData] = useState({
     email: "",
     password: "",
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Redirecionamento após o login/verificação de autenticação
+  useEffect(() => {
+    // Se ainda está carregando a autenticação, não faça nada.
+    if (isLoadingAuth) {
+      return;
+    }
+
+    if (isAuthenticated) {
+      if (isFirstLogin) {
+        navigate('/change-password'); // Redireciona para a página de alteração de senha
+      } else {
+        navigate('/'); // Redireciona para a página principal (ou palpites, como você já tem)
+      }
+    }
+  }, [isAuthenticated, isLoadingAuth, isFirstLogin, navigate]); // Adicionado isFirstLogin como dependência
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -54,17 +69,36 @@ const Login = () => {
     try {
       const success = await login(formData.email, formData.password);
 
-      if (success) {
-        toast.success("Login realizado com sucesso!");
-        navigate("/palpites");
-      }
+      // O redirecionamento agora é feito no useEffect, após o estado de autenticação ser atualizado
+      // Não precisamos de um navigate aqui, pois o useEffect vai cuidar disso.
+      // Se a função `login` retornar sucesso, o `useEffect` será acionado.
     } catch (error) {
-      console.error("Erro ao fazer login:", error);
-      toast.error(error?.message || "Ocorreu um erro no login. Tente novamente.");
+      // O toast.error já é tratado dentro da função login, se for erro do Supabase
+      console.error("Erro ao fazer login no componente:", error); // Para erros inesperados
+      toast.error("Ocorreu um erro inesperado no login. Tente novamente.");
     } finally {
       setIsSubmitting(false);
     }
   };
+
+  // Se estiver carregando a autenticação ou já autenticado (e não é o primeiro login),
+  // mostra um loader para evitar o "flash" do formulário de login antes do redirecionamento.
+  if (isLoadingAuth || (isAuthenticated && !isFirstLogin)) {
+    return (
+      <Layout>
+        <div className="flex justify-center items-center h-screen">
+          <Loader2 className="h-8 w-8 animate-spin text-fifa-blue" />
+          <p className="ml-2 text-fifa-blue">Carregando...</p>
+        </div>
+      </Layout>
+    );
+  }
+
+  // Se o usuário está autenticado E é o primeiro login, mas o useEffect ainda não redirecionou,
+  // evita renderizar o formulário de login novamente.
+  if (isAuthenticated && isFirstLogin) {
+    return null;
+  }
 
   return (
     <Layout>
@@ -134,7 +168,14 @@ const Login = () => {
                   className="w-full bg-fifa-blue hover:bg-opacity-90"
                   disabled={isSubmitting}
                 >
-                  {isSubmitting ? "Entrando..." : "Entrar"}
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Entrando...
+                    </>
+                  ) : (
+                    "Entrar"
+                  )}
                 </Button>
               </div>
             </form>
