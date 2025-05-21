@@ -121,7 +121,7 @@ const useParticipantsRanking = () => {
 
         // Fetch all real group results
         const { data: realGroupResults, error: realGroupResultsError } = await supabase
-          .from('group_results') 
+          .from('groups_results') 
           .select('id, group_id, first_place_team_id, second_place_team_id');
 
         if (realGroupResultsError) {
