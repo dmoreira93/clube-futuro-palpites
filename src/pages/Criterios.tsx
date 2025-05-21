@@ -10,6 +10,7 @@ const Criterios = () => {
           <h1 className="text-3xl font-bold text-fifa-blue">Critérios de Pontuação</h1>
           <p className="text-gray-600 mt-2">
             Entenda como funciona o sistema de pontos do nosso bolão.
+            **Para cada categoria (Partidas, Classificação de Grupos), você ganha a pontuação máxima aplicável.**
           </p>
         </div>
 
@@ -19,7 +20,7 @@ const Criterios = () => {
             <CardHeader className="bg-fifa-blue text-white">
               <CardTitle className="flex items-center gap-2">
                 <SoccerBallIcon className="h-5 w-5 text-fifa-gold" />
-                Pontuação por Partidas
+                Pontuação por Partidas (Apenas 1 critério por partida)
               </CardTitle>
             </CardHeader>
             <CardContent className="p-6">
@@ -31,7 +32,7 @@ const Criterios = () => {
                   <div>
                     <h3 className="font-semibold">Placar Exato</h3>
                     <p className="text-sm text-gray-600">
-                      Você acerta o vencedor **E** o placar exato da partida.
+                      Você acerta o vencedor **E** o placar exato da partida. **(Prioridade Máxima)**
                     </p>
                   </div>
                 </div>
@@ -55,7 +56,7 @@ const Criterios = () => {
                   <div>
                     <h3 className="font-semibold">Vencedor Correto</h3>
                     <p className="text-sm text-gray-600">
-                      Você acerta o time vencedor da partida, mas o placar exato está incorreto.
+                      Você acerta o time vencedor da partida (sem placar exato).
                     </p>
                   </div>
                 </div>
@@ -67,7 +68,7 @@ const Criterios = () => {
                   <div>
                     <h3 className="font-semibold">Acerto Parcial de Gols</h3>
                     <p className="text-sm text-gray-600">
-                      Você erra o vencedor e o placar, mas acerta o número de gols de **um dos times**.
+                      Você acerta o número de gols de **um dos times** (mas erra o vencedor e placar).
                     </p>
                   </div>
                 </div>
@@ -80,7 +81,7 @@ const Criterios = () => {
             <CardHeader className="bg-fifa-blue text-white">
               <CardTitle className="flex items-center gap-2">
                 <UsersIcon className="h-5 w-5 text-fifa-gold" />
-                Classificação da Fase de Grupos
+                Classificação da Fase de Grupos (Apenas 1 critério por grupo)
               </CardTitle>
             </CardHeader>
             <CardContent className="p-6">
@@ -92,7 +93,19 @@ const Criterios = () => {
                   <div>
                     <h3 className="font-semibold">Classificação Exata do Grupo</h3>
                     <p className="text-sm text-gray-600">
-                      Você acerta os **dois times classificados** do grupo e a **ordem correta** (1º e 2º lugares).
+                      Você acerta os **dois times classificados** do grupo e a **ordem correta** (1º e 2º lugares). **(Prioridade Máxima)**
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center p-3 bg-yellow-50 rounded-lg border-l-4 border-yellow-500">
+                  <div className="bg-yellow-500 text-white rounded-full w-8 h-8 flex items-center justify-center font-bold mr-4">
+                    4
+                  </div>
+                  <div>
+                    <h3 className="font-semibold">Classificados Invertidos</h3>
+                    <p className="text-sm text-gray-600">
+                      Você acerta os **dois times classificados**, mas a ordem está invertida (o 1º está como 2º e vice-versa).
                     </p>
                   </div>
                 </div>
@@ -120,18 +133,6 @@ const Criterios = () => {
                     </p>
                   </div>
                 </div>
-
-                <div className="flex items-center p-3 bg-yellow-50 rounded-lg border-l-4 border-yellow-500">
-                  <div className="bg-yellow-500 text-white rounded-full w-8 h-8 flex items-center justify-center font-bold mr-4">
-                    4
-                  </div>
-                  <div>
-                    <h3 className="font-semibold">Classificados Invertidos</h3>
-                    <p className="text-sm text-gray-600">
-                      Você acerta os **dois times classificados**, mas a ordem está invertida (o 1º está como 2º e vice-versa).
-                    </p>
-                  </div>
-                </div>
               </div>
             </CardContent>
           </Card>
@@ -141,7 +142,7 @@ const Criterios = () => {
             <CardHeader className="bg-fifa-blue text-white">
               <CardTitle className="flex items-center gap-2">
                 <TrophyIcon className="h-5 w-5 text-fifa-gold" />
-                Classificação Final do Torneio
+                Classificação Final do Torneio (Pontos acumulativos)
               </CardTitle>
             </CardHeader>
             <CardContent className="p-6">
