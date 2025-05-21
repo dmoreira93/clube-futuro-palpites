@@ -1,6 +1,6 @@
 // src/pages/Login.tsx
 
-import { useState, useEffect } from "react"; // Adicionado useEffect
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import Layout from "@/components/layout/Layout";
 import { Input } from "@/components/ui/input";
@@ -9,44 +9,39 @@ import {
   Card,
   CardContent,
   CardDescription,
+  CardFooter, // <--- ESTA LINHA PRECISA ESTAR AQUI!
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
-import { LogInIcon, Loader2 } from "lucide-react"; // Importe Loader2
+import { LogInIcon, Loader2, InfoIcon } from "lucide-react"; // Adicionado Loader2 e InfoIcon
 import { Link } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
-import {
-  Alert,
-  AlertDescription,
-} from "@/components/ui/alert";
-import { InfoIcon } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 const Login = () => {
   const navigate = useNavigate();
-  const { login, isAuthenticated, isLoadingAuth, isFirstLogin } = useAuth(); // Obtenha isAuthenticated, isLoadingAuth, isFirstLogin
+  const { login, isAuthenticated, isLoadingAuth, isFirstLogin } = useAuth();
   const [formData, setFormData] = useState({
     email: "",
     password: "",
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Redirecionamento após o login/verificação de autenticação
   useEffect(() => {
-    // Se ainda está carregando a autenticação, não faça nada.
     if (isLoadingAuth) {
       return;
     }
 
     if (isAuthenticated) {
       if (isFirstLogin) {
-        navigate('/change-password'); // Redireciona para a página de alteração de senha
+        navigate('/change-password');
       } else {
-        navigate('/'); // Redireciona para a página principal (ou palpites, como você já tem)
+        navigate('/');
       }
     }
-  }, [isAuthenticated, isLoadingAuth, isFirstLogin, navigate]); // Adicionado isFirstLogin como dependência
+  }, [isAuthenticated, isLoadingAuth, isFirstLogin, navigate]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -67,22 +62,16 @@ const Login = () => {
     setIsSubmitting(true);
 
     try {
-      const success = await login(formData.email, formData.password);
-
-      // O redirecionamento agora é feito no useEffect, após o estado de autenticação ser atualizado
-      // Não precisamos de um navigate aqui, pois o useEffect vai cuidar disso.
-      // Se a função `login` retornar sucesso, o `useEffect` será acionado.
+      await login(formData.email, formData.password);
+      // O redirecionamento é tratado no useEffect
     } catch (error) {
-      // O toast.error já é tratado dentro da função login, se for erro do Supabase
-      console.error("Erro ao fazer login no componente:", error); // Para erros inesperados
+      console.error("Erro ao fazer login no componente:", error);
       toast.error("Ocorreu um erro inesperado no login. Tente novamente.");
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  // Se estiver carregando a autenticação ou já autenticado (e não é o primeiro login),
-  // mostra um loader para evitar o "flash" do formulário de login antes do redirecionamento.
   if (isLoadingAuth || (isAuthenticated && !isFirstLogin)) {
     return (
       <Layout>
@@ -94,8 +83,6 @@ const Login = () => {
     );
   }
 
-  // Se o usuário está autenticado E é o primeiro login, mas o useEffect ainda não redirecionou,
-  // evita renderizar o formulário de login novamente.
   if (isAuthenticated && isFirstLogin) {
     return null;
   }
@@ -168,7 +155,7 @@ const Login = () => {
                   className="w-full bg-fifa-blue hover:bg-opacity-90"
                   disabled={isSubmitting}
                 >
-                  {isSubmitting ? (
+                  {isSubmitting ? ( // <--- Ajuste aqui para renderizar o Loader2
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                       Entrando...
@@ -180,7 +167,7 @@ const Login = () => {
               </div>
             </form>
           </CardContent>
-          <CardFooter>
+          <CardFooter> {/* <--- Garante que CardFooter está aqui */}
             <div className="text-center w-full">
               <div className="text-xs text-gray-500 mt-2">
                 Se você é administrador,{" "}
