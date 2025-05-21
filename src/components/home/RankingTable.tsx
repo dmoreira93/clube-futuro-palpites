@@ -1,5 +1,3 @@
-// src/components/ranking/RankingTable.tsx
-
 import {
   Table,
   TableBody,
@@ -11,7 +9,7 @@ import {
 } from "@/components/ui/table";
 import { Trophy as TrophyIcon } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
-import RankingRow from "./RankingRow"; // Corrigido o caminho para ser relativo ao mesmo diretório
+import RankingRow from "@/components/ranking/RankingRow"; // <--- CAMINHO CORRIGIDO AQUI!
 import { useParticipantsRanking } from "@/hooks/useParticipantsRanking";
 
 const RankingTable = () => {
