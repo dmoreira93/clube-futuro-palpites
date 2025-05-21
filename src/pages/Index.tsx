@@ -1,18 +1,14 @@
-// src/pages/Index.tsx
-
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import Layout from "@/components/layout/Layout";
 import RankingTable from "@/components/home/RankingTable";
-import NextMatches from "@/components/home/NextMatches"; // Se você tem este componente
-import DailyPredictions from "@/components/home/DailyPredictions"; // Se você tem este componente
+import NextMatches from "@/components/home/NextMatches";
+import DailyPredictions from "@/components/home/DailyPredictions"; // <--- CORREÇÃO AQUI
 import StatsCard from "@/components/home/StatsCard";
 import { Trophy as TrophyIcon, User as UserIcon, Volleyball as SoccerBallIcon, Flag as FlagIcon, Users } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"; // Importe os componentes Dialog
-import DailyMatchPredictions from "@/components/predictions/DailyMatchPredictions"; // <--- IMPORTE O NOVO COMPONENTE
 
 const Index = () => {
   const [stats, setStats] = useState({
@@ -29,8 +25,6 @@ const Index = () => {
     }
   });
 
-  const [showDailyPredictionsModal, setShowDailyPredictionsModal] = useState(false); // Novo estado para controlar o modal
-
   useEffect(() => {
     const fetchStats = async () => {
       try {
@@ -44,7 +38,7 @@ const Index = () => {
         const { count: finishedMatchCount, error: finishedMatchCountError } = await supabase
           .from('matches')
           .select('*', { count: 'exact', head: true })
-          .eq('is_finished', true); // Contar apenas as partidas finalizadas
+          .eq('is_finished', true);
         if (finishedMatchCountError) throw finishedMatchCountError;
 
         // Contar total de partidas
@@ -53,52 +47,53 @@ const Index = () => {
           .select('*', { count: 'exact', head: true });
         if (totalMatchCountError) throw totalMatchCountError;
 
-        // Buscar o usuário com mais pontos (Top Score)
-        const { data: topScorerData, error: topScorerError } = await supabase
+        // Buscar pontuação máxima
+        const { data: topUserPoints, error: topUserPointsError } = await supabase
           .from('user_points')
-          .select('user_id, points, users_custom(name)') // Seleciona o nome do usuário através do join
+          .select('points, user_id, users_custom(name)')
           .order('points', { ascending: false })
-          .limit(1)
-          .single();
-
-        if (topScorerError && topScorerError.code !== 'PGRST116') { // PGRST116 é "No rows found"
-          console.error('Erro ao buscar top scorer:', topScorerError);
-          // Não jogue um erro fatal aqui, apenas não defina o top score
+          .limit(1);
+        
+        let topScore = { points: 0, userName: "" };
+        if (topUserPoints && topUserPoints.length > 0) {
+          const user = topUserPoints[0].users_custom as { name: string } | null;
+          topScore = {
+            points: topUserPoints[0].points || 0,
+            userName: user?.name || "N/A"
+          };
         }
+        if (topUserPointsError) console.error("Erro ao buscar pontuação máxima:", topUserPointsError);
 
-        // Buscar a próxima partida
+
+        // Buscar próxima partida (exemplo, você pode ajustar a lógica de filtro)
         const { data: nextMatchData, error: nextMatchError } = await supabase
           .from('matches')
-          .select('match_date, home_team:home_team_id(name), away_team:away_team_id(name)')
-          .gte('match_date', new Date().toISOString()) // Partidas no futuro
+          .select('match_date, home_team (name), away_team (name)')
+          .gte('match_date', new Date().toISOString()) // Apenas partidas futuras
           .order('match_date', { ascending: true })
           .limit(1)
           .single();
 
-        if (nextMatchError && nextMatchError.code !== 'PGRST116') {
-          console.error('Erro ao buscar próxima partida:', nextMatchError);
+        let nextMatch = { date: "", teams: "" };
+        if (nextMatchData) {
+          nextMatch = {
+            date: new Date(nextMatchData.match_date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' }),
+            teams: `${nextMatchData.home_team?.name || 'N/A'} vs ${nextMatchData.away_team?.name || 'N/A'}`
+          };
+        }
+        if (nextMatchError && nextMatchError.code !== 'PGRST116') { // PGRST116 é "No rows found", não é um erro para nós aqui
+          console.error("Erro ao buscar próxima partida:", nextMatchError);
         }
 
         setStats({
           totalUsers: userCount || 0,
           matchesPlayed: finishedMatchCount || 0,
           totalMatches: totalMatchCount || 0,
-          topScore: topScorerData
-            ? {
-                points: topScorerData.points,
-                userName: (topScorerData.users_custom as { name: string })?.name || "N/A"
-              }
-            : { points: 0, userName: "N/A" },
-          nextMatch: nextMatchData
-            ? {
-                date: new Date(nextMatchData.match_date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' }),
-                teams: `${(nextMatchData.home_team as { name: string })?.name} vs ${(nextMatchData.away_team as { name: string })?.name}`
-              }
-            : { date: "N/A", teams: "Nenhuma partida futura" }
+          topScore: topScore,
+          nextMatch: nextMatch
         });
-
-      } catch (err) {
-        console.error("Erro ao carregar estatísticas:", err);
+      } catch (error) {
+        console.error("Erro ao buscar estatísticas:", error);
       }
     };
 
@@ -108,59 +103,44 @@ const Index = () => {
   return (
     <Layout>
       <div className="container mx-auto px-4 py-8">
-        <h1 className="text-4xl font-bold text-center text-fifa-blue mb-8">Bem-vindo ao Bolão da Copa!</h1>
+        <h1 className="text-3xl font-bold text-center text-fifa-blue mb-8">Bem-vindo ao Clube Futuro Palpites!</h1>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+          <StatsCard
+            title="Total de Usuários"
+            value={stats.totalUsers}
+            icon={<UserIcon className="h-5 w-5" />}
+            description="Participantes registrados no bolão"
+          />
+          <StatsCard
+            title="Partidas Finalizadas"
+            value={`${stats.matchesPlayed} / ${stats.totalMatches}`}
+            icon={<SoccerBallIcon className="h-5 w-5" />}
+            description="Jogos com resultados registrados"
+          />
+          <StatsCard
+            title="Maior Pontuação"
+            value={stats.topScore.points}
+            icon={<TrophyIcon className="h-5 w-5" />}
+            description={`Maior pontuação até agora, de ${stats.topScore.userName}`}
+          />
+          <StatsCard
+            title="Próxima Partida"
+            value={stats.nextMatch.date || "N/A"}
+            icon={<FlagIcon className="h-5 w-5" />}
+            description={stats.nextMatch.teams || "Aguardando definição"}
+          />
+        </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Coluna Principal - Ranking */}
           <div className="lg:col-span-2">
             <RankingTable />
           </div>
+          <div className="lg:col-span-1 flex flex-col gap-8">
+            <NextMatches />
+            <DailyPredictions /> {/* Mantido o componente DailyPredictions aqui */}
 
-          {/* Coluna Lateral - Estatísticas e Regras */}
-          <div className="space-y-8">
-            {/* Seção de Estatísticas */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <StatsCard
-                title="Total de Participantes"
-                value={stats.totalUsers}
-                icon={<UserIcon className="h-5 w-5" />}
-              />
-              <StatsCard
-                title="Partidas Jogadas"
-                value={`${stats.matchesPlayed} / ${stats.totalMatches}`}
-                icon={<SoccerBallIcon className="h-5 w-5" />}
-              />
-              <StatsCard
-                title="Maior Pontuação"
-                value={`${stats.topScore.points} pts`}
-                icon={<TrophyIcon className="h-5 w-5" />}
-                description={stats.topScore.userName}
-              />
-              <StatsCard
-                title="Próxima Partida"
-                value={stats.nextMatch.date}
-                icon={<FlagIcon className="h-5 w-5" />}
-                description={stats.nextMatch.teams}
-              />
-            </div>
-
-            {/* Botão para Palpites do Dia (NOVO) */}
-            <Dialog open={showDailyPredictionsModal} onOpenChange={setShowDailyPredictionsModal}>
-              <DialogTrigger asChild>
-                <Button className="w-full bg-fifa-gold hover:bg-fifa-gold/90 text-white font-bold py-2 px-4 rounded-md shadow-md transition-colors">
-                  Ver Palpites do Dia
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto">
-                <DialogHeader>
-                  <DialogTitle>Palpites de {format(new Date(), 'dd/MM/yyyy', { locale: ptBR })}</DialogTitle>
-                </DialogHeader>
-                <DailyMatchPredictions date={new Date()} /> {/* Passa a data atual */}
-              </DialogContent>
-            </Dialog>
-
-            {/* Seção de Regras Rápidas */}
-            <div className="w-full">
+            <div className="hidden lg:block"> {/* Oculta em telas menores */}
               <Card className="shadow-lg">
                 <CardContent className="p-6">
                   <h3 className="text-lg font-semibold mb-4 text-fifa-blue">Regras Rápidas</h3>
