@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 import Layout from "@/components/layout/Layout";
@@ -19,9 +18,11 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 
 const AdminLogin = () => {
   const navigate = useNavigate();
-  const { adminLogin, isAdmin } = useAuth();
+  // Altere 'adminLogin' para 'login' aqui
+  const { login, isAdmin } = useAuth(); 
   const [formData, setFormData] = useState({
-    username: "",
+    // Altere 'username' para 'email' para corresponder à função de login
+    email: "", 
     password: "",
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -43,16 +44,18 @@ const AdminLogin = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoginError("");
-    
-    if (!formData.username || !formData.password) {
+
+    // Verifique 'email' em vez de 'username'
+    if (!formData.email || !formData.password) { 
       setLoginError("Por favor, preencha todos os campos");
       return;
     }
 
     setIsSubmitting(true);
-    const success = await adminLogin(formData.username, formData.password);
+    // Chame a função 'login' com 'formData.email'
+    const success = await login(formData.email, formData.password); 
     setIsSubmitting(false);
-    
+
     if (success) {
       navigate("/admin");
     }
@@ -89,21 +92,22 @@ const AdminLogin = () => {
                   </AlertDescription>
                 </Alert>
               )}
-              
+
               <div className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="username">Nome de usuário</Label>
+                  {/* Altere htmlFor e name para 'email' */}
+                  <Label htmlFor="email">E-mail</Label> 
                   <Input
-                    id="username"
-                    name="username"
-                    type="text"
-                    placeholder="Nome de usuário de administrador"
-                    value={formData.username}
+                    id="email" // Altere id para 'email'
+                    name="email" // Altere name para 'email'
+                    type="email" // Mude o tipo para 'email'
+                    placeholder="E-mail de administrador" // Altere placeholder
+                    value={formData.email} // Mude para formData.email
                     onChange={handleChange}
                     required
                   />
                 </div>
-                
+
                 <div className="space-y-2">
                   <Label htmlFor="password">Senha</Label>
                   <Input
@@ -116,10 +120,9 @@ const AdminLogin = () => {
                     required
                   />
                 </div>
-              
-                         
-                <Button 
-                  type="submit" 
+
+                <Button
+                  type="submit"
                   className="w-full bg-fifa-blue hover:bg-opacity-90"
                   disabled={isSubmitting}
                 >
