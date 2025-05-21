@@ -12,17 +12,19 @@ import {
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { useToast } from "@/hooks/use-toast";
-import { calculateTournamentFinalPoints } from "@/lib/scoring";
+import { toast } from "sonner";
+import { Loader2 } from "lucide-react"; // Importar Loader2
+import { calculateTournamentFinalPoints } from "@/lib/scoring"; // Importe sua função de pontuação
 
 // --- Interfaces para mapear os dados das tabelas ---
 interface Team {
-  id: string;
+  id: string; // O ID de time no Supabase provavelmente é string (UUID)
   name: string;
 }
 
+// A tabela `tournament_results` deve ter um único registro ou um ID fixo para o torneio atual
 interface TournamentResult {
-  id: string; // Se você usa um ID fixo para o único registro
+  id?: string; // Pode ser um ID fixo ou gerado
   champion_id: string | null;
   runner_up_id: string | null;
   third_place_id: string | null;
@@ -32,343 +34,231 @@ interface TournamentResult {
   is_completed: boolean;
 }
 
-// ATUALIZADA: Interface para a tabela `final_predictions` com os novos campos
-interface FinalPrediction {
-  user_id: string;
-  champion_id: string;
-  vice_champion_id: string;
-  third_place_id: string;
-  fourth_place_id: string;
-  // NOVOS CAMPOS PARA O PALPITE DO PLACAR FINAL
-  final_home_score: number;
-  final_away_score: number;
-}
-// --- Fim das Interfaces ---
-
 const AdminTournamentResults = () => {
-  const { toast } = useToast();
-
-  const [loading, setLoading] = useState(false);
   const [teams, setTeams] = useState<Team[]>([]);
-
-  const [championId, setChampionId] = useState<string>("");
-  const [runnerUpId, setRunnerUpId] = useState<string>("");
-  const [thirdPlaceId, setThirdPlaceId] = useState<string>("");
-  const [fourthPlaceId, setFourthPlaceId] = useState<string>("");
+  const [champion, setChampion] = useState<string | null>(null);
+  const [runnerUp, setRunnerUp] = useState<string | null>(null);
+  const [thirdPlace, setThirdPlace] = useState<string | null>(null);
+  const [fourthPlace, setFourthPlace] = useState<string | null>(null);
   const [finalHomeScore, setFinalHomeScore] = useState<string>("");
   const [finalAwayScore, setFinalAwayScore] = useState<string>("");
-  const [isResultsCompleted, setIsResultsCompleted] = useState<boolean>(false);
+  const [loading, setLoading] = useState(true);
+  const [isResultsCompleted, setIsResultsCompleted] = useState(false);
+  const [tournamentResultId, setTournamentResultId] = useState<string | null>(null); // Para gerenciar o ID do registro único
 
-  const fetchTournamentData = async () => {
+  useEffect(() => {
+    fetchTeamsAndResults();
+  }, []);
+
+  const fetchTeamsAndResults = async () => {
     setLoading(true);
     try {
+      // Fetch Teams
       const { data: teamsData, error: teamsError } = await supabase
         .from<Team>("teams")
         .select("id, name")
-        .order("name");
-
-      if (teamsError) throw new Error(teamsError.message);
+        .order("name", { ascending: true });
+      if (teamsError) throw teamsError;
       setTeams(teamsData || []);
 
-      const { data: tournamentResult, error: resultError } = await supabase
+      // Fetch existing Tournament Results (assuming a single record for the current tournament)
+      const { data: resultsData, error: resultsError } = await supabase
         .from<TournamentResult>("tournament_results")
-        .select("*")
-        .single();
-
-      if (resultError && resultError.code !== 'PGRST116') {
-        throw new Error(resultError.message);
+        .select("id, champion_id, runner_up_id, third_place_id, fourth_place_id, final_home_score, final_away_score, is_completed")
+        .single(); // Assumindo que haverá apenas um registro
+      
+      if (resultsError && resultsError.code !== "PGRST116") { // PGRST116 = no rows found
+        throw resultsError;
       }
 
-      if (tournamentResult) {
-        setChampionId(tournamentResult.champion_id || "");
-        setRunnerUpId(tournamentResult.runner_up_id || "");
-        setThirdPlaceId(tournamentResult.third_place_id || "");
-        setFourthPlaceId(tournamentResult.fourth_place_id || "");
-        setFinalHomeScore(tournamentResult.final_home_score !== null ? String(tournamentResult.final_home_score) : "");
-        setFinalAwayScore(tournamentResult.final_away_score !== null ? String(tournamentResult.final_away_score) : "");
-        setIsResultsCompleted(tournamentResult.is_completed);
+      if (resultsData) {
+        setTournamentResultId(resultsData.id || null); // Armazena o ID do registro
+        setChampion(resultsData.champion_id);
+        setRunnerUp(resultsData.runner_up_id);
+        setThirdPlace(resultsData.third_place_id);
+        setFourthPlace(resultsData.fourth_place_id);
+        setFinalHomeScore(resultsData.final_home_score?.toString() || "");
+        setFinalAwayScore(resultsData.final_away_score?.toString() || "");
+        setIsResultsCompleted(resultsData.is_completed);
       } else {
-        setChampionId("");
-        setRunnerUpId("");
-        setThirdPlaceId("");
-        setFourthPlaceId("");
-        setFinalHomeScore("");
-        setFinalAwayScore("");
+        // Se não houver resultados, inicia com valores nulos e is_completed false
         setIsResultsCompleted(false);
       }
-
+      toast.success("Dados de resultados finais carregados com sucesso.");
     } catch (error: any) {
-      toast({
-        title: "Erro ao carregar dados do torneio",
-        description: error.message,
-        variant: "destructive",
-      });
-      console.error("Erro ao carregar dados do torneio:", error.message);
+      console.error("Erro ao carregar dados de resultados finais:", error.message);
+      toast.error("Erro ao carregar dados de resultados finais: " + error.message);
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    fetchTournamentData();
-  }, []);
-
   const processTournamentResultsAndCalculatePoints = async () => {
-    if (!championId || !runnerUpId || !thirdPlaceId || !fourthPlaceId || finalHomeScore === "" || finalAwayScore === "") {
-      toast({
-        title: "Dados incompletos",
-        description: "Por favor, preencha todos os campos de resultados finais.",
-        variant: "destructive",
-      });
+    if (!champion || !runnerUp || !thirdPlace || !fourthPlace || finalHomeScore === "" || finalAwayScore === "") {
+      toast.error("Por favor, preencha todos os campos dos resultados finais.");
       return;
     }
 
-    const realHomeScore = parseInt(finalHomeScore, 10);
-    const realAwayScore = parseInt(finalAwayScore, 10);
+    const homeScore = parseInt(finalHomeScore);
+    const awayScore = parseInt(finalAwayScore);
 
-    if (isNaN(realHomeScore) || isNaN(realAwayScore)) {
-        toast({
-            title: "Placar inválido",
-            description: "Por favor, insira números válidos para o placar da final.",
-            variant: "destructive",
-        });
-        return;
+    if (isNaN(homeScore) || isNaN(awayScore) || homeScore < 0 || awayScore < 0) {
+      toast.error("Por favor, insira placares válidos (números não negativos).");
+      return;
     }
 
-    const uniqueTeams = new Set([championId, runnerUpId, thirdPlaceId, fourthPlaceId]);
+    // Validação para garantir que os 4 primeiros colocados são times distintos
+    const uniqueTeams = new Set([champion, runnerUp, thirdPlace, fourthPlace]);
     if (uniqueTeams.size !== 4) {
-      toast({
-        title: "Times repetidos",
-        description: "Os 4 times finalistas devem ser distintos.",
-        variant: "destructive",
-      });
+      toast.error("Os times do Campeão, Vice, Terceiro e Quarto lugar devem ser distintos.");
       return;
     }
 
     setLoading(true);
     try {
-      // 1. **Salvar/Atualizar os resultados reais do torneio na tabela 'tournament_results'**
-      // Se sua tabela 'tournament_results' tiver uma PK que você usa de forma única (ex: 'tournament_id_fixed'),
-      // você pode passar isso no objeto e usar onConflict.
-      // Caso contrário, se ela só tiver um registro, pode precisar de uma lógica de DELETE/INSERT ou UPDATE condicional.
-      // Para simplificar, vou assumir que o 'id' é autogerado e o upsert funcionará para o único registro.
-      // Se houver mais de um registro e você quiser garantir que apenas um seja manipulado,
-      // considere adicionar uma coluna `is_current_tournament` BOOLEAN DEFAULT TRUE com um UNIQUE INDEX.
-      const { data: existingTournamentResult, error: fetchExistingError } = await supabase
-        .from("tournament_results")
-        .select("id")
-        .limit(1)
-        .single(); // Tenta buscar um registro existente
-
-      const upsertData: Partial<TournamentResult> = {
-        champion_id: championId,
-        runner_up_id: runnerUpId,
-        third_place_id: thirdPlaceId,
-        fourth_place_id: fourthPlaceId,
-        final_home_score: realHomeScore,
-        final_away_score: realAwayScore,
-        is_completed: true,
-        updated_at: new Date().toISOString(),
+      // 1. Inserir ou atualizar o registro de `tournament_results`
+      let upsertError: any;
+      const resultData: Omit<TournamentResult, 'id'> = {
+        champion_id: champion,
+        runner_up_id: runnerUp,
+        third_place_id: thirdPlace,
+        fourth_place_id: fourthPlace,
+        final_home_score: homeScore,
+        final_away_score: awayScore,
+        is_completed: true, // Marcar como concluído ao salvar
       };
 
-      let upsertError;
-      if (existingTournamentResult) {
-        // Se existe, atualiza o registro existente
+      if (tournamentResultId) {
+        // Atualiza o registro existente
         const { error } = await supabase
           .from("tournament_results")
-          .update(upsertData)
-          .eq("id", existingTournamentResult.id);
+          .update(resultData)
+          .eq("id", tournamentResultId);
         upsertError = error;
       } else {
-        // Se não existe, insere um novo registro
-        const { error } = await supabase
+        // Insere um novo registro (primeira vez)
+        const { data, error } = await supabase
           .from("tournament_results")
-          .insert(upsertData);
-        upsertError = error;
-      }
-
-      if (upsertError) {
-        throw new Error(`Erro ao salvar resultados finais do torneio: ${upsertError.message}`);
-      }
-      toast({
-        title: "Resultados Finais Salvos",
-        description: "Resultados finais do torneio salvos com sucesso!",
-      });
-
-      // 2. **Buscar TODOS os palpites dos usuários para AS FINAIS, incluindo o placar**
-      const { data: userFinalPredictions, error: fetchPredictionsError } = await supabase
-        .from<FinalPrediction>("final_predictions")
-        // ATUALIZADO: Inclui final_home_score e final_away_score
-        .select("user_id, champion_id, vice_champion_id, third_place_id, fourth_place_id, final_home_score, final_away_score");
-
-      if (fetchPredictionsError) {
-        throw new Error(`Erro ao buscar palpites das finais: ${fetchPredictionsError.message}`);
-      }
-
-      if (!userFinalPredictions || userFinalPredictions.length === 0) {
-        toast({
-          title: "Nenhum palpite",
-          description: "Nenhum palpite das finais encontrado. Nenhuma pontuação a ser calculada.",
-          variant: "info",
-        });
-        setIsResultsCompleted(true);
-        setLoading(false);
-        return;
-      }
-
-      const realResultsForCalculation = {
-        champion: championId,
-        runnerUp: runnerUpId,
-        thirdPlace: thirdPlaceId,
-        fourthPlace: fourthPlaceId,
-        finalScore: { homeGoals: realHomeScore, awayGoals: realAwayScore },
-      };
-
-      // 3. **Iterar sobre cada palpite, calcular os pontos e atualizar a pontuação do usuário**
-      const scoreUpdatesPromises = userFinalPredictions.map(async (prediction) => {
-        const userPredictionForCalculation = {
-          champion: prediction.champion_id,
-          runnerUp: prediction.vice_champion_id,
-          thirdPlace: prediction.third_place_id,
-          fourthPlace: prediction.fourth_place_id,
-          // ATUALIZADO: Usa os scores do palpite do usuário
-          finalScore: { homeGoals: prediction.final_home_score, awayGoals: prediction.final_away_score },
-        };
-
-        const pointsEarned = calculateTournamentFinalPoints(userPredictionForCalculation, realResultsForCalculation);
-
-        const { data: currentUserData, error: fetchUserError } = await supabase
-          .from("users_custom")
-          .select("total_score")
-          .eq("id", prediction.user_id)
+          .insert(resultData)
+          .select('id') // Seleciona o ID para armazenar
           .single();
+        upsertError = error;
+        if (data) setTournamentResultId(data.id); // Armazena o ID do novo registro
+      }
 
-        if (fetchUserError && fetchUserError.code !== 'PGRST116') {
-          console.error(`Erro ao buscar pontuação atual do usuário ${prediction.user_id}:`, fetchUserError.message);
-          return;
-        }
+      if (upsertError) throw upsertError;
 
-        const currentTotalScore = currentUserData?.total_score || 0;
-        const newTotalScore = currentTotalScore + pointsEarned;
+      // 2. Acionar o cálculo de pontos para todos os palpites finais
+      // Você precisará buscar todos os palpites finais dos usuários
+      const { data: finalPredictions, error: predictionsError } = await supabase
+        .from("final_predictions")
+        .select("user_id, champion_id, vice_champion_id, third_place_id, fourth_place_id, final_home_score, final_away_score");
+      if (predictionsError) throw predictionsError;
 
-        const { error: updateScoreError } = await supabase
-          .from("users_custom")
-          .upsert(
-            { id: prediction.user_id, total_score: newTotalScore, updated_at: new Date().toISOString() },
-            { onConflict: 'id' }
-          );
+      // Chama a função de pontuação para cada palpite
+      for (const prediction of finalPredictions) {
+        // A função calculateTournamentFinalPoints precisará ser refatorada para aceitar
+        // o palpite, os resultados reais, e o user_id para atualizar a tabela user_points
+        await calculateTournamentFinalPoints(
+          prediction.user_id,
+          prediction.champion_id, prediction.vice_champion_id, prediction.third_place_id, prediction.fourth_place_id,
+          prediction.final_home_score, prediction.final_away_score,
+          champion, runnerUp, thirdPlace, fourthPlace, homeScore, awayScore
+        );
+      }
 
-        if (updateScoreError) {
-          console.error(`Erro ao atualizar pontuação do usuário ${prediction.user_id}:`, updateScoreError.message);
-        } else {
-          console.log(`Usuário ${prediction.user_id} ganhou ${pointsEarned} pontos. Nova pontuação: ${newTotalScore}`);
-        }
-      });
-
-      await Promise.all(scoreUpdatesPromises);
-
-      toast({
-        title: "Pontuações Finais Atualizadas!",
-        description: "Pontuações dos usuários para as fases finais foram atualizadas com sucesso.",
-      });
-
-      setIsResultsCompleted(true);
-      await fetchTournamentData();
-
+      toast.success("Resultados finais salvos e pontos calculados com sucesso!");
+      setIsResultsCompleted(true); // Atualiza o estado da UI
+      await fetchTeamsAndResults(); // Recarrega para garantir consistência
     } catch (error: any) {
-      console.error("Erro no processamento dos resultados finais e cálculo de pontos:", error.message);
-      toast({
-        title: "Erro de processamento",
-        description: "Erro ao processar resultados finais e atualizar pontuações: " + error.message,
-        variant: "destructive",
-      });
+      console.error("Erro ao processar resultados finais do torneio:", error.message);
+      toast.error("Erro ao salvar resultados finais ou calcular pontos: " + error.message);
     } finally {
       setLoading(false);
     }
   };
 
-  const getTeamName = (teamId: string | null) => {
-    if (!teamId) return "N/A";
-    const team = teams.find(t => t.id === teamId);
-    return team ? team.name : "Time desconhecido";
-  };
-
   return (
-    <div className="p-4">
-      <h1 className="text-2xl font-bold mb-6">Administração de Resultados Finais do Torneio</h1>
-
-      {loading && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="animate-spin h-10 w-10 border-4 border-emerald-500 border-t-transparent rounded-full"></div>
-        </div>
-      )}
-
-      <Card className="p-6">
+    <div className="space-y-6">
+      <Card>
         <CardHeader>
-          <CardTitle>Inserir Resultados Finais</CardTitle>
+          <CardTitle>Gerenciar Resultados Finais do Torneio</CardTitle>
         </CardHeader>
         <CardContent>
-          {isResultsCompleted && (
-            <div className="mb-4 p-3 bg-green-100 text-green-800 rounded-md">
-              Resultados Finais já foram inseridos e processados.
-              <br/>
-              **Campeão:** {getTeamName(championId)} |
-              **Vice:** {getTeamName(runnerUpId)} |
-              **3º Lugar:** {getTeamName(thirdPlaceId)} |
-              **4º Lugar:** {getTeamName(fourthPlaceId)}
-              <br/>
-              **Placar Final:** {finalHomeScore} x {finalAwayScore}
-            </div>
-          )}
+          {loading && <p className="text-center py-4">Carregando...</p>}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block mb-1 font-medium text-gray-700">Campeão</label>
-              <Select value={championId} onValueChange={setChampionId} disabled={loading || isResultsCompleted}>
+              <Select
+                onValueChange={setChampion}
+                value={champion || ""}
+                disabled={loading || isResultsCompleted}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="Selecione o Campeão" />
                 </SelectTrigger>
                 <SelectContent>
-                  {teams.map(team => (
-                    <SelectItem key={team.id} value={team.id}>{team.name}</SelectItem>
+                  {teams.map((team) => (
+                    <SelectItem key={team.id} value={team.id}>
+                      {team.name}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
             <div>
               <label className="block mb-1 font-medium text-gray-700">Vice-Campeão</label>
-              <Select value={runnerUpId} onValueChange={setRunnerUpId} disabled={loading || isResultsCompleted}>
+              <Select
+                onValueChange={setRunnerUp}
+                value={runnerUp || ""}
+                disabled={loading || isResultsCompleted}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="Selecione o Vice-Campeão" />
                 </SelectTrigger>
                 <SelectContent>
-                  {teams.map(team => (
-                    <SelectItem key={team.id} value={team.id}>{team.name}</SelectItem>
+                  {teams.map((team) => (
+                    <SelectItem key={team.id} value={team.id}>
+                      {team.name}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
             <div>
               <label className="block mb-1 font-medium text-gray-700">Terceiro Lugar</label>
-              <Select value={thirdPlaceId} onValueChange={setThirdPlaceId} disabled={loading || isResultsCompleted}>
+              <Select
+                onValueChange={setThirdPlace}
+                value={thirdPlace || ""}
+                disabled={loading || isResultsCompleted}
+              >
                 <SelectTrigger>
-                  <SelectValue placeholder="Selecione o 3º Lugar" />
+                  <SelectValue placeholder="Selecione o Terceiro Lugar" />
                 </SelectTrigger>
                 <SelectContent>
-                  {teams.map(team => (
-                    <SelectItem key={team.id} value={team.id}>{team.name}</SelectItem>
+                  {teams.map((team) => (
+                    <SelectItem key={team.id} value={team.id}>
+                      {team.name}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
             <div>
               <label className="block mb-1 font-medium text-gray-700">Quarto Lugar</label>
-              <Select value={fourthPlaceId} onValueChange={setFourthPlaceId} disabled={loading || isResultsCompleted}>
+              <Select
+                onValueChange={setFourthPlace}
+                value={fourthPlace || ""}
+                disabled={loading || isResultsCompleted}
+              >
                 <SelectTrigger>
-                  <SelectValue placeholder="Selecione o 4º Lugar" />
+                  <SelectValue placeholder="Selecione o Quarto Lugar" />
                 </SelectTrigger>
                 <SelectContent>
-                  {teams.map(team => (
-                    <SelectItem key={team.id} value={team.id}>{team.name}</SelectItem>
+                  {teams.map((team) => (
+                    <SelectItem key={team.id} value={team.id}>
+                      {team.name}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -398,11 +288,28 @@ const AdminTournamentResults = () => {
           </div>
           <Button
             onClick={processTournamentResultsAndCalculatePoints}
-            className="mt-6 w-full bg-green-600 hover:bg-green-700"
+            className="mt-6 w-full bg-fifa-blue hover:bg-opacity-90" // Ajustado para cor FIFA
             disabled={loading || isResultsCompleted}
           >
-            {isResultsCompleted ? "Resultados Finalizados" : (loading ? "Processando..." : "Salvar Resultados Finais e Pontuar")}
+            {isResultsCompleted ? (
+              <span className="flex items-center">
+                <Badge variant="default" className="bg-green-500 mr-2">Resultados Finalizados</Badge>
+              </span>
+            ) : (
+              loading ? (
+                <span className="flex items-center">
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Processando...
+                </span>
+              ) : (
+                "Salvar Resultados Finais e Pontuar"
+              )
+            )}
           </Button>
+          {isResultsCompleted && (
+            <p className="text-sm text-gray-500 mt-2 text-center">
+              Os resultados finais já foram inseridos e os pontos calculados. Para editar, você precisará de uma permissão especial (remover `is_completed` do DB).
+            </p>
+          )}
         </CardContent>
       </Card>
     </div>

@@ -1,200 +1,256 @@
 // src/lib/scoring.ts
+import { supabase } from "@/integrations/supabase/client";
 
 /**
- * Interface para a estrutura de um palpite de partida de um usuário.
+ * Função auxiliar para registrar os pontos em 'user_points' e atualizar o 'total_points' em 'users_custom'.
+ * Esta função agora garante que o total de pontos do usuário é sempre atualizado.
+ *
+ * @param userId O ID do usuário.
+ * @param points A quantidade de pontos a ser adicionada.
+ * @param pointsType O tipo de pontuação (ex: 'match', 'group_classification', 'tournament_final').
+ * @param predictionId Opcional: ID do palpite específico que gerou os pontos (match_predictions.id, group_predictions.id, final_predictions.id).
+ * @param relatedId Opcional: ID do item relacionado que foi pontuado (matches.id, groups.id, tournament_results.id).
  */
-interface MatchPrediction {
-  homeGoals: number;
-  awayGoals: number;
-}
+async function registerPoints(
+  userId: string,
+  points: number,
+  pointsType: string,
+  predictionId: string | null = null,
+  relatedId: string | null = null
+) {
+  try {
+    // 1. Inserir o registro de pontos detalhado na tabela user_points
+    const { error: insertError } = await supabase.from("user_points").insert({
+      user_id: userId,
+      points: points,
+      points_type: pointsType,
+      prediction_id: predictionId,
+      related_id: relatedId,
+      // created_at e updated_at serão preenchidos automaticamente pelo Supabase se configurado
+      // ou você pode descomentar as linhas abaixo se preferir definir explicitamente
+      // created_at: new Date().toISOString(),
+      // updated_at: new Date().toISOString(),
+    });
 
-/**
- * Interface para a estrutura do resultado real de uma partida.
- */
-interface MatchResult {
-  homeGoals: number;
-  awayGoals: number;
+    if (insertError) {
+      console.error(`Erro ao inserir registro em user_points para ${userId}:`, insertError.message);
+      throw insertError;
+    }
+    console.log(`Ponto detalhado registrado para o usuário ${userId}: ${points} (${pointsType})`);
+
+    // 2. Atualizar o total_points na tabela users_custom
+    // Primeiro, busque o total_points atual do usuário
+    const { data: userData, error: fetchUserError } = await supabase
+      .from("users_custom")
+      .select("total_points")
+      .eq("id", userId)
+      .single(); // Usa .single() para buscar um único registro
+
+    // Tratamento de erro para fetchUserError
+    // PGRST116 é o código para "No rows found" - isso pode acontecer se o usuário não for encontrado
+    if (fetchUserError && fetchUserError.code !== "PGRST116") {
+      console.error(`Erro ao buscar total_points para o usuário ${userId}:`, fetchUserError.message);
+      throw fetchUserError;
+    }
+
+    const currentTotalPoints = userData?.total_points || 0; // Assume 0 se total_points for null ou undefined
+    const newTotalPoints = currentTotalPoints + points;
+
+    // Atualiza a coluna total_points na tabela users_custom
+    const { error: updateTotalError } = await supabase
+      .from("users_custom")
+      .update({ total_points: newTotalPoints })
+      .eq("id", userId);
+
+    if (updateTotalError) {
+      console.error(`Erro ao atualizar total_points para o usuário ${userId}:`, updateTotalError.message);
+      throw updateTotalError;
+    }
+    console.log(`Total points para o usuário ${userId} atualizado para ${newTotalPoints}`);
+
+  } catch (error: any) {
+    console.error(`Erro crítico no registro e atualização de pontos para o usuário ${userId}:`, error.message);
+    throw error;
+  }
 }
 
 /**
  * Calcula os pontos de um usuário para um palpite de partida da fase de grupos.
+ * As regras são as suas, adaptadas para a nova assinatura e para chamar `registerPoints`.
  *
- * Regras:
- * - Placar exato (ambos os times): 10 pontos
- * - Empate com placar diferente: 7 pontos
- * - Vencedor da partida (outro placar): 5 pontos
- * - Acertar o número de gols de um dos times (e não acertou as regras acima): 3 pontos
- *
- * @param userPrediction O palpite do usuário (gols do time da casa, gols do time de fora).
- * @param realResult O resultado real da partida (gols do time da casa, gols do time de fora).
- * @returns O número de pontos ganhos pelo usuário.
+ * @param userId ID do usuário que fez o palpite.
+ * @param predictionId ID do palpite na tabela `match_predictions`.
+ * @param matchId ID da partida.
+ * @param userHomeScore Palpite de gols do time da casa do usuário.
+ * @param userAwayScore Palpite de gols do time de fora do usuário.
+ * @param actualHomeScore Gols reais do time da casa.
+ * @param actualAwayScore Gols reais do time de fora.
  */
-export function calculateMatchPoints(userPrediction: MatchPrediction, realResult: MatchResult): number {
+export async function calculateMatchPoints(
+  userId: string,
+  predictionId: string | null,
+  matchId: string,
+  userHomeScore: number,
+  userAwayScore: number,
+  actualHomeScore: number,
+  actualAwayScore: number
+) {
   let points = 0;
 
-  const predictedHomeGoals = userPrediction.homeGoals;
-  const predictedAwayGoals = userPrediction.awayGoals;
-  const realHomeGoals = realResult.homeGoals;
-  const realAwayGoals = realResult.awayGoals;
-
-  // Determina o vencedor (ou empate) do palpite e do resultado real
-  const predictedOutcome = predictedHomeGoals > predictedAwayGoals ? 'home_win' :
-                           predictedAwayGoals > predictedHomeGoals ? 'away_win' : 'draw';
-  const realOutcome = realHomeGoals > realAwayGoals ? 'home_win' :
-                     realAwayGoals > realHomeGoals ? 'away_win' : 'draw';
+  const predictedOutcome = userHomeScore > userAwayScore ? 'home_win' :
+                           userAwayScore > userHomeScore ? 'away_win' : 'draw';
+  const realOutcome = actualHomeScore > actualAwayScore ? 'home_win' :
+                      actualAwayScore > actualHomeScore ? 'away_win' : 'draw';
 
   // 1. Placar exato - Acertar o placar exato de ambos os times - 10 pontos
-  if (predictedHomeGoals === realHomeGoals && predictedAwayGoals === realAwayGoals) {
+  if (userHomeScore === actualHomeScore && userAwayScore === actualAwayScore) {
     points = 10;
   }
   // 2. Acerto empate - Acertar empate com placar diferente - 7 pontos
-  // Esta condição só é verificada se não caiu no "Placar exato"
   else if (predictedOutcome === 'draw' && realOutcome === 'draw') {
     points = 7;
   }
   // 3. Vencedor da partida - Acertar apenas o time vencedor da partida (outro placar) - 5 pontos
-  // Esta condição só é verificada se não caiu nas anteriores (Placar exato ou Empate)
   else if (predictedOutcome === realOutcome) {
     points = 5;
   }
   // 4. Acertar placar de um time - Acertar o numero de gols de um dos times - 3 pontos
   // Esta condição só é verificada se NENHUMA das regras de maior pontuação foi atingida.
-  // Isso evita que um acerto de placar exato (10 pontos) também dê 3 pontos adicionais.
-  if (points === 0) {
-      if (predictedHomeGoals === realHomeGoals || predictedAwayGoals === realAwayGoals) {
-        points = 3;
-      }
+  if (points === 0) { // Verifica se ainda não pontuou com as regras mais "fortes"
+    if (userHomeScore === actualHomeScore || userAwayScore === actualAwayScore) {
+      points = 3;
+    }
   }
 
-  return points;
+  // Se pontos foram ganhos, registre-os
+  if (points > 0) {
+    await registerPoints(userId, points, 'match', predictionId, matchId);
+  }
 }
 
 /**
  * Calcula os pontos de um usuário para o palpite da classificação de um grupo.
+ * As regras são as suas, adaptadas para a nova assinatura e para chamar `registerPoints`.
  *
- * Regras:
- * - Acertar ambos os classificados do grupo em ordem: 10 pontos
- * - Classificados invertidos (os dois times corretos, mas na ordem oposta): 4 pontos
- * - Acertar apenas o primeiro classificado: 5 pontos
- * - Acertar apenas o segundo classificado: 5 pontos
- *
- * @param userPredictedOrder Um array com os IDs/Nomes dos times na ordem prevista pelo usuário (ex: ['timeA_id', 'timeB_id']).
- * @param realOrder Um array com os IDs/Nomes dos times na ordem real de classificação (ex: ['timeA_id', 'timeB_id']).
- * @returns O número de pontos ganhos pelo usuário.
+ * @param userId ID do usuário.
+ * @param predictionId ID do palpite na tabela `group_predictions`.
+ * @param groupId ID do grupo.
+ * @param userFirstTeamId Palpite do 1º lugar do usuário.
+ * @param userSecondTeamId Palpite do 2º lugar do usuário.
+ * @param actualFirstTeamId Real 1º lugar.
+ * @param actualSecondTeamId Real 2º lugar.
  */
-export function calculateGroupClassificationPoints(userPredictedOrder: string[], realOrder: string[]): number {
+export async function calculateGroupClassificationPoints(
+  userId: string,
+  predictionId: string | null,
+  groupId: string,
+  userFirstTeamId: string,
+  userSecondTeamId: string,
+  actualFirstTeamId: string,
+  actualSecondTeamId: string
+) {
   let points = 0;
 
-  // Garante que ambos os arrays têm exatamente 2 times
-  if (userPredictedOrder.length !== 2 || realOrder.length !== 2) {
-    console.warn("Entrada inválida para cálculo de classificação de grupo. Esperado 2 times em cada array.");
-    return 0; // Não pontua se a entrada não estiver no formato esperado
-  }
-
-  const predictedFirst = userPredictedOrder[0];
-  const predictedSecond = userPredictedOrder[1];
-  const realFirst = realOrder[0];
-  const realSecond = realOrder[1];
-
   // Acertar ambos os classificados do grupo em ordem - 10 pontos
-  if (predictedFirst === realFirst && predictedSecond === realSecond) {
+  if (userFirstTeamId === actualFirstTeamId && userSecondTeamId === actualSecondTeamId) {
     points = 10;
   }
   // Classificados invertidos - Acertar os dois classificados em ordem invertida - 4 pontos
-  // Esta condição é verificada antes de "Acertar apenas o primeiro/segundo" para evitar sobreposição.
-  else if (predictedFirst === realSecond && predictedSecond === realFirst) {
+  else if (userFirstTeamId === actualSecondTeamId && userSecondTeamId === actualFirstTeamId) {
     points = 4;
   }
   // Acertar apenas o primeiro - Acertar apenas o primeiro classificado - 5 pontos
-  // Esta condição só é verificada se não caiu nas regras anteriores.
-  else if (predictedFirst === realFirst) {
+  else if (userFirstTeamId === actualFirstTeamId) {
     points = 5;
   }
   // Acertar apenas o segundo - Acertar apenas o segundo classificado - 5 pontos
-  // Esta condição só é verificada se não caiu nas regras anteriores.
-  else if (predictedSecond === realSecond) {
+  else if (userSecondTeamId === actualSecondTeamId) {
     points = 5;
   }
 
-  return points;
-}
-
-/**
- * Interface para a estrutura dos palpites de um usuário para as fases finais do torneio,
- * incluindo o placar da final.
- */
-export interface TournamentFinalPredictions {
-  champion: string; // ID ou Nome do time
-  runnerUp: string;
-  thirdPlace: string;
-  fourthPlace: string;
-  finalScore: { homeGoals: number; awayGoals: number; }; // Placar da final palpitado pelo usuário
-}
-
-/**
- * Interface para a estrutura dos resultados reais das fases finais do torneio.
- */
-export interface TournamentFinalResults {
-  champion: string; // ID ou Nome do time
-  runnerUp: string;
-  thirdPlace: string;
-  fourthPlace: string;
-  finalScore: { homeGoals: number; awayGoals: number; }; // Placar da final real
+  // Se pontos foram ganhos, registre-os
+  if (points > 0) {
+    await registerPoints(userId, points, 'group_classification', predictionId, groupId);
+  }
 }
 
 /**
  * Calcula os pontos de um usuário para os palpites das fases finais do torneio e placar final.
+ * As regras são as suas, adaptadas para a nova assinatura e para chamar `registerPoints`.
  *
- * Regras:
- * - Acertar o campeão: 50 pontos
- * - Acertar o vice-campeão: 25 pontos
- * - Acertar o terceiro colocado: 15 pontos
- * - Acertar o quarto colocado: 10 pontos
- * - Acertar o placar FINAL (independente dos times): 20 pontos
- * - BÔNUS: Acertar os 4 finalistas (campeão, vice, terceiro e quarto em ordem exata): +35 pontos (acumulativo com os pontos individuais)
- *
- * @param userPredictions Os palpites do usuário para as fases finais.
- * @param realResults Os resultados reais das fases finais do torneio.
- * @returns O número total de pontos ganhos pelo usuário para esta seção.
+ * @param userId ID do usuário.
+ * @param predictionId ID do palpite na tabela `final_predictions`.
+ * @param tournamentResultId ID do registro na tabela `tournament_results` (assumindo que há um único registro para os resultados finais do torneio).
+ * @param userChampionId Palpite Campeão do usuário.
+ * @param userViceChampionId Palpite Vice-Campeão do usuário.
+ * @param userThirdPlaceId Palpite 3º lugar do usuário.
+ * @param userFourthPlaceId Palpite 4º lugar do usuário.
+ * @param userFinalHomeScore Palpite placar final casa do usuário.
+ * @param userFinalAwayScore Palpite placar final fora do usuário.
+ * @param actualChampionId Campeão real.
+ * @param actualRunnerUpId Vice-Campeão real.
+ * @param actualThirdPlaceId 3º lugar real.
+ * @param actualFourthPlaceId 4º lugar real.
+ * @param actualFinalHomeScore Placar final real casa.
+ * @param actualFinalAwayScore Placar final real fora.
  */
-export function calculateTournamentFinalPoints(userPredictions: TournamentFinalPredictions, realResults: TournamentFinalResults): number {
+export async function calculateTournamentFinalPoints(
+  userId: string,
+  predictionId: string | null,
+  tournamentResultId: string, // Pode ser um ID fixo ou o ID do único registro de resultados finais
+  userChampionId: string,
+  userViceChampionId: string,
+  userThirdPlaceId: string,
+  userFourthPlaceId: string,
+  userFinalHomeScore: number,
+  userFinalAwayScore: number,
+  actualChampionId: string,
+  actualRunnerUpId: string,
+  actualThirdPlaceId: string,
+  actualFourthPlaceId: string,
+  actualFinalHomeScore: number,
+  actualFinalAwayScore: number
+) {
   let points = 0;
 
   // Acertar o campeão - 50 pontos
-  if (userPredictions.champion === realResults.champion) {
+  if (userChampionId === actualChampionId) {
     points += 50;
   }
 
   // Acertar o vice campeão - 25 pontos
-  if (userPredictions.runnerUp === realResults.runnerUp) {
+  if (userViceChampionId === actualRunnerUpId) {
     points += 25;
   }
 
   // Acertar o terceiro colocado - 15 pontos
-  if (userPredictions.thirdPlace === realResults.thirdPlace) {
+  if (userThirdPlaceId === actualThirdPlaceId) {
     points += 15;
   }
 
   // Acertar o quarto colocado - 10 pontos
-  if (userPredictions.fourthPlace === realResults.fourthPlace) {
+  if (userFourthPlaceId === actualFourthPlaceId) {
     points += 10;
   }
 
   // Acertar o placar FINAL - Acertar o placar da final (independente dos times) - 20 pontos
-  // Agora compara o palpite do usuário com o resultado real
-  if (userPredictions.finalScore.homeGoals === realResults.finalScore.homeGoals &&
-      userPredictions.finalScore.awayGoals === realResults.finalScore.awayGoals) {
+  if (userFinalHomeScore === actualFinalHomeScore && userFinalAwayScore === actualFinalAwayScore) {
     points += 20;
   }
 
-  // BONUS - acertar os 4 finalistas (campeao, vice, terceiro e quarto em ordem) - 35 pontos
+  // BÔNUS: Acertar os 4 finalistas (campeão, vice, terceiro e quarto em ordem exata) - 35 pontos
   // Este é um bônus que se soma aos pontos individuais já ganhos.
-  if (userPredictions.champion === realResults.champion &&
-      userPredictions.runnerUp === realResults.runnerUp &&
-      userPredictions.thirdPlace === realResults.thirdPlace &&
-      userPredictions.fourthPlace === realResults.fourthPlace) {
+  if (
+    userChampionId === actualChampionId &&
+    userViceChampionId === actualRunnerUpId &&
+    userThirdPlaceId === actualThirdPlaceId &&
+    userFourthPlaceId === actualFourthPlaceId
+  ) {
     points += 35;
   }
 
-  return points;
+  // Se pontos foram ganhos, registre-os
+  if (points > 0) {
+    await registerPoints(userId, points, 'tournament_final', predictionId, tournamentResultId);
+  }
 }
