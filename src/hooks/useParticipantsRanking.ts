@@ -69,10 +69,11 @@ type SupabaseFinalResult = {
   final_away_score: number;
 };
 
+// ALTERADO: Troquei 'nickname' por 'username' para refletir a coluna do seu BD
 type UserData = {
   id: string;
   name: string;
-  nickname: string;
+  username: string; //
   avatar_url?: string;
 };
 
@@ -80,7 +81,7 @@ type UserData = {
 export type Participant = {
   id: string;
   name: string;
-  nickname: string;
+  username: string; //
   avatar_url?: string;
   points: number;
   matches: number;
@@ -98,9 +99,10 @@ export const useParticipantsRanking = () => {
       setError(null);
       try {
         // 1. Buscar todos os usuários (participantes)
+        // ALTERADO: Selecionando 'username' ao invés de 'nickname'
         const { data: users, error: usersError } = await supabase
           .from('users_custom')
-          .select('id, name, nickname, avatar_url');
+          .select('id, name, username, avatar_url'); //
         if (usersError) throw usersError;
         if (!users) {
           setParticipants([]);
@@ -233,7 +235,7 @@ export const useParticipantsRanking = () => {
         const finalRanking: Participant[] = users.map(user => ({
           id: user.id,
           name: user.name,
-          nickname: user.nickname,
+          username: user.username, // <-- ALTERADO PARA USERNAME
           avatar_url: user.avatar_url,
           points: userPoints[user.id]?.points || 0,
           matches: userPoints[user.id]?.matchesCount || 0,
