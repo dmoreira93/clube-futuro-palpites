@@ -25,19 +25,18 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { Match } from "@/types/matches";
-import { format, parseISO } from "date-fns"; // Importar format e parseISO
-import { ptBR } from "date-fns/locale"; // Importar locale
+import { format, parseISO } from "date-fns";
+import { ptBR } from "date-fns/locale";
 
 // Ajustes nos tipos de importação para refletir as tabelas separadas
 import {
-  MatchPrediction, // Renomeado de Prediction para MatchPrediction para clareza
+  MatchPrediction,
   GroupPrediction,
   FinalPrediction,
   RawGroupPrediction,
-  RawFinalPrediction // Manter se necessário para o payload RPC, mas as interfaces diretas da tabela são mais claras
+  RawFinalPrediction
 } from "@/types/predictions";
 
-// Adicione as interfaces para Teams e Groups, caso não existam em outro lugar
 interface Team {
   id: string;
   name: string;
@@ -54,23 +53,19 @@ const Palpites = () => {
   const { user, isAuthenticated } = useAuth();
   const navigate = useNavigate();
 
-  // State for data loading
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Data states
   const [matches, setMatches] = useState<Match[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
   const [teamsByGroup, setTeamsByGroup] = useState<{ [groupId: string]: Team[] }>({});
 
-  // Predictions states
   const [matchPredictions, setMatchPredictions] = useState<{ [matchId: string]: { homeGoals: number; awayGoals: number } }>({});
   const [groupPredictions, setGroupPredictions] = useState<GroupPrediction[]>([]);
   const [finalPrediction, setFinalPrediction] = useState<FinalPrediction | null>(null);
 
-  // Form input states for group and final predictions
   const [groupPositions, setGroupPositions] = useState<{ [groupId: string]: { first: string; second: string } }>({});
   const [finalPositions, setFinalPositions] = useState({
     champion: '',
@@ -80,11 +75,12 @@ const Palpites = () => {
   });
   const [finalScore, setFinalScore] = useState({ homeGoals: 0, awayGoals: 0 });
 
-  // ***** DATA DE CORTE PARA PALPITES *****
-  // O ideal é que cada partida tenha sua própria deadline na tabela 'matches'.
-  // Para simplificar e seguir o seu exemplo de 14/06/2025 para todos,
-  // usaremos uma data global fixa. Ajuste conforme sua regra!
-  const globalPredictionCutoffDate = new Date('2025-06-14T23:59:59-03:00'); // Fuso horário de Brasília -03:00
+  // ***** DATA DE CORTE GLOBAL PARA GRUPOS E FINAL *****
+  // Esta data (14/06/2025 às 18:00) é o limite para palpites de GRUPO e FINAL.
+  // Use um fuso horário adequado (e.g., 'America/Sao_Paulo' ou 'UTC-03:00')
+  const globalPredictionCutoffDate = new Date('2025-06-14T18:00:00-03:00'); 
+  // O getTime() retorna o valor em milissegundos, mais fácil para comparações
+  const globalPredictionCutoffTime = globalPredictionCutoffDate.getTime();
 
   // --- Efeitos de Carregamento de Dados ---
   useEffect(() => {
@@ -105,7 +101,6 @@ const Palpites = () => {
         if (teamsError) throw teamsError;
         setTeams(teamsData || []);
 
-        // Organizar times por grupo
         const organizedTeamsByGroup: { [groupId: string]: Team[] } = {};
         teamsData?.forEach(team => {
             if (team.group_id) {
@@ -117,7 +112,6 @@ const Palpites = () => {
         });
         setTeamsByGroup(organizedTeamsByGroup);
 
-
         // Fetch Groups e ordenar por nome
         const { data: groupsData, error: groupsError } = await supabase
           .from('groups')
@@ -126,7 +120,6 @@ const Palpites = () => {
 
         if (groupsError) throw groupsError;
         setGroups(groupsData || []);
-
 
         // Fetch Matches e filtrar times NULL
         const { data: matchesData, error: matchesError } = await supabase
@@ -138,9 +131,7 @@ const Palpites = () => {
         const filteredMatches = matchesData?.filter(match => match.home_team_id !== null && match.away_team_id !== null) || [];
         setMatches(filteredMatches);
 
-
         // Fetch existing Match Predictions for the user
-        // AGORA PEGANDO DA TABELA 'match_predictions'
         const { data: userMatchPredictions, error: userMatchPredictionsError } = await supabase
           .from('match_predictions')
           .select('id, match_id, home_score, away_score')
@@ -153,9 +144,7 @@ const Palpites = () => {
         }, {} as { [matchId: string]: { homeGoals: number; awayGoals: number } });
         setMatchPredictions(initialMatchPredictions);
 
-
         // Fetch existing Group Predictions for the user
-        // AGORA PEGANDO DA TABELA 'group_predictions'
         const { data: userGroupPredictions, error: userGroupPredictionsError } = await supabase
             .from('group_predictions')
             .select('id, group_id, predicted_first_team_id, predicted_second_team_id')
@@ -173,16 +162,14 @@ const Palpites = () => {
         });
         setGroupPositions(initialGroupPositions);
 
-
         // Fetch existing Final Prediction for the user
-        // AGORA PEGANDO DA TABELA 'final_predictions'
         const { data: userFinalPrediction, error: userFinalPredictionError } = await supabase
             .from('final_predictions')
             .select('id, champion_id, vice_champion_id, third_place_id, fourth_place_id, final_home_score, final_away_score')
             .eq('user_id', user.id)
             .single();
 
-        if (userFinalPredictionError && userFinalPredictionError.code !== 'PGRST116') { // PGRST116 é "no rows found"
+        if (userFinalPredictionError && userFinalPredictionError.code !== 'PGRST116') {
             throw userFinalPredictionError;
         }
 
@@ -216,8 +203,9 @@ const Palpites = () => {
   // --- Funções de Manipulação de State do Formulário ---
   const handleScoreChange = (matchId: string, team: 'home' | 'away', value: string) => {
     const match = matches.find(m => m.id === matchId);
-    if (match && parseISO(match.match_date) <= globalPredictionCutoffDate) {
-      toast.warning("Não é possível alterar o palpite para esta partida. O prazo já encerrou.");
+    // Bloqueia se a data/hora atual for MAIOR ou IGUAL à data/hora da partida
+    if (match && new Date().getTime() >= parseISO(match.match_date).getTime()) {
+      toast.warning("Não é possível alterar o palpite para esta partida. O prazo já encerrou (a partida já começou ou terminou).");
       return;
     }
     const goals = parseInt(value);
@@ -231,10 +219,9 @@ const Palpites = () => {
   };
 
   const handleGroupPositionChange = (groupId: string, position: 'first' | 'second', teamId: string) => {
-    // Para palpites de grupo e final, você pode querer um cutoff diferente ou o mesmo global.
-    // Usando o mesmo global por enquanto.
-    if (new Date() > globalPredictionCutoffDate) {
-      toast.warning("Não é possível alterar palpites de grupo. O prazo já encerrou.");
+    // Bloqueia se a data/hora atual for MAIOR ou IGUAL à data de corte global
+    if (new Date().getTime() >= globalPredictionCutoffTime) {
+      toast.warning(`Não é possível alterar palpites de grupo. O prazo encerrou em ${format(globalPredictionCutoffDate, 'dd/MM/yyyy HH:mm', { locale: ptBR })}.`);
       return;
     }
     setGroupPositions(prev => ({
@@ -247,8 +234,9 @@ const Palpites = () => {
   };
 
   const handleFinalPositionChange = (position: 'champion' | 'runnerUp' | 'thirdPlace' | 'fourthPlace', teamId: string) => {
-    if (new Date() > globalPredictionCutoffDate) {
-      toast.warning("Não é possível alterar palpites da fase final. O prazo já encerrou.");
+    // Bloqueia se a data/hora atual for MAIOR ou IGUAL à data de corte global
+    if (new Date().getTime() >= globalPredictionCutoffTime) {
+      toast.warning(`Não é possível alterar palpites da fase final. O prazo encerrou em ${format(globalPredictionCutoffDate, 'dd/MM/yyyy HH:mm', { locale: ptBR })}.`);
       return;
     }
     setFinalPositions(prev => ({
@@ -258,8 +246,9 @@ const Palpites = () => {
   };
 
   const handleFinalScoreChange = (type: 'homeGoals' | 'awayGoals', value: string) => {
-    if (new Date() > globalPredictionCutoffDate) {
-      toast.warning("Não é possível alterar o placar da final. O prazo já encerrou.");
+    // Bloqueia se a data/hora atual for MAIOR ou IGUAL à data de corte global
+    if (new Date().getTime() >= globalPredictionCutoffTime) {
+      toast.warning(`Não é possível alterar o placar da final. O prazo encerrou em ${format(globalPredictionCutoffDate, 'dd/MM/yyyy HH:mm', { locale: ptBR })}.`);
       return;
     }
     const goals = parseInt(value);
@@ -277,18 +266,13 @@ const Palpites = () => {
       return;
     }
 
-    // Validação geral do prazo ANTES de tentar salvar qualquer coisa
-    if (new Date() > globalPredictionCutoffDate) {
-      toast.error(`Não é possível salvar palpites após ${format(globalPredictionCutoffDate, 'dd/MM/yyyy HH:mm', { locale: ptBR })}.`);
-      return;
-    }
-
     setSubmitting(true);
     setError(null);
 
     try {
+      const now = new Date().getTime();
+
       // --- SUBMISSÃO DE PALPITES DE PARTIDA ---
-      // AGORA PEGANDO DA TABELA 'match_predictions' para carregar palpites de partida existentes
       const loadedMatchPredictions = (await supabase.from('match_predictions')
           .select('id, match_id, home_score, away_score')
           .eq('user_id', user.id)
@@ -299,16 +283,17 @@ const Palpites = () => {
         const existingMatchPrediction = loadedMatchPredictions.find(p => p.match_id === matchId);
         const match = matches.find(m => m.id === matchId);
 
-        if (match && parseISO(match.match_date) <= globalPredictionCutoffDate) {
-          console.warn(`Palpite para partida ${matchId} ignorado, prazo encerrado.`);
+        // Bloqueio de envio para partida: se a data/hora atual for MAIOR ou IGUAL à data/hora da partida
+        if (match && now >= parseISO(match.match_date).getTime()) {
+          console.warn(`Palpite para partida ${matchId} ignorado, prazo encerrado (partida já começou/terminou).`);
           continue; // Pula esta partida, não permite salvar/atualizar
         }
 
         if (existingMatchPrediction) {
           const { error: updateError } = await supabase.rpc('update_match_prediction', {
             pred_id: existingMatchPrediction.id,
-            home_score_param: prediction.homeGoals, // Parâmetro ajustado
-            away_score_param: prediction.awayGoals, // Parâmetro ajustado
+            home_score_param: prediction.homeGoals,
+            away_score_param: prediction.awayGoals,
           });
           if (updateError) throw updateError;
         } else {
@@ -323,101 +308,108 @@ const Palpites = () => {
       }
 
       // --- SUBMISSÃO DE PALPITES DE GRUPO ---
-      console.log("Submitting Group Predictions:", groupPositions);
-      // AGORA PEGANDO DA TABELA 'group_predictions' para carregar palpites de grupo existentes
-      const loadedGroupPredictions = (await supabase.from('group_predictions')
-          .select('id, group_id, predicted_first_team_id, predicted_second_team_id')
-          .eq('user_id', user.id)
-          ).data || [];
+      // Bloqueio de envio para grupos: se a data/hora atual for MAIOR ou IGUAL à data de corte global
+      if (now >= globalPredictionCutoffTime) {
+        toast.error(`Não é possível salvar palpites de grupo após ${format(globalPredictionCutoffDate, 'dd/MM/yyyy HH:mm', { locale: ptBR })}.`);
+        // A função de salvar continua, mas os palpites de grupo/final serão ignorados se o prazo expirou
+        // Ou você pode lançar um erro e interromper tudo: throw new Error("Prazo para palpites de grupo encerrado.");
+      } else { // Só tenta salvar se o prazo ainda não encerrou
+          const loadedGroupPredictions = (await supabase.from('group_predictions')
+              .select('id, group_id, predicted_first_team_id, predicted_second_team_id')
+              .eq('user_id', user.id)
+              ).data || [];
 
-      for (const groupId in groupPositions) {
-        const positions = groupPositions[groupId];
-        const existingGroupPred = loadedGroupPredictions.find(p => p.group_id === groupId);
+          for (const groupId in groupPositions) {
+            const positions = groupPositions[groupId];
+            const existingGroupPred = loadedGroupPredictions.find(p => p.group_id === groupId);
 
-        if (!positions.first || !positions.second) {
-            toast.warning(`Por favor, selecione 1º e 2º lugar para o Grupo ${groups.find(g => g.id === groupId)?.name || 'desconhecido'}.`);
-            continue;
-        }
+            if (!positions.first || !positions.second) {
+                toast.warning(`Por favor, selecione 1º e 2º lugar para o Grupo ${groups.find(g => g.id === groupId)?.name || 'desconhecido'}.`);
+                continue;
+            }
 
-        // Garante que o 1º e 2º lugar não são o mesmo time
-        if (positions.first === positions.second) {
-            toast.warning(`No Grupo ${groups.find(g => g.id === groupId)?.name || 'desconhecido'}, 1º e 2º lugar não podem ser o mesmo time.`);
-            continue;
-        }
+            if (positions.first === positions.second) {
+                toast.warning(`No Grupo ${groups.find(g => g.id === groupId)?.name || 'desconhecido'}, 1º e 2º lugar não podem ser o mesmo time.`);
+                continue;
+            }
 
-        if (existingGroupPred) {
-          const { error: updateError } = await supabase.rpc('update_group_prediction', {
-            pred_id: existingGroupPred.id,
-            first_id_param: positions.first, // Parâmetro ajustado
-            second_id_param: positions.second, // Parâmetro ajustado
-          });
-          if (updateError) {
-            console.error(`Erro ao atualizar palpite de grupo ${groupId}:`, updateError);
-            throw updateError;
+            if (existingGroupPred) {
+              const { error: updateError } = await supabase.rpc('update_group_prediction', {
+                pred_id: existingGroupPred.id,
+                first_id_param: positions.first,
+                second_id_param: positions.second,
+              });
+              if (updateError) {
+                console.error(`Erro ao atualizar palpite de grupo ${groupId}:`, updateError);
+                throw updateError;
+              }
+            } else {
+              const { error: insertError } = await supabase.rpc('insert_group_prediction', {
+                group_id_param: groupId,
+                user_id_param: user.id,
+                first_team_id_param: positions.first,
+                second_team_id_param: positions.second,
+              });
+              if (insertError) {
+                console.error(`Erro ao inserir palpite de grupo ${groupId}:`, insertError);
+                throw insertError;
+              }
+            }
           }
-        } else {
-          const { error: insertError } = await supabase.rpc('insert_group_prediction', {
-            group_id_param: groupId,
-            user_id_param: user.id,
-            first_team_id_param: positions.first,
-            second_team_id_param: positions.second,
-          });
-          if (insertError) {
-            console.error(`Erro ao inserir palpite de grupo ${groupId}:`, insertError);
-            throw insertError;
-          }
-        }
       }
+
 
       // --- SUBMISSÃO DE PALPITE FINAL ---
-      console.log("Submitting Final Prediction:", finalPositions, finalScore);
-      // AGORA PEGANDO DA TABELA 'final_predictions' para carregar o palpite final existente
-      const loadedFinalPrediction = (await supabase.from('final_predictions')
-          .select('id, champion_id, vice_champion_id, third_place_id, fourth_place_id, final_home_score, final_away_score')
-          .eq('user_id', user.id)
-          .single()
-          ).data;
+      // Bloqueio de envio para final: se a data/hora atual for MAIOR ou IGUAL à data de corte global
+      if (now >= globalPredictionCutoffTime) {
+        toast.error(`Não é possível salvar palpites da fase final após ${format(globalPredictionCutoffDate, 'dd/MM/yyyy HH:mm', { locale: ptBR })}.`);
+      } else { // Só tenta salvar se o prazo ainda não encerrou
+          const loadedFinalPrediction = (await supabase.from('final_predictions')
+              .select('id, champion_id, vice_champion_id, third_place_id, fourth_place_id, final_home_score, final_away_score')
+              .eq('user_id', user.id)
+              .single()
+              ).data;
 
-      // Validação: todos os 4 finalistas devem ser selecionados
-      if (!finalPositions.champion || !finalPositions.runnerUp || !finalPositions.thirdPlace || !finalPositions.fourthPlace) {
-          toast.warning("Por favor, selecione os 4 primeiros colocados para o palpite final.");
-          return;
-      }
-      // Validação: os 4 finalistas devem ser diferentes
-      const uniqueFinalists = new Set([finalPositions.champion, finalPositions.runnerUp, finalPositions.thirdPlace, finalPositions.fourthPlace]);
-      if (uniqueFinalists.size !== 4) {
-          toast.warning("Os 4 times do palpite final devem ser diferentes.");
-          return;
-      }
-
-      if (loadedFinalPrediction) { // Se já existe um palpite final
-        const { error: updateError } = await supabase.rpc('update_final_prediction', {
-          pred_id: loadedFinalPrediction.id,
-          champion_id_param: finalPositions.champion,
-          vice_champion_id_param: finalPositions.runnerUp,
-          third_place_id_param: finalPositions.thirdPlace,
-          fourth_place_id_param: finalPositions.fourthPlace,
-          final_home_score_param: finalScore.homeGoals,
-          final_away_score_param: finalScore.awayGoals,
-        });
-        if (updateError) {
-          console.error("Erro ao atualizar palpite final:", updateError);
-          throw updateError;
-        }
-      } else { // Se não existe um palpite final, insere
-        const { error: insertError } = await supabase.rpc('insert_final_prediction', {
-          user_id_param: user.id,
-          champion_id_param: finalPositions.champion,
-          vice_champion_id_param: finalPositions.runnerUp,
-          third_place_id_param: finalPositions.thirdPlace,
-          fourth_place_id_param: finalPositions.fourthPlace,
-          final_home_score_param: finalScore.homeGoals,
-          final_away_score_param: finalScore.awayGoals,
-        });
-        if (insertError) {
-          console.error("Erro ao inserir palpite final:", insertError);
-          throw insertError;
-        }
+          if (!finalPositions.champion || !finalPositions.runnerUp || !finalPositions.thirdPlace || !finalPositions.fourthPlace) {
+              toast.warning("Por favor, selecione os 4 primeiros colocados para o palpite final.");
+              // Não interrompe o save, permite que as partidas sejam salvas se for o caso
+          } else {
+              const uniqueFinalists = new Set([finalPositions.champion, finalPositions.runnerUp, finalPositions.thirdPlace, finalPositions.fourthPlace]);
+              if (uniqueFinalists.size !== 4) {
+                  toast.warning("Os 4 times do palpite final devem ser diferentes.");
+                  // Não interrompe o save
+              } else {
+                  if (loadedFinalPrediction) {
+                    const { error: updateError } = await supabase.rpc('update_final_prediction', {
+                      pred_id: loadedFinalPrediction.id,
+                      champion_id_param: finalPositions.champion,
+                      vice_champion_id_param: finalPositions.runnerUp,
+                      third_place_id_param: finalPositions.thirdPlace,
+                      fourth_place_id_param: finalPositions.fourthPlace,
+                      final_home_score_param: finalScore.homeGoals,
+                      final_away_score_param: finalScore.awayGoals,
+                    });
+                    if (updateError) {
+                      console.error("Erro ao atualizar palpite final:", updateError);
+                      throw updateError;
+                    }
+                  } else {
+                    const { error: insertError } = await supabase.rpc('insert_final_prediction', {
+                      user_id_param: user.id,
+                      champion_id_param: finalPositions.champion,
+                      vice_champion_id_param: finalPositions.runnerUp,
+                      third_place_id_param: finalPositions.third_place_id,
+                      fourth_place_id_param: finalPositions.fourth_place_id,
+                      final_home_score_param: finalScore.homeGoals,
+                      final_away_score_param: finalScore.awayGoals,
+                    });
+                    if (insertError) {
+                      console.error("Erro ao inserir palpite final:", insertError);
+                      throw insertError;
+                    }
+                  }
+              }
+          }
       }
 
 
@@ -464,18 +456,21 @@ const Palpites = () => {
   };
 
   // Determinar se o botão geral de "Confirmar Palpites" deve ser desabilitado
-  const isGlobalPredictionLocked = new Date() > globalPredictionCutoffDate;
+  // O botão principal só bloqueia se a data GLOBAL para grupos/final tiver passado.
+  // As partidas individuais já são bloqueadas no loop.
+  const isGlobalPredictionLockedForFinalAndGroups = new Date().getTime() >= globalPredictionCutoffTime;
 
   return (
     <Layout>
       <div className="container mx-auto p-4 max-w-4xl">
         <h1 className="text-3xl font-bold text-center text-fifa-blue mb-6">Meus Palpites</h1>
 
-        {isGlobalPredictionLocked && (
+        {isGlobalPredictionLockedForFinalAndGroups && (
           <Alert variant="destructive" className="mb-6">
             <AlertTitle>Prazo Encerrado!</AlertTitle>
             <AlertDescription>
-              Não é possível mais registrar ou alterar palpites para nenhuma categoria após {format(globalPredictionCutoffDate, 'dd/MM/yyyy HH:mm', { locale: ptBR })}.
+              O prazo para registrar ou alterar palpites de GRUPOS e FASE FINAL encerrou em {format(globalPredictionCutoffDate, 'dd/MM/yyyy HH:mm', { locale: ptBR })}.
+              Você ainda pode palpitar em partidas individuais se o prazo delas não tiver encerrado.
             </AlertDescription>
           </Alert>
         )}
@@ -501,7 +496,8 @@ const Palpites = () => {
                 ) : (
                   matches.map((match) => {
                     const matchDateTime = parseISO(match.match_date);
-                    const isMatchPredictionLocked = matchDateTime <= globalPredictionCutoffDate; // Use a data da partida para bloquear
+                    // Bloqueia a partida se a data/hora atual for MAIOR ou IGUAL à data/hora da partida
+                    const isMatchPredictionLocked = new Date().getTime() >= matchDateTime.getTime();
 
                     return (
                       <div key={match.id} className="flex items-center justify-between border-b pb-4 last:border-b-0 last:pb-0">
@@ -541,7 +537,7 @@ const Palpites = () => {
                           </Avatar>
                         </div>
                         {isMatchPredictionLocked && (
-                          <p className="text-red-500 text-xs ml-4">Prazo encerrado.</p>
+                          <p className="text-red-500 text-xs ml-4">Prazo encerrado ({format(matchDateTime, 'dd/MM HH:mm', { locale: ptBR })}).</p>
                         )}
                       </div>
                     );
@@ -572,7 +568,7 @@ const Palpites = () => {
                           <Select
                             value={groupPositions[group.id]?.first || ''}
                             onValueChange={(value) => handleGroupPositionChange(group.id, 'first', value)}
-                            disabled={isGlobalPredictionLocked || submitting} // Desabilita se o prazo passou ou estiver salvando
+                            disabled={isGlobalPredictionLockedForFinalAndGroups || submitting} // Desabilita se o prazo global passou ou estiver salvando
                           >
                             <SelectTrigger id={`group-${group.id}-first`}>
                               <SelectValue placeholder="Selecione o 1º..." />
@@ -597,7 +593,7 @@ const Palpites = () => {
                           <Select
                             value={groupPositions[group.id]?.second || ''}
                             onValueChange={(value) => handleGroupPositionChange(group.id, 'second', value)}
-                            disabled={isGlobalPredictionLocked || submitting} // Desabilita se o prazo passou ou estiver salvando
+                            disabled={isGlobalPredictionLockedForFinalAndGroups || submitting} // Desabilita se o prazo global passou ou estiver salvando
                           >
                             <SelectTrigger id={`group-${group.id}-second`}>
                               <SelectValue placeholder="Selecione o 2º..." />
@@ -639,7 +635,7 @@ const Palpites = () => {
                   <Select
                     value={finalPositions.champion}
                     onValueChange={(value) => handleFinalPositionChange('champion', value)}
-                    disabled={isGlobalPredictionLocked || submitting} // Desabilita se o prazo passou ou estiver salvando
+                    disabled={isGlobalPredictionLockedForFinalAndGroups || submitting} // Desabilita se o prazo global passou ou estiver salvando
                   >
                     <SelectTrigger id="champion">
                       <SelectValue placeholder="Selecione o Campeão..." />
@@ -665,7 +661,7 @@ const Palpites = () => {
                   <Select
                     value={finalPositions.runnerUp}
                     onValueChange={(value) => handleFinalPositionChange('runnerUp', value)}
-                    disabled={isGlobalPredictionLocked || submitting} // Desabilita se o prazo passou ou estiver salvando
+                    disabled={isGlobalPredictionLockedForFinalAndGroups || submitting} // Desabilita se o prazo global passou ou estiver salvando
                   >
                     <SelectTrigger id="runnerUp">
                       <SelectValue placeholder="Selecione o Vice..." />
@@ -691,7 +687,7 @@ const Palpites = () => {
                   <Select
                     value={finalPositions.thirdPlace}
                     onValueChange={(value) => handleFinalPositionChange('thirdPlace', value)}
-                    disabled={isGlobalPredictionLocked || submitting} // Desabilita se o prazo passou ou estiver salvando
+                    disabled={isGlobalPredictionLockedForFinalAndGroups || submitting} // Desabilita se o prazo global passou ou estiver salvando
                   >
                     <SelectTrigger id="thirdPlace">
                       <SelectValue placeholder="Selecione o 3º..." />
@@ -717,7 +713,7 @@ const Palpites = () => {
                   <Select
                     value={finalPositions.fourthPlace}
                     onValueChange={(value) => handleFinalPositionChange('fourthPlace', value)}
-                    disabled={isGlobalPredictionLocked || submitting} // Desabilita se o prazo passou ou estiver salvando
+                    disabled={isGlobalPredictionLockedForFinalAndGroups || submitting} // Desabilita se o prazo global passou ou estiver salvando
                   >
                     <SelectTrigger id="fourthPlace">
                       <SelectValue placeholder="Selecione o 4º..." />
@@ -746,7 +742,7 @@ const Palpites = () => {
                     value={finalScore.homeGoals}
                     onChange={(e) => handleFinalScoreChange('homeGoals', e.target.value)}
                     min="0"
-                    disabled={isGlobalPredictionLocked || submitting} // Desabilita se o prazo passou ou estiver salvando
+                    disabled={isGlobalPredictionLockedForFinalAndGroups || submitting} // Desabilita se o prazo global passou ou estiver salvando
                   />
                   <span className="font-bold text-lg">X</span>
                   <Input
@@ -755,7 +751,7 @@ const Palpites = () => {
                     value={finalScore.awayGoals}
                     onChange={(e) => handleFinalScoreChange('awayGoals', e.target.value)}
                     min="0"
-                    disabled={isGlobalPredictionLocked || submitting} // Desabilita se o prazo passou ou estiver salvando
+                    disabled={isGlobalPredictionLockedForFinalAndGroups || submitting} // Desabilita se o prazo global passou ou estiver salvando
                   />
                 </div>
               </CardContent>
@@ -775,7 +771,9 @@ const Palpites = () => {
             <Button
               className="w-full bg-fifa-blue hover:bg-opacity-90"
               onClick={handleSubmitBets}
-              disabled={submitting || isGlobalPredictionLocked} // Desabilita o botão se o prazo passou ou estiver salvando
+              // O botão geral é desabilitado se houver alguma operação em andamento.
+              // A validação de data ocorre internamente para cada tipo de palpite.
+              disabled={submitting} 
             >
               {submitting ? (
                 <>
@@ -788,7 +786,7 @@ const Palpites = () => {
             </Button>
 
             <p className="text-sm text-gray-500 text-center">
-              Atenção: Após confirmar, seus palpites ficarão registrados e não poderão ser alterados.
+              Atenção: Ao confirmar, os palpites de partidas com prazo encerrado e palpites de grupo/final após o dia {format(globalPredictionCutoffDate, 'dd/MM/yyyy HH:mm', { locale: ptBR })} não serão salvos.
             </p>
           </CardContent>
         </Card>
