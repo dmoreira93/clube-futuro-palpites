@@ -48,6 +48,7 @@ const Resultados = () => {
   const { data: matches = [], isLoading, error } = useQuery<Match[]>({
     queryKey: ['matches'],
     queryFn: async () => {
+      console.log("Iniciando query para buscar partidas..."); // Debug: Início da query
       const { data, error } = await supabase
         .from('matches')
         .select(`
@@ -64,17 +65,20 @@ const Resultados = () => {
         .not('away_team_id', 'is', null);
 
       if (error) {
-        console.error("Erro ao buscar partidas:", error);
+        console.error("Erro ao buscar partidas:", error); // Debug: Erro na busca
         throw new Error(error.message);
       }
       
+      console.log("Dados brutos das partidas recebidos:", data); // Debug: Dados brutos
+
       const formattedMatches = data.map((match: any) => ({
         ...match,
-        // O group_id agora vem como um objeto { name: '...' } devido ao join com groups
         group: match.home_team?.group_id ? { name: match.home_team.group_id.name } : undefined,
         home_score: match.is_finished ? match.home_score : null,
         away_score: match.is_finished ? match.away_score : null,
       }));
+
+      console.log("Partidas formatadas (após ajuste de score):", formattedMatches); // Debug: Partidas formatadas
 
       return formattedMatches as Match[];
     },
@@ -84,14 +88,16 @@ const Resultados = () => {
   const { data: groupsData = [], isLoading: groupsLoading } = useQuery<Group[]>({
     queryKey: ['groups'],
     queryFn: async () => {
+      console.log("Iniciando query para buscar grupos..."); // Debug: Início da query de grupos
       const { data, error } = await supabase
         .from('groups')
         .select('id, name');
 
       if (error) {
-        console.error("Erro ao buscar grupos para filtro:", error);
+        console.error("Erro ao buscar grupos para filtro:", error); // Debug: Erro na busca de grupos
         throw new Error(error.message);
       }
+      console.log("Dados dos grupos recebidos:", data); // Debug: Dados dos grupos
       return data as Group[];
     },
   });
@@ -104,8 +110,14 @@ const Resultados = () => {
     if (filter === "all") {
       return true;
     }
+    // Verifica se o nome do grupo existe e se corresponde ao filtro
     return match.group?.name === filter;
   });
+
+  console.log("Filtro atual:", filter); // Debug: Filtro ativo
+  console.log("Partidas carregadas (sem filtro):", matches); // Debug: Partidas antes do filtro
+  console.log("Partidas filtradas (para exibição):", filteredMatches); // Debug: Partidas após o filtro
+
 
   const filterGroups = groupsData.map(group => ({
     id: group.name, // Usamos o nome do grupo como ID para o filtro
