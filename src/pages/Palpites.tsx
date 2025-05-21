@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Layout from "@/components/layout/Layout";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -25,653 +25,411 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { Match } from "@/types/matches";
-import { Prediction, GroupPrediction, FinalPrediction, RawGroupPrediction, RawFinalPrediction } from "@/types/predictions";
-import { checkTableExists } from "@/utils/RPCHelperFunctions";
+import { Prediction, GroupPrediction, FinalPrediction, RawGroupPrediction, RawFinalPrediction } from "@/types/predictions"; // Mantenha essas importações
+import { checkTableExists } from "@/utils/RPCHelperFunctions"; // Assumindo que este util é para verificar a tabela
+
+// Adicione as interfaces para Teams e Groups, caso não existam em outro lugar
+interface Team {
+  id: string;
+  name: string;
+  logo_url: string; // Adicione se você tiver
+}
+
+interface Group {
+  id: string;
+  name: string;
+  // Outros campos do grupo, se houver
+}
 
 const Palpites = () => {
   const { user, isAuthenticated } = useAuth();
   const navigate = useNavigate();
-  
+
   // State for data loading
   const [loading, setLoading] = useState(true);
-  
-  // State for all data
-  const [matchBets, setMatchBets] = useState<{ [key: string]: { home: string, away: string } }>({});
-  const [groupPredictions, setGroupPredictions] = useState<{ [key: string]: { first: string, second: string } }>({});
-  const [finalPredictions, setFinalPredictions] = useState({
-    champion: "",
-    viceChampion: "",
-    third: "",
-    fourth: "",
-  });
-  
-  // State for matches and teams from database
-  const [matches, setMatches] = useState<Match[]>([]);
-  const [teams, setTeams] = useState<any[]>([]);
-  const [groups, setGroups] = useState<any[]>([]);
-  const [existingPredictions, setExistingPredictions] = useState<Prediction[]>([]);
-  const [existingGroupPredictions, setExistingGroupPredictions] = useState<GroupPrediction[]>([]);
-  const [existingFinalPredictions, setExistingFinalPredictions] = useState<FinalPrediction[]>([]);
-  
   const [submitting, setSubmitting] = useState(false);
-  
-  // Redirect if not authenticated
+  const [error, setError] = useState<string | null>(null);
+
+  // Data states
+  const [matches, setMatches] = useState<Match[]>([]);
+  const [teams, setTeams] = useState<Team[]>([]);
+  const [groups, setGroups] = useState<Group[]>([]);
+
+  // Predictions states
+  const [matchPredictions, setMatchPredictions] = useState<{ [matchId: string]: { homeGoals: number; awayGoals: number } }>({});
+  const [groupPredictions, setGroupPredictions] = useState<GroupPrediction[]>([]); // Para armazenar palpites de grupo existentes
+  const [finalPrediction, setFinalPrediction] = useState<FinalPrediction | null>(null); // Para armazenar palpite final existente
+
+  // Form input states for group and final predictions
+  const [groupPositions, setGroupPositions] = useState<{ [groupId: string]: { first: string; second: string } }>({});
+  const [finalPositions, setFinalPositions] = useState({
+    champion: '',
+    runnerUp: '',
+    thirdPlace: '',
+    fourthPlace: '',
+  });
+  const [finalScore, setFinalScore] = useState({ homeGoals: 0, awayGoals: 0 });
+
+
+  // --- Efeitos de Carregamento de Dados ---
   useEffect(() => {
     if (!isAuthenticated) {
-      toast("Você precisa estar logado para acessar esta página", {
-        description: "Redirecionando para a página de login"
-      });
       navigate("/login");
+      return;
     }
-  }, [isAuthenticated, navigate]);
-  
-  // Load data from the database
-  useEffect(() => {
+
     const fetchData = async () => {
       setLoading(true);
+      setError(null);
       try {
-        // Fetch matches - FILTERING ONLY GROUP STAGE MATCHES
+        // Fetch Matches
         const { data: matchesData, error: matchesError } = await supabase
           .from('matches')
-          .select(`
-            id, 
-            match_date, 
-            home_score, 
-            away_score, 
-            stage, 
-            home_team_id, 
-            away_team_id,
-            is_finished
-          `)
-          .ilike('stage', '%Grupo%') // Only fetch group stage matches
-          .order('match_date', { ascending: true });
-          
-        if (matchesError) {
-          console.error("Error fetching matches:", matchesError);
-          toast("Erro ao carregar jogos", { 
-            description: "Ocorreu um erro ao buscar os jogos no banco de dados" 
-          });
-        } else {
-          // Fetch home team information for each match
-          const matchesWithTeams = await Promise.all((matchesData || []).map(async (match) => {
-            const { data: homeTeam } = await supabase
-              .from('teams')
-              .select('id, name, flag_url')
-              .eq('id', match.home_team_id)
-              .single();
-              
-            const { data: awayTeam } = await supabase
-              .from('teams')
-              .select('id, name, flag_url')
-              .eq('id', match.away_team_id)
-              .single();
-              
-            return {
-              ...match,
-              home_team: homeTeam || { id: match.home_team_id, name: "Time não definido" },
-              away_team: awayTeam || { id: match.away_team_id, name: "Time não definido" }
-            } as Match;
-          }));
-          
-          setMatches(matchesWithTeams);
-        }
-        
-        // Fetch teams
+          .select('*')
+          .order('match_date', { ascending: true }); // Ordenar por data para exibir corretamente
+
+        if (matchesError) throw matchesError;
+        setMatches(matchesData || []);
+
+        // Fetch Teams
         const { data: teamsData, error: teamsError } = await supabase
           .from('teams')
-          .select('id, name, group_id, flag_url')
-          .order('name', { ascending: true });
-          
-        if (teamsError) {
-          console.error("Error fetching teams:", teamsError);
-        } else {
-          setTeams(teamsData || []);
-        }
-        
-        // Fetch groups
+          .select('id, name, logo_url'); // Assumindo essas colunas
+
+        if (teamsError) throw teamsError;
+        setTeams(teamsData || []);
+
+        // Fetch Groups
         const { data: groupsData, error: groupsError } = await supabase
-          .from('groups')
-          .select('id, name');
-          
-        if (groupsError) {
-          console.error("Error fetching groups:", groupsError);
-        } else {
-          setGroups(groupsData || []);
-        }
-        
-        // Fetch user's existing predictions if the user is logged in
-        if (user?.id) {
-          // Match predictions
-          const { data: predictionsData, error: predictionsError } = await supabase
-            .from('predictions')
-            .select('*')
+          .from('groups') // Assumindo que você tem uma tabela 'groups'
+          .select('id, name'); // Assumindo essas colunas
+
+        if (groupsError) throw groupsError;
+        setGroups(groupsData || []);
+
+
+        // Fetch existing Match Predictions for the user
+        const { data: userMatchPredictions, error: userMatchPredictionsError } = await supabase
+          .from('match_predictions')
+          .select('match_id, home_score, away_score')
+          .eq('user_id', user.id);
+
+        if (userMatchPredictionsError) throw userMatchPredictionsError;
+        const initialMatchPredictions = userMatchPredictions.reduce((acc, pred) => {
+          acc[pred.match_id] = { homeGoals: pred.home_score, awayGoals: pred.away_score };
+          return acc;
+        }, {} as { [matchId: string]: { homeGoals: number; awayGoals: number } });
+        setMatchPredictions(initialMatchPredictions);
+
+
+        // --- NOVO: Fetch existing Group Predictions for the user ---
+        const { data: userGroupPredictions, error: userGroupPredictionsError } = await supabase
+            .from('group_predictions')
+            .select('*') // Seleciona todos os campos para preencher o estado GroupPrediction
             .eq('user_id', user.id);
-            
-          if (predictionsError) {
-            console.error("Error fetching match predictions:", predictionsError);
-          } else {
-            setExistingPredictions(predictionsData || []);
-            
-            // Populate the matchBets state with existing predictions
-            const existingBets: { [key: string]: { home: string, away: string } } = {};
-            predictionsData?.forEach((prediction: Prediction) => {
-              existingBets[prediction.match_id] = {
-                home: prediction.home_score.toString(),
-                away: prediction.away_score.toString()
-              };
-            });
-            setMatchBets(existingBets);
-          }
-          
-          // Check if group_predictions table exists
-          const hasGroupPredictionsTable = await checkTableExists('group_predictions');
-          
-          if (hasGroupPredictionsTable) {
-            try {
-              // Use the RPC function to get user group predictions
-              const { data: groupPredictionsData, error: groupPredictionsError } = await supabase
-                .rpc('get_user_group_predictions', { user_id_param: user.id });
-              
-              if (!groupPredictionsError && groupPredictionsData) {
-                // Parse the JSON data returned from the RPC function
-                const parsedGroupPredictions: GroupPrediction[] = groupPredictionsData.map((item: RawGroupPrediction) => ({
-                  id: item.id,
-                  group_id: item.group_id,
-                  first_team_id: item.first_team_id,
-                  second_team_id: item.second_team_id,
-                  user_id: item.user_id,
-                  created_at: item.created_at,
-                  updated_at: item.updated_at
-                }));
-                
-                setExistingGroupPredictions(parsedGroupPredictions);
-                
-                // Populate the groupPredictions state with existing predictions
-                const existingGroupPreds: { [key: string]: { first: string, second: string } } = {};
-                parsedGroupPredictions.forEach((prediction: GroupPrediction) => {
-                  existingGroupPreds[prediction.group_id] = {
-                    first: prediction.first_team_id,
-                    second: prediction.second_team_id
-                  };
-                });
-                setGroupPredictions(existingGroupPreds);
-              } else if (groupPredictionsError) {
-                console.error("Error fetching group predictions:", groupPredictionsError);
-              }
-            } catch (error) {
-              console.error("Error fetching group predictions:", error);
-            }
-          }
-          
-          // Check if final_predictions table exists
-          const hasFinalPredictionsTable = await checkTableExists('final_predictions');
-          
-          if (hasFinalPredictionsTable) {
-            try {
-              // Use the RPC function to get user final prediction
-              const { data: finalPredictionsData, error: finalPredictionsError } = await supabase
-                .rpc('get_user_final_prediction', { user_id_param: user.id });
-              
-              if (!finalPredictionsError && finalPredictionsData && finalPredictionsData.length > 0) {
-                // Parse the JSON data returned from the RPC function
-                const parsedFinalPredictions: FinalPrediction[] = finalPredictionsData.map((item: RawFinalPrediction) => ({
-                  id: item.id,
-                  champion_id: item.champion_id,
-                  vice_champion_id: item.vice_champion_id,
-                  third_place_id: item.third_place_id,
-                  fourth_place_id: item.fourth_place_id,
-                  user_id: item.user_id,
-                  created_at: item.created_at,
-                  updated_at: item.updated_at
-                }));
-                
-                if (parsedFinalPredictions.length > 0) {
-                  setExistingFinalPredictions(parsedFinalPredictions);
-                  
-                  const finalPred = parsedFinalPredictions[0];
-                  // Populate finalPredictions state with existing predictions
-                  setFinalPredictions({
-                    champion: finalPred.champion_id || "",
-                    viceChampion: finalPred.vice_champion_id || "",
-                    third: finalPred.third_place_id || "",
-                    fourth: finalPred.fourth_place_id || ""
-                  });
-                }
-              } else if (finalPredictionsError) {
-                console.error("Error fetching final predictions:", finalPredictionsError);
-              }
-            } catch (error) {
-              console.error("Error fetching final predictions:", error);
-            }
-          }
-        }
-      } catch (error) {
-        console.error("Error fetching data:", error);
-        toast("Erro ao carregar dados", { 
-          description: "Ocorreu um erro ao buscar os dados no banco de dados" 
+
+        if (userGroupPredictionsError) throw userGroupPredictionsError;
+        setGroupPredictions(userGroupPredictions || []);
+
+        const initialGroupPositions: { [groupId: string]: { first: string; second: string } } = {};
+        userGroupPredictions?.forEach(pred => {
+            initialGroupPositions[pred.group_id] = {
+                first: pred.predicted_first_team_id,
+                second: pred.predicted_second_team_id,
+            };
         });
+        setGroupPositions(initialGroupPositions);
+
+
+        // --- NOVO: Fetch existing Final Prediction for the user ---
+        const { data: userFinalPrediction, error: userFinalPredictionError } = await supabase
+            .from('final_predictions')
+            .select('*')
+            .eq('user_id', user.id)
+            .single(); // Esperamos apenas um palpite final por usuário
+
+        if (userFinalPredictionError && userFinalPredictionError.code !== 'PGRST116') { // PGRST116 é "no rows found"
+            throw userFinalPredictionError;
+        }
+
+        if (userFinalPrediction) {
+            setFinalPrediction(userFinalPrediction);
+            setFinalPositions({
+                champion: userFinalPrediction.champion_id,
+                runnerUp: userFinalPrediction.vice_champion_id,
+                thirdPlace: userFinalPrediction.third_place_id,
+                fourthPlace: userFinalPrediction.fourth_place_id,
+            });
+            setFinalScore({
+                homeGoals: userFinalPrediction.final_home_score,
+                awayGoals: userFinalPrediction.final_away_score,
+            });
+        }
+
+      } catch (err: any) {
+        console.error("Error fetching data:", err);
+        setError(err.message || "Failed to load data.");
+        toast.error("Erro ao carregar dados: " + (err.message || "Verifique sua conexão."));
       } finally {
         setLoading(false);
       }
     };
-    
-    if (isAuthenticated) {
-      fetchData();
-    }
-  }, [isAuthenticated, user?.id]);
 
-  // Format date for display
-  const formatDate = (dateStr: string) => {
-    const date = new Date(dateStr);
-    return date.toLocaleDateString("pt-BR");
-  };
-  
-  // Group teams by their group_id
-  const teamsByGroup = teams.reduce((acc: any, team) => {
-    if (!team.group_id) return acc;
-    
-    if (!acc[team.group_id]) {
-      acc[team.group_id] = [];
-    }
-    acc[team.group_id].push(team);
-    return acc;
-  }, {});
-  
-  // Process groups with their teams for display
-  const groupsWithTeams = groups.map(group => ({
-    ...group,
-    teams: teamsByGroup[group.id] || []
-  }));
+    fetchData();
+  }, [isAuthenticated, navigate, user?.id]);
 
-  const handleMatchBetChange = (matchId: string, team: 'home' | 'away', value: string) => {
-    setMatchBets(prev => ({
+
+  // --- Funções de Manipulação de State do Formulário ---
+  const handleScoreChange = (matchId: string, team: 'home' | 'away', value: string) => {
+    const goals = parseInt(value);
+    setMatchPredictions(prev => ({
       ...prev,
       [matchId]: {
-        ...prev[matchId] || { home: '', away: '' },
-        [team]: value
-      }
+        ...prev[matchId],
+        [team === 'home' ? 'homeGoals' : 'awayGoals']: isNaN(goals) ? 0 : goals,
+      },
     }));
   };
 
-  const handleGroupPredictionChange = (groupId: string, position: 'first' | 'second', value: string) => {
-    setGroupPredictions(prev => ({
+  const handleGroupPositionChange = (groupId: string, position: 'first' | 'second', teamId: string) => {
+    setGroupPositions(prev => ({
       ...prev,
       [groupId]: {
-        ...prev[groupId] || { first: '', second: '' },
-        [position]: value
-      }
+        ...prev[groupId],
+        [position]: teamId,
+      },
     }));
   };
 
-  const handleFinalPredictionChange = (position: keyof typeof finalPredictions, value: string) => {
-    setFinalPredictions(prev => ({
+  const handleFinalPositionChange = (position: 'champion' | 'runnerUp' | 'thirdPlace' | 'fourthPlace', teamId: string) => {
+    setFinalPositions(prev => ({
       ...prev,
-      [position]: value
+      [position]: teamId,
     }));
   };
 
+  const handleFinalScoreChange = (type: 'homeGoals' | 'awayGoals', value: string) => {
+    const goals = parseInt(value);
+    setFinalScore(prev => ({
+      ...prev,
+      [type]: isNaN(goals) ? 0 : goals,
+    }));
+  };
+
+  // --- Função de Submissão Principal ---
   const handleSubmitBets = async () => {
-    if (!user?.id) {
-      toast("Você precisa estar logado para salvar palpites", { 
-        description: "Faça login e tente novamente" 
-      });
+    if (!user || !isAuthenticated) {
+      toast.error("Você precisa estar logado para salvar palpites.");
+      navigate("/login");
       return;
     }
-    
+
     setSubmitting(true);
-    
+    setError(null);
+
     try {
-      // Validate match predictions
-      const invalidPredictions = Object.entries(matchBets).filter(([_, scores]) => {
-        const homeScore = parseInt(scores.home);
-        const awayScore = parseInt(scores.away);
-        return isNaN(homeScore) || isNaN(awayScore) || homeScore < 0 || awayScore < 0;
-      });
-      
-      if (invalidPredictions.length > 0) {
-        toast("Palpites inválidos", { 
-          description: "Alguns palpites de jogos possuem valores inválidos (não são números ou são negativos). Verifique e tente novamente." 
-        });
-        setSubmitting(false);
-        return;
+      // --- SUBMISSÃO DE PALPITES DE PARTIDA ---
+      for (const matchId in matchPredictions) {
+        const prediction = matchPredictions[matchId];
+        const existingMatchPrediction = userMatchPredictions.find(p => p.match_id === matchId); // Assumindo que userMatchPredictions foi carregado
+
+        if (existingMatchPrediction) {
+          const { error: updateError } = await supabase.rpc('update_match_prediction', {
+            pred_id: existingMatchPrediction.id,
+            home_score: prediction.homeGoals,
+            away_score: prediction.awayGoals,
+          });
+          if (updateError) throw updateError;
+        } else {
+          const { error: insertError } = await supabase.rpc('insert_match_prediction', {
+            match_id_param: matchId,
+            user_id_param: user.id,
+            home_score_param: prediction.homeGoals,
+            away_score_param: prediction.awayGoals,
+          });
+          if (insertError) throw insertError;
+        }
       }
-      
-      // Save match predictions to the database
-      let newMatchPredictions = 0;
-      let updatedMatchPredictions = 0;
-      
-      // Process match predictions
-      for (const [matchId, scores] of Object.entries(matchBets)) {
-        const homeScore = parseInt(scores.home);
-        const awayScore = parseInt(scores.away);
-        
-        if (isNaN(homeScore) || isNaN(awayScore)) continue; // Já validado, mas uma checagem extra não faz mal
-        
-        const existingPrediction = existingPredictions.find(p => 
-          p.match_id === matchId && p.user_id === user.id
-        );
-        
-        if (existingPrediction) {
-          // Update existing prediction
-          const { error: updateError } = await supabase
-            .from('predictions')
-            .update({
-              home_score: homeScore,
-              away_score: awayScore,
-              updated_at: new Date().toISOString()
-            })
-            .eq('id', existingPrediction.id);
-            
+
+      // --- NOVO: SUBMISSÃO DE PALPITES DE GRUPO ---
+      console.log("Submitting Group Predictions:", groupPositions);
+      for (const groupId in groupPositions) {
+        const positions = groupPositions[groupId];
+        const existingGroupPred = groupPredictions.find(p => p.group_id === groupId);
+
+        if (existingGroupPred) {
+          const { error: updateError } = await supabase.rpc('update_group_prediction', {
+            pred_id: existingGroupPred.id,
+            first_id: positions.first,
+            second_id: positions.second,
+          });
           if (updateError) {
-            console.error(`Error updating prediction ${existingPrediction.id}:`, updateError);
-            toast(`Erro ao atualizar palpite de jogo ${matchId}`, { description: updateError.message });
-          } else {
-            updatedMatchPredictions++;
+            console.error(`Erro ao atualizar palpite de grupo ${groupId}:`, updateError);
+            throw updateError;
           }
         } else {
-          // Insert new prediction
-          const { error: insertError } = await supabase
-            .from('predictions')
-            .insert({
-              match_id: matchId,
-              user_id: user.id,
-              home_score: homeScore,
-              away_score: awayScore
-            });
-            
+          const { error: insertError } = await supabase.rpc('insert_group_prediction', {
+            group_id_param: groupId,
+            user_id_param: user.id,
+            first_team_id_param: positions.first,
+            second_team_id_param: positions.second,
+          });
           if (insertError) {
-            console.error(`Error inserting match prediction for match ${matchId}:`, insertError);
-            toast(`Erro ao inserir palpite de jogo ${matchId}`, { description: insertError.message });
-          } else {
-            newMatchPredictions++;
+            console.error(`Erro ao inserir palpite de grupo ${groupId}:`, insertError);
+            throw insertError;
           }
         }
       }
-      
-      // Process group predictions - only if the group_predictions table exists
-      let newGroupPredictions = 0;
-      let updatedGroupPredictions = 0;
-      
-      const hasGroupPredictionsTable = await checkTableExists('group_predictions');
-      
-      if (hasGroupPredictionsTable) {
-        try {
-            for (const [groupId, positions] of Object.entries(groupPredictions)) {
-                // VERIFICAÇÃO ADICIONAL: Pule se o palpite de grupo estiver incompleto
-                if (!positions.first || !positions.second || positions.first === "" || positions.second === "") {
-                    console.warn(`Palpite de grupo incompleto para o grupo ${groupId}. Ignorando.`);
-                    continue; 
-                }
-                // Verificação adicional para garantir que os times são diferentes, se aplicável
-                if (positions.first === positions.second) {
-                    toast(`Palpite de grupo ${groupId} inválido`, { description: "O 1º e 2º lugar não podem ser o mesmo time." });
-                    console.warn(`Palpite de grupo ${groupId} inválido: 1º e 2º lugar são o mesmo time.`);
-                    continue; 
-                }
 
-                const existingGroupPrediction = existingGroupPredictions.find(p => 
-                    p.group_id === groupId && p.user_id === user.id
-                );
-                
-                if (existingGroupPrediction) {
-                    const { error: updateError } = await supabase.rpc('update_group_prediction', {
-                        pred_id: existingGroupPrediction.id,
-                        first_id: positions.first,
-                        second_id: positions.second
-                    });
-                    
-                    if (updateError) {
-                        console.error(`Error updating group prediction for group ${groupId}:`, updateError);
-                        toast(`Erro ao atualizar previsão do grupo ${groupId}`, { description: updateError.message });
-                    } else {
-                        updatedGroupPredictions++;
-                    }
-                } else {
-                    const { error: insertError } = await supabase.rpc('insert_group_prediction', {
-                        group_id_param: groupId,
-                        user_id_param: user.id,
-                        first_team_id_param: positions.first,
-                        second_team_id_param: positions.second
-                    });
-                    
-                    if (insertError) {
-                        console.error(`Error inserting group prediction for group ${groupId}:`, insertError);
-                        toast(`Erro ao inserir previsão do grupo ${groupId}`, { description: insertError.message });
-                    } else {
-                        newGroupPredictions++;
-                    }
-                }
-            }
-        } catch (error) {
-            console.error("Erro geral no processamento de previsões de grupo:", error);
-            toast("Erro geral ao salvar previsões de grupo", { description: (error as Error).message });
+      // --- NOVO: SUBMISSÃO DE PALPITE FINAL ---
+      console.log("Submitting Final Prediction:", finalPositions, finalScore);
+      if (finalPositions.champion && finalPositions.runnerUp && finalPositions.thirdPlace && finalPositions.fourthPlace) {
+        if (finalPrediction) { // Se já existe um palpite final
+          const { error: updateError } = await supabase.rpc('update_final_prediction', {
+            pred_id: finalPrediction.id,
+            champion_id_param: finalPositions.champion,
+            vice_champion_id_param: finalPositions.runnerUp,
+            third_place_id_param: finalPositions.thirdPlace,
+            fourth_place_id_param: finalPositions.fourthPlace,
+            final_home_score_param: finalScore.homeGoals,
+            final_away_score_param: finalScore.awayGoals,
+          });
+          if (updateError) {
+            console.error("Erro ao atualizar palpite final:", updateError);
+            throw updateError;
+          }
+        } else { // Se não existe um palpite final, insere
+          const { error: insertError } = await supabase.rpc('insert_final_prediction', {
+            user_id_param: user.id,
+            champion_id_param: finalPositions.champion,
+            vice_champion_id_param: finalPositions.runnerUp,
+            third_place_id_param: finalPositions.thirdPlace,
+            fourth_place_id_param: finalPositions.fourthPlace,
+            final_home_score_param: finalScore.homeGoals,
+            final_away_score_param: finalScore.awayGoals,
+          });
+          if (insertError) {
+            console.error("Erro ao inserir palpite final:", insertError);
+            throw insertError;
+          }
         }
       } else {
-          console.warn("Tabela 'group_predictions' não existe ou não foi detectada. Palpites de grupo não serão salvos.");
-          toast("Aviso: Tabela de previsões de grupo não encontrada. Palpites de grupo não serão salvos.", { duration: 5000 });
+        toast.warning("Por favor, selecione os 4 primeiros colocados para o palpite final.");
       }
-      
-      // Process final predictions - only if the final_predictions table exists
-      let finalPredictionUpdated = false;
-      let finalPredictionInserted = false; // Adicionar para rastrear inserções
-      
-      const hasFinalPredictionsTable = await checkTableExists('final_predictions');
-      
-      if (hasFinalPredictionsTable) {
-        try {
-            // Check if all required fields are filled
-            if (finalPredictions.champion && finalPredictions.viceChampion && 
-                finalPredictions.third && finalPredictions.fourth) {
-              
-              // Verificação adicional para garantir que os times finais são diferentes
-              const finalTeams = new Set([
-                finalPredictions.champion,
-                finalPredictions.viceChampion,
-                finalPredictions.third,
-                finalPredictions.fourth
-              ]);
-              if (finalTeams.size < 4) {
-                toast("Palpite final inválido", { description: "Os times para Campeão, Vice, 3º e 4º lugar devem ser diferentes." });
-                console.warn("Palpite final inválido: Times repetidos.");
-                setSubmitting(false);
-                return;
-              }
 
-              const existingFinalPrediction = existingFinalPredictions.length > 0 ? existingFinalPredictions[0] : null;
-              
-              if (existingFinalPrediction) {
-                  const { error: updateError } = await supabase.rpc('update_final_prediction', {
-                      pred_id: existingFinalPrediction.id,
-                      champion_id_param: finalPredictions.champion,
-                      vice_champion_id_param: finalPredictions.viceChampion,
-                      third_place_id_param: finalPredictions.third,
-                      fourth_place_id_param: finalPredictions.fourth
-                  });
-                  
-                  if (updateError) {
-                      console.error("Error updating final prediction:", updateError);
-                      toast("Erro ao atualizar previsão final", { description: updateError.message });
-                  } else {
-                      finalPredictionUpdated = true;
-                  }
-              } else {
-                  const { error: insertError } = await supabase.rpc('insert_final_prediction', {
-                      user_id_param: user.id,
-                      champion_id_param: finalPredictions.champion,
-                      vice_champion_id_param: finalPredictions.viceChampion,
-                      third_place_id_param: finalPredictions.third,
-                      fourth_place_id_param: finalPredictions.fourth
-                  });
-                  
-                  if (insertError) {
-                      console.error("Error inserting final prediction:", insertError);
-                      toast("Erro ao inserir previsão final", { description: insertError.message });
-                  } else {
-                      finalPredictionInserted = true; 
-                  }
-              }
-            } else {
-                console.warn("Palpite final incompleto. Não será salvo.");
-                toast("Palpite final incompleto", { description: "Preencha todos os 4 campos da previsão final." });
-            }
-        } catch (error) {
-            console.error("Erro geral no processamento de previsão final:", error);
-            toast("Erro geral ao salvar previsão final", { description: (error as Error).message });
-        }
-      } else {
-          console.warn("Tabela 'final_predictions' não existe ou não foi detectada. Palpites finais não serão salvos.");
-          toast("Aviso: Tabela de previsões finais não encontrada. Palpites finais não serão salvos.", { duration: 5000 });
-      }
-      
-      // Generate success message
-      let successMessage = "";
-      let hasChanges = false;
-      
-      if (newMatchPredictions > 0 || updatedMatchPredictions > 0) {
-        successMessage += `Palpites de jogos: ${newMatchPredictions} novos, ${updatedMatchPredictions} atualizados. `;
-        hasChanges = true;
-      }
-      
-      if (newGroupPredictions > 0 || updatedGroupPredictions > 0) {
-        successMessage += `Classificações de grupos: ${newGroupPredictions} novas, ${updatedGroupPredictions} atualizadas. `;
-        hasChanges = true;
-      }
-      
-      if (finalPredictionUpdated || finalPredictionInserted) {
-        successMessage += "Previsão do resultado final salva. ";
-        hasChanges = true;
-      }
-      
-      if (hasChanges) { // Usar hasChanges para verificar se algo foi alterado
-        toast("Palpites registrados com sucesso!", { 
-          description: successMessage.trim() // trim() para remover espaço extra no final
-        });
-      } else {
-        toast("Nenhum palpite foi alterado", { 
-          description: "Nenhuma alteração foi detectada nos palpites ou eles estavam incompletos/inválidos."
-        });
-      }
-      
-    } catch (error) {
-      console.error("Erro ao salvar palpites:", error);
-      toast("Erro ao salvar palpites", { 
-        description: "Ocorreu um erro ao processar seus palpites. Verifique o console para mais detalhes."
-      });
+
+      toast.success("Palpites salvos com sucesso!");
+      // Opcional: recarregar os dados para refletir as mudanças ou redirecionar
+      // fetchData();
+    } catch (err: any) {
+      console.error("Erro ao salvar palpites:", err);
+      setError(err.message || "Falha ao salvar os palpites.");
+      toast.error("Erro ao salvar palpites: " + (err.message || "Verifique sua conexão."));
     } finally {
       setSubmitting(false);
     }
   };
 
-  // O restante do código (renderização, useEffects, etc.) permanece o mesmo.
-  // ... (código anterior) ...
 
+  // --- Renderização do Componente ---
   if (loading) {
     return (
       <Layout>
-        <div className="max-w-4xl mx-auto text-center py-12">
-          <Loader2 className="mx-auto h-12 w-12 animate-spin text-fifa-blue" />
-          <p className="mt-4 text-lg text-gray-600">Carregando dados...</p>
+        <div className="flex justify-center items-center h-screen">
+          <Loader2 className="h-8 w-8 animate-spin text-fifa-blue" />
+          <p className="ml-2 text-fifa-blue">Carregando palpites...</p>
         </div>
       </Layout>
     );
   }
 
+  if (error) {
+    return (
+      <Layout>
+        <Alert variant="destructive">
+          <AlertTitle>Erro!</AlertTitle>
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      </Layout>
+    );
+  }
+
+  // Helper para encontrar time pelo ID (para display no Select)
+  const getTeamName = (teamId: string) => {
+    return teams.find(t => t.id === teamId)?.name || 'Selecione';
+  };
+
+  const getTeamLogo = (teamId: string) => {
+    return teams.find(t => t.id === teamId)?.logo_url || '/placeholder-team-logo.png'; // Placeholder
+  };
+
+  // Mapear partidas por grupo para facilitar a exibição
+  const matchesByGroup = matches.reduce((acc, match) => {
+    if (!acc[match.group_id]) {
+      acc[match.group_id] = [];
+    }
+    acc[match.group_id].push(match);
+    return acc;
+  }, {} as { [groupId: string]: Match[] });
+
   return (
     <Layout>
-      <div className="max-w-4xl mx-auto">
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-fifa-blue">Meus Palpites</h1>
-          <p className="text-gray-600 mt-2">
-            Registre aqui seus palpites para o Mundial de Clubes FIFA 2025
-          </p>
-        </div>
+      <div className="container mx-auto p-4 max-w-4xl">
+        <h1 className="text-3xl font-bold text-center text-fifa-blue mb-6">Meus Palpites</h1>
 
-        <Alert className="mb-6">
-          <AlertTitle>Atenção</AlertTitle>
-          <AlertDescription>
-            Registre seus palpites para a fase de grupos antes do início da competição. Após confirmar seus palpites, eles não poderão ser alterados.
-          </AlertDescription>
-        </Alert>
-
+        {/* Tabs para diferentes seções de palpites */}
         <Tabs defaultValue="matches" className="mb-8">
-          <TabsList className="grid grid-cols-3 mb-4">
-            <TabsTrigger value="matches" className="flex items-center gap-2">
-              <SoccerBallIcon className="h-4 w-4" />
-              Jogos
-            </TabsTrigger>
-            <TabsTrigger value="groups" className="flex items-center gap-2">
-              <UsersIcon className="h-4 w-4" />
-              Grupos
-            </TabsTrigger>
-            <TabsTrigger value="finals" className="flex items-center gap-2">
-              <TrophyIcon className="h-4 w-4" />
-              Final
-            </TabsTrigger>
+          <TabsList className="grid w-full grid-cols-3">
+            <TabsTrigger value="matches"><SoccerBallIcon className="mr-2" />Partidas</TabsTrigger>
+            <TabsTrigger value="groups"><UsersIcon className="mr-2" />Grupos</TabsTrigger>
+            <TabsTrigger value="final"><TrophyIcon className="mr-2" />Final</TabsTrigger>
           </TabsList>
-          
-          <TabsContent value="matches" className="space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>Palpites para Jogos</CardTitle>
-                <CardDescription>
-                  Registre o placar que você acredita para cada jogo da fase de grupos
+
+          {/* Conteúdo da aba de Partidas */}
+          <TabsContent value="matches">
+            <Card className="shadow-lg">
+              <CardHeader className="bg-fifa-blue text-white">
+                <CardTitle>Palpites de Partidas</CardTitle>
+                <CardDescription className="text-gray-200">
+                  Preencha os placares das partidas da fase de grupos.
                 </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-6">
+              <CardContent className="p-6 space-y-6">
                 {matches.length === 0 ? (
-                  <p className="text-center py-4 text-gray-500">Nenhum jogo encontrado</p>
+                  <p className="text-center text-gray-500">Nenhuma partida disponível no momento.</p>
                 ) : (
                   matches.map((match) => (
-                    <div key={match.id} className="p-4 border rounded-md">
-                      <div className="flex justify-between items-center mb-3">
-                        <span className="text-sm text-gray-500">
-                          {formatDate(match.match_date)} • {match.stage}
-                        </span>
+                    <div key={match.id} className="flex items-center justify-between border-b pb-4 last:border-b-0 last:pb-0">
+                      <div className="flex items-center gap-2">
+                        <Avatar className="h-6 w-6">
+                          <AvatarImage src={getTeamLogo(match.home_team_id)} />
+                          <AvatarFallback>{teams.find(t => t.id === match.home_team_id)?.name.substring(0,2)}</AvatarFallback>
+                        </Avatar>
+                        <span className="font-medium text-gray-700">{teams.find(t => t.id === match.home_team_id)?.name}</span>
                       </div>
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="flex-1 text-right flex items-center justify-end gap-2">
-                          {match.home_team?.flag_url && (
-                            <div className="w-8 h-8 flex justify-center">
-                              <Avatar className="h-8 w-8">
-                                <AvatarImage src={match.home_team.flag_url} alt={match.home_team?.name || ""} />
-                                <AvatarFallback className="text-xs">
-                                  {match.home_team?.name?.substring(0, 2) || ""}
-                                </AvatarFallback>
-                              </Avatar>
-                            </div>
-                          )}
-                          <p className="font-medium">{match.home_team?.name}</p>
-                          <Input 
-                            type="number" 
-                            min="0"
-                            className="w-16 ml-auto" 
-                            value={matchBets[match.id]?.home || ""}
-                            onChange={(e) => handleMatchBetChange(match.id, 'home', e.target.value)}
-                            disabled={match.is_finished}
-                          />
-                        </div>
-                        <div className="mx-2">vs</div>
-                        <div className="flex-1 flex items-center">
-                          <Input 
-                            type="number" 
-                            min="0"
-                            className="w-16 mr-2" 
-                            value={matchBets[match.id]?.away || ""}
-                            onChange={(e) => handleMatchBetChange(match.id, 'away', e.target.value)}
-                            disabled={match.is_finished}
-                          />
-                          <p className="font-medium">{match.away_team?.name}</p>
-                          {match.away_team?.flag_url && (
-                            <div className="w-8 h-8 ml-2 flex justify-center">
-                              <Avatar className="h-8 w-8">
-                                <AvatarImage src={match.away_team.flag_url} alt={match.away_team?.name || ""} />
-                                <AvatarFallback className="text-xs">
-                                  {match.away_team?.name?.substring(0, 2) || ""}
-                                </AvatarFallback>
-                              </Avatar>
-                            </div>
-                          )}
-                        </div>
+                      <div className="flex items-center gap-2">
+                        <Input
+                          type="number"
+                          className="w-16 text-center"
+                          value={matchPredictions[match.id]?.homeGoals ?? ''}
+                          onChange={(e) => handleScoreChange(match.id, 'home', e.target.value)}
+                          min="0"
+                        />
+                        <span className="font-bold text-gray-700">X</span>
+                        <Input
+                          type="number"
+                          className="w-16 text-center"
+                          value={matchPredictions[match.id]?.awayGoals ?? ''}
+                          onChange={(e) => handleScoreChange(match.id, 'away', e.target.value)}
+                          min="0"
+                        />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-gray-700">{teams.find(t => t.id === match.away_team_id)?.name}</span>
+                        <Avatar className="h-6 w-6">
+                          <AvatarImage src={getTeamLogo(match.away_team_id)} />
+                          <AvatarFallback>{teams.find(t => t.id === match.away_team_id)?.name.substring(0,2)}</AvatarFallback>
+                        </Avatar>
                       </div>
                     </div>
                   ))
@@ -679,55 +437,67 @@ const Palpites = () => {
               </CardContent>
             </Card>
           </TabsContent>
-          
-          <TabsContent value="groups" className="space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>Classificação nos Grupos</CardTitle>
-                <CardDescription>
-                  Preveja quais times ficarão em 1º e 2º lugar em cada grupo
+
+          {/* Conteúdo da aba de Grupos */}
+          <TabsContent value="groups">
+            <Card className="shadow-lg">
+              <CardHeader className="bg-fifa-blue text-white">
+                <CardTitle>Classificação dos Grupos</CardTitle>
+                <CardDescription className="text-gray-200">
+                  Selecione o 1º e 2º lugar de cada grupo.
                 </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-6">
-                {groupsWithTeams.length === 0 ? (
-                  <p className="text-center py-4 text-gray-500">Nenhum grupo encontrado</p>
+              <CardContent className="p-6 space-y-6">
+                {groups.length === 0 ? (
+                  <p className="text-center text-gray-500">Nenhum grupo disponível no momento.</p>
                 ) : (
-                  groupsWithTeams.map(group => (
-                    <div key={group.id} className="p-4 border rounded-md">
-                      <h3 className="font-bold mb-3">Grupo {group.name}</h3>
-                      <div className="space-y-3">
-                        <div className="space-y-2">
-                          <Label htmlFor={`group-${group.id}-1st`}>1º Lugar</Label>
-                          <Select 
-                            value={groupPredictions[group.id]?.first || ""} 
-                            onValueChange={(value) => handleGroupPredictionChange(group.id, 'first', value)}
+                  groups.map(group => (
+                    <div key={group.id} className="border-b pb-4 last:border-b-0 last:pb-0">
+                      <h3 className="font-bold text-lg text-fifa-blue mb-3">Grupo {group.name}</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <Label htmlFor={`group-${group.id}-first`}>1º Lugar</Label>
+                          <Select
+                            value={groupPositions[group.id]?.first || ''}
+                            onValueChange={(value) => handleGroupPositionChange(group.id, 'first', value)}
                           >
-                            <SelectTrigger id={`group-${group.id}-1st`}>
-                              <SelectValue placeholder="Selecione um time" />
+                            <SelectTrigger id={`group-${group.id}-first`}>
+                              <SelectValue placeholder="Selecione o 1º..." />
                             </SelectTrigger>
                             <SelectContent>
-                              {group.teams.map((team: any) => (
+                              {teams.map(team => (
                                 <SelectItem key={team.id} value={team.id}>
-                                  {team.name}
+                                  <div className="flex items-center gap-2">
+                                    <Avatar className="h-5 w-5">
+                                      <AvatarImage src={team.logo_url} />
+                                      <AvatarFallback>{team.name.substring(0,2)}</AvatarFallback>
+                                    </Avatar>
+                                    {team.name}
+                                  </div>
                                 </SelectItem>
                               ))}
                             </SelectContent>
                           </Select>
                         </div>
-                        
-                        <div className="space-y-2">
-                          <Label htmlFor={`group-${group.id}-2nd`}>2º Lugar</Label>
-                          <Select 
-                            value={groupPredictions[group.id]?.second || ""} 
-                            onValueChange={(value) => handleGroupPredictionChange(group.id, 'second', value)}
+                        <div>
+                          <Label htmlFor={`group-${group.id}-second`}>2º Lugar</Label>
+                          <Select
+                            value={groupPositions[group.id]?.second || ''}
+                            onValueChange={(value) => handleGroupPositionChange(group.id, 'second', value)}
                           >
-                            <SelectTrigger id={`group-${group.id}-2nd`}>
-                              <SelectValue placeholder="Selecione um time" />
+                            <SelectTrigger id={`group-${group.id}-second`}>
+                              <SelectValue placeholder="Selecione o 2º..." />
                             </SelectTrigger>
                             <SelectContent>
-                              {group.teams.map((team: any) => (
+                              {teams.map(team => (
                                 <SelectItem key={team.id} value={team.id}>
-                                  {team.name}
+                                  <div className="flex items-center gap-2">
+                                    <Avatar className="h-5 w-5">
+                                      <AvatarImage src={team.logo_url} />
+                                      <AvatarFallback>{team.name.substring(0,2)}</AvatarFallback>
+                                    </Avatar>
+                                    {team.name}
+                                  </div>
                                 </SelectItem>
                               ))}
                             </SelectContent>
@@ -740,94 +510,139 @@ const Palpites = () => {
               </CardContent>
             </Card>
           </TabsContent>
-          
-          <TabsContent value="finals" className="space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>Classificação Final</CardTitle>
-                <CardDescription>
-                  Preveja quem será o campeão, vice, terceiro e quarto colocados
+
+          {/* Conteúdo da aba de Final */}
+          <TabsContent value="final">
+            <Card className="shadow-lg">
+              <CardHeader className="bg-fifa-blue text-white">
+                <CardTitle>Palpite Final</CardTitle>
+                <CardDescription className="text-gray-200">
+                  Selecione o Campeão, Vice, 3º e 4º colocados, e o placar da final.
                 </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="champion" className="flex items-center gap-1">
-                      <TrophyIcon className="h-4 w-4 text-fifa-gold" /> Campeão
-                    </Label>
-                    <Select 
-                      value={finalPredictions.champion} 
-                      onValueChange={(value) => handleFinalPredictionChange('champion', value)}
-                    >
-                      <SelectTrigger id="champion">
-                        <SelectValue placeholder="Selecione um time" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {teams.map(team => (
-                          <SelectItem key={team.id} value={team.id}>
+              <CardContent className="p-6 space-y-6">
+                {/* Campeão */}
+                <div>
+                  <Label htmlFor="champion">Campeão</Label>
+                  <Select
+                    value={finalPositions.champion}
+                    onValueChange={(value) => handleFinalPositionChange('champion', value)}
+                  >
+                    <SelectTrigger id="champion">
+                      <SelectValue placeholder="Selecione o Campeão..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {teams.map(team => (
+                        <SelectItem key={team.id} value={team.id}>
+                          <div className="flex items-center gap-2">
+                            <Avatar className="h-5 w-5">
+                              <AvatarImage src={team.logo_url} />
+                              <AvatarFallback>{team.name.substring(0,2)}</AvatarFallback>
+                            </Avatar>
                             {team.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label htmlFor="vice-champion">Vice-Campeão</Label>
-                    <Select 
-                      value={finalPredictions.viceChampion} 
-                      onValueChange={(value) => handleFinalPredictionChange('viceChampion', value)}
-                    >
-                      <SelectTrigger id="vice-champion">
-                        <SelectValue placeholder="Selecione um time" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {teams.map(team => (
-                          <SelectItem key={team.id} value={team.id}>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Vice Campeão */}
+                <div>
+                  <Label htmlFor="runnerUp">Vice Campeão</Label>
+                  <Select
+                    value={finalPositions.runnerUp}
+                    onValueChange={(value) => handleFinalPositionChange('runnerUp', value)}
+                  >
+                    <SelectTrigger id="runnerUp">
+                      <SelectValue placeholder="Selecione o Vice..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {teams.map(team => (
+                        <SelectItem key={team.id} value={team.id}>
+                          <div className="flex items-center gap-2">
+                            <Avatar className="h-5 w-5">
+                              <AvatarImage src={team.logo_url} />
+                              <AvatarFallback>{team.name.substring(0,2)}</AvatarFallback>
+                            </Avatar>
                             {team.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label htmlFor="third-place">Terceiro Lugar</Label>
-                    <Select 
-                      value={finalPredictions.third} 
-                      onValueChange={(value) => handleFinalPredictionChange('third', value)}
-                    >
-                      <SelectTrigger id="third-place">
-                        <SelectValue placeholder="Selecione um time" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {teams.map(team => (
-                          <SelectItem key={team.id} value={team.id}>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Terceiro Lugar */}
+                <div>
+                  <Label htmlFor="thirdPlace">3º Lugar</Label>
+                  <Select
+                    value={finalPositions.thirdPlace}
+                    onValueChange={(value) => handleFinalPositionChange('thirdPlace', value)}
+                  >
+                    <SelectTrigger id="thirdPlace">
+                      <SelectValue placeholder="Selecione o 3º..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {teams.map(team => (
+                        <SelectItem key={team.id} value={team.id}>
+                          <div className="flex items-center gap-2">
+                            <Avatar className="h-5 w-5">
+                              <AvatarImage src={team.logo_url} />
+                              <AvatarFallback>{team.name.substring(0,2)}</AvatarFallback>
+                            </Avatar>
                             {team.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label htmlFor="fourth-place">Quarto Lugar</Label>
-                    <Select 
-                      value={finalPredictions.fourth} 
-                      onValueChange={(value) => handleFinalPredictionChange('fourth', value)}
-                    >
-                      <SelectTrigger id="fourth-place">
-                        <SelectValue placeholder="Selecione um time" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {teams.map(team => (
-                          <SelectItem key={team.id} value={team.id}>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Quarto Lugar */}
+                <div>
+                  <Label htmlFor="fourthPlace">4º Lugar</Label>
+                  <Select
+                    value={finalPositions.fourthPlace}
+                    onValueChange={(value) => handleFinalPositionChange('fourthPlace', value)}
+                  >
+                    <SelectTrigger id="fourthPlace">
+                      <SelectValue placeholder="Selecione o 4º..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {teams.map(team => (
+                        <SelectItem key={team.id} value={team.id}>
+                          <div className="flex items-center gap-2">
+                            <Avatar className="h-5 w-5">
+                              <AvatarImage src={team.logo_url} />
+                              <AvatarFallback>{team.name.substring(0,2)}</AvatarFallback>
+                            </Avatar>
                             {team.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Placar da Final */}
+                <div className="flex items-center justify-between gap-4 mt-6">
+                  <Label>Placar da Final:</Label>
+                  <Input
+                    type="number"
+                    className="w-24 text-center"
+                    value={finalScore.homeGoals}
+                    onChange={(e) => handleFinalScoreChange('homeGoals', e.target.value)}
+                    min="0"
+                  />
+                  <span className="font-bold text-lg">X</span>
+                  <Input
+                    type="number"
+                    className="w-24 text-center"
+                    value={finalScore.awayGoals}
+                    onChange={(e) => handleFinalScoreChange('awayGoals', e.target.value)}
+                    min="0"
+                  />
                 </div>
               </CardContent>
             </Card>
@@ -842,8 +657,8 @@ const Palpites = () => {
             </CardDescription>
           </CardHeader>
           <CardContent className="p-6 space-y-4">
-            
-            <Button 
+
+            <Button
               className="w-full bg-fifa-blue hover:bg-opacity-90"
               onClick={handleSubmitBets}
               disabled={submitting}
