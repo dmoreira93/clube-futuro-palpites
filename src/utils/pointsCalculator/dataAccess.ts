@@ -12,7 +12,7 @@ import {
   SupabaseTeam, // Se você tiver um tipo para times
 } from "./types"; // Certifique-se de que esses tipos estão disponíveis
 
-// --- Funções de Busca Existentes (Exemplo, apenas para contexto) ---
+// --- Funções de Busca Existentes ---
 
 /**
  * Busca o resultado da partida (apenas partidas finalizadas)
@@ -39,6 +39,28 @@ export async function fetchMatchResult(matchId: string): Promise<MatchResult | n
 }
 
 /**
+ * Busca todos os palpites para UMA partida específica.
+ */
+export async function fetchPredictions(matchId: string): Promise<Prediction[]> {
+  try {
+    const { data, error } = await supabase
+      .from('predictions') // <--- VERIFIQUE se esta é a tabela correta para palpites individuais
+      .select('id, match_id, user_id, home_score, away_score')
+      .eq('match_id', matchId);
+
+    if (error || !data) {
+      console.error('Erro ao buscar palpites para a partida (fetchPredictions):', error);
+      return [];
+    }
+
+    return data as Prediction[];
+  } catch (error) {
+    console.error('Erro ao buscar palpites para a partida (fetchPredictions):', error);
+    return [];
+  }
+}
+
+/**
  * Busca os critérios de pontuação do banco de dados
  */
 export async function fetchScoringCriteria(): Promise<ScoringCriteria | null> {
@@ -49,15 +71,16 @@ export async function fetchScoringCriteria(): Promise<ScoringCriteria | null> {
       .order('name')
       .limit(3); // Supondo que você só precisa dos 3 principais critérios
 
-    if (error || !data) {
+    if (error) { // Removido !data, pois data pode ser [] e ainda ser válido
       console.error('Erro ao buscar critérios de pontuação:', error);
       return null;
     }
 
+    // Se data for null ou [], garanta que os valores padrão são usados
     const criteria: ScoringCriteria = {
-      exactScore: data.find(c => c.name === 'Placar exato')?.points || 10,
-      winner: data.find(c => c.name === 'Acertar vencedor')?.points || 5,
-      partialScore: data.find(c => c.name === 'Acertar um placar')?.points || 3,
+      exactScore: data?.find(c => c.name === 'Placar exato')?.points || 10,
+      winner: data?.find(c => c.name === 'Acertar vencedor')?.points || 5,
+      partialScore: data?.find(c => c.name === 'Acertar um placar')?.points || 3,
     };
 
     return criteria;
