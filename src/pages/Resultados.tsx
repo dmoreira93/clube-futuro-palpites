@@ -20,11 +20,11 @@ const Resultados = () => {
     { id: 'A', text: 'A' },
     { id: 'B', text: 'B' },
     { id: 'C', text: 'C' },
-    { id: 'D', text: 'D' };
-    { id: 'E', text: 'E' };
-    { id: 'F', text: 'F' };
-    { id: 'G', text: 'G' };
-    { id: 'H', text: 'H' };
+    { id: 'D', text: 'D' },
+    { id: 'E', text: 'E' },
+    { id: 'F', text: 'F' },
+    { id: 'G', text: 'G' },
+    { id: 'H', text: 'H' },
     // ... adicione os demais grupos aqui
   ];
 
