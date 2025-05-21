@@ -6,6 +6,68 @@ export type Json =
   | { [key: string]: Json | undefined }
   | Json[]
 
+// --- Tipos para a lógica da aplicação ---
+
+/**
+ * Representa o palpite de um usuário para uma partida.
+ */
+export interface MatchPrediction {
+  homeGoals: number;
+  awayGoals: number;
+}
+
+/**
+ * Representa o resultado real de uma partida.
+ */
+export interface MatchResult {
+  homeGoals: number;
+  awayGoals: number;
+}
+
+/**
+ * Representa os palpites finais de um usuário para o torneio (campeão, vice, etc.).
+ */
+export interface TournamentFinalPredictions {
+  champion: string;
+  runnerUp: string;
+  thirdPlace: string;
+  fourthPlace: string;
+  finalScore: {
+    homeGoals: number;
+    awayGoals: number;
+  };
+}
+
+/**
+ * Representa os resultados reais finais do torneio (campeão, vice, etc.).
+ */
+export interface TournamentFinalResults {
+  champion: string;
+  runnerUp: string;
+  thirdPlace: string;
+  fourthPlace: string;
+  finalScore: {
+    homeGoals: number;
+    awayGoals: number;
+  };
+}
+
+/**
+ * Representa um participante no ranking, combinando dados do usuário com estatísticas calculadas.
+ */
+export type Participant = {
+  id: string;
+  name: string;
+  username: string;
+  avatar_url: string | null;
+  points: number;
+  matches: number;
+  accuracy: string;
+  premio?: string; // Campo opcional para prêmio
+};
+
+// --- Tipos gerados a partir do esquema do Supabase ---
+
 export type Database = {
   public: {
     Tables: {
