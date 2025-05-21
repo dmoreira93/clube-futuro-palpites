@@ -1,3 +1,4 @@
+// src/components/ranking/RankingTable.tsx
 
 import {
   Table,
@@ -10,11 +11,11 @@ import {
 } from "@/components/ui/table";
 import { Trophy as TrophyIcon } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
-import RankingRow from "./ranking/RankingRow";
+import RankingRow from "./RankingRow"; // Corrigido o caminho para ser relativo ao mesmo diretório
 import { useParticipantsRanking } from "@/hooks/useParticipantsRanking";
 
 const RankingTable = () => {
-  const { participants, loading } = useParticipantsRanking();
+  const { participants, loading, error } = useParticipantsRanking(); // Também pegando o erro
 
   if (loading) {
     return (
@@ -32,6 +33,24 @@ const RankingTable = () => {
     );
   }
 
+  // Adicionar tratamento para erro
+  if (error) {
+    return (
+      <div className="bg-white rounded-lg shadow-lg overflow-hidden">
+        <div className="bg-fifa-blue text-white p-4">
+          <h2 className="text-xl font-bold flex items-center gap-2">
+            <TrophyIcon className="h-5 w-5 text-fifa-gold" />
+            Erro ao Carregar Ranking
+          </h2>
+        </div>
+        <div className="p-4 text-center text-red-500">
+          {error}
+          <p className="mt-2 text-sm">Verifique sua conexão e os dados do Supabase.</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="bg-white rounded-lg shadow-lg overflow-hidden">
       <div className="bg-fifa-blue text-white p-4">
@@ -40,7 +59,7 @@ const RankingTable = () => {
           Ranking de Participantes
         </h2>
       </div>
-      
+
       <Table>
         <TableCaption>Classificação atualizada dos participantes</TableCaption>
         <TableHeader>
@@ -54,13 +73,21 @@ const RankingTable = () => {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {participants.map((participant, index) => (
-            <RankingRow 
-              key={participant.id} 
-              participant={participant} 
-              index={index} 
-            />
-          ))}
+          {participants.length === 0 ? (
+            <TableRow>
+              <TableCell colSpan={6} className="text-center py-8 text-gray-500">
+                Nenhum participante no ranking ainda ou dados insuficientes.
+              </TableCell>
+            </TableRow>
+          ) : (
+            participants.map((participant, index) => (
+              <RankingRow
+                key={participant.id}
+                participant={participant}
+                index={index}
+              />
+            ))
+          )}
         </TableBody>
       </Table>
     </div>
