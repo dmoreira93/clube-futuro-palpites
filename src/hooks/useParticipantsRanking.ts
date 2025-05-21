@@ -49,7 +49,7 @@ type SupabaseFinalPrediction = {
   id: string;
   user_id: string;
   champion_id: string;
-  vice_champion_id: string;
+  runner_up_id: string;
   third_place_id: string;
   fourth_place_id: string;
   final_home_score: number;
@@ -58,7 +58,7 @@ type SupabaseFinalPrediction = {
 
 type SupabaseFinalResult = {
   champion_id: string;
-  vice_champion_id: string;
+  runner_up_id: string;
   third_place_id: string;
   fourth_place_id: string;
   final_home_score: number;
@@ -132,7 +132,7 @@ const useParticipantsRanking = () => {
         // Use 'tournament_results' se você tem uma tabela única para isso
         const { data: realFinalResults, error: realFinalResultsError } = await supabase
             .from('tournament_results') 
-            .select('champion_id, vice_champion_id, third_place_id, fourth_place_id, final_home_score, final_away_score')
+            .select('champion_id, runner_up_id, third_place_id, fourth_place_id, final_home_score, final_away_score')
             .single(); 
 
         // Se houver erro E NÃO for "No rows found" (PGRST116), então é um erro real.
@@ -162,7 +162,7 @@ const useParticipantsRanking = () => {
         // Fetch all final predictions from Supabase
         const { data: allFinalPredictions, error: finalPredictionsError } = await supabase
           .from('final_predictions') // <-- CONFIRME SE O NOME DA TABELA É 'final_predictions'
-          .select('id, user_id, champion_id, vice_champion_id, third_place_id, fourth_place_id, final_home_score, final_away_score');
+          .select('id, user_id, champion_id, runner_up_id, third_place_id, fourth_place_id, final_home_score, final_away_score');
 
         if (finalPredictionsError) {
           throw finalPredictionsError;
@@ -221,7 +221,7 @@ const useParticipantsRanking = () => {
             allFinalPredictions.forEach((prediction: SupabaseFinalPrediction) => {
                 const userFinalPred: TournamentFinalPredictions = {
                     champion: prediction.champion_id,
-                    runnerUp: prediction.vice_champion_id,
+                    runnerUp: prediction.runner_up_id,
                     thirdPlace: prediction.third_place_id,
                     fourthPlace: prediction.fourth_place_id,
                     finalScore: {
@@ -231,7 +231,7 @@ const useParticipantsRanking = () => {
                 };
                 const realTournamentResult: TournamentFinalResults = {
                     champion: realFinalResults.champion_id,
-                    runnerUp: realFinalResults.vice_champion_id,
+                    runnerUp: realFinalResults.runner_up_id,
                     thirdPlace: realFinalResults.third_place_id,
                     fourthPlace: realFinalResults.fourth_place_id,
                     finalScore: {
