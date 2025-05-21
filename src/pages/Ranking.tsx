@@ -1,317 +1,103 @@
-import { useState, useEffect } from "react";
-import { supabase } from "@/integrations/supabase/client";
+// src/pages/Ranking.tsx (ou src/components/RankingDisplay.tsx)
 
-// Importe as funções de cálculo de pontos
-import {
-  calculateMatchPoints,
-  calculateGroupClassificationPoints,
-  calculateTournamentFinalPoints,
-  MatchPrediction as ScoringMatchPrediction,
-  MatchResult,
-  TournamentFinalPredictions,
-  TournamentFinalResults,
-} from "@/lib/scoring"; // Certifique-se que o caminho está correto!
+import React from "react";
+import Layout from "@/components/layout/Layout"; // Se for uma página, use seu Layout
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import { Loader2 } from "lucide-react"; // Ícone de carregamento
+import useParticipantsRanking from "@/hooks/useParticipantsRanking"; // AJUSTE O CAMINHO CONFORME ONDE VOCÊ SALVOU O HOOK
 
-// --- Definições de Tipo (do Supabase) ---
-// Estes tipos refletem a estrutura dos dados que vêm diretamente do Supabase.
-// Certifique-se de que os nomes das tabelas e colunas correspondem ao seu banco.
+const RankingPage = () => { // Renomeado para evitar conflito com 'Resultados'
+  const { participants, loading, error } = useParticipantsRanking();
 
-// ALTERADO AQUI: Tipo para refletir a estrutura da tabela 'users_custom'
-type SupabaseUserCustom = {
-  id: string;
-  name: string;
-  username: string;
-  avatar_url: string | null;
-  is_admin: boolean; // Adicionado para filtrar admins
-  total_points: number; // Adicionado, embora o hook ainda recalcule para fins de display
+  return (
+    <Layout>
+      <div className="container mx-auto p-4 max-w-4xl">
+        <h1 className="text-3xl font-bold text-center mb-8 text-fifa-blue">
+          Ranking dos Participantes
+        </h1>
+
+        {error && (
+          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4" role="alert">
+            <strong className="font-bold">Erro!</strong>
+            <span className="block sm:inline"> {error}</span>
+          </div>
+        )}
+
+        {loading ? (
+          <div className="flex justify-center items-center h-64">
+            <Loader2 className="h-8 w-8 animate-spin text-fifa-blue" />
+            <p className="ml-2 text-gray-600">Carregando ranking...</p>
+          </div>
+        ) : (
+          <Card className="shadow-lg">
+            <CardHeader className="bg-gray-50 border-b">
+              <CardTitle className="text-xl">Classificação Geral</CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              {participants.length === 0 ? (
+                <p className="p-4 text-center text-gray-500">Nenhum participante encontrado no ranking.</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-100">
+                      <tr>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Posição
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Participante
+                        </th>
+                        <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Pontos
+                        </th>
+                         <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Partidas Processadas
+                        </th>
+                        <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Acurácia
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {participants.map((participant, index) => (
+                        <tr key={participant.id} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                            {index + 1}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="flex items-center">
+                              <Avatar className="h-8 w-8">
+                                <AvatarImage src={participant.avatar_url || `https://api.dicebear.com/7.x/initials/svg?seed=${participant.name}`} alt={`${participant.name}'s avatar`} />
+                                <AvatarFallback>{participant.name.charAt(0)}</AvatarFallback>
+                              </Avatar>
+                              <div className="ml-4">
+                                <div className="text-sm font-medium text-gray-900">{participant.name}</div>
+                                <div className="text-sm text-gray-500">@{participant.username}</div>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium text-fifa-blue">
+                            {participant.points}
+                          </td>
+                           <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-700">
+                            {participant.matches}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-700">
+                            {participant.accuracy}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+      </div>
+    </Layout>
+  );
 };
 
-// ALTERADO AQUI: SupabaseMatchPrediction agora usa 'predictions'
-type SupabaseMatchPrediction = {
-  id: string;
-  user_id: string;
-  match_id: string;
-  home_score: number; // score do palpite
-  away_score: number; // score do palpite
-};
-
-type SupabaseMatchResultFromMatches = {
-  id: string; // id da partida
-  home_score: number; // score real da partida
-  away_score: number; // score real da partida
-  is_finished: boolean; // para saber se a partida terminou e os resultados estão válidos
-};
-
-// ALTERADO AQUI: SupabaseGroupPrediction agora usa 'predictions'
-type SupabaseGroupPrediction = {
-  id: string;
-  user_id: string;
-  group_id: string;
-  predicted_first_team_id: string;
-  predicted_second_team_id: string;
-};
-
-type SupabaseGroupResult = {
-  id: string;
-  group_id: string;
-  first_place_team_id: string;
-  second_place_team_id: string;
-};
-
-// ALTERADO AQUI: SupabaseFinalPrediction agora usa 'predictions'
-type SupabaseFinalPrediction = {
-  id: string;
-  user_id: string;
-  champion_id: string;
-  vice_champion_id: string;
-  third_place_id: string;
-  fourth_place_id: string;
-  final_home_score: number;
-  final_away_score: number;
-};
-
-type SupabaseFinalResult = {
-  champion_id: string;
-  vice_champion_id: string;
-  third_place_id: string;
-  fourth_place_id: string;
-  final_home_score: number;
-  final_away_score: number;
-};
-
-// Tipo de usuário que será usado internamente no hook após o fetch
-type UserForRanking = {
-  id: string;
-  name: string;
-  username: string;
-  avatar_url: string | null;
-  is_admin: boolean;
-  total_points: number;
-};
-
-export type Participant = {
-  id: string;
-  name: string;
-  username: string; // Adicionado username
-  avatar_url: string | null;
-  points: number;
-  matches: number;
-  accuracy: string; // Percentual de acerto das partidas
-};
-
-const useParticipantsRanking = () => {
-  const [participants, setParticipants] = useState<Participant[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    const fetchAndCalculateRanking = async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        // Fetch all non-admin users from 'users_custom' table
-        const { data: users, error: usersError } = await supabase
-          .from('users_custom') // <--- MUDANÇA AQUI: de 'users' para 'users_custom'
-          .select('id, name, username, avatar_url, is_admin, total_points') // <--- MUDANÇA AQUI: selecionar is_admin e total_points
-          .eq('is_admin', false); // <--- ADICIONADO AQUI: Filtra para NÃO incluir administradores
-
-        if (usersError) {
-          throw usersError;
-        }
-
-        // Fetch all real match results
-        const { data: realMatchResults, error: realMatchResultsError } = await supabase
-          .from('matches')
-          .select('id, home_score, away_score, is_finished')
-          .eq('is_finished', true); // Only calculate points for finished matches
-
-        if (realMatchResultsError) {
-          throw realMatchResultsError;
-        }
-
-        // Fetch all real group results
-        const { data: realGroupResults, error: realGroupResultsError } = await supabase
-          .from('group_results') // Assumindo uma tabela 'group_results' com os resultados reais
-          .select('id, group_id, first_place_team_id, second_place_team_id');
-
-        if (realGroupResultsError) {
-          throw realGroupResultsError;
-        }
-
-        // Fetch real final results (assuming a table for final results)
-        const { data: realFinalResults, error: realFinalResultsError } = await supabase
-            .from('final_results') // Assumindo uma tabela 'final_results' com o resultado real da copa
-            .select('champion_id, vice_champion_id, third_place_id, fourth_place_id, final_home_score, final_away_score')
-            .single(); // Esperamos apenas um resultado final
-
-        if (realFinalResultsError && realFinalResultsError.code !== 'PGRST116') { // PGRST116 é "no rows found"
-            throw realFinalResultsError;
-        }
-        
-        // Fetch all predictions from Supabase (including match, group, and final predictions)
-        // ALTERADO AQUI:supabase.from('predictions') para carregar TODOS os palpites
-        const { data: allPredictions, error: allPredictionsError } = await supabase
-          .from('predictions')
-          .select('id, user_id, match_id, home_score, away_score, group_id, predicted_first_team_id, predicted_second_team_id, champion_id, vice_champion_id, third_place_id, fourth_place_id, final_home_score, final_away_score');
-
-        if (allPredictionsError) {
-          throw allPredictionsError;
-        }
-
-        // Initialize user points and stats for non-admin users
-        const userPoints: { [userId: string]: { points: number; matchesCount: number; correctMatches: number } } = {};
-        users.forEach((user: SupabaseUserCustom) => {
-          // Assegura que apenas usuários não-admin são inicializados, embora o filtro já faça isso.
-          // O total_points do banco é a fonte principal, mas o restante (matchesCount, correctMatches) é recalculado aqui.
-          if (!user.is_admin) { // Esta verificação é redundante devido ao .eq('is_admin', false), mas mantida para clareza
-             userPoints[user.id] = { 
-                points: user.total_points, // Inicializa com os pontos totais do banco
-                matchesCount: 0, 
-                correctMatches: 0 
-            };
-          }
-        });
-
-        // Process all match predictions
-        // Filtrar apenas os palpites de partida E que pertencem a usuários não-admin
-        const matchPredictions = allPredictions.filter(p => 
-            p.match_id !== null && p.home_score !== null && p.away_score !== null && userPoints[p.user_id]
-        );
-
-        matchPredictions.forEach((prediction: SupabaseMatchPrediction) => {
-          const realMatch = realMatchResults.find(m => m.id === prediction.match_id);
-
-          if (realMatch && realMatch.is_finished) {
-            const userPrediction: ScoringMatchPrediction = {
-              homeGoals: prediction.home_score,
-              awayGoals: prediction.away_score,
-            };
-            const realResult: MatchResult = {
-              homeGoals: realMatch.home_score,
-              awayGoals: realMatch.away_score,
-            };
-
-            const points = calculateMatchPoints(userPrediction, realResult);
-            if (userPoints[prediction.user_id]) {
-                // userPoints[prediction.user_id].points += points; // Não adicionamos aqui se usarmos total_points do banco como base
-                userPoints[prediction.user_id].matchesCount++;
-
-                if (points >= 10) { // Se acertou o placar exato (ou critério de maior pontuação), adiciona como correto
-                    userPoints[prediction.user_id].correctMatches++;
-                }
-            }
-          }
-        });
-
-        // Process all group predictions
-        // Filtrar apenas os palpites de grupo E que pertencem a usuários não-admin
-        const groupPredictions = allPredictions.filter(p => 
-            p.group_id !== null && p.predicted_first_team_id !== null && p.predicted_second_team_id !== null && userPoints[p.user_id]
-        );
-
-        groupPredictions.forEach((prediction: SupabaseGroupPrediction) => {
-          const realGroup = realGroupResults.find(g => g.group_id === prediction.group_id);
-
-          if (realGroup) {
-            const points = calculateGroupClassificationPoints(
-              {
-                firstPlace: prediction.predicted_first_team_id,
-                secondPlace: prediction.predicted_second_team_id,
-              },
-              {
-                firstPlace: realGroup.first_place_team_id,
-                secondPlace: realGroup.second_place_team_id,
-              }
-            );
-            if (userPoints[prediction.user_id]) {
-                // userPoints[prediction.user_id].points += points; // Não adicionamos aqui se usarmos total_points do banco como base
-            }
-          }
-        });
-
-        // Process all final predictions
-        // Filtrar apenas os palpites finais E que pertencem a usuários não-admin
-        const finalPredictions = allPredictions.filter(p => 
-            p.champion_id !== null && p.final_home_score !== null && userPoints[p.user_id]
-        );
-
-        if (realFinalResults) {
-            finalPredictions.forEach((prediction: SupabaseFinalPrediction) => {
-                const userFinalPred: TournamentFinalPredictions = {
-                    champion: prediction.champion_id,
-                    runnerUp: prediction.vice_champion_id,
-                    thirdPlace: prediction.third_place_id,
-                    fourthPlace: prediction.fourth_place_id,
-                    finalScore: {
-                        homeGoals: prediction.final_home_score,
-                        awayGoals: prediction.away_score, // Corrigido de final_away_score para away_score se a coluna é apenas away_score
-                    },
-                };
-                const realTournamentResult: TournamentFinalResults = {
-                    champion: realFinalResults.champion_id,
-                    runnerUp: realFinalResults.vice_champion_id,
-                    thirdPlace: realFinalResults.third_place_id,
-                    fourthPlace: realFinalResults.fourth_place_id,
-                    finalScore: {
-                        homeGoals: realFinalResults.final_home_score,
-                        awayGoals: realFinalResults.final_away_score,
-                    },
-                };
-
-                const points = calculateTournamentFinalPoints(userFinalPred, realTournamentResult);
-                if (userPoints[prediction.user_id]) {
-                    // userPoints[prediction.user_id].points += points; // Não adicionamos aqui se usarmos total_points do banco como base
-                }
-            });
-        }
-
-        // Final ranking construction
-        // Use a lista 'users' (já filtrada para não-admins) para construir o ranking
-        const finalRanking: Participant[] = users.map((user: UserForRanking) => {
-          const userStats = userPoints[user.id]; // Pega as estatísticas calculadas (matchesCount, correctMatches)
-
-          // Se por algum motivo um usuário de users_custom não teve palpites, garanta valores padrão
-          const matchesCount = userStats?.matchesCount || 0;
-          const correctMatches = userStats?.correctMatches || 0;
-
-          const accuracy = matchesCount > 0
-            ? ((correctMatches / matchesCount) * 100).toFixed(0) // Arredonda para inteiro
-            : "0";
-
-          return {
-            id: user.id,
-            name: user.name,
-            username: user.username,
-            avatar_url: user.avatar_url,
-            points: user.total_points, // <--- USANDO total_points DIRETAMENTE AQUI (já que é atualizado pelo scoring.ts)
-            matches: matchesCount, // Mantido para o cálculo de acurácia
-            accuracy: `${accuracy}%` // Calculado com base nos palpites processados
-          };
-        });
-
-        // Ordenar o ranking: primeiro por pontos (decrescente), depois por nome (crescente)
-        finalRanking.sort((a, b) => {
-          if (b.points !== a.points) {
-            return b.points - a.points;
-          }
-          return a.name.localeCompare(b.name); // Desempate por nome
-        });
-
-        setParticipants(finalRanking);
-        console.log("Final Ranking Calculated:", finalRanking); // DEBUG
-
-      } catch (err: any) {
-        console.error("Erro ao carregar o ranking:", err);
-        setError("Não foi possível carregar o ranking. Verifique os dados ou tente novamente mais tarde. Verifique sua conexão e os dados do Supabase.");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchAndCalculateRanking();
-  }, []); // Adicionado [] para garantir que useEffect roda apenas uma vez
-
-  return { participants, loading, error };
-};
-
-export default useParticipantsRanking;
+export default RankingPage;
