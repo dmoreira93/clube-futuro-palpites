@@ -1,4 +1,14 @@
-// ... imports existentes ...
+// ... outros imports necessários ...
+import { useState, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useToast } from "@/components/ui/use-toast";
+import Layout from "@/components/Layout";
+import { MatchCard } from "@/components/MatchCard";
+import { MatchFilter } from "@/components/MatchFilter";
+import { ResultForm } from "@/components/ResultForm";
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
+import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/lib/auth"; // <-- Adicionado aqui
 
 const Resultados = () => {
   const { isAdmin } = useAuth();
@@ -6,17 +16,18 @@ const Resultados = () => {
   const [filter, setFilter] = useState("all");
   const [selectedMatch, setSelectedMatch] = useState<string | null>(null);
 
-  // Defina os grupos aqui. Você pode carregar isso dinamicamente do Supabase,
-  // mas para resolver o erro 'map', vamos usar um exemplo estático por enquanto.
-  // Supondo que seus grupos sejam A, B, C, etc.
   const groups = [
     { id: 'A', text: 'A' },
     { id: 'B', text: 'B' },
     { id: 'C', text: 'C' },
-    // ... adicione todos os grupos relevantes do seu jogo
+    { id: 'D', text: 'D' };
+    { id: 'E', text: 'E' };
+    { id: 'F', text: 'F' };
+    { id: 'G', text: 'G' };
+    { id: 'H', text: 'H' };
+    // ... adicione os demais grupos aqui
   ];
 
-  // Fetch matches from the database
   const { data: matches = [], isLoading, error } = useQuery({
     queryKey: ['matches'],
     queryFn: async () => {
@@ -36,11 +47,8 @@ const Resultados = () => {
         `)
         .order('match_date', { ascending: true });
 
-      if (error) {
-        throw new Error(error.message);
-      }
+      if (error) throw new Error(error.message);
 
-      // Explicitly cast the data to Match[] to satisfy TypeScript
       return data as Match[];
     },
   });
@@ -63,18 +71,14 @@ const Resultados = () => {
     setSelectedMatch(null);
   };
 
-  // Apply filter - cast as any first to work around type issues safely
   const filteredMatches = filter === "all"
     ? matches
     : (matches as any[]).filter((match) => {
-        // Filter by group_id
-        // Certifique-se de que home_team e away_team existem antes de acessar group_id
         if (match.home_team && match.home_team.group_id === filter) return true;
         if (match.away_team && match.away_team.group_id === filter) return true;
         return false;
       });
 
-  // Find the selected match data with proper type handling
   const selectedMatchData = matches.find((m) => m.id === selectedMatch) as Match | undefined;
 
   if (isLoading) {
@@ -109,7 +113,6 @@ const Resultados = () => {
           </Alert>
         )}
 
-        {/* **AQUI ESTÁ A MUDANÇA PRINCIPAL:** Passe a prop 'groups' */}
         <MatchFilter value={filter} onValueChange={setFilter} groups={groups} />
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
@@ -118,16 +121,14 @@ const Resultados = () => {
               <p className="text-gray-500">Nenhuma partida encontrada para este filtro.</p>
             </div>
           ) : (
-            // Use type assertion to work around the type issue safely
             (filteredMatches as any[]).map((match) => (
               <MatchCard
                 key={match.id}
                 id={match.id}
                 homeTeam={match.home_team?.name || ""}
                 awayTeam={match.away_team?.name || ""}
-                date={match.match_date ? new Date(match.match_date).toISOString() : ""} // Use ISOString para garantir formato consistente
+                date={match.match_date ? new Date(match.match_date).toISOString() : ""}
                 time={match.match_date ? new Date(match.match_date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ""}
-                // Certifique-se de que 'group' esteja no formato { name: string }
                 group={match.home_team?.group_id ? { name: match.home_team.group_id } : undefined}
                 homeTeamFlag={match.home_team?.flag_url || ""}
                 awayTeamFlag={match.away_team?.flag_url || ""}
@@ -140,10 +141,7 @@ const Resultados = () => {
         </div>
 
         {selectedMatch && isAdmin && (
-          <ResultForm
-            match={selectedMatchData}
-            onComplete={handleFormComplete}
-          />
+          <ResultForm match={selectedMatchData} onComplete={handleFormComplete} />
         )}
       </div>
     </Layout>
