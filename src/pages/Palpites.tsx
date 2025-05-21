@@ -25,15 +25,21 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { Match } from "@/types/matches";
-// Importações de Prediction, GroupPrediction, FinalPrediction (elas se referem a como os dados são tratados no frontend)
-import { Prediction, GroupPrediction, FinalPrediction } from "@/types/predictions"; 
+// Ajustes nos tipos de importação para refletir as tabelas separadas
+import {
+  MatchPrediction, // Renomeado de Prediction para MatchPrediction para clareza
+  GroupPrediction,
+  FinalPrediction,
+  RawGroupPrediction,
+  RawFinalPrediction // Manter se necessário para o payload RPC, mas as interfaces diretas da tabela são mais claras
+} from "@/types/predictions"; 
 
 // Adicione as interfaces para Teams e Groups, caso não existam em outro lugar
 interface Team {
   id: string;
   name: string;
   flag_url: string;
-  group_id: string | null; // Adicionado: Assumindo que o time tem um group_id
+  group_id: string | null;
 }
 
 interface Group {
@@ -126,12 +132,11 @@ const Palpites = () => {
 
 
         // Fetch existing Match Predictions for the user
-        // ALTERADO AQUI: supabase.from('predictions') para carregar palpites de partida
+        // AGORA PEGANDO DA TABELA 'match_predictions'
         const { data: userMatchPredictions, error: userMatchPredictionsError } = await supabase
-          .from('predictions') 
+          .from('match_predictions') 
           .select('id, match_id, home_score, away_score')
-          .eq('user_id', user.id)
-          .not('match_id', 'is', null); // Filtra para pegar apenas linhas que são palpites de partida
+          .eq('user_id', user.id);
 
         if (userMatchPredictionsError) throw userMatchPredictionsError;
         const initialMatchPredictions = userMatchPredictions.reduce((acc, pred) => {
@@ -142,12 +147,11 @@ const Palpites = () => {
 
 
         // Fetch existing Group Predictions for the user
-        // ALTERADO AQUI: supabase.from('predictions') para carregar palpites de grupo
+        // AGORA PEGANDO DA TABELA 'group_predictions'
         const { data: userGroupPredictions, error: userGroupPredictionsError } = await supabase
-            .from('predictions')
+            .from('group_predictions')
             .select('id, group_id, predicted_first_team_id, predicted_second_team_id')
-            .eq('user_id', user.id)
-            .not('group_id', 'is', null); // Filtra para pegar apenas linhas que são palpites de grupo
+            .eq('user_id', user.id);
 
         if (userGroupPredictionsError) throw userGroupPredictionsError;
         setGroupPredictions(userGroupPredictions || []);
@@ -163,12 +167,11 @@ const Palpites = () => {
 
 
         // Fetch existing Final Prediction for the user
-        // ALTERADO AQUI: supabase.from('predictions') para carregar o palpite final
+        // AGORA PEGANDO DA TABELA 'final_predictions'
         const { data: userFinalPrediction, error: userFinalPredictionError } = await supabase
-            .from('predictions') 
+            .from('final_predictions') 
             .select('id, champion_id, vice_champion_id, third_place_id, fourth_place_id, final_home_score, final_away_score')
             .eq('user_id', user.id)
-            .not('champion_id', 'is', null) // Filtra para pegar apenas a linha que é o palpite final
             .single(); 
 
         if (userFinalPredictionError && userFinalPredictionError.code !== 'PGRST116') { // PGRST116 é "no rows found"
@@ -252,12 +255,10 @@ const Palpites = () => {
 
     try {
       // --- SUBMISSÃO DE PALPITES DE PARTIDA ---
-      // IMPORTANTE: precisamos do ID do palpite existente para update_match_prediction
-      // ALTERADO AQUI:supabase.from('predictions') para carregar palpites de partida existentes
-      const loadedMatchPredictions = (await supabase.from('predictions')
+      // AGORA PEGANDO DA TABELA 'match_predictions' para carregar palpites de partida existentes
+      const loadedMatchPredictions = (await supabase.from('match_predictions')
           .select('id, match_id, home_score, away_score')
           .eq('user_id', user.id)
-          .not('match_id', 'is', null) // Filtra para pegar apenas linhas que são palpites de partida
           ).data || [];
 
       for (const matchId in matchPredictions) {
@@ -267,8 +268,8 @@ const Palpites = () => {
         if (existingMatchPrediction) {
           const { error: updateError } = await supabase.rpc('update_match_prediction', {
             pred_id: existingMatchPrediction.id,
-            home_score: prediction.homeGoals,
-            away_score: prediction.awayGoals,
+            home_score_param: prediction.homeGoals, // Parâmetro ajustado
+            away_score_param: prediction.awayGoals, // Parâmetro ajustado
           });
           if (updateError) throw updateError;
         } else {
@@ -284,11 +285,10 @@ const Palpites = () => {
 
       // --- SUBMISSÃO DE PALPITES DE GRUPO ---
       console.log("Submitting Group Predictions:", groupPositions);
-      // ALTERADO AQUI: supabase.from('predictions') para carregar palpites de grupo existentes
-      const loadedGroupPredictions = (await supabase.from('predictions')
+      // AGORA PEGANDO DA TABELA 'group_predictions' para carregar palpites de grupo existentes
+      const loadedGroupPredictions = (await supabase.from('group_predictions')
           .select('id, group_id, predicted_first_team_id, predicted_second_team_id')
           .eq('user_id', user.id)
-          .not('group_id', 'is', null) // Filtra para pegar apenas linhas que são palpites de grupo
           ).data || [];
 
       for (const groupId in groupPositions) {
@@ -299,12 +299,18 @@ const Palpites = () => {
             toast.warning(`Por favor, selecione 1º e 2º lugar para o Grupo ${groups.find(g => g.id === groupId)?.name || 'desconhecido'}.`);
             continue; 
         }
+        
+        // Garante que o 1º e 2º lugar não são o mesmo time
+        if (positions.first === positions.second) {
+            toast.warning(`No Grupo ${groups.find(g => g.id === groupId)?.name || 'desconhecido'}, 1º e 2º lugar não podem ser o mesmo time.`);
+            continue;
+        }
 
         if (existingGroupPred) {
           const { error: updateError } = await supabase.rpc('update_group_prediction', {
             pred_id: existingGroupPred.id,
-            first_id: positions.first,
-            second_id: positions.second,
+            first_id_param: positions.first, // Parâmetro ajustado
+            second_id_param: positions.second, // Parâmetro ajustado
           });
           if (updateError) {
             console.error(`Erro ao atualizar palpite de grupo ${groupId}:`, updateError);
@@ -326,47 +332,53 @@ const Palpites = () => {
 
       // --- SUBMISSÃO DE PALPITE FINAL ---
       console.log("Submitting Final Prediction:", finalPositions, finalScore);
-      // ALTERADO AQUI: supabase.from('predictions') para carregar o palpite final existente
-      const loadedFinalPrediction = (await supabase.from('predictions')
+      // AGORA PEGANDO DA TABELA 'final_predictions' para carregar o palpite final existente
+      const loadedFinalPrediction = (await supabase.from('final_predictions')
           .select('id, champion_id, vice_champion_id, third_place_id, fourth_place_id, final_home_score, final_away_score')
           .eq('user_id', user.id)
-          .not('champion_id', 'is', null) // Filtra para pegar apenas a linha que é o palpite final
           .single()
           ).data;
 
+      // Validação: todos os 4 finalistas devem ser selecionados
+      if (!finalPositions.champion || !finalPositions.runnerUp || !finalPositions.thirdPlace || !finalPositions.fourthPlace) {
+          toast.warning("Por favor, selecione os 4 primeiros colocados para o palpite final.");
+          return;
+      }
+      // Validação: os 4 finalistas devem ser diferentes
+      const uniqueFinalists = new Set([finalPositions.champion, finalPositions.runnerUp, finalPositions.thirdPlace, finalPositions.fourthPlace]);
+      if (uniqueFinalists.size !== 4) {
+          toast.warning("Os 4 times do palpite final devem ser diferentes.");
+          return;
+      }
 
-      if (finalPositions.champion && finalPositions.runnerUp && finalPositions.thirdPlace && finalPositions.fourthPlace) {
-        if (loadedFinalPrediction) { // Se já existe um palpite final
-          const { error: updateError } = await supabase.rpc('update_final_prediction', {
-            pred_id: loadedFinalPrediction.id,
-            champion_id_param: finalPositions.champion,
-            vice_champion_id_param: finalPositions.runnerUp,
-            third_place_id_param: finalPositions.thirdPlace,
-            fourth_place_id_param: finalPositions.fourthPlace,
-            final_home_score_param: finalScore.homeGoals,
-            final_away_score_param: finalScore.awayGoals,
-          });
-          if (updateError) {
-            console.error("Erro ao atualizar palpite final:", updateError);
-            throw updateError;
-          }
-        } else { // Se não existe um palpite final, insere
-          const { error: insertError } = await supabase.rpc('insert_final_prediction', {
-            user_id_param: user.id,
-            champion_id_param: finalPositions.champion,
-            vice_champion_id_param: finalPositions.runnerUp,
-            third_place_id_param: finalPositions.thirdPlace,
-            fourth_place_id_param: finalPositions.fourthPlace,
-            final_home_score_param: finalScore.homeGoals,
-            final_away_score_param: finalScore.awayGoals,
-          });
-          if (insertError) {
-            console.error("Erro ao inserir palpite final:", insertError);
-            throw insertError;
-          }
+      if (loadedFinalPrediction) { // Se já existe um palpite final
+        const { error: updateError } = await supabase.rpc('update_final_prediction', {
+          pred_id: loadedFinalPrediction.id,
+          champion_id_param: finalPositions.champion,
+          vice_champion_id_param: finalPositions.runnerUp,
+          third_place_id_param: finalPositions.thirdPlace,
+          fourth_place_id_param: finalPositions.fourthPlace,
+          final_home_score_param: finalScore.homeGoals,
+          final_away_score_param: finalScore.awayGoals,
+        });
+        if (updateError) {
+          console.error("Erro ao atualizar palpite final:", updateError);
+          throw updateError;
         }
-      } else {
-        toast.warning("Por favor, selecione os 4 primeiros colocados para o palpite final.");
+      } else { // Se não existe um palpite final, insere
+        const { error: insertError } = await supabase.rpc('insert_final_prediction', {
+          user_id_param: user.id,
+          champion_id_param: finalPositions.champion,
+          vice_champion_id_param: finalPositions.runnerUp,
+          third_place_id_param: finalPositions.thirdPlace,
+          fourth_place_id_param: finalPositions.fourthPlace,
+          final_home_score_param: finalScore.homeGoals,
+          final_away_score_param: finalScore.awayGoals,
+        });
+        if (insertError) {
+          console.error("Erro ao inserir palpite final:", insertError);
+          throw insertError;
+        }
       }
 
 
