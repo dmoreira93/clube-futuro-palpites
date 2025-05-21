@@ -101,6 +101,13 @@ const useParticipantsRanking = () => {
         if (usersError) {
           throw usersError;
         }
+        
+        // Se não houver usuários, não há ranking para calcular
+        if (!users || users.length === 0) {
+            setParticipants([]);
+            setLoading(false);
+            return;
+        }
 
         // Fetch all real match results
         const { data: realMatchResults, error: realMatchResultsError } = await supabase
@@ -122,18 +129,21 @@ const useParticipantsRanking = () => {
         }
 
         // Fetch real final results 
+        // Use 'final_results' se você tem uma tabela única para isso
         const { data: realFinalResults, error: realFinalResultsError } = await supabase
             .from('final_results') 
             .select('champion_id, vice_champion_id, third_place_id, fourth_place_id, final_home_score, final_away_score')
             .single(); 
 
+        // Se houver erro E NÃO for "No rows found" (PGRST116), então é um erro real.
+        // Se for PGRST116, significa que a final ainda não foi cadastrada, o que é normal.
         if (realFinalResultsError && realFinalResultsError.code !== 'PGRST116') {
             throw realFinalResultsError;
         }
         
         // Fetch all match predictions from Supabase
         const { data: allMatchPredictions, error: matchPredictionsError } = await supabase
-          .from('match_predictions') 
+          .from('match_predictions') // <-- CONFIRME SE O NOME DA TABELA É 'match_predictions'
           .select('id, user_id, match_id, home_score, away_score');
 
         if (matchPredictionsError) {
@@ -142,7 +152,7 @@ const useParticipantsRanking = () => {
 
         // Fetch all group predictions from Supabase
         const { data: allGroupPredictions, error: groupPredictionsError } = await supabase
-          .from('group_predictions') 
+          .from('group_predictions') // <-- CONFIRME SE O NOME DA TABELA É 'group_predictions'
           .select('id, user_id, group_id, predicted_first_team_id, predicted_second_team_id');
 
         if (groupPredictionsError) {
@@ -151,7 +161,7 @@ const useParticipantsRanking = () => {
 
         // Fetch all final predictions from Supabase
         const { data: allFinalPredictions, error: finalPredictionsError } = await supabase
-          .from('final_predictions') 
+          .from('final_predictions') // <-- CONFIRME SE O NOME DA TABELA É 'final_predictions'
           .select('id, user_id, champion_id, vice_champion_id, third_place_id, fourth_place_id, final_home_score, final_away_score');
 
         if (finalPredictionsError) {
@@ -159,9 +169,9 @@ const useParticipantsRanking = () => {
         }
 
         // Initialize user points and stats
-        const userPoints: { [userId: string]: { points: number; matchesCount: number; correctMatches: number; scoredGames: number } } = {}; // Adicionado 'scoredGames'
+        const userPoints: { [userId: string]: { points: number; matchesCount: number; correctMatches: number; scoredGames: number } } = {}; 
         users.forEach(user => {
-          userPoints[user.id] = { points: 0, matchesCount: 0, correctMatches: 0, scoredGames: 0 }; // Inicializa scoredGames
+          userPoints[user.id] = { points: 0, matchesCount: 0, correctMatches: 0, scoredGames: 0 }; 
         });
 
         // Process all match predictions
@@ -180,8 +190,7 @@ const useParticipantsRanking = () => {
 
             const points = calculateMatchPoints(userPrediction, realResult);
             userPoints[prediction.user_id].points += points;
-            userPoints[prediction.user_id].matchesCount++;
-
+            userPoints[prediction.user_id].matchesCount++; // Conta total de palpites de partidas feitos
             if (points > 0) { // Incrementa 'jogos pontuados' se ganhou QUALQUER ponto
                 userPoints[prediction.user_id].scoredGames++;
             }
@@ -197,8 +206,8 @@ const useParticipantsRanking = () => {
 
           if (realGroup) {
             const points = calculateGroupClassificationPoints(
-              [prediction.predicted_first_team_id, prediction.predicted_second_team_id], // Passa como array
-              [realGroup.first_place_team_id, realGroup.second_place_team_id] // Passa como array
+              [prediction.predicted_first_team_id, prediction.predicted_second_team_id], 
+              [realGroup.first_place_team_id, realGroup.second_place_team_id] 
             );
             userPoints[prediction.user_id].points += points;
             if (points > 0) { // Incrementa 'jogos pontuados' se ganhou QUALQUER ponto
@@ -207,8 +216,8 @@ const useParticipantsRanking = () => {
           }
         });
 
-        // Process all final predictions
-        if (realFinalResults) { 
+        // Process all final predictions (only if final results exist)
+        if (realFinalResults) { // Só processa se houver resultados finais
             allFinalPredictions.forEach((prediction: SupabaseFinalPrediction) => {
                 const userFinalPred: TournamentFinalPredictions = {
                     champion: prediction.champion_id,
@@ -227,7 +236,7 @@ const useParticipantsRanking = () => {
                     fourthPlace: realFinalResults.fourth_place_id,
                     finalScore: {
                         homeGoals: realFinalResults.final_home_score,
-                        awayGoals: realFinalResults.final_away_score, // <-- CORRIGIDO AQUI!
+                        awayGoals: realFinalResults.final_away_score, 
                     },
                 };
 
@@ -243,10 +252,10 @@ const useParticipantsRanking = () => {
         // Final ranking construction and sorting
         let finalRanking: Participant[] = users.map((user: User) => {
           const userStats = userPoints[user.id];
-          const matchesCount = userStats?.matchesCount || 0; // Total de partidas com palpite
-          const correctMatches = userStats?.correctMatches || 0; // Palpites de partida exatos (>=10 pontos)
-          const scoredGames = userStats?.scoredGames || 0; // Total de jogos que geraram pontos (todos os tipos)
-
+          const matchesCount = userStats?.matchesCount || 0; 
+          const correctMatches = userStats?.correctMatches || 0; 
+          const scoredGames = userStats?.scoredGames || 0; 
+          
           const accuracy = matchesCount > 0 
             ? ((correctMatches / matchesCount) * 100).toFixed(0) 
             : "0";
@@ -257,7 +266,7 @@ const useParticipantsRanking = () => {
             username: user.username,
             avatar_url: user.avatar_url,
             points: userStats?.points || 0,
-            matches: scoredGames, // 'matches' agora representa 'jogos pontuados'
+            matches: scoredGames, 
             accuracy: `${accuracy}%`,
             premio: null, // Inicializa como null
           };
@@ -274,33 +283,20 @@ const useParticipantsRanking = () => {
         // Aplicar a lógica de prêmios após a ordenação
         const numParticipants = finalRanking.length;
         if (numParticipants > 0) {
-            finalRanking[0].premio = '60%'; // Primeiro colocado
+            finalRanking[0].premio = '60%'; 
             if (numParticipants > 1) {
-                finalRanking[1].premio = '25%'; // Segundo colocado
+                finalRanking[1].premio = '25%'; 
             }
             if (numParticipants > 2) {
-                finalRanking[2].premio = '15%'; // Terceiro colocado
+                finalRanking[2].premio = '15%'; 
             }
-
+            
             // Lógica para o último lugar:
-            // Ele é o último se classificacao_asc = 1.
-            // Para não sobrescrever os top 3, precisamos que haja mais de 3 participantes
-            // Ou que a posição dele seja de fato > 3 (ex: 4o lugar em 4 pessoas).
-            // A lógica de último lugar pode ser refinada, mas esta é uma boa base.
             const lastPlaceIndex = finalRanking.length - 1;
-            // Verifica se o último lugar NÃO é um dos top 3 (por índice) e se há mais de 3 participantes
-            // Ou se ele é o único ou o último em um grupo pequeno, e tem 0 pontos, e o primeiro tem pontos.
-            if (numParticipants > 3 && finalRanking[lastPlaceIndex].points < finalRanking[2].points) {
-                 finalRanking[lastPlaceIndex].premio = 'deve um café da manhã';
-            } else if (numParticipants > 0 && finalRanking.length === 1 && finalRanking[0].points === 0) {
-              // Caso de apenas 1 participante e ele não pontuou
-              finalRanking[0].premio = 'deve um café da manhã';
-            } else if (numParticipants > 0 && finalRanking.length === 2 && finalRanking[1].points === 0 && finalRanking[0].points > 0) {
-              // Caso de 2 participantes, o segundo com 0 pontos e o primeiro com pontos
-              finalRanking[1].premio = 'deve um café da manhã';
-            } else if (numParticipants > 0 && finalRanking.length === 3 && finalRanking[2].points === 0 && finalRanking[0].points > 0 && finalRanking[1].points > 0) {
-              // Caso de 3 participantes, o terceiro com 0 pontos e os primeiros com pontos
-              finalRanking[2].premio = 'deve um café da manhã';
+            // Apenas atribui o prêmio de café da manhã se o último colocado tiver 0 pontos
+            // e se não for um dos 3 primeiros (para evitar sobrescrever)
+            if (finalRanking[lastPlaceIndex].points === 0 && (numParticipants > 3 || (numParticipants === 3 && lastPlaceIndex === 2) || (numParticipants === 2 && lastPlaceIndex === 1) || (numParticipants === 1 && lastPlaceIndex === 0))) {
+                finalRanking[lastPlaceIndex].premio = 'deve um café da manhã';
             }
         }
 

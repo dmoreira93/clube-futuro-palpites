@@ -1,10 +1,10 @@
-// src/lib/dataAccess.ts (ATUALIZADO - Removida a função updateOrCreateUserStats)
+// src/lib/dataAccess.ts
 
 import { supabase } from "@/integrations/supabase/client";
-import { MatchResult, Prediction, ScoringCriteria, PointsResult } from "./types"; // Certifique-se que você ainda precisa de 'Prediction' aqui
+import { MatchResult, Prediction, ScoringCriteria, PointsResult } from "./types"; // Certifique-se que Prediction é o tipo correto aqui.
 
 /**
- * Busca o resultado da partida
+ * Busca o resultado da partida (de matches)
  */
 export async function fetchMatchResult(matchId: string): Promise<MatchResult | null> {
   try {
@@ -12,11 +12,14 @@ export async function fetchMatchResult(matchId: string): Promise<MatchResult | n
       .from('matches')
       .select('id, home_score, away_score')
       .eq('id', matchId)
-      .eq('is_finished', true)
+      .eq('is_finished', true) // Garante que só busca partidas finalizadas
       .single();
     
     if (error || !data) {
-      console.error('Erro ao buscar resultado da partida:', error);
+      // PGRST116: no rows found - isso é normal se a partida não for encontrada ou não estiver finalizada
+      if (error && error.code !== 'PGRST116') { 
+        console.error('Erro ao buscar resultado da partida:', error);
+      }
       return null;
     }
     
@@ -28,29 +31,32 @@ export async function fetchMatchResult(matchId: string): Promise<MatchResult | n
 }
 
 /**
- * Busca todos os palpites para uma partida
+ * Busca todos os palpites de PARTIDA para uma partida específica (de match_predictions)
+ * ATENÇÃO: Confirme que o nome da tabela é 'match_predictions' no seu Supabase.
  */
 export async function fetchPredictions(matchId: string): Promise<Prediction[]> {
   try {
     const { data, error } = await supabase
-      .from('predictions') // <--- Confirme se é 'predictions' ou 'match_predictions'
-      .select('id, match_id, user_id, home_score, away_score')
-      .eq('match_id', matchId);
+      .from('match_predictions') // <-- CONFIRME ESTE NOME DE TABELA!
+      .select('id, user_id, match_id, home_score, away_score');
+      // .eq('match_id', matchId); // Esta linha provavelmente deve estar aqui se você quer apenas palpites PARA ESTA partida.
+                                // Se você está usando para `pointsCalculator.ts` que busca tudo, então o .eq('match_id', matchId) é essencial.
+                                // Recomendo manter o .eq('match_id', matchId); aqui se esta função é chamada para uma única partida.
     
     if (error || !data) {
-      console.error('Erro ao buscar palpites:', error);
+      console.error('Erro ao buscar palpites de partida:', error);
       return [];
     }
     
     return data as Prediction[];
   } catch (error) {
-    console.error('Erro ao buscar palpites:', error);
+    console.error('Erro ao buscar palpites de partida:', error);
     return [];
   }
 }
 
 /**
- * Busca os critérios de pontuação do banco de dados
+ * Busca os critérios de pontuação do banco de dados (de scoring_criteria)
  */
 export async function fetchScoringCriteria(): Promise<ScoringCriteria> {
   try {
@@ -60,7 +66,8 @@ export async function fetchScoringCriteria(): Promise<ScoringCriteria> {
     
     if (error || !data) {
       console.error('Erro ao buscar critérios de pontuação:', error);
-      return { exactScore: 10, winner: 5, partialScore: 3 }; // Retorna valores padrão em caso de erro
+      // Retorna valores padrão em caso de erro para não quebrar a aplicação
+      return { exactScore: 10, winner: 5, partialScore: 3 }; 
     }
     
     const criteria: ScoringCriteria = {
@@ -72,39 +79,43 @@ export async function fetchScoringCriteria(): Promise<ScoringCriteria> {
     return criteria;
   } catch (error) {
     console.error('Erro ao buscar critérios de pontuação:', error);
-    return { exactScore: 10, winner: 5, partialScore: 3 }; // Retorna valores padrão em caso de erro
+    // Retorna valores padrão em caso de erro
+    return { exactScore: 10, winner: 5, partialScore: 3 }; 
   }
 }
 
 /**
- * Salva os pontos do usuário no banco de dados.
+ * Salva os pontos do usuário para um palpite individual no banco de dados (em user_points).
  */
 export async function saveUserPoints(pointsResult: PointsResult): Promise<boolean> {
   try {
     const { error } = await supabase
-      .from('user_points')
-      .insert({
+      .from('user_points') // <-- Confirme este nome de tabela
+      .upsert({ // Usar upsert para atualizar se já existe, inserir se não
         user_id: pointsResult.userId,
         match_id: pointsResult.matchId,
         points: pointsResult.points,
         points_type: pointsResult.pointsType,
         prediction_id: pointsResult.predictionId,
+      }, {
+        onConflict: 'prediction_id', // O campo para evitar conflitos (ex: se já salvou os pontos para este palpite)
+        ignoreDuplicates: false // Não ignorar se o conflito for com a chave primária
       });
     
     if (error) {
-      console.error('Erro ao salvar pontos:', error);
+      console.error('Erro ao salvar ou atualizar pontos do palpite:', error);
       return false;
     }
     
     return true;
   } catch (error) {
-    console.error('Erro ao salvar pontos:', error);
+    console.error('Erro ao salvar ou atualizar pontos do palpite:', error);
     return false;
   }
 }
 
-// REMOVIDA A FUNÇÃO updateOrCreateUserStats AQUI
-// Se você precisar que os pontos totais e estatísticas sejam armazenados no banco de dados,
-// a lógica precisará ser refeita para acumular os pontos de TODOS os tipos de palpites (partidas, grupos, final)
-// e não apenas os de 'user_points' (que parecem ser só de partidas).
-// No entanto, para o funcionamento do ranking, isso não é mais necessário, pois o ranking é calculado no frontend.
+// ---------------------------------------------------------------------
+// FUNÇÃO updateOrCreateUserStats E SEUS TIPOS FORAM REMOVIDOS DESTE ARQUIVO.
+// Esta função não é mais necessária, pois o ranking é calculado no frontend.
+// Se você a tinha aqui, ela deve ser removida.
+// ---------------------------------------------------------------------

@@ -1,10 +1,11 @@
-// src/pages/Index.tsx (Conteúdo COMPLETO e ATUALIZADO)
+// src/pages/Index.tsx
+
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import Layout from "@/components/layout/Layout";
 import RankingTable from "@/components/home/RankingTable";
-import NextMatches from "@/components/home/NextMatches";
-import DailyPredictions from "@/components/home/DailyPredictions";
+import NextMatches from "@/components/home/NextMatches"; // Certifique-se que este componente existe
+import DailyPredictions from "@/components/home/DailyPredictions"; // Certifique-se que este componente existe
 import StatsCard from "@/components/home/StatsCard";
 import { Trophy as TrophyIcon, User as UserIcon, Volleyball as SoccerBallIcon, Flag as FlagIcon } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -15,17 +16,16 @@ import { Link } from "react-router-dom";
 import useParticipantsRanking from "@/hooks/useParticipantsRanking"; 
 
 const Index = () => {
-  // O estado 'stats' será populado com base nos dados do ranking e outras contagens
   const [stats, setStats] = useState({
     totalUsers: 0,
-    matchesPlayed: 0, // Corrigido para representar o total de partidas FINALIZADAS
-    totalMatches: 0, // Total de partidas no campeonato
+    matchesPlayed: 0, // Total de partidas FINALIZADAS
+    totalMatches: 0, // Total de partidas no campeonato (cadastradas)
     topScore: {
       points: 0,
       userName: ""
     },
     nextMatch: {
-      date: "", // Você precisaria buscar isso separadamente ou de um hook de partidas futuras
+      date: "",
       teams: ""
     }
   });
@@ -34,44 +34,84 @@ const Index = () => {
   const { participants, loading: rankingLoading, error: rankingError } = useParticipantsRanking();
 
   useEffect(() => {
-    const fetchCounts = async () => {
+    const fetchCountsAndNextMatch = async () => {
       try {
-        // Contar usuários (do useParticipantsRanking já temos os participantes)
-        // Mas para totalUsers aqui, podemos fazer uma busca direta para ser mais preciso antes do ranking carregar
+        // --- Contagem de Usuários ---
         const { count: userCount, error: userCountError } = await supabase
-          .from('users_custom') // Usar users_custom
+          .from('users_custom') 
           .select('*', { count: 'exact', head: true });
         if (userCountError) throw userCountError;
 
-        // Contar partidas realizadas (is_finished = true)
+        // --- Contagem de Partidas Realizadas (Finalizadas) ---
         const { count: finishedMatchCount, error: finishedMatchCountError } = await supabase
           .from('matches')
           .select('*', { count: 'exact', head: true })
-          .eq('is_finished', true); // Contar apenas as finalizadas
+          .eq('is_finished', true); 
         if (finishedMatchCountError) throw finishedMatchCountError;
 
-        // Contar total de partidas (todas as partidas)
+        // --- Contagem Total de Partidas (Cadastradas) ---
         const { count: totalMatchCount, error: totalMatchCountError } = await supabase
           .from('matches')
           .select('*', { count: 'exact', head: true });
         if (totalMatchCountError) throw totalMatchCountError;
 
-
         setStats(prevStats => ({
           ...prevStats,
           totalUsers: userCount || 0,
-          matchesPlayed: finishedMatchCount || 0, // Total de partidas finalizadas
-          totalMatches: totalMatchCount || 0, // Total de partidas no sistema
-          // topScore será atualizado após o carregamento dos participantes
+          matchesPlayed: finishedMatchCount || 0,
+          totalMatches: totalMatchCount || 0,
         }));
 
+        // --- Buscar o Próximo Jogo ---
+        const { data: nextMatchData, error: nextMatchError } = await supabase
+          .from('matches')
+          // Seleciona o ID das partidas, o campo de data, e as informações dos times
+          // A sintaxe 'teams!matches_home_team_id_fkey(name), away_team:teams!matches_away_team_id_fkey(name)'
+          // assume que você tem um relacionamento definido no Supabase
+          // onde 'matches_home_team_id_fkey' e 'matches_away_team_id_fkey' são os nomes das suas foreign keys.
+          // E que a tabela 'teams' tem uma coluna 'name'.
+          .select('id, match_date, home_team_id, away_team_id, home_team:teams!home_team_id(name), away_team:teams!away_team_id(name)')
+          .eq('is_finished', false)
+          .order('match_date', { ascending: true })
+          .limit(1)
+          .single(); 
+        
+        // PGRST116 significa "No rows found", o que é esperado se não houver próximo jogo.
+        if (nextMatchError && nextMatchError.code !== 'PGRST116') {
+            console.error("Erro ao buscar próximo jogo:", nextMatchError);
+            throw nextMatchError; 
+        }
+
+        if (nextMatchData) {
+          setStats(prevStats => ({
+            ...prevStats,
+            nextMatch: {
+              date: new Date(nextMatchData.match_date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' }), 
+              teams: `${nextMatchData.home_team.name} vs ${nextMatchData.away_team.name}` 
+            }
+          }));
+        } else {
+            setStats(prevStats => ({
+                ...prevStats,
+                nextMatch: {
+                    date: "N/A",
+                    teams: "Nenhum jogo futuro"
+                }
+            }));
+        }
+
       } catch (err: any) {
-        console.error("Erro ao buscar contagens:", err);
+        console.error("Erro geral ao buscar estatísticas ou próximo jogo:", err);
+        // Pode definir mensagens de erro mais específicas aqui se desejar
+        setStats(prevStats => ({
+            ...prevStats,
+            nextMatch: { date: "Erro", teams: "Falha ao carregar" }
+        }));
       }
     };
 
-    fetchCounts();
-  }, []); // Rodar apenas uma vez na montagem
+    fetchCountsAndNextMatch();
+  }, []); // Rodar apenas uma vez na montagem da página
 
   // Efeito para atualizar topScore quando os participantes do ranking carregarem
   useEffect(() => {
@@ -85,38 +125,17 @@ const Index = () => {
           userName: topScorer.name
         }
       }));
+    } else if (!rankingLoading && participants.length === 0) {
+        // Se não houver participantes, o topScore é 0
+        setStats(prevStats => ({
+            ...prevStats,
+            topScore: {
+                points: 0,
+                userName: "N/A"
+            }
+        }));
     }
   }, [participants, rankingLoading]); // Rodar quando participantes ou rankingLoading mudarem
-
-  // Se você precisa buscar o próximo jogo, faria isso aqui ou em NextMatches
-  // Exemplo (adapte conforme sua estrutura):
-  // useEffect(() => {
-  //   const fetchNextMatch = async () => {
-  //     try {
-  //       const { data, error } = await supabase
-  //         .from('matches')
-  //         .select('home_team_id, away_team_id, match_date, teams(name)') // Ajuste sua seleção
-  //         .eq('is_finished', false)
-  //         .order('match_date', { ascending: true })
-  //         .limit(1)
-  //         .single();
-  //       if (error && error.code !== 'PGRST116') throw error; // PGRST116 = no rows found
-  //       if (data) {
-  //         setStats(prevStats => ({
-  //           ...prevStats,
-  //           nextMatch: {
-  //             date: new Date(data.match_date).toLocaleDateString(), // Formate a data
-  //             teams: `${data.teams[0].name} vs ${data.teams[1].name}` // Ajuste para como teams vem
-  //           }
-  //         }));
-  //       }
-  //     } catch (err) {
-  //       console.error("Erro ao buscar próximo jogo:", err);
-  //     }
-  //   };
-  //   fetchNextMatch();
-  // }, []);
-
 
   return (
     <Layout>
@@ -159,8 +178,8 @@ const Index = () => {
             <RankingTable />
           </div>
           <div className="lg:col-span-1 space-y-6">
-            <NextMatches />
-            <DailyPredictions />
+            <NextMatches /> {/* Este componente NextMatches pode ser usado para exibir uma lista de próximos jogos */}
+            <DailyPredictions /> {/* Este componente DailyPredictions pode ser usado para exibir palpites do dia */}
             <div className="mt-8">
               <Card className="shadow-lg">
                 <CardContent className="p-6">
