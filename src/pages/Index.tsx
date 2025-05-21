@@ -68,7 +68,7 @@ const Index = () => {
         // Buscar próxima partida (exemplo, você pode ajustar a lógica de filtro)
         const { data: nextMatchData, error: nextMatchError } = await supabase
           .from('matches')
-          .select(`match_date, home_team:home_team_id(name), away_team:away_team_id(name)`);
+          .select(`match_date, home_team:home_team_id(name), away_team:away_team_id(name)`)
           .gte('match_date', new Date().toISOString()) // Apenas partidas futuras
           .order('match_date', { ascending: true })
           .limit(1)
