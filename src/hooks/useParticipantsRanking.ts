@@ -73,7 +73,7 @@ type SupabaseFinalResult = {
 type UserData = {
   id: string;
   name: string;
-  username: string; //
+  username: string; // <-- AQUI foi corrigido de nickname para username
   avatar_url?: string;
 };
 
@@ -81,7 +81,7 @@ type UserData = {
 export type Participant = {
   id: string;
   name: string;
-  username: string; //
+  username: string; // <-- AQUI foi corrigido de nickname para username
   avatar_url?: string;
   points: number;
   matches: number;
@@ -102,7 +102,7 @@ export const useParticipantsRanking = () => {
         // ALTERADO: Selecionando 'username' ao invés de 'nickname'
         const { data: users, error: usersError } = await supabase
           .from('users_custom')
-          .select('id, name, username, avatar_url'); //
+          .select('id, name, username, avatar_url'); // <-- AQUI
         if (usersError) throw usersError;
         if (!users) {
           setParticipants([]);
@@ -132,6 +132,7 @@ export const useParticipantsRanking = () => {
         if (groupPredError) throw groupPredError;
 
         // 5. Buscar TODOS os resultados de grupos (tabela 'groups_results', colunas corrigidas)
+        // Verifique se a tabela 'groups_results' existe e tem as colunas 'first_place_team_id', 'second_place_team_id'
         const { data: allGroupResults, error: groupResultError } = await supabase
           .from('groups_results')
           .select('id, group_id, first_place_team_id, second_place_team_id');
@@ -144,6 +145,7 @@ export const useParticipantsRanking = () => {
         if (finalPredError) throw finalPredError;
 
         // 7. Buscar o resultado final (tabela 'tournament_results', colunas corrigidas)
+        // Verifique se a tabela 'tournament_results' existe e tem as colunas corretas.
         const { data: tournamentResultsArray, error: finalResultError } = await supabase
           .from('tournament_results')
           .select('id, champion_id, runner_up_id, third_place_id, fourth_place_id, final_home_score, final_away_score');
@@ -166,6 +168,7 @@ export const useParticipantsRanking = () => {
 
         // Pontuação de Partidas
         allMatchPredictions?.forEach(prediction => {
+          // Apenas considere palpites de partidas que foram finalizadas e para as quais o resultado existe
           const result = finishedMatchResults.find(m => m.id === prediction.match_id);
           if (result && userPoints[prediction.user_id]) {
             const userPred: ScoringMatchPrediction = {
@@ -179,7 +182,7 @@ export const useParticipantsRanking = () => {
             const pointsGained = calculateMatchPoints(userPred, realRes);
             userPoints[prediction.user_id].points += pointsGained;
             userPoints[prediction.user_id].matchesCount++;
-            if (pointsGained > 0) {
+            if (pointsGained > 0) { // Se ganhou algum ponto, considera um acerto
               userPoints[prediction.user_id].correctMatches++;
             }
           }
@@ -187,6 +190,7 @@ export const useParticipantsRanking = () => {
 
         // Pontuação de Grupos
         allGroupPredictions?.forEach(prediction => {
+          // Certifique-se de que o grupo correspondente foi finalizado e tem resultados
           const result = allGroupResults?.find(r => r.group_id === prediction.group_id);
           if (result && userPoints[prediction.user_id]) {
             const userPredOrder = [
@@ -202,7 +206,7 @@ export const useParticipantsRanking = () => {
         });
 
         // Pontuação Final
-        if (finalResults) {
+        if (finalResults) { // Só calcula se houver um resultado final do torneio
           const realFinalRes: TournamentFinalResults = {
             champion: teamMap.get(finalResults.champion_id) || '',
             runnerUp: teamMap.get(finalResults.runner_up_id) || '',
@@ -232,22 +236,40 @@ export const useParticipantsRanking = () => {
         }
 
         // Construir o ranking final
-        const finalRanking: Participant[] = users.map(user => ({
-          id: user.id,
-          name: user.name,
-          username: user.username, // <-- ALTERADO PARA USERNAME
-          avatar_url: user.avatar_url,
-          points: userPoints[user.id]?.points || 0,
-          matches: userPoints[user.id]?.matchesCount || 0,
-          accuracy: `${((userPoints[user.id]?.correctMatches || 0) / (userPoints[user.id]?.matchesCount || 1) * 100).toFixed(0)}%`
-        }));
+        const finalRanking: Participant[] = users.map(user => {
+          const userStats = userPoints[user.id];
+          const matchesCount = userStats?.matchesCount || 0;
+          const correctMatches = userStats?.correctMatches || 0;
+          
+          // Prevenindo divisão por zero
+          const accuracy = matchesCount > 0 
+            ? ((correctMatches / matchesCount) * 100).toFixed(0) // Arredonda para inteiro
+            : "0"; // Se não jogou partidas, 0% de acerto
 
-        finalRanking.sort((a, b) => b.points - a.points);
+          return {
+            id: user.id,
+            name: user.name,
+            username: user.username, // <-- USANDO USERNAME
+            avatar_url: user.avatar_url,
+            points: userStats?.points || 0,
+            matches: matchesCount,
+            accuracy: `${accuracy}%` // Formata como string de porcentagem
+          };
+        });
+
+        // Ordenar o ranking: primeiro por pontos (decrescente), depois por nome (crescente)
+        finalRanking.sort((a, b) => {
+          if (b.points !== a.points) {
+            return b.points - a.points;
+          }
+          return a.name.localeCompare(b.name); // Desempate por nome
+        });
+
         setParticipants(finalRanking);
 
       } catch (err) {
         console.error("Erro ao carregar o ranking:", err);
-        setError("Não foi possível carregar o ranking. Verifique os dados ou tente novamente mais tarde.");
+        setError("Não foi possível carregar o ranking. Verifique os dados ou tente novamente mais tarde. Verifique sua conexão e os dados do Supabase.");
       } finally {
         setLoading(false);
       }
@@ -256,5 +278,5 @@ export const useParticipantsRanking = () => {
     fetchAndCalculateRanking();
   }, []); // Dependências vazias para executar uma vez no carregamento
 
-  return { participants, loading, error }; // Retorna o erro também
+  return { participants, loading, error };
 };
