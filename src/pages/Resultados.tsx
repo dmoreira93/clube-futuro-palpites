@@ -135,7 +135,7 @@ const Resultados = () => {
                 awayTeam={match.away_team?.name || ""}
                 date={match.match_date ? new Date(match.match_date).toISOString() : ""}
                 time={match.match_date ? new Date(match.match_date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ""}
-                group={match.home_team?.group ? { name: match.home_team.group.name } : undefined} {/* <--- MUDANÇA AQUI: Acessando .group.name */}
+                group={match.home_team?.group ? { name: match.home_team.group.name } : undefined}
                 homeTeamFlag={match.home_team?.flag_url || ""}
                 awayTeamFlag={match.away_team?.flag_url || ""}
                 stage={match.stage || ""}
