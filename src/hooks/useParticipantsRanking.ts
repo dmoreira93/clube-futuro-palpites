@@ -129,9 +129,9 @@ const useParticipantsRanking = () => {
         }
 
         // Fetch real final results 
-        // Use 'final_results' se você tem uma tabela única para isso
+        // Use 'tournament_results' se você tem uma tabela única para isso
         const { data: realFinalResults, error: realFinalResultsError } = await supabase
-            .from('final_results') 
+            .from('tournament_results') 
             .select('champion_id, vice_champion_id, third_place_id, fourth_place_id, final_home_score, final_away_score')
             .single(); 
 
