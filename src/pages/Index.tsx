@@ -1,3 +1,4 @@
+// src/pages/Index.tsx (Conteúdo COMPLETO e ATUALIZADO)
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import Layout from "@/components/layout/Layout";
@@ -5,231 +6,162 @@ import RankingTable from "@/components/home/RankingTable";
 import NextMatches from "@/components/home/NextMatches";
 import DailyPredictions from "@/components/home/DailyPredictions";
 import StatsCard from "@/components/home/StatsCard";
-import { Trophy as TrophyIcon, User as UserIcon, Volleyball as SoccerBallIcon, Flag as FlagIcon, Users } from "lucide-react";
+import { Trophy as TrophyIcon, User as UserIcon, Volleyball as SoccerBallIcon, Flag as FlagIcon } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
 
+// IMPORTANTE: Importar o useParticipantsRanking
+import useParticipantsRanking from "@/hooks/useParticipantsRanking"; 
+
 const Index = () => {
+  // O estado 'stats' será populado com base nos dados do ranking e outras contagens
   const [stats, setStats] = useState({
     totalUsers: 0,
-    matchesPlayed: 0,
-    totalMatches: 0,
+    matchesPlayed: 0, // Corrigido para representar o total de partidas FINALIZADAS
+    totalMatches: 0, // Total de partidas no campeonato
     topScore: {
       points: 0,
       userName: ""
     },
     nextMatch: {
-      date: "",
+      date: "", // Você precisaria buscar isso separadamente ou de um hook de partidas futuras
       teams: ""
     }
   });
 
+  // Use o hook de ranking para obter os participantes e o estado de carregamento/erro
+  const { participants, loading: rankingLoading, error: rankingError } = useParticipantsRanking();
+
   useEffect(() => {
-    const fetchStats = async () => {
+    const fetchCounts = async () => {
       try {
-        // Contar usuários
+        // Contar usuários (do useParticipantsRanking já temos os participantes)
+        // Mas para totalUsers aqui, podemos fazer uma busca direta para ser mais preciso antes do ranking carregar
         const { count: userCount, error: userCountError } = await supabase
-          .from('users_custom')
+          .from('users_custom') // Usar users_custom
           .select('*', { count: 'exact', head: true });
         if (userCountError) throw userCountError;
 
-        // Contar partidas realizadas
+        // Contar partidas realizadas (is_finished = true)
         const { count: finishedMatchCount, error: finishedMatchCountError } = await supabase
           .from('matches')
           .select('*', { count: 'exact', head: true })
-          .eq('is_finished', true);
+          .eq('is_finished', true); // Contar apenas as finalizadas
         if (finishedMatchCountError) throw finishedMatchCountError;
 
-        // Contar total de partidas
+        // Contar total de partidas (todas as partidas)
         const { count: totalMatchCount, error: totalMatchCountError } = await supabase
           .from('matches')
           .select('*', { count: 'exact', head: true });
         if (totalMatchCountError) throw totalMatchCountError;
 
-        // Buscar usuário com maior pontuação
-        // Esta é a query que estava causando o 406. 
-        // A política RLS já foi confirmada, então a causa provável é a falta de dados ou o .single() com 0 resultados.
-        const { data: topScoreUser, error: topScoreUserError } = await supabase
-          .from('user_stats')
-          .select('total_points, user_id')
-          .order('total_points', { ascending: false })
-          .limit(1)
-          .single(); // Mantém o .single()
 
-        if (topScoreUserError) {
-          // Logar o erro, mas não impedir o carregamento da página inteira
-          console.error("Erro ao buscar o usuário com maior pontuação da tabela user_stats:", topScoreUserError);
-          // Podemos definir valores padrão ou vazios para topScore caso haja erro
-        }
-
-        let topUserName = "Não disponível";
-        if (topScoreUser) {
-          // Buscar o nome do usuário a partir do user_id obtido de user_stats
-          const { data: userData, error: userDataError } = await supabase
-            .from('users_custom')
-            .select('name')
-            .eq('id', topScoreUser.user_id)
-            .single();
-          
-          if (userDataError) {
-            console.error("Erro ao buscar nome do usuário com maior pontuação:", userDataError);
-          }
-          
-          if (userData) {
-            topUserName = userData.name;
-          }
-        }
-
-        // Buscar próxima partida
-        const now = new Date().toISOString();
-        const { data: nextMatchData, error: nextMatchDataError } = await supabase
-          .from('matches')
-          .select('id, match_date, home_team_id, away_team_id')
-          .gt('match_date', now)
-          .eq('is_finished', false)
-          .order('match_date')
-          .limit(1)
-          .single();
-
-        if (nextMatchDataError && nextMatchDataError.code !== 'PGRST116') { // PGRST116 é para "não encontrado" (No rows found)
-            console.error("Erro ao buscar próxima partida:", nextMatchDataError);
-        }
-
-        let nextMatchInfo = {
-          date: "Não agendado",
-          teams: "Não definido"
-        };
-
-        if (nextMatchData) {
-          const matchDate = new Date(nextMatchData.match_date);
-          const formattedDate = `${matchDate.getDate().toString().padStart(2, '0')}/${(matchDate.getMonth() + 1).toString().padStart(2, '0')}`;
-
-          const { data: homeTeam, error: homeTeamError } = await supabase
-            .from('teams')
-            .select('name')
-            .eq('id', nextMatchData.home_team_id)
-            .single();
-          if (homeTeamError) console.error("Erro ao buscar home team:", homeTeamError);
-
-          const { data: awayTeam, error: awayTeamError } = await supabase
-            .from('teams')
-            .select('name')
-            .eq('id', nextMatchData.away_team_id)
-            .single();
-          if (awayTeamError) console.error("Erro ao buscar away team:", awayTeamError);
-
-          nextMatchInfo = {
-            date: formattedDate,
-            teams: `${homeTeam?.name || 'Time A'} vs ${awayTeam?.name || 'Time B'}`
-          };
-        }
-
-        setStats({
+        setStats(prevStats => ({
+          ...prevStats,
           totalUsers: userCount || 0,
-          matchesPlayed: finishedMatchCount || 0,
-          totalMatches: totalMatchCount || 0,
-          topScore: {
-            points: topScoreUser?.total_points || 0,
-            userName: topUserName
-          },
-          nextMatch: nextMatchInfo
-        });
-      } catch (error) {
-        console.error("Erro geral ao buscar estatísticas:", error);
+          matchesPlayed: finishedMatchCount || 0, // Total de partidas finalizadas
+          totalMatches: totalMatchCount || 0, // Total de partidas no sistema
+          // topScore será atualizado após o carregamento dos participantes
+        }));
+
+      } catch (err: any) {
+        console.error("Erro ao buscar contagens:", err);
       }
     };
 
-    fetchStats();
-  }, []);
+    fetchCounts();
+  }, []); // Rodar apenas uma vez na montagem
+
+  // Efeito para atualizar topScore quando os participantes do ranking carregarem
+  useEffect(() => {
+    if (!rankingLoading && participants.length > 0) {
+      // O primeiro participante no ranking já é o de maior pontuação
+      const topScorer = participants[0];
+      setStats(prevStats => ({
+        ...prevStats,
+        topScore: {
+          points: topScorer.points,
+          userName: topScorer.name
+        }
+      }));
+    }
+  }, [participants, rankingLoading]); // Rodar quando participantes ou rankingLoading mudarem
+
+  // Se você precisa buscar o próximo jogo, faria isso aqui ou em NextMatches
+  // Exemplo (adapte conforme sua estrutura):
+  // useEffect(() => {
+  //   const fetchNextMatch = async () => {
+  //     try {
+  //       const { data, error } = await supabase
+  //         .from('matches')
+  //         .select('home_team_id, away_team_id, match_date, teams(name)') // Ajuste sua seleção
+  //         .eq('is_finished', false)
+  //         .order('match_date', { ascending: true })
+  //         .limit(1)
+  //         .single();
+  //       if (error && error.code !== 'PGRST116') throw error; // PGRST116 = no rows found
+  //       if (data) {
+  //         setStats(prevStats => ({
+  //           ...prevStats,
+  //           nextMatch: {
+  //             date: new Date(data.match_date).toLocaleDateString(), // Formate a data
+  //             teams: `${data.teams[0].name} vs ${data.teams[1].name}` // Ajuste para como teams vem
+  //           }
+  //         }));
+  //       }
+  //     } catch (err) {
+  //       console.error("Erro ao buscar próximo jogo:", err);
+  //     }
+  //   };
+  //   fetchNextMatch();
+  // }, []);
+
 
   return (
     <Layout>
-      <div className="mb-8">
-        <div className="text-center mb-8">
-          <h1 className="text-3xl md:text-4xl font-bold text-fifa-blue mb-2">
-            Copa Mundial de Clubes FIFA 2025
-          </h1>
-          <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-            Participe do nosso bolão e teste seus conhecimentos sobre futebol mundial!
-          </p>
-        </div>
+      <div className="container mx-auto p-4 md:p-6 lg:p-8">
+        <h1 className="text-3xl md:text-4xl font-extrabold text-center text-fifa-blue mb-8">
+          Copa dos Palpites
+        </h1>
 
-        <div className="bg-gradient-to-r from-fifa-blue to-fifa-green rounded-lg shadow-xl p-6 mb-8 text-white">
-          <div className="flex flex-col md:flex-row items-center justify-between">
-            <div className="md:w-3/5 mb-6 md:mb-0">
-              <h2 className="text-2xl font-bold mb-2">Mostre que você entende de futebol!</h2>
-              <p className="mb-4">Faça seus palpites para todos os jogos da Copa Mundial de Clubes e concorra a prêmios incríveis!</p>
-              <div className="flex flex-wrap gap-3">
-                <Link to="/cadastro">
-                  <Button className="bg-fifa-gold hover:bg-opacity-90 text-fifa-blue font-semibold">
-                    Participar Agora
-                  </Button>
-                </Link>
-                <Link to="/criterios">
-                  <Button variant="outline" className="border-white text-fifa-gold hover:bg-white hover:bg-opacity-20 font-semibold">
-                    Ver Critérios
-                  </Button>
-                </Link>
-              </div>
-            </div>
-            <div className="md:w-2/5 flex justify-center">
-              <TrophyIcon size={120} className="text-fifa-gold" />
-            </div>
-          </div>
-        </div>
-
-        {/* Componente de palpites diários (só aparecerá após 14/06/2025) */}
-        <DailyPredictions />
-
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           <StatsCard 
-            title="Total de Participantes" 
+            icon={<UserIcon className="h-6 w-6 text-white" />} 
+            title="Participantes" 
             value={stats.totalUsers.toString()} 
-            icon={<UserIcon className="h-4 w-4" />}
-            description="Jogadores registrados" 
+            className="bg-gradient-to-r from-blue-500 to-blue-700 text-white"
           />
           <StatsCard 
-            title="Jogos Realizados" 
+            icon={<SoccerBallIcon className="h-6 w-6 text-white" />} 
+            title="Partidas Jogadas" 
             value={`${stats.matchesPlayed}/${stats.totalMatches}`} 
-            icon={<SoccerBallIcon className="h-4 w-4" />}
-            description={stats.totalMatches > 0 ? `${Math.round((stats.matchesPlayed / stats.totalMatches) * 100)}% concluído` : "0% concluído"} 
+            className="bg-gradient-to-r from-green-500 to-green-700 text-white"
           />
           <StatsCard 
+            icon={<TrophyIcon className="h-6 w-6 text-white" />} 
             title="Maior Pontuação" 
             value={stats.topScore.points.toString()} 
-            icon={<TrophyIcon className="h-4 w-4" />}
-            description={stats.topScore.userName} 
+            subtitle={stats.topScore.userName} 
+            className="bg-gradient-to-r from-yellow-500 to-orange-500 text-white"
           />
           <StatsCard 
+            icon={<FlagIcon className="h-6 w-6 text-white" />} 
             title="Próximo Jogo" 
-            value={stats.nextMatch.date} 
-            icon={<FlagIcon className="h-4 w-4" />}
-            description={stats.nextMatch.teams} 
+            value={stats.nextMatch.date || "Carregando..."} 
+            subtitle={stats.nextMatch.teams || "Aguarde..."} 
+            className="bg-gradient-to-r from-purple-500 to-pink-500 text-white"
           />
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="md:col-span-2">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2">
             <RankingTable />
-            <div className="mt-4 flex gap-2">
-              <Link to="/palpites">
-                <Button size="wide" className="bg-fifa-blue hover:bg-fifa-blue/90 text-white gap-2">
-                  <SoccerBallIcon className="h-4 w-4" />
-                  Fazer Meus Palpites
-                </Button>
-              </Link>
-              <Link to="/palpites-usuarios">
-                <Button size="wide" className="bg-fifa-green hover:bg-fifa-green/90 text-white gap-2">
-                  <Users className="h-4 w-4" />
-                  Ver Todos os Palpites
-                </Button>
-              </Link>
-            </div>
           </div>
-          <div>
-            <div className="space-y-6">
-              <NextMatches />
+          <div className="lg:col-span-1 space-y-6">
+            <NextMatches />
+            <DailyPredictions />
+            <div className="mt-8">
               <Card className="shadow-lg">
                 <CardContent className="p-6">
                   <h3 className="text-lg font-semibold mb-4 text-fifa-blue">Regras Rápidas</h3>

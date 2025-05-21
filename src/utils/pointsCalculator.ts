@@ -1,5 +1,6 @@
+// src/lib/pointsCalculator.ts (Atualizado)
 
-import { fetchMatchResult, fetchPredictions, fetchScoringCriteria, saveUserPoints, updateUserStats } from "./pointsCalculator/dataAccess";
+import { fetchMatchResult, fetchPredictions, fetchScoringCriteria, saveUserPoints } from "./pointsCalculator/dataAccess"; // <-- REMOVER updateUserStats daqui
 import { calculateMaximumPoints } from "./pointsCalculator/pointsRules";
 import { PointsType } from "./pointsCalculator/types";
 
@@ -35,7 +36,7 @@ export async function updateUserPoints(matchId: string): Promise<boolean> {
     console.log(`Critérios de pontuação: Placar Exato=${exactScore}, Vencedor=${winner}, Placar Parcial=${partialScore}`);
 
     // 4. Calcular e salvar os pontos para cada palpite
-    const processedUserIds = new Set<string>();
+    const processedUserIds = new Set<string>(); // Este Set ainda pode ser útil para depuração, mas não para o updateUserStats
     const pointsSummary = {
       [PointsType.EXACT_SCORE]: 0,
       [PointsType.CORRECT_WINNER]: 0,
@@ -55,30 +56,28 @@ export async function updateUserPoints(matchId: string): Promise<boolean> {
       );
       
       if (pointsResult) {
-        // Incrementar estatísticas
+        // Incrementar estatísticas (apenas para log se quiser)
         pointsSummary[pointsResult.pointsType as PointsType]++;
         pointsSummary.total++;
         
-        // Salvar os pontos
+        // Salvar os pontos (isto ainda é relevante se você quiser persistir os pontos de cada palpite individualmente)
         const saved = await saveUserPoints(pointsResult);
         if (saved) {
-          // Adicionar o ID do usuário ao conjunto de usuários processados
-          processedUserIds.add(prediction.user_id);
+          // processedUserIds.add(prediction.user_id); // Não é mais necessário para updateUserStats
         }
       }
     }
 
-    // 5. Atualizar as estatísticas para cada usuário afetado
-    for (const userId of processedUserIds) {
-      await updateUserStats(userId);
-    }
+    // 5. REMOVER: A chamada para updateUserStats não é mais necessária aqui
+    // for (const userId of processedUserIds) {
+    //   await updateUserStats(userId);
+    // }
 
-    console.log(`Pontuação atualizada para ${processedUserIds.size} usuários na partida ${matchId}`);
-    console.log(`Resumo de pontuação: `, pointsSummary);
+    console.log(`Pontuação processada para partida ${matchId}. Resumo de pontuação: `, pointsSummary);
     
     return true;
   } catch (error) {
-    console.error('Erro ao atualizar pontos dos usuários:', error);
+    console.error('Erro ao atualizar pontos da partida:', error);
     return false;
   }
 }

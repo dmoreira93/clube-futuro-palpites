@@ -1,6 +1,7 @@
+// src/lib/dataAccess.ts (ATUALIZADO - Removida a função updateOrCreateUserStats)
 
 import { supabase } from "@/integrations/supabase/client";
-import { MatchResult, Prediction, ScoringCriteria, PointsResult } from "./types";
+import { MatchResult, Prediction, ScoringCriteria, PointsResult } from "./types"; // Certifique-se que você ainda precisa de 'Prediction' aqui
 
 /**
  * Busca o resultado da partida
@@ -32,7 +33,7 @@ export async function fetchMatchResult(matchId: string): Promise<MatchResult | n
 export async function fetchPredictions(matchId: string): Promise<Prediction[]> {
   try {
     const { data, error } = await supabase
-      .from('predictions')
+      .from('predictions') // <--- Confirme se é 'predictions' ou 'match_predictions'
       .select('id, match_id, user_id, home_score, away_score')
       .eq('match_id', matchId);
     
@@ -51,95 +52,48 @@ export async function fetchPredictions(matchId: string): Promise<Prediction[]> {
 /**
  * Busca os critérios de pontuação do banco de dados
  */
-export async function fetchScoringCriteria(): Promise<{
-  exactScore: number;
-  winner: number;
-  partialScore: number;
-}> {
+export async function fetchScoringCriteria(): Promise<ScoringCriteria> {
   try {
     const { data, error } = await supabase
       .from('scoring_criteria')
       .select('name, points');
     
-    if (error) {
+    if (error || !data) {
       console.error('Erro ao buscar critérios de pontuação:', error);
-      // Valores padrão
-      return { exactScore: 10, winner: 7, partialScore: 2 };
+      return { exactScore: 10, winner: 5, partialScore: 3 }; // Retorna valores padrão em caso de erro
     }
     
-    if (!data || data.length === 0) {
-      console.warn('Nenhum critério de pontuação encontrado, usando valores padrão');
-      return { exactScore: 10, winner: 7, partialScore: 2 };
-    }
-    
-    // Log para debug
-    console.log('Critérios de pontuação encontrados:', data);
-    
-    const exactScoreCriteria = data.find(c => c.name === 'exact_score');
-    const winnerCriteria = data.find(c => c.name === 'correct_winner');
-    const partialScoreCriteria = data.find(c => c.name === 'partial_score');
-    
-    // Verificar se todos os critérios foram encontrados
-    if (!exactScoreCriteria || !winnerCriteria || !partialScoreCriteria) {
-      console.warn('Alguns critérios de pontuação não foram encontrados, usando valores padrão para os ausentes');
-    }
-    
-    return {
-      exactScore: exactScoreCriteria?.points || 10,
-      winner: winnerCriteria?.points || 7,
-      partialScore: partialScoreCriteria?.points || 2
+    const criteria: ScoringCriteria = {
+      exactScore: data.find(c => c.name === 'Placar exato')?.points || 10,
+      winner: data.find(c => c.name === 'Acertar vencedor')?.points || 5,
+      partialScore: data.find(c => c.name === 'Acertar um placar')?.points || 3,
     };
+    
+    return criteria;
   } catch (error) {
     console.error('Erro ao buscar critérios de pontuação:', error);
-    return { exactScore: 10, winner: 7, partialScore: 2 };
+    return { exactScore: 10, winner: 5, partialScore: 3 }; // Retorna valores padrão em caso de erro
   }
 }
 
 /**
- * Salva os pontos calculados no banco de dados
+ * Salva os pontos do usuário no banco de dados.
  */
 export async function saveUserPoints(pointsResult: PointsResult): Promise<boolean> {
   try {
-    // Verificar se já existem pontos registrados para este usuário e partida
-    const { data: existingPoints } = await supabase
+    const { error } = await supabase
       .from('user_points')
-      .select('id')
-      .eq('user_id', pointsResult.userId)
-      .eq('match_id', pointsResult.matchId)
-      .single();
+      .insert({
+        user_id: pointsResult.userId,
+        match_id: pointsResult.matchId,
+        points: pointsResult.points,
+        points_type: pointsResult.pointsType,
+        prediction_id: pointsResult.predictionId,
+      });
     
-    if (existingPoints) {
-      // Atualizar pontos existentes
-      const { error: updateError } = await supabase
-        .from('user_points')
-        .update({
-          points: pointsResult.points,
-          points_type: pointsResult.pointsType,
-          prediction_id: pointsResult.predictionId,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', existingPoints.id);
-      
-      if (updateError) {
-        console.error('Erro ao atualizar pontos:', updateError);
-        return false;
-      }
-    } else {
-      // Inserir novos pontos
-      const { error: insertError } = await supabase
-        .from('user_points')
-        .insert({
-          user_id: pointsResult.userId,
-          match_id: pointsResult.matchId,
-          prediction_id: pointsResult.predictionId,
-          points: pointsResult.points,
-          points_type: pointsResult.pointsType
-        });
-      
-      if (insertError) {
-        console.error('Erro ao inserir pontos:', insertError);
-        return false;
-      }
+    if (error) {
+      console.error('Erro ao salvar pontos:', error);
+      return false;
     }
     
     return true;
@@ -149,76 +103,8 @@ export async function saveUserPoints(pointsResult: PointsResult): Promise<boolea
   }
 }
 
-/**
- * Atualiza as estatísticas do usuário
- */
-export async function updateUserStats(userId: string): Promise<boolean> {
-  try {
-    // Buscar todos os pontos do usuário
-    const { data: userPoints, error: pointsError } = await supabase
-      .from('user_points')
-      .select('points, match_id')
-      .eq('user_id', userId);
-    
-    if (pointsError) {
-      console.error('Erro ao buscar pontos do usuário:', pointsError);
-      return false;
-    }
-    
-    // Calcular estatísticas
-    const totalPoints = userPoints?.reduce((sum, point) => sum + (point.points || 0), 0) || 0;
-    const uniqueMatches = new Set(userPoints?.map(point => point.match_id));
-    const matchesPlayed = uniqueMatches.size;
-    
-    // Calcular aproveitamento (porcentagem de pontos obtidos em relação ao máximo possível)
-    const maxPossiblePoints = matchesPlayed * 10; // Assumindo que 10 é a pontuação máxima por partida
-    const accuracyPercentage = maxPossiblePoints > 0 
-      ? Math.round((totalPoints / maxPossiblePoints) * 100)
-      : 0;
-
-    // Verificar se já existe um registro de estatísticas para este usuário
-    const { data: existingStats } = await supabase
-      .from('user_stats')
-      .select('id')
-      .eq('user_id', userId)
-      .single();
-
-    if (existingStats) {
-      // Atualizar estatísticas existentes
-      const { error: updateError } = await supabase
-        .from('user_stats')
-        .update({
-          total_points: totalPoints,
-          matches_played: matchesPlayed,
-          accuracy_percentage: accuracyPercentage,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', existingStats.id);
-      
-      if (updateError) {
-        console.error('Erro ao atualizar estatísticas:', updateError);
-        return false;
-      }
-    } else {
-      // Inserir novas estatísticas
-      const { error: insertError } = await supabase
-        .from('user_stats')
-        .insert({
-          user_id: userId,
-          total_points: totalPoints,
-          matches_played: matchesPlayed,
-          accuracy_percentage: accuracyPercentage
-        });
-      
-      if (insertError) {
-        console.error('Erro ao inserir estatísticas:', insertError);
-        return false;
-      }
-    }
-    
-    return true;
-  } catch (error) {
-    console.error('Erro ao atualizar estatísticas:', error);
-    return false;
-  }
-}
+// REMOVIDA A FUNÇÃO updateOrCreateUserStats AQUI
+// Se você precisar que os pontos totais e estatísticas sejam armazenados no banco de dados,
+// a lógica precisará ser refeita para acumular os pontos de TODOS os tipos de palpites (partidas, grupos, final)
+// e não apenas os de 'user_points' (que parecem ser só de partidas).
+// No entanto, para o funcionamento do ranking, isso não é mais necessário, pois o ranking é calculado no frontend.
