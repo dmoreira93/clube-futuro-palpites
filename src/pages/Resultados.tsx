@@ -17,7 +17,7 @@ interface Team {
   id: string;
   name: string;
   flag_url: string;
-  group_id: string; // Este será o NOME do grupo após o join, não o ID
+  group_id: { name: string } | null; // Corrigido para refletir o join com groups
 }
 
 interface Group {
@@ -35,7 +35,7 @@ interface Match {
   stage: string;
   home_team: Team;
   away_team: Team;
-  group: { name: string }; // Propriedade para o nome do grupo para o MatchCard e filtro
+  group: { name: string } | undefined; // Propriedade para o nome do grupo para o MatchCard e filtro
 }
 
 const Resultados = () => {
@@ -73,6 +73,7 @@ const Resultados = () => {
 
       const formattedMatches = data.map((match: any) => ({
         ...match,
+        // Garante que 'group' seja um objeto com 'name' ou undefined
         group: match.home_team?.group_id ? { name: match.home_team.group_id.name } : undefined,
         home_score: match.is_finished ? match.home_score : null,
         away_score: match.is_finished ? match.away_score : null,
@@ -167,24 +168,41 @@ const Resultados = () => {
               <p className="text-gray-500">Nenhuma partida encontrada para este filtro.</p>
             </div>
           ) : (
-            (filteredMatches as Match[]).map((match) => (
-              <MatchCard
-                key={match.id}
-                id={match.id}
-                homeTeam={match.home_team?.name || ""}
-                awayTeam={match.away_team?.name || ""}
-                date={match.match_date ? new Date(match.match_date).toISOString() : ""}
-                time={match.match_date ? new Date(match.match_date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ""}
-                group={match.group}
-                homeTeamFlag={match.home_team?.flag_url || ""}
-                awayTeamFlag={match.away_team?.flag_url || ""}
-                stage={match.stage || ""}
-                selected={selectedMatch === match.id}
-                onClick={isAdmin ? handleSelectMatch : undefined}
-                homeScore={match.home_score}
-                awayScore={match.away_score}
-              />
-            ))
+            (filteredMatches as Match[]).map((match) => {
+              // --- NOVO CONSOLE.LOG AQUI ---
+              console.log("Renderizando MatchCard com dados:", {
+                id: match.id,
+                homeTeam: match.home_team?.name,
+                awayTeam: match.away_team?.name,
+                date: match.match_date,
+                group: match.group,
+                homeTeamFlag: match.home_team?.flag_url,
+                awayTeamFlag: match.away_team?.flag_url,
+                isFinished: match.is_finished, // Adicionado para verificação
+                homeScore: match.home_score,
+                awayScore: match.away_score,
+              });
+              // --- FIM DO NOVO CONSOLE.LOG ---
+
+              return (
+                <MatchCard
+                  key={match.id}
+                  id={match.id}
+                  homeTeam={match.home_team?.name || ""}
+                  awayTeam={match.away_team?.name || ""}
+                  date={match.match_date ? new Date(match.match_date).toISOString() : ""}
+                  time={match.match_date ? new Date(match.match_date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ""}
+                  group={match.group}
+                  homeTeamFlag={match.home_team?.flag_url || ""}
+                  awayTeamFlag={match.away_team?.flag_url || ""}
+                  stage={match.stage || ""}
+                  selected={selectedMatch === match.id}
+                  onClick={isAdmin ? handleSelectMatch : undefined}
+                  homeScore={match.home_score}
+                  awayScore={match.away_score}
+                />
+              );
+            })
           )}
         </div>
 
