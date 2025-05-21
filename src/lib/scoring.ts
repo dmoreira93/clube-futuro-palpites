@@ -119,15 +119,8 @@ export function calculateGroupClassificationPoints(userPredictedOrder: string[],
   return points;
 }
 
----
-
-### **`src/lib/scoring.ts` (Interface Atualizada)**
-
-```typescript
-// src/lib/scoring.ts (trecho com a interface atualizada)
-
 /**
- * ATUALIZADA: Interface para a estrutura dos palpites de um usuário para as fases finais do torneio,
+ * Interface para a estrutura dos palpites de um usuário para as fases finais do torneio,
  * incluindo o placar da final.
  */
 export interface TournamentFinalPredictions {
@@ -158,7 +151,7 @@ export interface TournamentFinalResults {
  * - Acertar o terceiro colocado: 15 pontos
  * - Acertar o quarto colocado: 10 pontos
  * - Acertar o placar FINAL (independente dos times): 20 pontos
- * - BÔNUS: Acertar os 4 finalistas (campeão, vice, terceiro e quarto) em ordem exata: +35 pontos (acumulativo com os pontos individuais)
+ * - BÔNUS: Acertar os 4 finalistas (campeão, vice, terceiro e quarto em ordem exata): +35 pontos (acumulativo com os pontos individuais)
  *
  * @param userPredictions Os palpites do usuário para as fases finais.
  * @param realResults Os resultados reais das fases finais do torneio.
