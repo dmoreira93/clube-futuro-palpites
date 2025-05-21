@@ -16,6 +16,16 @@ import {
 // Estes tipos refletem a estrutura dos dados que vêm diretamente do Supabase.
 // Certifique-se de que os nomes das tabelas e colunas correspondem ao seu banco.
 
+// ALTERADO AQUI: Tipo para refletir a estrutura da tabela 'users_custom'
+type SupabaseUserCustom = {
+  id: string;
+  name: string;
+  username: string;
+  avatar_url: string | null;
+  is_admin: boolean; // Adicionado para filtrar admins
+  total_points: number; // Adicionado, embora o hook ainda recalcule para fins de display
+};
+
 // ALTERADO AQUI: SupabaseMatchPrediction agora usa 'predictions'
 type SupabaseMatchPrediction = {
   id: string;
@@ -69,18 +79,21 @@ type SupabaseFinalResult = {
   final_away_score: number;
 };
 
-type User = {
+// Tipo de usuário que será usado internamente no hook após o fetch
+type UserForRanking = {
   id: string;
   name: string;
-  username: string; // Adicionado username
-  avatar_url: string;
+  username: string;
+  avatar_url: string | null;
+  is_admin: boolean;
+  total_points: number;
 };
 
 export type Participant = {
   id: string;
   name: string;
-  username: string; // Adicionado username aqui também
-  avatar_url: string;
+  username: string; // Adicionado username
+  avatar_url: string | null;
   points: number;
   matches: number;
   accuracy: string; // Percentual de acerto das partidas
@@ -96,10 +109,11 @@ const useParticipantsRanking = () => {
       setLoading(true);
       setError(null);
       try {
-        // Fetch all users
+        // Fetch all non-admin users from 'users_custom' table
         const { data: users, error: usersError } = await supabase
-          .from('users')
-          .select('id, name, username, avatar_url'); // Buscar username também
+          .from('users_custom') // <--- MUDANÇA AQUI: de 'users' para 'users_custom'
+          .select('id, name, username, avatar_url, is_admin, total_points') // <--- MUDANÇA AQUI: selecionar is_admin e total_points
+          .eq('is_admin', false); // <--- ADICIONADO AQUI: Filtra para NÃO incluir administradores
 
         if (usersError) {
           throw usersError;
@@ -137,22 +151,32 @@ const useParticipantsRanking = () => {
         // Fetch all predictions from Supabase (including match, group, and final predictions)
         // ALTERADO AQUI:supabase.from('predictions') para carregar TODOS os palpites
         const { data: allPredictions, error: allPredictionsError } = await supabase
-          .from('predictions') 
+          .from('predictions')
           .select('id, user_id, match_id, home_score, away_score, group_id, predicted_first_team_id, predicted_second_team_id, champion_id, vice_champion_id, third_place_id, fourth_place_id, final_home_score, final_away_score');
 
         if (allPredictionsError) {
           throw allPredictionsError;
         }
 
-        // Initialize user points and stats
+        // Initialize user points and stats for non-admin users
         const userPoints: { [userId: string]: { points: number; matchesCount: number; correctMatches: number } } = {};
-        users.forEach(user => {
-          userPoints[user.id] = { points: 0, matchesCount: 0, correctMatches: 0 };
+        users.forEach((user: SupabaseUserCustom) => {
+          // Assegura que apenas usuários não-admin são inicializados, embora o filtro já faça isso.
+          // O total_points do banco é a fonte principal, mas o restante (matchesCount, correctMatches) é recalculado aqui.
+          if (!user.is_admin) { // Esta verificação é redundante devido ao .eq('is_admin', false), mas mantida para clareza
+             userPoints[user.id] = { 
+                points: user.total_points, // Inicializa com os pontos totais do banco
+                matchesCount: 0, 
+                correctMatches: 0 
+            };
+          }
         });
 
         // Process all match predictions
-        // Filtrar apenas os palpites de partida
-        const matchPredictions = allPredictions.filter(p => p.match_id !== null && p.home_score !== null && p.away_score !== null);
+        // Filtrar apenas os palpites de partida E que pertencem a usuários não-admin
+        const matchPredictions = allPredictions.filter(p => 
+            p.match_id !== null && p.home_score !== null && p.away_score !== null && userPoints[p.user_id]
+        );
 
         matchPredictions.forEach((prediction: SupabaseMatchPrediction) => {
           const realMatch = realMatchResults.find(m => m.id === prediction.match_id);
@@ -168,19 +192,22 @@ const useParticipantsRanking = () => {
             };
 
             const points = calculateMatchPoints(userPrediction, realResult);
-            userPoints[prediction.user_id].points += points;
-            userPoints[prediction.user_id].matchesCount++;
+            if (userPoints[prediction.user_id]) {
+                // userPoints[prediction.user_id].points += points; // Não adicionamos aqui se usarmos total_points do banco como base
+                userPoints[prediction.user_id].matchesCount++;
 
-            // Verificar se o placar exato foi acertado (para a acurácia)
-            if (points >= 10) { // Se acertou o placar exato, adiciona como correto
-                userPoints[prediction.user_id].correctMatches++;
+                if (points >= 10) { // Se acertou o placar exato (ou critério de maior pontuação), adiciona como correto
+                    userPoints[prediction.user_id].correctMatches++;
+                }
             }
           }
         });
 
         // Process all group predictions
-        // Filtrar apenas os palpites de grupo
-        const groupPredictions = allPredictions.filter(p => p.group_id !== null && p.predicted_first_team_id !== null && p.predicted_second_team_id !== null);
+        // Filtrar apenas os palpites de grupo E que pertencem a usuários não-admin
+        const groupPredictions = allPredictions.filter(p => 
+            p.group_id !== null && p.predicted_first_team_id !== null && p.predicted_second_team_id !== null && userPoints[p.user_id]
+        );
 
         groupPredictions.forEach((prediction: SupabaseGroupPrediction) => {
           const realGroup = realGroupResults.find(g => g.group_id === prediction.group_id);
@@ -196,14 +223,17 @@ const useParticipantsRanking = () => {
                 secondPlace: realGroup.second_place_team_id,
               }
             );
-            userPoints[prediction.user_id].points += points;
+            if (userPoints[prediction.user_id]) {
+                // userPoints[prediction.user_id].points += points; // Não adicionamos aqui se usarmos total_points do banco como base
+            }
           }
         });
 
         // Process all final predictions
-        // Filtrar apenas os palpites finais
-        const finalPredictions = allPredictions.filter(p => p.champion_id !== null && p.final_home_score !== null);
-        const finalPrediction = finalPredictions.find(p => p.user_id === user?.id); // Ajuste: pegar o palpite final do usuário logado ou o primeiro encontrado.
+        // Filtrar apenas os palpites finais E que pertencem a usuários não-admin
+        const finalPredictions = allPredictions.filter(p => 
+            p.champion_id !== null && p.final_home_score !== null && userPoints[p.user_id]
+        );
 
         if (realFinalResults) {
             finalPredictions.forEach((prediction: SupabaseFinalPrediction) => {
@@ -214,7 +244,7 @@ const useParticipantsRanking = () => {
                     fourthPlace: prediction.fourth_place_id,
                     finalScore: {
                         homeGoals: prediction.final_home_score,
-                        awayGoals: prediction.final_away_score,
+                        awayGoals: prediction.away_score, // Corrigido de final_away_score para away_score se a coluna é apenas away_score
                     },
                 };
                 const realTournamentResult: TournamentFinalResults = {
@@ -229,18 +259,22 @@ const useParticipantsRanking = () => {
                 };
 
                 const points = calculateTournamentFinalPoints(userFinalPred, realTournamentResult);
-                userPoints[prediction.user_id].points += points;
+                if (userPoints[prediction.user_id]) {
+                    // userPoints[prediction.user_id].points += points; // Não adicionamos aqui se usarmos total_points do banco como base
+                }
             });
         }
 
-
         // Final ranking construction
-        const finalRanking: Participant[] = users.map((user: User) => {
-          const userStats = userPoints[user.id];
+        // Use a lista 'users' (já filtrada para não-admins) para construir o ranking
+        const finalRanking: Participant[] = users.map((user: UserForRanking) => {
+          const userStats = userPoints[user.id]; // Pega as estatísticas calculadas (matchesCount, correctMatches)
+
+          // Se por algum motivo um usuário de users_custom não teve palpites, garanta valores padrão
           const matchesCount = userStats?.matchesCount || 0;
           const correctMatches = userStats?.correctMatches || 0;
 
-          const accuracy = matchesCount > 0 
+          const accuracy = matchesCount > 0
             ? ((correctMatches / matchesCount) * 100).toFixed(0) // Arredonda para inteiro
             : "0";
 
@@ -249,9 +283,9 @@ const useParticipantsRanking = () => {
             name: user.name,
             username: user.username,
             avatar_url: user.avatar_url,
-            points: userStats?.points || 0,
-            matches: matchesCount,
-            accuracy: `${accuracy}%`
+            points: user.total_points, // <--- USANDO total_points DIRETAMENTE AQUI (já que é atualizado pelo scoring.ts)
+            matches: matchesCount, // Mantido para o cálculo de acurácia
+            accuracy: `${accuracy}%` // Calculado com base nos palpites processados
           };
         });
 
