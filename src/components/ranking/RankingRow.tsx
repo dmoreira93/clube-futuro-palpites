@@ -8,9 +8,31 @@ import { Participant } from "@/hooks/useParticipantsRanking"; // <--- Importaç�
 type RankingRowProps = {
   participant: Participant;
   index: number;
+  totalParticipants: number; // <--- NOVO: Adicionada a prop totalParticipants
 };
 
-const RankingRow = ({ participant, index }: RankingRowProps) => {
+const RankingRow = ({ participant, index, totalParticipants }: RankingRowProps) => {
+
+  // Lógica para determinar o texto do prêmio
+  const getPrizeText = (position: number, total: number): string => {
+    if (position === 0) {
+      return "1º 60%";
+    }
+    if (position === 1) {
+      return "2º 25%";
+    }
+    if (position === 2) {
+      return "3º 15%";
+    }
+    // Para o último colocado, verifique se há mais de um participante para evitar que o 1º também seja "último"
+    if (position === total - 1 && total > 1) {
+      return "Paga um café";
+    }
+    return ""; // Retorna vazio para as outras posições sem prêmio específico
+  };
+
+  const prizeText = getPrizeText(index, totalParticipants);
+
   return (
     <TableRow className={index < 3 ? "bg-yellow-50" : ""}>
       <TableCell className="font-medium text-center">
@@ -27,18 +49,18 @@ const RankingRow = ({ participant, index }: RankingRowProps) => {
       <TableCell className="font-medium">
         <div className="flex items-center gap-2">
           <Avatar className="h-8 w-8">
-            <AvatarImage src={participant.avatar_url} />
+            <AvatarImage src={participant.avatar_url || undefined} /> {/* Certifique-se de que avatar_url é string | undefined para o src */}
             <AvatarFallback>{participant.name.substring(0, 2)}</AvatarFallback>
           </Avatar>
           {participant.name}
         </div>
       </TableCell>
       <TableCell className="text-right font-bold">{participant.points}</TableCell>
-      <TableCell className="text-right">{participant.matches}</TableCell> {/* Agora é 'jogos pontuados' */}
+      <TableCell className="text-right">{participant.matches}</TableCell>
       <TableCell className="text-right">{participant.accuracy}</TableCell>
       <TableCell className="text-right font-semibold">
-        {participant.premio}
-      </TableCell> {/* Adicionada célula para o prêmio */}
+        {prizeText} {/* <--- AGORA USA O TEXTO CALCULADO */}
+      </TableCell>
     </TableRow>
   );
 };

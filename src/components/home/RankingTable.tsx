@@ -50,6 +50,9 @@ const RankingTable = () => {
     );
   }
 
+  // Obter o total de participantes para passar para RankingRow
+  const totalParticipants = participants.length;
+
   return (
     <Card className="shadow-lg">
       <CardHeader className="bg-fifa-blue text-white">
@@ -76,7 +79,12 @@ const RankingTable = () => {
             </TableHeader>
             <TableBody>
               {participants.map((participant, index) => (
-                <RankingRow key={participant.id} participant={participant} index={index} />
+                <RankingRow 
+                  key={participant.id} 
+                  participant={participant} 
+                  index={index}
+                  totalParticipants={totalParticipants} // <--- NOVO: Passando o total de participantes
+                />
               ))}
             </TableBody>
           </Table>
