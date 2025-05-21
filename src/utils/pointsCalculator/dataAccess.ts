@@ -1,18 +1,15 @@
-// src/lib/dataAccess.ts
+// src/utils/pointsCalculator/dataAccess.ts
 
 import { supabase } from "@/integrations/supabase/client";
 import {
   MatchResult,
-  Prediction, // Este tipo provavelmente será MatchPrediction
+  Prediction,
   ScoringCriteria,
   PointsResult,
   SupabaseMatchPrediction,
   SupabaseMatchResultFromMatches,
-  User, // Você provavelmente já tem um tipo User
-  SupabaseTeam, // Se você tiver um tipo para times
+  User,
 } from "./types"; // Certifique-se de que esses tipos estão disponíveis
-
-// --- Funções de Busca Existentes (para cálculo de pontos e outras finalidades) ---
 
 /**
  * Busca o resultado da partida (apenas partidas finalizadas)
@@ -211,19 +208,17 @@ export async function updateUserStats(userId: string): Promise<boolean> {
   }
 }
 
-// --- NOVAS FUNÇÕES PARA PALPITES DO DIA (DailyMatchesAndPredictions) ---
-
 /**
- * Busca todas as partidas para uma data específica.
+ * Busca todas as partidas para uma data específica, incluindo dados dos times e do grupo.
  * @param dateString Uma string de data no formato 'YYYY-MM-DD'.
  */
 export async function fetchMatchesForDate(dateString: string): Promise<SupabaseMatchResultFromMatches[] | null> {
   try {
     const { data, error } = await supabase
       .from('matches')
-      .select('*, home_team:home_team_id(*), away_team:away_team_id(*)') // Inclui dados dos times
-      .gte('match_date', `${dateString}T00:00:00Z`) // Começo do dia
-      .lte('match_date', `${dateString}T23:59:59Z`) // Fim do dia
+      .select('*, home_team:home_team_id(*, group:group_id(name)), away_team:away_team_id(*, group:group_id(name))') // <--- MUDANÇA AQUI: Pegando o 'name' da tabela 'groups'
+      .gte('match_date', `${dateString}T00:00:00Z`)
+      .lte('match_date', `${dateString}T23:59:59Z`)
       .order('match_date', { ascending: true });
 
     if (error) {

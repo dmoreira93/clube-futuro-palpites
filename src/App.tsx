@@ -1,4 +1,4 @@
-// src/App.tsx (ou o local do seu arquivo principal de App.tsx)
+// src/App.tsx
 
 import { Toaster } from "@/components/ui/toaster"; // Do Shadcn UI, para toasts imperativos
 import { Toaster as Sonner } from "@/components/ui/sonner"; // Do Sonner, para toasts declarativos
@@ -6,7 +6,6 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 
-// AQUI ESTÁ A ALTERAÇÃO CHAVE:
 // Usando o alias '@/' para o caminho do AuthProvider para consistência
 import { AuthProvider } from "@/contexts/AuthContext";
 

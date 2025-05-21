@@ -11,12 +11,12 @@ import {
   fetchMatchesForDate,
   fetchMatchPredictionsForMatches,
   fetchUsersCustom,
-} from '@/utils/pointsCalculator/dataAccess'; // Ajuste o caminho se necessário
+} from '@/utils/pointsCalculator/dataAccess';
 import {
   SupabaseMatchResultFromMatches,
   SupabaseMatchPrediction,
   User,
-} from '@/utils/pointsCalculator/types'; // Ajuste o caminho se necessário
+} from '@/utils/pointsCalculator/types';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
   Tooltip,
@@ -27,8 +27,9 @@ import {
 
 // Definição de tipos para o que vamos exibir
 interface DisplayMatch extends SupabaseMatchResultFromMatches {
-  home_team: { name: string; flag_url?: string; group_id?: string } | null;
-  away_team: { name: string; flag_url?: string; group_id?: string } | null;
+  // home_team e away_team agora podem ter uma propriedade 'group' aninhada
+  home_team: { name: string; flag_url?: string; group_id?: string; group?: { name: string } } | null;
+  away_team: { name: string; flag_url?: string; group_id?: string; group?: { name: string } } | null;
   predictionsByUserId?: {
     [userId: string]: SupabaseMatchPrediction;
   };
@@ -136,6 +137,11 @@ const DailyMatchesAndPredictions = () => {
     );
   }
 
+  // Definindo a data limite para exibição dos palpites.
+  // Idealmente, esta data viria de uma configuração global ou de uma coluna 'prediction_deadline' na tabela 'matches'.
+  // Para este exemplo, estou usando uma data fixa.
+  const predictionDisplayCutoffDate = new Date('2025-06-14T23:59:59Z'); // Usar um fuso horário adequado, se aplicável
+
   return (
     <Layout>
       <div className="container mx-auto px-4 py-8">
@@ -184,81 +190,102 @@ const DailyMatchesAndPredictions = () => {
           </div>
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {dailyMatches.map((match) => (
-              <Card key={match.id} className="shadow-lg">
-                <CardHeader className="bg-fifa-blue text-white rounded-t-lg">
-                  <CardTitle className="text-lg flex justify-between items-center">
-                    <span>
-                      {match.home_team?.name || 'Time Casa'} vs{' '}
-                      {match.away_team?.name || 'Time Fora'}
-                    </span>
-                    <span className="text-sm">
-                      {format(parseISO(match.match_date), 'HH:mm', { locale: ptBR })}
-                      {match.home_team?.group_id && (
-                        <span className="ml-2"> - Grupo {match.home_team.group_id}</span>
-                      )}
-                    </span>
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="p-4">
-                  <h3 className="font-bold text-md mb-3 text-fifa-blue">Palpites dos Participantes:</h3>
-                  {allUsers.length === 0 ? (
-                    <p className="text-gray-500 text-sm">Nenhum participante encontrado.</p>
-                  ) : (
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-y-3 gap-x-2">
-                      {allUsers.map((user) => {
-                        const prediction = match.predictionsByUserId?.[user.id];
-                        const hasPredicted = !!prediction;
+            {dailyMatches.map((match) => {
+              const matchDateTime = parseISO(match.match_date);
+              // Os palpites só serão visíveis se a data da partida já passou do cutoff.
+              const canShowPredictions = matchDateTime <= predictionDisplayCutoffDate;
 
-                        return (
-                          <TooltipProvider key={user.id} delayDuration={0}>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <div className="flex items-center space-x-2 p-2 rounded-md hover:bg-gray-100 transition-colors">
-                                  <Avatar className="h-8 w-8">
-                                    {user.avatar_url ? (
-                                      <AvatarImage src={user.avatar_url} alt={user.name} />
-                                    ) : (
-                                      <AvatarFallback>
-                                        {user.name ? user.name.substring(0, 2).toUpperCase() : <UserIcon className="h-4 w-4" />}
-                                      </AvatarFallback>
+              return (
+                <Card key={match.id} className="shadow-lg">
+                  <CardHeader className="bg-fifa-blue text-white rounded-t-lg">
+                    <CardTitle className="text-lg flex justify-between items-center">
+                      <span>
+                        {match.home_team?.name || 'Time Casa'} vs{' '}
+                        {match.away_team?.name || 'Time Fora'}
+                      </span>
+                      <span className="text-sm">
+                        {format(matchDateTime, 'HH:mm', { locale: ptBR })}
+                        {/* Acessando o nome do grupo através do relacionamento aninhado */}
+                        {match.home_team?.group?.name && (
+                          <span className="ml-2"> - Grupo {match.home_team.group.name}</span>
+                        )}
+                      </span>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-4">
+                    {canShowPredictions ? (
+                      <>
+                        <h3 className="font-bold text-md mb-3 text-fifa-blue">Palpites dos Participantes:</h3>
+                        {allUsers.length === 0 ? (
+                          <p className="text-gray-500 text-sm">Nenhum participante encontrado.</p>
+                        ) : (
+                          <div className="grid grid-cols-2 md:grid-cols-3 gap-y-3 gap-x-2">
+                            {allUsers.map((user) => {
+                              const prediction = match.predictionsByUserId?.[user.id];
+                              const hasPredicted = !!prediction;
+
+                              return (
+                                <TooltipProvider key={user.id} delayDuration={0}>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <div className="flex items-center space-x-2 p-2 rounded-md hover:bg-gray-100 transition-colors">
+                                        <Avatar className="h-8 w-8">
+                                          {user.avatar_url ? (
+                                            <AvatarImage src={user.avatar_url} alt={user.name} />
+                                          ) : (
+                                            <AvatarFallback>
+                                              {user.name ? user.name.substring(0, 2).toUpperCase() : <UserIcon className="h-4 w-4" />}
+                                            </AvatarFallback>
+                                          )}
+                                        </Avatar>
+                                        <div className="flex-grow">
+                                          <p className="font-medium text-sm truncate">{user.username || user.name || 'Desconhecido'}</p>
+                                          <p className="text-xs text-muted-foreground">
+                                            {hasPredicted
+                                              ? `Palpite: ${prediction.home_score} x ${prediction.away_score}`
+                                              : 'Não palpitou'}
+                                          </p>
+                                        </div>
+                                      </div>
+                                    </TooltipTrigger>
+                                    {hasPredicted && (
+                                      <TooltipContent className="bg-white border shadow-md p-2 rounded-md">
+                                        <p className="font-semibold">{user.username || user.name}</p>
+                                        <p>Palpite: {prediction.home_score} x {prediction.away_score}</p>
+                                        <p className="text-xs text-gray-500">Para {match.home_team?.name} vs {match.away_team?.name}</p>
+                                      </TooltipContent>
                                     )}
-                                  </Avatar>
-                                  <div className="flex-grow">
-                                    <p className="font-medium text-sm truncate">{user.username || user.name || 'Desconhecido'}</p>
-                                    <p className="text-xs text-muted-foreground">
-                                      {hasPredicted
-                                        ? `Palpite: ${prediction.home_score} x ${prediction.away_score}`
-                                        : 'Não palpitou'}
-                                    </p>
-                                  </div>
-                                </div>
-                              </TooltipTrigger>
-                              {hasPredicted && (
-                                <TooltipContent className="bg-white border shadow-md p-2 rounded-md">
-                                  <p className="font-semibold">{user.username || user.name}</p>
-                                  <p>Palpite: {prediction.home_score} x {prediction.away_score}</p>
-                                  <p className="text-xs text-gray-500">Para {match.home_team?.name} vs {match.away_team?.name}</p>
-                                </TooltipContent>
-                              )}
-                            </Tooltip>
-                          </TooltipProvider>
-                        );
-                      })}
-                    </div>
-                  )}
-                  {/* Se a partida terminou, mostrar o resultado real */}
-                  {match.is_finished && match.home_score !== null && match.away_score !== null && (
-                    <div className="mt-4 pt-4 border-t border-gray-200">
-                      <h4 className="font-bold text-md text-green-700">Resultado Final:</h4>
-                      <p className="text-lg font-bold text-green-700">
-                        {match.home_team?.name} {match.home_score} x {match.away_score} {match.away_team?.name}
-                      </p>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            ))}
+                                  </Tooltip>
+                                </TooltipProvider>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <div className="text-center py-6">
+                        <p className="text-orange-600 font-semibold text-lg">
+                          Os palpites serão visíveis após {format(predictionDisplayCutoffDate, 'dd/MM/yyyy HH:mm', { locale: ptBR })}.
+                        </p>
+                        <p className="text-gray-500 text-sm mt-2">
+                          Volte mais tarde para ver os palpites dos participantes.
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Se a partida terminou, mostrar o resultado real */}
+                    {match.is_finished && match.home_score !== null && match.away_score !== null && (
+                      <div className="mt-4 pt-4 border-t border-gray-200">
+                        <h4 className="font-bold text-md text-green-700">Resultado Final:</h4>
+                        <p className="text-lg font-bold text-green-700">
+                          {match.home_team?.name} {match.home_score} x {match.away_score} {match.away_team?.name}
+                        </p>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
         )}
       </div>
