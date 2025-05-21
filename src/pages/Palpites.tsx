@@ -31,8 +31,12 @@ import { ptBR } from "date-fns/locale";
 import ReactDOMServer from 'react-dom/server'; // Importação NECESSÁRIA para renderizar HTML em string
 
 // Importações para o comprovante
-import { PredictionReceipt } from "@/components/predictions/PredictionReceipt"; // Componente do comprovante
+// ... (código existente) ...
+
+// Importações para o comprovante
+import { PredictionReceipt } from "@/components/home/predictions/PredictionReceipt"; // <--- CAMINHO CORRIGIDO AQUI!
 import { UserType } from "@/contexts/AuthContext"; // Importação explícita do tipo UserType
+
 
 // Ajustes nos tipos de importação para refletir as tabelas separadas
 import {
