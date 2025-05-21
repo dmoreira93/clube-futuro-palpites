@@ -25,20 +25,20 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { Match } from "@/types/matches";
-import { Prediction, GroupPrediction, FinalPrediction, RawGroupPrediction, RawFinalPrediction } from "@/types/predictions"; // Mantenha essas importações
-import { checkTableExists } from "@/utils/RPCHelperFunctions"; // Assumindo que este util é para verificar a tabela
+import { Prediction, GroupPrediction, FinalPrediction } from "@/types/predictions"; 
+// Removidos RawGroupPrediction, RawFinalPrediction pois não são estritamente necessários para este código.
 
 // Adicione as interfaces para Teams e Groups, caso não existam em outro lugar
 interface Team {
   id: string;
   name: string;
-  flag_url: string; // ALTERADO: AGORA USANDO flag_url
+  flag_url: string;
+  group_id: string | null; // Adicionado: Assumindo que o time tem um group_id
 }
 
 interface Group {
   id: string;
   name: string;
-  // Outros campos do grupo, se houver
 }
 
 const Palpites = () => {
@@ -54,11 +54,12 @@ const Palpites = () => {
   const [matches, setMatches] = useState<Match[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
+  const [teamsByGroup, setTeamsByGroup] = useState<{ [groupId: string]: Team[] }>({}); // NOVO: para filtrar times por grupo
 
   // Predictions states
   const [matchPredictions, setMatchPredictions] = useState<{ [matchId: string]: { homeGoals: number; awayGoals: number } }>({});
-  const [groupPredictions, setGroupPredictions] = useState<GroupPrediction[]>([]); // Para armazenar palpites de grupo existentes
-  const [finalPrediction, setFinalPrediction] = useState<FinalPrediction | null>(null); // Para armazenar palpite final existente
+  const [groupPredictions, setGroupPredictions] = useState<GroupPrediction[]>([]); 
+  const [finalPrediction, setFinalPrediction] = useState<FinalPrediction | null>(null);
 
   // Form input states for group and final predictions
   const [groupPositions, setGroupPositions] = useState<{ [groupId: string]: { first: string; second: string } }>({});
@@ -82,36 +83,53 @@ const Palpites = () => {
       setLoading(true);
       setError(null);
       try {
-        // Fetch Matches
-        const { data: matchesData, error: matchesError } = await supabase
-          .from('matches')
-          .select('*')
-          .order('match_date', { ascending: true }); // Ordenar por data para exibir corretamente
-
-        if (matchesError) throw matchesError;
-        setMatches(matchesData || []);
-
         // Fetch Teams
         const { data: teamsData, error: teamsError } = await supabase
           .from('teams')
-          .select('id, name, flag_url'); // ALTERADO: AQUI USANDO flag_url
+          .select('id, name, flag_url, group_id'); // Adicionado group_id para filtro de grupos
 
         if (teamsError) throw teamsError;
         setTeams(teamsData || []);
 
-        // Fetch Groups
+        // NOVO: Organizar times por grupo
+        const organizedTeamsByGroup: { [groupId: string]: Team[] } = {};
+        teamsData?.forEach(team => {
+            if (team.group_id) { // Apenas se o time tiver um grupo associado
+                if (!organizedTeamsByGroup[team.group_id]) {
+                    organizedTeamsByGroup[team.group_id] = [];
+                }
+                organizedTeamsByGroup[team.group_id].push(team);
+            }
+        });
+        setTeamsByGroup(organizedTeamsByGroup);
+
+
+        // Fetch Groups e ordenar por nome
         const { data: groupsData, error: groupsError } = await supabase
-          .from('groups') // Assumindo que você tem uma tabela 'groups'
-          .select('id, name'); // Assumindo essas colunas
+          .from('groups')
+          .select('id, name')
+          .order('name', { ascending: true }); // ORDENAR GRUPOS ALFABETICAMENTE
 
         if (groupsError) throw groupsError;
         setGroups(groupsData || []);
+        
+
+        // Fetch Matches e filtrar times NULL
+        const { data: matchesData, error: matchesError } = await supabase
+          .from('matches')
+          .select('*')
+          .order('match_date', { ascending: true });
+
+        if (matchesError) throw matchesError;
+        // FILTRAR PARTIDAS COM TIMES NULL
+        const filteredMatches = matchesData?.filter(match => match.home_team_id !== null && match.away_team_id !== null) || [];
+        setMatches(filteredMatches);
 
 
         // Fetch existing Match Predictions for the user
         const { data: userMatchPredictions, error: userMatchPredictionsError } = await supabase
           .from('match_predictions')
-          .select('id, match_id, home_score, away_score') // Adicionado 'id' aqui, pois é necessário para update_match_prediction
+          .select('id, match_id, home_score, away_score')
           .eq('user_id', user.id);
 
         if (userMatchPredictionsError) throw userMatchPredictionsError;
@@ -122,7 +140,7 @@ const Palpites = () => {
         setMatchPredictions(initialMatchPredictions);
 
 
-        // --- Fetch existing Group Predictions for the user ---
+        // Fetch existing Group Predictions for the user
         const { data: userGroupPredictions, error: userGroupPredictionsError } = await supabase
             .from('group_predictions')
             .select('*')
@@ -141,12 +159,12 @@ const Palpites = () => {
         setGroupPositions(initialGroupPositions);
 
 
-        // --- Fetch existing Final Prediction for the user ---
+        // Fetch existing Final Prediction for the user
         const { data: userFinalPrediction, error: userFinalPredictionError } = await supabase
             .from('final_predictions')
             .select('*')
             .eq('user_id', user.id)
-            .single(); // Esperamos apenas um palpite final por usuário
+            .single(); 
 
         if (userFinalPredictionError && userFinalPredictionError.code !== 'PGRST116') { // PGRST116 é "no rows found"
             throw userFinalPredictionError;
@@ -229,8 +247,6 @@ const Palpites = () => {
 
     try {
       // --- SUBMISSÃO DE PALPITES DE PARTIDA ---
-      // IMPORTANTE: precisamos do ID do palpite existente para update_match_prediction
-      // userMatchPredictions precisa ser uma lista de objetos com 'id' para funcionar com .find
       const loadedMatchPredictions = (await supabase.from('match_predictions')
           .select('id, match_id, home_score, away_score')
           .eq('user_id', user.id)).data || [];
@@ -262,6 +278,13 @@ const Palpites = () => {
       for (const groupId in groupPositions) {
         const positions = groupPositions[groupId];
         const existingGroupPred = groupPredictions.find(p => p.group_id === groupId);
+
+        // Verificação adicional para garantir que seleções foram feitas
+        if (!positions.first || !positions.second) {
+            toast.warning(`Por favor, selecione 1º e 2º lugar para o Grupo ${groups.find(g => g.id === groupId)?.name || 'desconhecido'}.`);
+            // Você pode decidir pular este grupo ou lançar um erro
+            continue; // Pula para o próximo grupo se as seleções estiverem incompletas
+        }
 
         if (existingGroupPred) {
           const { error: updateError } = await supabase.rpc('update_group_prediction', {
@@ -310,7 +333,7 @@ const Palpites = () => {
             champion_id_param: finalPositions.champion,
             vice_champion_id_param: finalPositions.runnerUp,
             third_place_id_param: finalPositions.thirdPlace,
-            fourth_place_id_param: finalPositions.fourth_place_id,
+            fourth_place_id_param: finalPositions.fourthPlace, // Correção aqui: era fourth_place_id
             final_home_score_param: finalScore.homeGoals,
             final_away_score_param: finalScore.awayGoals,
           });
@@ -321,12 +344,14 @@ const Palpites = () => {
         }
       } else {
         toast.warning("Por favor, selecione os 4 primeiros colocados para o palpite final.");
+        // Se o usuário não preencheu tudo, não prosseguimos com o save do palpite final,
+        // mas as outras seções (partidas, grupos) podem ter sido salvas.
       }
 
 
       toast.success("Palpites salvos com sucesso!");
       // Opcional: recarregar os dados para refletir as mudanças ou redirecionar
-      // fetchData(); // Se você quiser recarregar os dados após salvar
+      // fetchData(); 
     } catch (err: any) {
       console.error("Erro ao salvar palpites:", err);
       setError(err.message || "Falha ao salvar os palpites.");
@@ -362,22 +387,12 @@ const Palpites = () => {
 
   // Helper para encontrar time pelo ID (para display no Select)
   const getTeamName = (teamId: string) => {
-    return teams.find(t => t.id === teamId)?.name || 'Selecione';
+    return teams.find(t => t.id === teamId)?.name || 'Time Desconhecido';
   };
 
   const getTeamLogo = (teamId: string) => {
-    // ALTERADO: AGORA USANDO team.flag_url
-    return teams.find(t => t.id === teamId)?.flag_url || '/placeholder-team-logo.png'; // Placeholder
+    return teams.find(t => t.id === teamId)?.flag_url || '/placeholder-team-logo.png';
   };
-
-  // Mapear partidas por grupo para facilitar a exibição
-  const matchesByGroup = matches.reduce((acc, match) => {
-    if (!acc[match.group_id]) {
-      acc[match.group_id] = [];
-    }
-    acc[match.group_id].push(match);
-    return acc;
-  }, {} as { [groupId: string]: Match[] });
 
   return (
     <Layout>
@@ -407,14 +422,17 @@ const Palpites = () => {
                 ) : (
                   matches.map((match) => (
                     <div key={match.id} className="flex items-center justify-between border-b pb-4 last:border-b-0 last:pb-0">
-                      <div className="flex items-center gap-2">
-                        <Avatar className="h-6 w-6">
+                      {/* Flex item 1: Time da Casa */}
+                      <div className="flex items-center gap-2 w-1/3 justify-start"> {/* Ajustado para ocupar 1/3 e alinhar à esquerda */}
+                        <Avatar className="h-6 w-6 flex-shrink-0">
                           <AvatarImage src={getTeamLogo(match.home_team_id)} />
                           <AvatarFallback>{teams.find(t => t.id === match.home_team_id)?.name.substring(0,2)}</AvatarFallback>
                         </Avatar>
-                        <span className="font-medium text-gray-700">{teams.find(t => t.id === match.home_team_id)?.name}</span>
+                        <span className="font-medium text-gray-700 truncate">{getTeamName(match.home_team_id)}</span> {/* Adicionado truncate */}
                       </div>
-                      <div className="flex items-center gap-2">
+                      
+                      {/* Flex item 2: Placar */}
+                      <div className="flex items-center gap-2 w-1/3 justify-center"> {/* Ajustado para ocupar 1/3 e centralizar */}
                         <Input
                           type="number"
                           className="w-16 text-center"
@@ -431,9 +449,11 @@ const Palpites = () => {
                           min="0"
                         />
                       </div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium text-gray-700">{teams.find(t => t.id === match.away_team_id)?.name}</span>
-                        <Avatar className="h-6 w-6">
+                      
+                      {/* Flex item 3: Time Visitante */}
+                      <div className="flex items-center gap-2 w-1/3 justify-end"> {/* Ajustado para ocupar 1/3 e alinhar à direita */}
+                        <span className="font-medium text-gray-700 text-right truncate">{getTeamName(match.away_team_id)}</span> {/* Adicionado truncate e text-right */}
+                        <Avatar className="h-6 w-6 flex-shrink-0">
                           <AvatarImage src={getTeamLogo(match.away_team_id)} />
                           <AvatarFallback>{teams.find(t => t.id === match.away_team_id)?.name.substring(0,2)}</AvatarFallback>
                         </Avatar>
@@ -472,11 +492,12 @@ const Palpites = () => {
                               <SelectValue placeholder="Selecione o 1º..." />
                             </SelectTrigger>
                             <SelectContent>
-                              {teams.map(team => (
+                              {/* FILTRAR TIMES APENAS PARA O GRUPO ATUAL */}
+                              {teamsByGroup[group.id]?.map(team => (
                                 <SelectItem key={team.id} value={team.id}>
                                   <div className="flex items-center gap-2">
                                     <Avatar className="h-5 w-5">
-                                      <AvatarImage src={team.flag_url} /> {/* ALTERADO: AQUI USANDO flag_url */}
+                                      <AvatarImage src={team.flag_url} />
                                       <AvatarFallback>{team.name.substring(0,2)}</AvatarFallback>
                                     </Avatar>
                                     {team.name}
@@ -496,11 +517,12 @@ const Palpites = () => {
                               <SelectValue placeholder="Selecione o 2º..." />
                             </SelectTrigger>
                             <SelectContent>
-                              {teams.map(team => (
+                              {/* FILTRAR TIMES APENAS PARA O GRUPO ATUAL */}
+                              {teamsByGroup[group.id]?.map(team => (
                                 <SelectItem key={team.id} value={team.id}>
                                   <div className="flex items-center gap-2">
                                     <Avatar className="h-5 w-5">
-                                      <AvatarImage src={team.flag_url} /> {/* ALTERADO: AQUI USANDO flag_url */}
+                                      <AvatarImage src={team.flag_url} />
                                       <AvatarFallback>{team.name.substring(0,2)}</AvatarFallback>
                                     </Avatar>
                                     {team.name}
@@ -543,7 +565,7 @@ const Palpites = () => {
                         <SelectItem key={team.id} value={team.id}>
                           <div className="flex items-center gap-2">
                             <Avatar className="h-5 w-5">
-                              <AvatarImage src={team.flag_url} /> {/* ALTERADO: AQUI USANDO flag_url */}
+                              <AvatarImage src={team.flag_url} />
                               <AvatarFallback>{team.name.substring(0,2)}</AvatarFallback>
                             </Avatar>
                             {team.name}
@@ -569,7 +591,7 @@ const Palpites = () => {
                         <SelectItem key={team.id} value={team.id}>
                           <div className="flex items-center gap-2">
                             <Avatar className="h-5 w-5">
-                              <AvatarImage src={team.flag_url} /> {/* ALTERADO: AQUI USANDO flag_url */}
+                              <AvatarImage src={team.flag_url} />
                               <AvatarFallback>{team.name.substring(0,2)}</AvatarFallback>
                             </Avatar>
                             {team.name}
@@ -595,7 +617,7 @@ const Palpites = () => {
                         <SelectItem key={team.id} value={team.id}>
                           <div className="flex items-center gap-2">
                             <Avatar className="h-5 w-5">
-                              <AvatarImage src={team.flag_url} /> {/* ALTERADO: AQUI USANDO flag_url */}
+                              <AvatarImage src={team.flag_url} />
                               <AvatarFallback>{team.name.substring(0,2)}</AvatarFallback>
                             </Avatar>
                             {team.name}
@@ -621,7 +643,7 @@ const Palpites = () => {
                         <SelectItem key={team.id} value={team.id}>
                           <div className="flex items-center gap-2">
                             <Avatar className="h-5 w-5">
-                              <AvatarImage src={team.flag_url} /> {/* ALTERADO: AQUI USANDO flag_url */}
+                              <AvatarImage src={team.flag_url} />
                               <AvatarFallback>{team.name.substring(0,2)}</AvatarFallback>
                             </Avatar>
                             {team.name}
