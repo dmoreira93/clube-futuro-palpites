@@ -25,6 +25,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { Match } from "@/types/matches";
+import { format, parseISO } from "date-fns"; // Importar format e parseISO
+import { ptBR } from "date-fns/locale"; // Importar locale
+
 // Ajustes nos tipos de importação para refletir as tabelas separadas
 import {
   MatchPrediction, // Renomeado de Prediction para MatchPrediction para clareza
@@ -32,7 +35,7 @@ import {
   FinalPrediction,
   RawGroupPrediction,
   RawFinalPrediction // Manter se necessário para o payload RPC, mas as interfaces diretas da tabela são mais claras
-} from "@/types/predictions"; 
+} from "@/types/predictions";
 
 // Adicione as interfaces para Teams e Groups, caso não existam em outro lugar
 interface Team {
@@ -60,11 +63,11 @@ const Palpites = () => {
   const [matches, setMatches] = useState<Match[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
-  const [teamsByGroup, setTeamsByGroup] = useState<{ [groupId: string]: Team[] }>({}); 
+  const [teamsByGroup, setTeamsByGroup] = useState<{ [groupId: string]: Team[] }>({});
 
   // Predictions states
   const [matchPredictions, setMatchPredictions] = useState<{ [matchId: string]: { homeGoals: number; awayGoals: number } }>({});
-  const [groupPredictions, setGroupPredictions] = useState<GroupPrediction[]>([]); 
+  const [groupPredictions, setGroupPredictions] = useState<GroupPrediction[]>([]);
   const [finalPrediction, setFinalPrediction] = useState<FinalPrediction | null>(null);
 
   // Form input states for group and final predictions
@@ -77,6 +80,11 @@ const Palpites = () => {
   });
   const [finalScore, setFinalScore] = useState({ homeGoals: 0, awayGoals: 0 });
 
+  // ***** DATA DE CORTE PARA PALPITES *****
+  // O ideal é que cada partida tenha sua própria deadline na tabela 'matches'.
+  // Para simplificar e seguir o seu exemplo de 14/06/2025 para todos,
+  // usaremos uma data global fixa. Ajuste conforme sua regra!
+  const globalPredictionCutoffDate = new Date('2025-06-14T23:59:59-03:00'); // Fuso horário de Brasília -03:00
 
   // --- Efeitos de Carregamento de Dados ---
   useEffect(() => {
@@ -92,7 +100,7 @@ const Palpites = () => {
         // Fetch Teams
         const { data: teamsData, error: teamsError } = await supabase
           .from('teams')
-          .select('id, name, flag_url, group_id'); 
+          .select('id, name, flag_url, group_id');
 
         if (teamsError) throw teamsError;
         setTeams(teamsData || []);
@@ -100,7 +108,7 @@ const Palpites = () => {
         // Organizar times por grupo
         const organizedTeamsByGroup: { [groupId: string]: Team[] } = {};
         teamsData?.forEach(team => {
-            if (team.group_id) { 
+            if (team.group_id) {
                 if (!organizedTeamsByGroup[team.group_id]) {
                     organizedTeamsByGroup[team.group_id] = [];
                 }
@@ -114,11 +122,11 @@ const Palpites = () => {
         const { data: groupsData, error: groupsError } = await supabase
           .from('groups')
           .select('id, name')
-          .order('name', { ascending: true }); 
+          .order('name', { ascending: true });
 
         if (groupsError) throw groupsError;
         setGroups(groupsData || []);
-        
+
 
         // Fetch Matches e filtrar times NULL
         const { data: matchesData, error: matchesError } = await supabase
@@ -134,7 +142,7 @@ const Palpites = () => {
         // Fetch existing Match Predictions for the user
         // AGORA PEGANDO DA TABELA 'match_predictions'
         const { data: userMatchPredictions, error: userMatchPredictionsError } = await supabase
-          .from('match_predictions') 
+          .from('match_predictions')
           .select('id, match_id, home_score, away_score')
           .eq('user_id', user.id);
 
@@ -169,10 +177,10 @@ const Palpites = () => {
         // Fetch existing Final Prediction for the user
         // AGORA PEGANDO DA TABELA 'final_predictions'
         const { data: userFinalPrediction, error: userFinalPredictionError } = await supabase
-            .from('final_predictions') 
+            .from('final_predictions')
             .select('id, champion_id, vice_champion_id, third_place_id, fourth_place_id, final_home_score, final_away_score')
             .eq('user_id', user.id)
-            .single(); 
+            .single();
 
         if (userFinalPredictionError && userFinalPredictionError.code !== 'PGRST116') { // PGRST116 é "no rows found"
             throw userFinalPredictionError;
@@ -207,6 +215,11 @@ const Palpites = () => {
 
   // --- Funções de Manipulação de State do Formulário ---
   const handleScoreChange = (matchId: string, team: 'home' | 'away', value: string) => {
+    const match = matches.find(m => m.id === matchId);
+    if (match && parseISO(match.match_date) <= globalPredictionCutoffDate) {
+      toast.warning("Não é possível alterar o palpite para esta partida. O prazo já encerrou.");
+      return;
+    }
     const goals = parseInt(value);
     setMatchPredictions(prev => ({
       ...prev,
@@ -218,6 +231,12 @@ const Palpites = () => {
   };
 
   const handleGroupPositionChange = (groupId: string, position: 'first' | 'second', teamId: string) => {
+    // Para palpites de grupo e final, você pode querer um cutoff diferente ou o mesmo global.
+    // Usando o mesmo global por enquanto.
+    if (new Date() > globalPredictionCutoffDate) {
+      toast.warning("Não é possível alterar palpites de grupo. O prazo já encerrou.");
+      return;
+    }
     setGroupPositions(prev => ({
       ...prev,
       [groupId]: {
@@ -228,6 +247,10 @@ const Palpites = () => {
   };
 
   const handleFinalPositionChange = (position: 'champion' | 'runnerUp' | 'thirdPlace' | 'fourthPlace', teamId: string) => {
+    if (new Date() > globalPredictionCutoffDate) {
+      toast.warning("Não é possível alterar palpites da fase final. O prazo já encerrou.");
+      return;
+    }
     setFinalPositions(prev => ({
       ...prev,
       [position]: teamId,
@@ -235,6 +258,10 @@ const Palpites = () => {
   };
 
   const handleFinalScoreChange = (type: 'homeGoals' | 'awayGoals', value: string) => {
+    if (new Date() > globalPredictionCutoffDate) {
+      toast.warning("Não é possível alterar o placar da final. O prazo já encerrou.");
+      return;
+    }
     const goals = parseInt(value);
     setFinalScore(prev => ({
       ...prev,
@@ -247,6 +274,12 @@ const Palpites = () => {
     if (!user || !isAuthenticated) {
       toast.error("Você precisa estar logado para salvar palpites.");
       navigate("/login");
+      return;
+    }
+
+    // Validação geral do prazo ANTES de tentar salvar qualquer coisa
+    if (new Date() > globalPredictionCutoffDate) {
+      toast.error(`Não é possível salvar palpites após ${format(globalPredictionCutoffDate, 'dd/MM/yyyy HH:mm', { locale: ptBR })}.`);
       return;
     }
 
@@ -264,6 +297,12 @@ const Palpites = () => {
       for (const matchId in matchPredictions) {
         const prediction = matchPredictions[matchId];
         const existingMatchPrediction = loadedMatchPredictions.find(p => p.match_id === matchId);
+        const match = matches.find(m => m.id === matchId);
+
+        if (match && parseISO(match.match_date) <= globalPredictionCutoffDate) {
+          console.warn(`Palpite para partida ${matchId} ignorado, prazo encerrado.`);
+          continue; // Pula esta partida, não permite salvar/atualizar
+        }
 
         if (existingMatchPrediction) {
           const { error: updateError } = await supabase.rpc('update_match_prediction', {
@@ -297,9 +336,9 @@ const Palpites = () => {
 
         if (!positions.first || !positions.second) {
             toast.warning(`Por favor, selecione 1º e 2º lugar para o Grupo ${groups.find(g => g.id === groupId)?.name || 'desconhecido'}.`);
-            continue; 
+            continue;
         }
-        
+
         // Garante que o 1º e 2º lugar não são o mesmo time
         if (positions.first === positions.second) {
             toast.warning(`No Grupo ${groups.find(g => g.id === groupId)?.name || 'desconhecido'}, 1º e 2º lugar não podem ser o mesmo time.`);
@@ -424,10 +463,22 @@ const Palpites = () => {
     return teams.find(t => t.id === teamId)?.flag_url || '/placeholder-team-logo.png';
   };
 
+  // Determinar se o botão geral de "Confirmar Palpites" deve ser desabilitado
+  const isGlobalPredictionLocked = new Date() > globalPredictionCutoffDate;
+
   return (
     <Layout>
       <div className="container mx-auto p-4 max-w-4xl">
         <h1 className="text-3xl font-bold text-center text-fifa-blue mb-6">Meus Palpites</h1>
+
+        {isGlobalPredictionLocked && (
+          <Alert variant="destructive" className="mb-6">
+            <AlertTitle>Prazo Encerrado!</AlertTitle>
+            <AlertDescription>
+              Não é possível mais registrar ou alterar palpites para nenhuma categoria após {format(globalPredictionCutoffDate, 'dd/MM/yyyy HH:mm', { locale: ptBR })}.
+            </AlertDescription>
+          </Alert>
+        )}
 
         <Tabs defaultValue="matches" className="mb-8">
           <TabsList className="grid w-full grid-cols-3">
@@ -448,43 +499,53 @@ const Palpites = () => {
                 {matches.length === 0 ? (
                   <p className="text-center text-gray-500">Nenhuma partida disponível no momento.</p>
                 ) : (
-                  matches.map((match) => (
-                    <div key={match.id} className="flex items-center justify-between border-b pb-4 last:border-b-0 last:pb-0">
-                      <div className="flex items-center gap-2 w-1/3 justify-start">
-                        <Avatar className="h-6 w-6 flex-shrink-0">
-                          <AvatarImage src={getTeamLogo(match.home_team_id)} />
-                          <AvatarFallback>{teams.find(t => t.id === match.home_team_id)?.name.substring(0,2)}</AvatarFallback>
-                        </Avatar>
-                        <span className="font-medium text-gray-700 truncate">{getTeamName(match.home_team_id)}</span>
+                  matches.map((match) => {
+                    const matchDateTime = parseISO(match.match_date);
+                    const isMatchPredictionLocked = matchDateTime <= globalPredictionCutoffDate; // Use a data da partida para bloquear
+
+                    return (
+                      <div key={match.id} className="flex items-center justify-between border-b pb-4 last:border-b-0 last:pb-0">
+                        <div className="flex items-center gap-2 w-1/3 justify-start">
+                          <Avatar className="h-6 w-6 flex-shrink-0">
+                            <AvatarImage src={getTeamLogo(match.home_team_id)} />
+                            <AvatarFallback>{teams.find(t => t.id === match.home_team_id)?.name.substring(0,2)}</AvatarFallback>
+                          </Avatar>
+                          <span className="font-medium text-gray-700 truncate">{getTeamName(match.home_team_id)}</span>
+                        </div>
+
+                        <div className="flex items-center gap-2 w-1/3 justify-center">
+                          <Input
+                            type="number"
+                            className="w-16 text-center"
+                            value={matchPredictions[match.id]?.homeGoals ?? ''}
+                            onChange={(e) => handleScoreChange(match.id, 'home', e.target.value)}
+                            min="0"
+                            disabled={isMatchPredictionLocked || submitting} // Desabilita se o prazo passou ou estiver salvando
+                          />
+                          <span className="font-bold text-gray-700">X</span>
+                          <Input
+                            type="number"
+                            className="w-16 text-center"
+                            value={matchPredictions[match.id]?.awayGoals ?? ''}
+                            onChange={(e) => handleScoreChange(match.id, 'away', e.target.value)}
+                            min="0"
+                            disabled={isMatchPredictionLocked || submitting} // Desabilita se o prazo passou ou estiver salvando
+                          />
+                        </div>
+
+                        <div className="flex items-center gap-2 w-1/3 justify-end">
+                          <span className="font-medium text-gray-700 text-right truncate">{getTeamName(match.away_team_id)}</span>
+                          <Avatar className="h-6 w-6 flex-shrink-0">
+                            <AvatarImage src={getTeamLogo(match.away_team_id)} />
+                            <AvatarFallback>{teams.find(t => t.id === match.away_team_id)?.name.substring(0,2)}</AvatarFallback>
+                          </Avatar>
+                        </div>
+                        {isMatchPredictionLocked && (
+                          <p className="text-red-500 text-xs ml-4">Prazo encerrado.</p>
+                        )}
                       </div>
-                      
-                      <div className="flex items-center gap-2 w-1/3 justify-center">
-                        <Input
-                          type="number"
-                          className="w-16 text-center"
-                          value={matchPredictions[match.id]?.homeGoals ?? ''}
-                          onChange={(e) => handleScoreChange(match.id, 'home', e.target.value)}
-                          min="0"
-                        />
-                        <span className="font-bold text-gray-700">X</span>
-                        <Input
-                          type="number"
-                          className="w-16 text-center"
-                          value={matchPredictions[match.id]?.awayGoals ?? ''}
-                          onChange={(e) => handleScoreChange(match.id, 'away', e.target.value)}
-                          min="0"
-                        />
-                      </div>
-                      
-                      <div className="flex items-center gap-2 w-1/3 justify-end">
-                        <span className="font-medium text-gray-700 text-right truncate">{getTeamName(match.away_team_id)}</span>
-                        <Avatar className="h-6 w-6 flex-shrink-0">
-                          <AvatarImage src={getTeamLogo(match.away_team_id)} />
-                          <AvatarFallback>{teams.find(t => t.id === match.away_team_id)?.name.substring(0,2)}</AvatarFallback>
-                        </Avatar>
-                      </div>
-                    </div>
-                  ))
+                    );
+                  })
                 )}
               </CardContent>
             </Card>
@@ -511,6 +572,7 @@ const Palpites = () => {
                           <Select
                             value={groupPositions[group.id]?.first || ''}
                             onValueChange={(value) => handleGroupPositionChange(group.id, 'first', value)}
+                            disabled={isGlobalPredictionLocked || submitting} // Desabilita se o prazo passou ou estiver salvando
                           >
                             <SelectTrigger id={`group-${group.id}-first`}>
                               <SelectValue placeholder="Selecione o 1º..." />
@@ -535,6 +597,7 @@ const Palpites = () => {
                           <Select
                             value={groupPositions[group.id]?.second || ''}
                             onValueChange={(value) => handleGroupPositionChange(group.id, 'second', value)}
+                            disabled={isGlobalPredictionLocked || submitting} // Desabilita se o prazo passou ou estiver salvando
                           >
                             <SelectTrigger id={`group-${group.id}-second`}>
                               <SelectValue placeholder="Selecione o 2º..." />
@@ -576,6 +639,7 @@ const Palpites = () => {
                   <Select
                     value={finalPositions.champion}
                     onValueChange={(value) => handleFinalPositionChange('champion', value)}
+                    disabled={isGlobalPredictionLocked || submitting} // Desabilita se o prazo passou ou estiver salvando
                   >
                     <SelectTrigger id="champion">
                       <SelectValue placeholder="Selecione o Campeão..." />
@@ -601,6 +665,7 @@ const Palpites = () => {
                   <Select
                     value={finalPositions.runnerUp}
                     onValueChange={(value) => handleFinalPositionChange('runnerUp', value)}
+                    disabled={isGlobalPredictionLocked || submitting} // Desabilita se o prazo passou ou estiver salvando
                   >
                     <SelectTrigger id="runnerUp">
                       <SelectValue placeholder="Selecione o Vice..." />
@@ -626,6 +691,7 @@ const Palpites = () => {
                   <Select
                     value={finalPositions.thirdPlace}
                     onValueChange={(value) => handleFinalPositionChange('thirdPlace', value)}
+                    disabled={isGlobalPredictionLocked || submitting} // Desabilita se o prazo passou ou estiver salvando
                   >
                     <SelectTrigger id="thirdPlace">
                       <SelectValue placeholder="Selecione o 3º..." />
@@ -651,6 +717,7 @@ const Palpites = () => {
                   <Select
                     value={finalPositions.fourthPlace}
                     onValueChange={(value) => handleFinalPositionChange('fourthPlace', value)}
+                    disabled={isGlobalPredictionLocked || submitting} // Desabilita se o prazo passou ou estiver salvando
                   >
                     <SelectTrigger id="fourthPlace">
                       <SelectValue placeholder="Selecione o 4º..." />
@@ -679,6 +746,7 @@ const Palpites = () => {
                     value={finalScore.homeGoals}
                     onChange={(e) => handleFinalScoreChange('homeGoals', e.target.value)}
                     min="0"
+                    disabled={isGlobalPredictionLocked || submitting} // Desabilita se o prazo passou ou estiver salvando
                   />
                   <span className="font-bold text-lg">X</span>
                   <Input
@@ -687,6 +755,7 @@ const Palpites = () => {
                     value={finalScore.awayGoals}
                     onChange={(e) => handleFinalScoreChange('awayGoals', e.target.value)}
                     min="0"
+                    disabled={isGlobalPredictionLocked || submitting} // Desabilita se o prazo passou ou estiver salvando
                   />
                 </div>
               </CardContent>
@@ -706,7 +775,7 @@ const Palpites = () => {
             <Button
               className="w-full bg-fifa-blue hover:bg-opacity-90"
               onClick={handleSubmitBets}
-              disabled={submitting}
+              disabled={submitting || isGlobalPredictionLocked} // Desabilita o botão se o prazo passou ou estiver salvando
             >
               {submitting ? (
                 <>

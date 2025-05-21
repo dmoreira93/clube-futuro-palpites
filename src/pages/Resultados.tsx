@@ -1,42 +1,14 @@
 import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useToast } from "@/components/ui/use-toast";
-import Layout from "@/components/layout/Layout";
+import Layout from "@/components/layout/Layout"; // <-- ADICIONADO: Importe o componente Layout
 import { MatchCard } from "@/components/results/MatchCard";
 import { MatchFilter } from "@/components/results/MatchFilter";
 import { ResultForm } from "@/components/results/ResultForm";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { Link } from "react-router-dom";
-import { Button } from "@/components/ui/button";
-import { ChevronLeft } from "lucide-react";
-
-// Definindo tipos para os dados que virão do Supabase para melhor tipagem
-interface Team {
-  id: string;
-  name: string;
-  flag_url: string;
-  group_id: { name: string } | null; // Corrigido para refletir o join com groups
-}
-
-interface Group {
-  id: string; // ID do grupo no DB
-  name: string; // Nome do grupo (e.g., 'A', 'B', 'C')
-}
-
-// Tipo para a partida com os dados do join
-interface Match {
-  id: string;
-  match_date: string;
-  home_score: number | null; // Pode ser null se o jogo não ocorreu
-  away_score: number | null; // Pode ser null se o jogo não ocorreu
-  is_finished: boolean;
-  stage: string;
-  home_team: Team;
-  away_team: Team;
-  group: { name: string } | undefined; // Propriedade para o nome do grupo para o MatchCard e filtro
-}
+import { Match } from "@/types/matches"; // Certifique-se de que Match está importado se for um tipo externo
 
 const Resultados = () => {
   const { isAdmin } = useAuth();
@@ -44,180 +16,138 @@ const Resultados = () => {
   const [filter, setFilter] = useState("all");
   const [selectedMatch, setSelectedMatch] = useState<string | null>(null);
 
-  // Query para buscar as partidas e os nomes dos grupos
-  const { data: matches = [], isLoading, error } = useQuery<Match[]>({
+  const groups = [
+    { id: 'A', text: 'A' },
+    { id: 'B', text: 'B' },
+    { id: 'C', text: 'C' },
+    { id: 'D', text: 'D' },
+    { id: 'E', text: 'E' },
+    { id: 'F', text: 'F' },
+    { id: 'G', text: 'G' },
+    { id: 'H', text: 'H' },
+  ];
+
+  const { data: matches = [], isLoading, error } = useQuery({
     queryKey: ['matches'],
     queryFn: async () => {
-      console.log("Iniciando query para buscar partidas..."); // Debug: Início da query
       const { data, error } = await supabase
         .from('matches')
         .select(`
           id,
           match_date,
-          home_score,
-          away_score,
           is_finished,
           stage,
-          home_team:teams!home_team_id(id, name, flag_url, group_id:groups(name)),
-          away_team:teams!away_team_id(id, name, flag_url, group_id:groups(name))
-        `)
-        .not('home_team_id', 'is', null)
-        .not('away_team_id', 'is', null);
+          home_score,
+          away_score,
+          home_team_id,
+          away_team_id,
+          home_team:home_team_id(id, name, flag_url, group:group_id(name)),
+          away_team:away_team_id(id, name, flag_url, group:group_id(name))
+        `) // <--- ALTERADO: Buscando o nome do grupo através da FK
+        .order('match_date', { ascending: true });
 
       if (error) {
-        console.error("Erro ao buscar partidas:", error); // Debug: Erro na busca
-        throw new Error(error.message);
+        console.error("Erro ao buscar partidas:", error.message);
+        throw new Error("Não foi possível carregar as partidas.");
       }
-      
-      console.log("Dados brutos das partidas recebidos:", data); // Debug: Dados brutos
-
-      const formattedMatches = data.map((match: any) => ({
-        ...match,
-        // Garante que 'group' seja um objeto com 'name' ou undefined
-        group: match.home_team?.group_id ? { name: match.home_team.group_id.name } : undefined,
-        home_score: match.is_finished ? match.home_score : null,
-        away_score: match.is_finished ? match.away_score : null,
-      }));
-
-      console.log("Partidas formatadas (após ajuste de score):", formattedMatches); // Debug: Partidas formatadas
-
-      return formattedMatches as Match[];
+      // Ajuste o tipo de retorno para garantir que o 'group' seja reconhecido
+      return data as (Match & {
+        home_team: { name: string; flag_url: string; group: { name: string } } | null;
+        away_team: { name: string; flag_url: string; group: { name: string } } | null;
+      })[] || [];
     },
   });
 
-  // Query para buscar os grupos dinamicamente para o dropdown de filtro
-  const { data: groupsData = [], isLoading: groupsLoading } = useQuery<Group[]>({
-    queryKey: ['groups'],
-    queryFn: async () => {
-      console.log("Iniciando query para buscar grupos..."); // Debug: Início da query de grupos
-      const { data, error } = await supabase
-        .from('groups')
-        .select('id, name');
+  useEffect(() => {
+    if (error) {
+      toast({
+        title: "Erro ao carregar partidas",
+        description: "Não foi possível carregar as partidas do banco de dados.",
+        variant: "destructive",
+      });
+    }
+  }, [error, toast]);
 
-      if (error) {
-        console.error("Erro ao buscar grupos para filtro:", error); // Debug: Erro na busca de grupos
-        throw new Error(error.message);
-      }
-      console.log("Dados dos grupos recebidos:", data); // Debug: Dados dos grupos
-      return data as Group[];
-    },
-  });
+  const handleSelectMatch = (matchId: string) => {
+    setSelectedMatch(matchId);
+  };
 
-  const handleSelectMatch = (id: string) => {
-    setSelectedMatch(selectedMatch === id ? null : id);
+  const handleFormComplete = () => {
+    setSelectedMatch(null);
   };
 
   const filteredMatches = matches.filter((match) => {
     if (filter === "all") {
       return true;
     }
-    // Verifica se o nome do grupo existe e se corresponde ao filtro
-    return match.group?.name === filter;
+    // Verifica se o nome do grupo da equipe da casa (ou de fora) corresponde ao filtro
+    // Acessando o nome do grupo através do relacionamento aninhado
+    return match.home_team?.group?.name === filter || match.away_team?.group?.name === filter;
   });
 
-  console.log("Filtro atual:", filter); // Debug: Filtro ativo
-  console.log("Partidas carregadas (sem filtro):", matches); // Debug: Partidas antes do filtro
-  console.log("Partidas filtradas (para exibição):", filteredMatches); // Debug: Partidas após o filtro
+  const selectedMatchData = matches.find((m) => m.id === selectedMatch) as Match | undefined;
 
-
-  const filterGroups = groupsData.map(group => ({
-    id: group.name, // Usamos o nome do grupo como ID para o filtro
-    text: group.name
-  }));
-
+  if (isLoading) {
+    return (
+      <Layout> {/* <-- ADICIONADO: Envolvendo com Layout */}
+        <div className="max-w-4xl mx-auto flex justify-center items-center min-h-[400px]">
+          <div className="animate-spin h-8 w-8 border-4 border-fifa-blue border-t-transparent rounded-full"></div>
+        </div>
+      </Layout>
+    );
+  }
 
   return (
-    <Layout>
-      <div className="container mx-auto p-4 md:p-6 lg:p-8">
-        <div className="flex items-center justify-between mb-6">
-          <Link to="/">
-            <Button variant="ghost" className="text-fifa-blue">
-              <ChevronLeft className="mr-2 h-4 w-4" /> Voltar ao Início
-            </Button>
-          </Link>
-          <h1 className="text-3xl md:text-4xl font-extrabold text-center text-fifa-blue flex-grow">
-            Resultados das Partidas
-          </h1>
-          <div className="w-24"></div> 
+    <Layout> {/* <-- ADICIONADO: Envolvendo com Layout */}
+      <div className="max-w-4xl mx-auto px-4 py-8">
+        <div className="text-center mb-8">
+          <h1 className="text-3xl font-bold text-fifa-blue">Resultados dos Jogos</h1>
+          <p className="text-gray-600 mt-2">
+            Administrador: insira os resultados das partidas para atualizar a pontuação dos participantes
+          </p>
         </div>
 
-        {isLoading && <p>Carregando partidas...</p>}
-        {error && (
-          <Alert variant="destructive" className="mb-4">
-            <AlertTitle>Erro</AlertTitle>
-            <AlertDescription>
-              Não foi possível carregar as partidas: {error.message}
+        {isAdmin && (
+          <Alert className="mb-6 bg-amber-50 border-amber-200">
+            <AlertTitle className="text-amber-800">Área restrita</AlertTitle>
+            <AlertDescription className="text-amber-700">
+              Apenas administradores podem inserir resultados. Os participantes devem aguardar a atualização oficial.
+              <strong className="block mt-2">
+                Ao registrar um resultado, o sistema calculará automaticamente os pontos dos participantes conforme os critérios estabelecidos.
+              </strong>
             </AlertDescription>
           </Alert>
         )}
 
-        <MatchFilter 
-          value={filter} 
-          onValueChange={setFilter} 
-          groups={filterGroups}
-          loading={groupsLoading}
-        />
+        <MatchFilter value={filter} onValueChange={setFilter} groups={groups} />
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
-          {isLoading ? (
-            <div className="col-span-2 text-center py-12 bg-gray-50 rounded-md">
-              <p className="text-gray-500">Carregando jogos...</p>
-            </div>
-          ) : filteredMatches.length === 0 ? (
+          {filteredMatches.length === 0 ? (
             <div className="col-span-2 text-center py-12 bg-gray-50 rounded-md">
               <p className="text-gray-500">Nenhuma partida encontrada para este filtro.</p>
             </div>
           ) : (
-            (filteredMatches as Match[]).map((match) => {
-              // --- NOVO CONSOLE.LOG AQUI ---
-              console.log("Renderizando MatchCard com dados:", {
-                id: match.id,
-                homeTeam: match.home_team?.name,
-                awayTeam: match.away_team?.name,
-                date: match.match_date,
-                group: match.group,
-                homeTeamFlag: match.home_team?.flag_url,
-                awayTeamFlag: match.away_team?.flag_url,
-                isFinished: match.is_finished, // Adicionado para verificação
-                homeScore: match.home_score,
-                awayScore: match.away_score,
-              });
-              // --- FIM DO NOVO CONSOLE.LOG ---
-
-              return (
-                <MatchCard
-                  key={match.id}
-                  id={match.id}
-                  homeTeam={match.home_team?.name || ""}
-                  awayTeam={match.away_team?.name || ""}
-                  date={match.match_date ? new Date(match.match_date).toISOString() : ""}
-                  time={match.match_date ? new Date(match.match_date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ""}
-                  group={match.group}
-                  homeTeamFlag={match.home_team?.flag_url || ""}
-                  awayTeamFlag={match.away_team?.flag_url || ""}
-                  stage={match.stage || ""}
-                  selected={selectedMatch === match.id}
-                  onClick={isAdmin ? handleSelectMatch : undefined}
-                  homeScore={match.home_score}
-                  awayScore={match.away_score}
-                />
-              );
-            })
+            (filteredMatches as any[]).map((match) => (
+              <MatchCard
+                key={match.id}
+                id={match.id}
+                homeTeam={match.home_team?.name || ""}
+                awayTeam={match.away_team?.name || ""}
+                date={match.match_date ? new Date(match.match_date).toISOString() : ""}
+                time={match.match_date ? new Date(match.match_date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ""}
+                group={match.home_team?.group ? { name: match.home_team.group.name } : undefined} {/* <--- MUDANÇA AQUI: Acessando .group.name */}
+                homeTeamFlag={match.home_team?.flag_url || ""}
+                awayTeamFlag={match.away_team?.flag_url || ""}
+                stage={match.stage || ""}
+                selected={selectedMatch === match.id}
+                onClick={isAdmin ? handleSelectMatch : undefined}
+              />
+            ))
           )}
         </div>
 
         {selectedMatch && isAdmin && (
-          <ResultForm
-            matchId={selectedMatch}
-            onResultSaved={() => {
-              toast({
-                title: "Resultado salvo!",
-                description: "Os pontos dos usuários serão calculados em breve.",
-              });
-              setSelectedMatch(null);
-            }}
-            onCancel={() => setSelectedMatch(null)}
-          />
+          <ResultForm match={selectedMatchData} onComplete={handleFormComplete} />
         )}
       </div>
     </Layout>
