@@ -6,13 +6,13 @@ import {
   Prediction, // Este tipo provavelmente será MatchPrediction
   ScoringCriteria,
   PointsResult,
-  SupabaseMatchPrediction, // Já deve estar definido em useParticipantsRanking.ts ou types.ts
-  SupabaseMatchResultFromMatches, // Já deve estar definido
+  SupabaseMatchPrediction,
+  SupabaseMatchResultFromMatches,
   User, // Você provavelmente já tem um tipo User
   SupabaseTeam, // Se você tiver um tipo para times
 } from "./types"; // Certifique-se de que esses tipos estão disponíveis
 
-// --- Funções de Busca Existentes ---
+// --- Funções de Busca Existentes (para cálculo de pontos e outras finalidades) ---
 
 /**
  * Busca o resultado da partida (apenas partidas finalizadas)
@@ -40,11 +40,12 @@ export async function fetchMatchResult(matchId: string): Promise<MatchResult | n
 
 /**
  * Busca todos os palpites para UMA partida específica.
+ * Usado principalmente para calcular pontos de uma partida já jogada.
  */
 export async function fetchPredictions(matchId: string): Promise<Prediction[]> {
   try {
     const { data, error } = await supabase
-      .from('predictions') // <--- VERIFIQUE se esta é a tabela correta para palpites individuais
+      .from('predictions') // <--- VERIFIQUE se esta é a tabela correta para palpites individuais (ex: 'match_predictions')
       .select('id, match_id, user_id, home_score, away_score')
       .eq('match_id', matchId);
 
@@ -91,12 +92,14 @@ export async function fetchScoringCriteria(): Promise<ScoringCriteria | null> {
 
 /**
  * Salva os pontos de um usuário para uma partida.
+ * Assume que 'user_points' é a tabela onde os pontos são registrados.
  */
 export async function saveUserPoints(pointsResult: PointsResult): Promise<boolean> {
   try {
+    // Utilize upsert para evitar duplicatas e atualizar se já existir um registro para prediction_id
     const { data, error } = await supabase
       .from('user_points')
-      .upsert(pointsResult, { onConflict: 'prediction_id' }); // Supondo que você queira atualizar se o prediction_id já existe
+      .upsert(pointsResult, { onConflict: 'prediction_id' }); // Certifique-se que 'prediction_id' é uma coluna única ou chave primária
 
     if (error) {
       console.error('Erro ao salvar pontos do usuário:', error);
@@ -111,7 +114,7 @@ export async function saveUserPoints(pointsResult: PointsResult): Promise<boolea
 
 /**
  * Atualiza as estatísticas gerais de um usuário (total de pontos, partidas jogadas, etc.).
- * Esta função deve ser chamada após calcular e salvar os pontos de uma partida.
+ * Esta função é tipicamente chamada após o cálculo e salvamento dos pontos de uma partida.
  */
 export async function updateUserStats(userId: string): Promise<boolean> {
   try {
@@ -128,7 +131,7 @@ export async function updateUserStats(userId: string): Promise<boolean> {
 
     const totalPoints = userPointsData ? userPointsData.reduce((sum, current) => sum + current.points, 0) : 0;
 
-    // 2. Contar partidas jogadas (onde o usuário fez palpite e a partida foi pontuada)
+    // 2. Contar partidas jogadas (onde o usuário fez palpite e foi pontuado)
     const { count: matchesPlayedCount, error: matchesCountError } = await supabase
       .from('user_points') // Assumindo que user_points registra uma entrada para cada palpite pontuado
       .select('*', { count: 'exact', head: true })
@@ -140,11 +143,12 @@ export async function updateUserStats(userId: string): Promise<boolean> {
     }
 
     // 3. Calcular porcentagem de acerto (exemplo: acertos exatos)
+    // Adapte esta lógica conforme a sua definição de "accuracy_percentage"
     const { count: exactScoresCount, error: exactScoresError } = await supabase
       .from('user_points')
       .select('*', { count: 'exact', head: true })
       .eq('user_id', userId)
-      .eq('points_type', 'EXACT_SCORE'); // Supondo que 'EXACT_SCORE' é um PointsType
+      .eq('points_type', 'EXACT_SCORE'); // Supondo que 'EXACT_SCORE' é um valor válido de PointsType
 
     if (exactScoresError) {
       console.error('Erro ao contar acertos exatos para estatísticas:', exactScoresError);
@@ -152,10 +156,11 @@ export async function updateUserStats(userId: string): Promise<boolean> {
     }
 
     const accuracyPercentage = matchesPlayedCount > 0
-      ? Math.round((exactScoresCount || 0) / matchesPlayedCount * 100)
+      ? Math.round(((exactScoresCount || 0) / matchesPlayedCount) * 100)
       : 0;
 
-    // 4. Atualizar ou inserir na tabela 'user_stats'
+    // 4. Inserir ou atualizar na tabela 'user_stats'
+    // Primeiro, tente buscar o registro existente
     const { data: existingStats, error: fetchStatsError } = await supabase
       .from('user_stats')
       .select('id')
@@ -163,12 +168,12 @@ export async function updateUserStats(userId: string): Promise<boolean> {
       .single();
 
     if (fetchStatsError && fetchStatsError.code !== 'PGRST116') { // PGRST116 = No rows found
-      console.error('Erro ao buscar estatísticas existentes:', fetchStatsError);
+      console.error('Erro ao buscar estatísticas existentes para atualização:', fetchStatsError);
       return false;
     }
 
     if (existingStats) {
-      // Atualizar
+      // Se existe, atualiza
       const { error: updateError } = await supabase
         .from('user_stats')
         .update({
@@ -184,7 +189,7 @@ export async function updateUserStats(userId: string): Promise<boolean> {
         return false;
       }
     } else {
-      // Inserir
+      // Se não existe, insere um novo
       const { error: insertError } = await supabase
         .from('user_stats')
         .insert({
@@ -206,8 +211,7 @@ export async function updateUserStats(userId: string): Promise<boolean> {
   }
 }
 
-
-// --- NOVAS FUNÇÕES PARA PALPITES DO DIA ---
+// --- NOVAS FUNÇÕES PARA PALPITES DO DIA (DailyMatchesAndPredictions) ---
 
 /**
  * Busca todas as partidas para uma data específica.
@@ -217,9 +221,9 @@ export async function fetchMatchesForDate(dateString: string): Promise<SupabaseM
   try {
     const { data, error } = await supabase
       .from('matches')
-      .select('*, home_team:home_team_id(*), away_team:away_team_id(*)')
-      .gte('match_date', `${dateString}T00:00:00Z`)
-      .lte('match_date', `${dateString}T23:59:59Z`)
+      .select('*, home_team:home_team_id(*), away_team:away_team_id(*)') // Inclui dados dos times
+      .gte('match_date', `${dateString}T00:00:00Z`) // Começo do dia
+      .lte('match_date', `${dateString}T23:59:59Z`) // Fim do dia
       .order('match_date', { ascending: true });
 
     if (error) {
@@ -236,6 +240,7 @@ export async function fetchMatchesForDate(dateString: string): Promise<SupabaseM
 
 /**
  * Busca todos os palpites para um array de IDs de partida.
+ * Usado para coletar todos os palpites para os jogos do dia.
  * @param matchIds Array de IDs de partida.
  */
 export async function fetchMatchPredictionsForMatches(matchIds: string[]): Promise<SupabaseMatchPrediction[] | null> {
@@ -245,7 +250,7 @@ export async function fetchMatchPredictionsForMatches(matchIds: string[]): Promi
     }
 
     const { data, error } = await supabase
-      .from('match_predictions')
+      .from('match_predictions') // <--- VERIFIQUE se esta é a tabela correta para palpites de partidas
       .select('*')
       .in('match_id', matchIds);
 
@@ -263,12 +268,13 @@ export async function fetchMatchPredictionsForMatches(matchIds: string[]): Promi
 
 /**
  * Busca todos os usuários customizados.
+ * Usado para exibir a lista de participantes e seus palpites.
  */
 export async function fetchUsersCustom(): Promise<User[] | null> {
   try {
     const { data, error } = await supabase
       .from('users_custom')
-      .select('id, name, username, avatar_url');
+      .select('id, name, username, avatar_url'); // Selecione apenas as colunas que você precisa
 
     if (error) {
       console.error('Erro ao buscar usuários customizados:', error);

@@ -3,12 +3,12 @@ import { supabase } from "@/integrations/supabase/client";
 import Layout from "@/components/layout/Layout";
 import RankingTable from "@/components/home/RankingTable";
 import NextMatches from "@/components/home/NextMatches";
-import DailyPredictions from "@/components/home/DailyPredictions"; // <--- CORREÇÃO AQUI
+import DailyPredictions from "@/components/home/DailyPredictions"; // Este componente mostra os palpites do usuário logado
 import StatsCard from "@/components/home/StatsCard";
 import { Trophy as TrophyIcon, User as UserIcon, Volleyball as SoccerBallIcon, Flag as FlagIcon, Users } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Link } from "react-router-dom";
+import { Link } from "react-router-dom"; // Certifique-se de que Link está importado
 
 const Index = () => {
   const [stats, setStats] = useState({
@@ -109,7 +109,7 @@ const Index = () => {
           <StatsCard
             title="Total de Usuários"
             value={stats.totalUsers}
-            icon={<UserIcon className="h-5 w-5" />}
+            icon={<Users className="h-5 w-5" />}
             description="Participantes registrados no bolão"
           />
           <StatsCard
@@ -132,14 +132,24 @@ const Index = () => {
           />
         </div>
 
+        {/* NOVO BOTÃO AQUI para a tela de palpites do dia */}
+        <div className="text-center mb-8">
+          <Link to="/palpites-do-dia">
+            <Button className="bg-fifa-green hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition-colors duration-300">
+              Ver Palpites dos Jogos do Dia
+            </Button>
+          </Link>
+        </div>
+
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2">
             <RankingTable />
           </div>
           <div className="lg:col-span-1 flex flex-col gap-8">
             <NextMatches />
-            <DailyPredictions /> {/* Mantido o componente DailyPredictions aqui */}
+            <DailyPredictions /> {/* Mantido o componente DailyPredictions aqui, se ele for para o usuário logado fazer/ver seus palpites do dia */}
 
+            {/* Regras Rápidas */}
             <div className="hidden lg:block"> {/* Oculta em telas menores */}
               <Card className="shadow-lg">
                 <CardContent className="p-6">
