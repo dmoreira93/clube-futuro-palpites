@@ -12,7 +12,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AwardIcon } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
-import RankingRow from "@/components/ranking/RankingRow"; // Seu componente RankingRow
+import RankingRow from "@/components/home/ranking/RankingRow"; // Se o arquivo que eu te dei estiver em home/ranking
 
 // Importe as funções de cálculo de pontos
 import {
