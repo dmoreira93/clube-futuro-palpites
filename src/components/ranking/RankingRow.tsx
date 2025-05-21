@@ -34,7 +34,8 @@ const RankingRow = ({ participant, index }: RankingRowProps) => {
           {participant.name}
         </div>
       </TableCell>
-      <TableCell>{participant.nickname}</TableCell>
+      {/* REMOVIDO: A CÉLULA ABAIXO QUE EXIBIA O APELIDO FOI REMOVIDA */}
+      {/* <TableCell>{participant.nickname}</TableCell> */}
       <TableCell className="text-right font-bold">{participant.points}</TableCell>
       <TableCell className="text-right">{participant.matches}</TableCell>
       <TableCell className="text-right">{participant.accuracy}</TableCell>
