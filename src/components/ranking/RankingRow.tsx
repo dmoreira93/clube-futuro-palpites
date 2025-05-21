@@ -3,7 +3,7 @@
 import React from "react";
 import { TableCell, TableRow } from "@/components/ui/table";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
-import { Participant } from "@/hooks/useParticipantsRanking"; 
+import { Participant } from "@/hooks/useParticipantsRanking"; // <--- Importação correta do tipo Participant
 
 type RankingRowProps = {
   participant: Participant;

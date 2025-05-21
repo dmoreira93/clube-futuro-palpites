@@ -5,26 +5,29 @@ import {
   calculateMatchPoints,
   calculateGroupClassificationPoints,
   calculateTournamentFinalPoints,
-  MatchPrediction as ScoringMatchPrediction,
+  MatchPrediction as ScoringMatchPrediction, // Renomeado para evitar conflito com tipo Supabase
   MatchResult,
   TournamentFinalPredictions,
   TournamentFinalResults,
 } from "@/lib/scoring"; 
 
 // --- Definições de Tipo (do Supabase) ---
+// Estes tipos refletem a estrutura dos dados que vêm diretamente do Supabase.
+// Agora, cada tipo corresponde a uma tabela específica.
+
 type SupabaseMatchPrediction = {
   id: string;
   user_id: string;
   match_id: string;
-  home_score: number;
-  away_score: number;
+  home_score: number; // score do palpite
+  away_score: number; // score do palpite
 };
 
 type SupabaseMatchResultFromMatches = {
-  id: string;
-  home_score: number;
-  away_score: number;
-  is_finished: boolean;
+  id: string; // id da partida
+  home_score: number; // score real da partida
+  away_score: number; // score real da partida
+  is_finished: boolean; // para saber se a partida terminou e os resultados estão válidos
 };
 
 type SupabaseGroupPrediction = {
@@ -224,7 +227,7 @@ const useParticipantsRanking = () => {
                     fourthPlace: realFinalResults.fourth_place_id,
                     finalScore: {
                         homeGoals: realFinalResults.final_home_score,
-                        awayGoals: realFinalResults.away_score, // Corrigido aqui: usar away_score
+                        awayGoals: realFinalResults.final_away_score, // <-- CORRIGIDO AQUI!
                     },
                 };
 
@@ -282,16 +285,13 @@ const useParticipantsRanking = () => {
             // Lógica para o último lugar:
             // Ele é o último se classificacao_asc = 1.
             // Para não sobrescrever os top 3, precisamos que haja mais de 3 participantes
-            // Ou que a posição dele seja de fato > 3 (ex: 4o em 4 pessoas).
-            if (numParticipants > 3) { // Se há mais de 3, podemos ter um "último" que não é 1º, 2º ou 3º
-                const lastPlaceIndex = finalRanking.length - 1;
-                // Certifica-se de que o último não é também um dos top 3 (por empate de pontos)
-                if (finalRanking[lastPlaceIndex].points < finalRanking[2].points) { // Se os pontos do último são MENORES que o 3o, ele é o último distinto
-                    finalRanking[lastPlaceIndex].premio = 'deve um café da manhã';
-                } else {
-                    // Caso de empate de pontos no final, ou se há menos de 4 pessoas, não dar 'deve um café'
-                    finalRanking[lastPlaceIndex].premio = null; // Ou um valor padrão se desejar
-                }
+            // Ou que a posição dele seja de fato > 3 (ex: 4o lugar em 4 pessoas).
+            // A lógica de último lugar pode ser refinada, mas esta é uma boa base.
+            const lastPlaceIndex = finalRanking.length - 1;
+            // Verifica se o último lugar NÃO é um dos top 3 (por índice) e se há mais de 3 participantes
+            // Ou se ele é o único ou o último em um grupo pequeno, e tem 0 pontos, e o primeiro tem pontos.
+            if (numParticipants > 3 && finalRanking[lastPlaceIndex].points < finalRanking[2].points) {
+                 finalRanking[lastPlaceIndex].premio = 'deve um café da manhã';
             } else if (numParticipants > 0 && finalRanking.length === 1 && finalRanking[0].points === 0) {
               // Caso de apenas 1 participante e ele não pontuou
               finalRanking[0].premio = 'deve um café da manhã';
