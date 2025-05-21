@@ -18,23 +18,44 @@ import {
 // Estes tipos refletem a estrutura dos dados que vêm diretamente do Supabase.
 // Certifique-se de que os nomes das tabelas e colunas correspondem ao seu banco.
 
-// ALTERADO AQUI: Tipo para refletir a estrutura da tabela 'users_custom'
 type SupabaseUserCustom = {
   id: string;
   name: string;
   username: string;
   avatar_url: string | null;
-  is_admin: boolean; // Adicionado para filtrar admins
-  total_points: number; // Adicionado, embora o hook ainda recalcule para fins de display
+  is_admin: boolean;
+  total_points: number;
 };
 
-// ALTERADO AQUI: SupabaseMatchPrediction agora usa 'predictions'
+// ATUALIZADO: Tipos específicos para cada tabela de palpites
 type SupabaseMatchPrediction = {
   id: string;
   user_id: string;
   match_id: string;
-  home_score: number; // score do palpite
-  away_score: number; // score do palpite
+  home_score: number;
+  away_score: number;
+  created_at: string;
+};
+
+type SupabaseGroupPrediction = {
+  id: string;
+  user_id: string;
+  group_id: string;
+  predicted_first_team_id: string;
+  predicted_second_team_id: string;
+  created_at: string;
+};
+
+type SupabaseFinalPrediction = {
+  id: string;
+  user_id: string;
+  champion_id: string;
+  runner_up_id: string;
+  third_place_id: string | null; // Pode ser null
+  fourth_place_id: string | null; // Pode ser null
+  final_home_score: number | null; // Pode ser null
+  final_away_score: number | null; // Pode ser null
+  created_at: string;
 };
 
 type SupabaseMatchResultFromMatches = {
@@ -44,15 +65,6 @@ type SupabaseMatchResultFromMatches = {
   is_finished: boolean; // para saber se a partida terminou e os resultados estão válidos
 };
 
-// ALTERADO AQUI: SupabaseGroupPrediction agora usa 'predictions'
-type SupabaseGroupPrediction = {
-  id: string;
-  user_id: string;
-  group_id: string;
-  predicted_first_team_id: string;
-  predicted_second_team_id: string;
-};
-
 type SupabaseGroupResult = {
   id: string;
   group_id: string;
@@ -60,28 +72,14 @@ type SupabaseGroupResult = {
   second_place_team_id: string;
 };
 
-// ATUALIZADO AQUI: Renomeado para 'tournament_results' E USANDO runner_up_id
 type SupabaseTournamentResult = {
   champion_id: string;
-  runner_up_id: string; // <--- CORRIGIDO AQUI
-  third_place_id: string;
-  fourth_place_id: string;
-  final_home_score: number;
-  final_away_score: number;
+  runner_up_id: string;
+  third_place_id: string | null;
+  fourth_place_id: string | null;
+  final_home_score: number | null;
+  final_away_score: number | null;
 };
-
-// ATUALIZADO AQUI: SupabaseFinalPrediction agora usa 'predictions' E USANDO runner_up_id
-type SupabaseFinalPrediction = {
-  id: string;
-  user_id: string;
-  champion_id: string;
-  runner_up_id: string; // <--- CORRIGIDO AQUI
-  third_place_id: string;
-  fourth_place_id: string;
-  final_home_score: number;
-  final_away_score: number;
-};
-
 
 // Tipo de usuário que será usado internamente no hook após o fetch
 type UserForRanking = {
@@ -96,11 +94,11 @@ type UserForRanking = {
 export type Participant = {
   id: string;
   name: string;
-  username: string; // Adicionado username
+  username: string;
   avatar_url: string | null;
   points: number;
-  matches: number; // Quantidade de partidas processadas para acurácia
-  accuracy: string; // Percentual de acerto das partidas
+  matches: number;
+  accuracy: string;
 };
 
 const useParticipantsRanking = () => {
@@ -145,41 +143,47 @@ const useParticipantsRanking = () => {
         // Fetch real tournament final results from 'tournament_results'
         const { data: realTournamentResults, error: realTournamentResultsError } = await supabase
             .from('tournament_results')
-            .select('champion_id, runner_up_id, third_place_id, fourth_place_id, final_home_score, final_away_score') // <--- CORRIGIDO AQUI
-            .single(); // Esperamos apenas um resultado final
+            .select('champion_id, runner_up_id, third_place_id, fourth_place_id, final_home_score, final_away_score')
+            .single();
 
         if (realTournamentResultsError && realTournamentResultsError.code !== 'PGRST116') { // PGRST116 é "no rows found"
             throw realTournamentResultsError;
         }
         
-        // Fetch all predictions from Supabase (including match, group, and final predictions)
-        const { data: allPredictions, error: allPredictionsError } = await supabase
-          .from('predictions')
-          // ATUALIZADO AQUI: Incluindo runner_up_id no select
-          .select('id, user_id, match_id, home_score, away_score, group_id, predicted_first_team_id, predicted_second_team_id, champion_id, runner_up_id, third_place_id, fourth_place_id, final_home_score, final_away_score');
+        // --- ATUALIZADO AQUI: Fetch de cada tabela de palpites separadamente ---
+        const { data: matchPredictionsData, error: matchPredictionsError } = await supabase
+          .from('match_predictions')
+          .select('id, user_id, match_id, home_score, away_score');
 
-        if (allPredictionsError) {
-          throw allPredictionsError;
-        }
+        if (matchPredictionsError) throw matchPredictionsError;
+
+        const { data: groupPredictionsData, error: groupPredictionsError } = await supabase
+          .from('group_predictions')
+          .select('id, user_id, group_id, predicted_first_team_id, predicted_second_team_id');
+        
+        if (groupPredictionsError) throw groupPredictionsError;
+
+        const { data: finalPredictionsData, error: finalPredictionsError } = await supabase
+          .from('final_predictions')
+          .select('id, user_id, champion_id, runner_up_id, third_place_id, fourth_place_id, final_home_score, final_away_score');
+
+        if (finalPredictionsError) throw finalPredictionsError;
+        // --- FIM DA ATUALIZAÇÃO DO FETCH ---
 
         // Initialize user points and stats for non-admin users
         const userPoints: { [userId: string]: { points: number; matchesCount: number; correctMatches: number } } = {};
         users.forEach((user: SupabaseUserCustom) => {
           if (!user.is_admin) {
              userPoints[user.id] = { 
-               points: user.total_points, // Inicializa com os pontos totais do banco
+               points: user.total_points, 
                matchesCount: 0, 
                correctMatches: 0 
              };
           }
         });
 
-        // Process all match predictions
-        const matchPredictions = allPredictions.filter(p => 
-            p.match_id !== null && p.home_score !== null && p.away_score !== null && userPoints[p.user_id]
-        );
-
-        matchPredictions.forEach((prediction: SupabaseMatchPrediction) => {
+        // Process match predictions
+        matchPredictionsData.forEach((prediction: SupabaseMatchPrediction) => { // Usando matchPredictionsData
           const realMatch = realMatchResults.find(m => m.id === prediction.match_id);
 
           if (realMatch && realMatch.is_finished) {
@@ -194,22 +198,18 @@ const useParticipantsRanking = () => {
 
             const points = calculateMatchPoints(userPrediction, realResult);
             if (userPoints[prediction.user_id]) {
-                // userPoints[prediction.user_id].points += points; // Não adicionamos aqui se usarmos total_points do banco como base
+                // userPoints[prediction.user_id].points += points; // total_points é a fonte da verdade
                 userPoints[prediction.user_id].matchesCount++;
 
-                if (points >= 10) { // Se acertou o placar exato (ou critério de maior pontuação), adiciona como correto
+                if (points >= 10) { 
                     userPoints[prediction.user_id].correctMatches++;
                 }
             }
           }
         });
 
-        // Process all group predictions
-        const groupPredictions = allPredictions.filter(p => 
-            p.group_id !== null && p.predicted_first_team_id !== null && p.predicted_second_team_id !== null && userPoints[p.user_id]
-        );
-
-        groupPredictions.forEach((prediction: SupabaseGroupPrediction) => {
+        // Process group predictions
+        groupPredictionsData.forEach((prediction: SupabaseGroupPrediction) => { // Usando groupPredictionsData
           const realGroup = realGroupResults.find(g => g.group_id === prediction.group_id);
 
           if (realGroup) {
@@ -224,22 +224,17 @@ const useParticipantsRanking = () => {
               }
             );
             if (userPoints[prediction.user_id]) {
-                // userPoints[prediction.user_id].points += points; // Não adicionamos aqui se usarmos total_points do banco como base
+                // userPoints[prediction.user_id].points += points; // total_points é a fonte da verdade
             }
           }
         });
 
-        // Process all final predictions
-        const finalPredictions = allPredictions.filter(p => 
-            p.champion_id !== null && p.final_home_score !== null && userPoints[p.user_id]
-        );
-
-        // ATUALIZADO AQUI: Usando realTournamentResults
+        // Process final predictions
         if (realTournamentResults) {
-            finalPredictions.forEach((prediction: SupabaseFinalPrediction) => {
+            finalPredictionsData.forEach((prediction: SupabaseFinalPrediction) => { // Usando finalPredictionsData
                 const userFinalPred: TournamentFinalPredictions = {
                     champion: prediction.champion_id,
-                    runnerUp: prediction.runner_up_id, // <--- CORRIGIDO AQUI
+                    runnerUp: prediction.runner_up_id,
                     thirdPlace: prediction.third_place_id,
                     fourthPlace: prediction.fourth_place_id,
                     finalScore: {
@@ -249,7 +244,7 @@ const useParticipantsRanking = () => {
                 };
                 const realResult: TournamentFinalResults = {
                     champion: realTournamentResults.champion_id,
-                    runnerUp: realTournamentResults.runner_up_id, // <--- CORRIGIDO AQUI
+                    runnerUp: realTournamentResults.runner_up_id,
                     thirdPlace: realTournamentResults.third_place_id,
                     fourthPlace: realTournamentResults.fourth_place_id,
                     finalScore: {
@@ -260,21 +255,20 @@ const useParticipantsRanking = () => {
 
                 const points = calculateTournamentFinalPoints(userFinalPred, realResult);
                 if (userPoints[prediction.user_id]) {
-                    // userPoints[prediction.user_id].points += points; // Não adicionamos aqui se usarmos total_points do banco como base
+                    // userPoints[prediction.user_id].points += points; // total_points é a fonte da verdade
                 }
             });
         }
 
         // Final ranking construction
         const finalRanking: Participant[] = users.map((user: UserForRanking) => {
-          const userStats = userPoints[user.id]; // Pega as estatísticas calculadas (matchesCount, correctMatches)
+          const userStats = userPoints[user.id]; 
 
-          // Se por algum motivo um usuário de users_custom não teve palpites, garanta valores padrão
           const matchesCount = userStats?.matchesCount || 0;
           const correctMatches = userStats?.correctMatches || 0;
 
           const accuracy = matchesCount > 0
-            ? ((correctMatches / matchesCount) * 100).toFixed(0) // Arredonda para inteiro
+            ? ((correctMatches / matchesCount) * 100).toFixed(0)
             : "0";
 
           return {
@@ -282,22 +276,22 @@ const useParticipantsRanking = () => {
             name: user.name,
             username: user.username,
             avatar_url: user.avatar_url,
-            points: user.total_points, // <--- USANDO total_points DIRETAMENTE AQUI (já que é atualizado pelo scoring.ts)
-            matches: matchesCount, // Mantido para o cálculo de acurácia
-            accuracy: `${accuracy}%` // Calculado com base nos palpites processados
+            points: user.total_points, 
+            matches: matchesCount, 
+            accuracy: `${accuracy}%`
           };
         });
 
-        // Ordenar o ranking: primeiro por pontos (decrescente), depois por nome (crescente)
+        // Ordenar o ranking
         finalRanking.sort((a, b) => {
           if (b.points !== a.points) {
             return b.points - a.points;
           }
-          return a.name.localeCompare(b.name); // Desempate por nome
+          return a.name.localeCompare(b.name); 
         });
 
         setParticipants(finalRanking);
-        console.log("Final Ranking Calculated:", finalRanking); // DEBUG
+        console.log("Final Ranking Calculated:", finalRanking); 
 
       } catch (err: any) {
         console.error("Erro ao carregar o ranking:", err);
@@ -308,7 +302,7 @@ const useParticipantsRanking = () => {
     };
 
     fetchAndCalculateRanking();
-  }, []); // Adicionado [] para garantir que useEffect roda apenas uma vez
+  }, []); 
 
   return { participants, loading, error };
 };

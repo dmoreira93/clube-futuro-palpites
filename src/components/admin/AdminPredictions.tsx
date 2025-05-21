@@ -1,6 +1,9 @@
+// src/components/admin/AdminPredictions.tsx
+
 import React, { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
+// Tipos adaptados para match_predictions
 type User = {
   id: string;
   name: string;
@@ -15,27 +18,29 @@ type Match = {
   stage: string;
 };
 
-type Prediction = {
+// ATUALIZADO: Tipo de dado para match_predictions
+type MatchPrediction = { // Renomeado de 'Prediction' para 'MatchPrediction' para clareza
   id: string;
   user_id: string;
   match_id: string;
   home_score: number;
   away_score: number;
   created_at: string;
-  user: User | null;
-  match: Match | null;
+  user: User | null; // Assumindo que você ainda quer o join do usuário
+  match: Match | null; // Assumindo que você ainda quer o join da partida
 };
 
 export default function AdminPredictions() {
-  const [predictions, setPredictions] = useState<Prediction[]>([]);
+  const [predictions, setPredictions] = useState<MatchPrediction[]>([]); // Usando MatchPrediction
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
 
   async function fetchPredictions() {
     setLoading(true);
     try {
+      // ATUALIZADO AQUI: De "predictions" para "match_predictions"
       const { data, error } = await supabase
-        .from("predictions")
+        .from("match_predictions") // <--- CORRIGIDO AQUI
         .select(`
           id,
           user_id,
@@ -43,36 +48,43 @@ export default function AdminPredictions() {
           home_score,
           away_score,
           created_at,
-          users: user_id (id, name, username),
-          matches: match_id (id, match_date, stage, home_team:home_team_id(name), away_team:away_team_id(name))
+          users:user_id(id, name, username),
+          matches:match_id(id, match_date, stage, home_team:home_team_id(name), away_team:away_team_id(name))
         `);
 
       if (error) throw error;
 
       // Mapear dados para facilitar o acesso
       const mapped = (data || []).map((p: any) => ({
-        id: p.id,
-        user_id: p.user_id,
-        match_id: p.match_id,
-        home_score: p.home_score,
-        away_score: p.away_score,
-        created_at: p.created_at,
-        user: p.users ?? null,
-        match: p.matches
-          ? {
-              id: p.matches.id,
-              match_date: p.matches.match_date,
-              stage: p.matches.stage,
-              home_team_name: p.matches.home_team?.name ?? "Desconhecido",
-              away_team_name: p.matches.away_team?.name ?? "Desconhecido",
-            }
-          : null,
+        ...p,
+        user: p.users, // Mapeia o objeto de usuário aninhado
+        match: p.matches, // Mapeia o objeto de partida aninhado
       }));
 
       setPredictions(mapped);
-    } catch (err) {
-      console.error("Erro ao buscar palpites:", err);
-      alert("Erro ao carregar os palpites. Veja o console para mais detalhes.");
+    } catch (error: any) {
+      console.error("Erro ao carregar palpites:", error.message);
+      // Opcional: exibir toast de erro
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function deletePrediction(id: string) {
+    if (!window.confirm("Tem certeza que deseja excluir este palpite?")) {
+      return;
+    }
+    setLoading(true);
+    try {
+      // ATUALIZADO AQUI: De "predictions" para "match_predictions"
+      const { error } = await supabase.from("match_predictions").delete().eq("id", id); // <--- CORRIGIDO AQUI
+
+      if (error) throw error;
+      setPredictions(predictions.filter((p) => p.id !== id));
+      // Opcional: exibir toast de sucesso
+    } catch (error: any) {
+      console.error("Erro ao excluir palpite:", error.message);
+      // Opcional: exibir toast de erro
     } finally {
       setLoading(false);
     }
@@ -82,38 +94,20 @@ export default function AdminPredictions() {
     fetchPredictions();
   }, []);
 
-  async function deletePrediction(id: string) {
-    if (!window.confirm("Confirma a exclusão deste palpite?")) return;
-
-    try {
-      const { error } = await supabase.from("predictions").delete().eq("id", id);
-      if (error) throw error;
-
-      setPredictions((prev) => prev.filter((p) => p.id !== id));
-      alert("Palpite excluído com sucesso.");
-    } catch (err) {
-      console.error("Erro ao excluir palpite:", err);
-      alert("Erro ao excluir palpite. Veja o console para detalhes.");
-    }
-  }
-
-  // Filtro simples por nome ou username do usuário
-  const filteredPredictions = predictions.filter((p) => {
-    if (!p.user) return false;
-    const term = searchTerm.toLowerCase();
-    return (
-      p.user.name.toLowerCase().includes(term) ||
-      p.user.username.toLowerCase().includes(term)
-    );
-  });
+  const filteredPredictions = predictions.filter(
+    (p) =>
+      p.user?.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      p.user?.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (p.match?.home_team_name && p.match.home_team_name.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (p.match?.away_team_name && p.match.away_team_name.toLowerCase().includes(searchTerm.toLowerCase()))
+  );
 
   return (
-    <div style={{ padding: 20 }}>
-      <h1>Administração de Palpites</h1>
-
+    <div>
+      <h2>Gerenciar Palpites de Partidas</h2> {/* Título mais específico */}
       <input
         type="text"
-        placeholder="Buscar por usuário"
+        placeholder="Buscar por usuário ou time..."
         value={searchTerm}
         onChange={(e) => setSearchTerm(e.target.value)}
         style={{ marginBottom: 20, padding: 8, width: "300px" }}
@@ -123,7 +117,7 @@ export default function AdminPredictions() {
       {loading ? (
         <p>Carregando palpites...</p>
       ) : filteredPredictions.length === 0 ? (
-        <p>Nenhum palpite encontrado.</p>
+        <p>Nenhum palpite de partida encontrado.</p>
       ) : (
         <table border={1} cellPadding={8} cellSpacing={0}>
           <thead>
