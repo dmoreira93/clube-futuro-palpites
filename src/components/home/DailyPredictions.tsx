@@ -1,3 +1,5 @@
+// src/components/home/DailyPredictions.tsx
+
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,6 +14,7 @@ import {
   SupabaseMatchPrediction,
 } from "@/utils/pointsCalculator/types";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Link } from "react-router-dom"; // Importar Link para o link do painel de admin
 
 // Interface para um palpite no estado local
 interface LocalPrediction {
@@ -22,7 +25,7 @@ interface LocalPrediction {
 }
 
 const DailyPredictions = () => {
-  const { user } = useAuth(); // Obter o usuário logado
+  const { user, isAdmin } = useAuth(); // Obter o usuário logado e o status de admin
   const { toast } = useToast();
 
   const [loading, setLoading] = useState(true);
@@ -33,25 +36,49 @@ const DailyPredictions = () => {
   }>({});
   const [isSaving, setIsSaving] = useState(false);
 
-  // Define a data de corte para envio/edição de palpites
-  // ***** IMPORTANTE: Ajuste essa data para a lógica de negócio real *****
-  // Por exemplo, se for 30 minutos antes do jogo, ou uma data global específica.
-  // Vou usar 14/06/2025 para seguir o seu exemplo, mas o ideal é que seja
-  // a data/hora da partida ou uma coluna prediction_deadline na tabela matches.
   const globalPredictionCutoffDate = new Date('2025-06-14T23:59:59-03:00'); // Exemplo: 14 de junho de 2025, 23:59:59 no fuso horário -03:00
+
+  // Verifica se o usuário está logado
+  if (!user) {
+    return (
+      <Card className="shadow-lg">
+        <CardHeader className="bg-fifa-blue text-white rounded-t-lg">
+          <CardTitle className="text-lg">Próximos Jogos e Seus Palpites</CardTitle>
+        </CardHeader>
+        <CardContent className="p-4 text-center text-gray-600">
+          <p>Faça login para ver as próximas partidas e registrar seus palpites.</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // ***** NOVO: Verifica se o usuário é um administrador *****
+  if (isAdmin) {
+    return (
+      <Card className="shadow-lg">
+        <CardHeader className="bg-fifa-blue text-white rounded-t-lg">
+          <CardTitle className="text-lg">Próximos Jogos e Seus Palpites</CardTitle>
+        </CardHeader>
+        <CardContent className="p-4 text-center text-gray-600">
+          <p>Esta seção é destinada aos participantes do bolão. Como administrador, você não registra palpites aqui.</p>
+          <p className="mt-2 text-sm">Gerencie o bolão através do <Link to="/admin" className="text-fifa-blue underline">Painel de Admin</Link>.</p>
+        </CardContent>
+      </Card>
+    );
+  }
+  // ***** FIM NOVO *****
+
 
   useEffect(() => {
     const fetchMatchesAndPredictions = async () => {
-      if (!user) {
-        setLoading(false);
-        return;
-      }
+      // O if (!user) acima já trata o caso de não logado
+      // E o if (isAdmin) acima já trata o caso de admin logado
 
       setLoading(true);
       setError(null);
       try {
         const today = format(new Date(), "yyyy-MM-dd");
-        
+
         // Buscar partidas futuras (a partir de hoje) que ainda não terminaram
         const { data: matchesData, error: matchesError } = await supabase
           .from('matches')
@@ -69,9 +96,9 @@ const DailyPredictions = () => {
         const matchIds = matchesData?.map(m => m.id) || [];
         if (matchIds.length > 0) {
           const { data: predictionsData, error: predictionsError } = await supabase
-            .from('match_predictions') // Assumindo que esta é a tabela de palpites
+            .from('match_predictions')
             .select('id, match_id, home_score, away_score')
-            .eq('user_id', user.id)
+            .eq('user_id', user.id) // Busca apenas os palpites do usuário logado
             .in('match_id', matchIds);
 
           if (predictionsError) throw predictionsError;
@@ -110,7 +137,7 @@ const DailyPredictions = () => {
   };
 
   const handleSavePrediction = async (matchId: string) => {
-    if (!user) {
+    if (!user) { // Já tratado acima, mas mantido como fallback de segurança
       toast({
         title: "Erro",
         description: "Você precisa estar logado para salvar um palpite.",
@@ -160,7 +187,7 @@ const DailyPredictions = () => {
         variant: "destructive",
       });
       return;
-    }
+    ` }
 
     setIsSaving(true);
     try {
@@ -187,7 +214,7 @@ const DailyPredictions = () => {
             home_score: homeScoreNum,
             away_score: awayScoreNum,
           })
-          .select('id') // Seleciona o ID para atualizar o estado
+          .select('id')
           .single();
 
         if (insertError) throw insertError;
@@ -212,19 +239,6 @@ const DailyPredictions = () => {
       setIsSaving(false);
     }
   };
-
-  if (!user) {
-    return (
-      <Card className="shadow-lg">
-        <CardHeader className="bg-fifa-blue text-white rounded-t-lg">
-          <CardTitle className="text-lg">Próximos Jogos e Seus Palpites</CardTitle>
-        </CardHeader>
-        <CardContent className="p-4 text-center text-gray-600">
-          <p>Faça login para ver as próximas partidas e registrar seus palpites.</p>
-        </CardContent>
-      </Card>
-    );
-  }
 
   return (
     <Card className="shadow-lg">
@@ -272,7 +286,7 @@ const DailyPredictions = () => {
                       placeholder="0"
                       value={currentPrediction.home_score}
                       onChange={(e) => handleScoreChange(match.id, 'home', e.target.value)}
-                      disabled={isSaving || !canPredict} // Desabilita se estiver salvando ou após o cutoff
+                      disabled={isSaving || !canPredict}
                     />
                     <span className="text-xl font-bold">x</span>
                     <Input
@@ -282,12 +296,12 @@ const DailyPredictions = () => {
                       placeholder="0"
                       value={currentPrediction.away_score}
                       onChange={(e) => handleScoreChange(match.id, 'away', e.target.value)}
-                      disabled={isSaving || !canPredict} // Desabilita se estiver salvando ou após o cutoff
+                      disabled={isSaving || !canPredict}
                     />
                     <Button
                       className="ml-auto bg-fifa-green hover:bg-green-700"
                       onClick={() => handleSavePrediction(match.id)}
-                      disabled={isSaving || !canPredict} // Desabilita se estiver salvando ou após o cutoff
+                      disabled={isSaving || !canPredict}
                     >
                       {currentPrediction.prediction_id ? "Atualizar" : "Salvar"}
                     </Button>
