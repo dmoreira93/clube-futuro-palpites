@@ -45,7 +45,8 @@ type PredictionReceiptProps = {
 };
 
 // --- Componente PredictionReceipt ---
-export const PredictionReceipt: React.FC<PredictionReceiptProps> = ({ user, predictions, dateGenerated }) => {
+// Alterado de 'export const PredictionReceipt' para 'const PredictionReceipt' e depois exportado como default
+const PredictionReceipt: React.FC<PredictionReceiptProps> = ({ user, predictions, dateGenerated }) => {
   return (
     // A classe 'receipt-container' e as utilidades 'print:' são para estilos de impressão.
     // 'print:shadow-none print:border-0 print:p-0' são importantes para remover elementos
@@ -89,3 +90,5 @@ export const PredictionReceipt: React.FC<PredictionReceiptProps> = ({ user, pred
     </div>
   );
 };
+
+export default PredictionReceipt; // Exportação padrão adicionada aqui
