@@ -29,7 +29,7 @@ import { Match, Team } from "@/types/matches"; // Certifique-se de que 'Team' es
 import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import ReactDOMServer from 'react-dom/server'; // Importação NECESSÁRIA para renderizar HTML em string
-import { PredictionReceipt } from '@/components/home/predictions/PredictionReceipt'; // Note as chaves {}
+import { PredictionReceipt } from '@/components/home/predictions/PredictionReceipt'; // Importar o componente do comprovante COM AS CHAVES E O CAMINHO CORRETO
 
 // --- INTERFACES PARA O ESTADO ---
 interface LocalPrediction {
@@ -49,8 +49,8 @@ interface GroupPredictionState {
 interface FinalPredictionState {
   champion_id: string | null;
   vice_champion_id: string | null;
-  third_place_id: string | null; // NOVO CAMPO
-  fourth_place_id: string | null; // NOVO CAMPO
+  third_place_id: string | null;
+  fourth_place_id: string | null;
   final_home_score: number | null;
   final_away_score: number | null;
   prediction_id?: string;
@@ -73,8 +73,8 @@ const Palpites = () => {
   const [finalPrediction, setFinalPrediction] = useState<FinalPredictionState>({
     champion_id: null,
     vice_champion_id: null,
-    third_place_id: null, // Inicializa novo campo
-    fourth_place_id: null, // Inicializa novo campo
+    third_place_id: null,
+    fourth_place_id: null,
     final_home_score: null,
     final_away_score: null,
   });
@@ -169,8 +169,8 @@ const Palpites = () => {
           setFinalPrediction({
             champion_id: finalPredData.champion_id,
             vice_champion_id: finalPredData.vice_champion_id,
-            third_place_id: finalPredData.third_place_id, // Carregar novo campo
-            fourth_place_id: finalPredData.fourth_place_id, // Carregar novo campo
+            third_place_id: finalPredData.third_place_id,
+            fourth_place_id: finalPredData.fourth_place_id,
             final_home_score: finalPredData.final_home_score,
             final_away_score: finalPredData.final_away_score,
             prediction_id: finalPredData.id,
@@ -379,7 +379,7 @@ const Palpites = () => {
 
     // Validação de todos os 6 IDs e 2 placares
     if (!finalPrediction.champion_id || !finalPrediction.vice_champion_id ||
-        !finalPrediction.third_place_id || !finalPrediction.fourth_place_id || // NOVOS CAMPOS NA VALIDAÇÃO
+        !finalPrediction.third_place_id || !finalPrediction.fourth_place_id ||
         finalPrediction.final_home_score === null || finalPrediction.final_away_score === null) {
       toast.error("Por favor, preencha todos os campos do palpite da final (Campeão, Vice-Campeão, 3º lugar, 4º lugar e Placar).");
       return;
@@ -403,8 +403,8 @@ const Palpites = () => {
       const { data, error } = await supabase.rpc('insert_final_prediction', {
         champion_id_param: finalPrediction.champion_id,
         vice_champion_id_param: finalPrediction.vice_champion_id,
-        third_place_id_param: finalPrediction.third_place_id,   // <<< ADICIONADO AQUI
-        fourth_place_id_param: finalPrediction.fourth_place_id, // <<< ADICIONADO AQUI
+        third_place_id_param: finalPrediction.third_place_id,
+        fourth_place_id_param: finalPrediction.fourth_place_id,
         final_home_score_param: finalPrediction.final_home_score,
         final_away_score_param: finalPrediction.final_away_score,
         user_id_param: user.id, // user_id_param deve ser o último conforme a função SQL que te passei
@@ -490,8 +490,8 @@ const Palpites = () => {
     const finalPredictionReceipt = {
       champion: teams.find(t => t.id === finalPrediction.champion_id),
       vice_champion: teams.find(t => t.id === finalPrediction.vice_champion_id),
-      third_place: teams.find(t => t.id === finalPrediction.third_place_id), // NOVO CAMPO PARA O COMPROVANTE
-      fourth_place: teams.find(t => t.id === finalPrediction.fourth_place_id), // NOVO CAMPO PARA O COMPROVANTE
+      third_place: teams.find(t => t.id === finalPrediction.third_place_id),
+      fourth_place: teams.find(t => t.id === finalPrediction.fourth_place_id),
       final_home_score: finalPrediction.final_home_score,
       final_away_score: finalPrediction.final_away_score,
     };
@@ -857,7 +857,10 @@ const Palpites = () => {
                           className="w-24 text-center"
                           placeholder="0"
                           value={finalPrediction.final_home_score === null ? '' : finalPrediction.final_home_score}
-                          onChange={(e) => handleFinalPredictionChange('final_home_score', parseInt(e.target.value) || null)}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            handleFinalPredictionChange('final_home_score', value === '' ? null : parseInt(value));
+                          }}
                           disabled={submitting || !(finalPredictionCutoffDate.getTime() > Date.now())}
                         />
                         <span className="text-xl font-bold">x</span>
@@ -868,7 +871,10 @@ const Palpites = () => {
                           className="w-24 text-center"
                           placeholder="0"
                           value={finalPrediction.final_away_score === null ? '' : finalPrediction.final_away_score}
-                          onChange={(e) => handleFinalPredictionChange('final_away_score', parseInt(e.target.value) || null)}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            handleFinalPredictionChange('final_away_score', value === '' ? null : parseInt(value));
+                          }}
                           disabled={submitting || !(finalPredictionCutoffDate.getTime() > Date.now())}
                         />
                       </div>
