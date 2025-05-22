@@ -1,6 +1,5 @@
 // src/pages/Palpites.tsx
-
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Layout from "@/components/layout/Layout";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -26,540 +25,720 @@ import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
-import { Match } from "@/types/matches"; // Certifique-se que o tipo Match está completo
-import { format, parseISO, isAfter } from "date-fns"; // Adicionado isAfter
+import { Match, Team } from "@/types/matches";
+import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import ReactDOMServer from 'react-dom/server';
+import { PredictionReceipt } from '@/components/home/predictions/PredictionReceipt';
 
-// Importações para o comprovante
-import PredictionReceipt from "@/components/home/predictions/PredictionReceipt";
-
-// --- NOVAS INTERFACES (ou ajuste as suas existentes) ---
-interface Team {
-  id: string;
-  name: string;
+// --- INTERFACES PARA O ESTADO ---
+interface LocalPrediction {
+  match_id: string;
+  home_score: string;
+  away_score: string;
+  prediction_id?: string;
 }
 
-export interface MatchWithTeams extends Match {
-  home_team?: Team;
-  away_team?: Team;
+interface GroupPredictionState {
+  group_id: string;
+  predicted_first_team_id: string | null;
+  predicted_second_team_id: string | null;
+  prediction_id?: string;
 }
 
-// Assumindo seus tipos para GroupPrediction e FinalPrediction
-// Você deve ter essas interfaces definidas em algum lugar, talvez em '@/types/predictions' ou similar
-interface GroupPrediction {
-  id?: string;
-  group_name: string;
-  predicted_first_team_id: string;
-  predicted_second_team_id: string;
-  predicted_first_team?: Team; // Para exibir o nome do time
-  predicted_second_team?: Team; // Para exibir o nome do time
+interface FinalPredictionState {
+  champion_id: string | null;
+  vice_champion_id: string | null;
+  third_place_id: string | null;
+  fourth_place_id: string | null;
+  final_home_score: number | null;
+  final_away_score: number | null;
+  prediction_id?: string;
 }
 
-interface FinalPrediction {
-  id?: string;
-  champion_id: string;
-  runner_up_id: string;
-  third_place_id: string;
-  fourth_place_id: string;
-  champion?: Team;
-  runner_up?: Team;
-  third_place?: Team;
-  fourth_place?: Team;
-}
-
-// Variáveis para datas de corte (ajuste conforme necessário)
-// Use estas para as regras específicas do seu bolão
-const globalPredictionCutoffDate = parseISO("2025-06-14T12:00:00-03:00"); // Exemplo: data limite global para o bolão (ajuste fuso horário)
-const finalPredictionCutoffDate = parseISO("2025-06-20T12:00:00-03:00"); // Exemplo: data limite para palpites de final (ajuste fuso horário)
-
+// --- COMPONENTE PRINCIPAL ---
 const Palpites = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
 
-  const [submitting, setSubmitting] = useState(false);
-  const [activeTab, setActiveTab] = useState("matches");
-
-  // --- Estados para Palpites de Partida (seria DailyPredictions) ---
-  const [matchPredictions, setMatchPredictions] = useState<any[]>([]); // Pode ser vazio ou removido se DailyPredictions cuida disso
-  const [matches, setMatches] = useState<MatchWithTeams[]>([]); // Para obter detalhes dos times no comprovante
-
-  // --- Estados para Palpites de Grupo ---
-  const [groups, setGroups] = useState<any[]>([]); // Supondo que você tenha uma tabela 'groups'
-  const [teams, setTeams] = useState<Team[]>([]); // Para as opções de seleção de times
-  const [groupPredictions, setGroupPredictions] = useState<GroupPrediction[]>([]);
-
-  // --- Estados para Palpites da Final ---
-  const [finalPrediction, setFinalPrediction] = useState<FinalPrediction | null>(null);
-
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [matches, setMatches] = useState<Match[]>([]);
+  const [teams, setTeams] = useState<Team[]>([]);
+  const [groups, setGroups] = useState<{ id: string; name: string }[]>([]);
 
+  // Estados para os palpites
+  const [dailyPredictions, setDailyPredictions] = useState<{ [matchId: string]: LocalPrediction }>({});
+  const [groupPredictions, setGroupPredictions] = useState<{ [groupId: string]: GroupPredictionState }>({});
+  const [finalPrediction, setFinalPrediction] = useState<FinalPredictionState>({
+    champion_id: null,
+    vice_champion_id: null,
+    third_place_id: null,
+    fourth_place_id: null,
+    final_home_score: null,
+    final_away_score: null,
+  });
 
-  // Função auxiliar para verificar se o prazo global ou da partida foi atingido
-  const getCanPredictMatch = useCallback((matchDate: string, isFinished: boolean) => {
-    const matchTime = parseISO(matchDate).getTime();
-    const now = new Date().getTime();
-    const cutoffTime = matchTime - (1 * 60 * 60 * 1000); // 1 hora antes do jogo
+  // Datas de corte (ajuste conforme a data real do seu bolão)
+  const globalPredictionCutoffDate = parseISO("2026-06-12T12:00:00-03:00");
+  const finalPredictionCutoffDate = parseISO("2026-07-01T12:00:00-03:00");
 
-    if (isFinished) return false;
-    if (now > cutoffTime) return false;
-    // Se quiser aplicar o prazo global para partidas também, adicione:
-    // if (isAfter(new Date(), globalPredictionCutoffDate)) return false;
-    return true;
+  // --- FUNÇÕES DE CARREGAMENTO DE DADOS ---
+
+  const fetchInitialData = useCallback(async () => {
+    setLoading(true);
+    try {
+      const { data: matchesData, error: matchesError } = await supabase
+        .from('matches')
+        .select('*, home_team:home_team_id(*), away_team:away_team_id(*)')
+        .not('home_team_id', 'is', null)
+        .not('away_team_id', 'is', null)
+        .order('match_date', { ascending: true });
+
+      if (matchesError) throw matchesError;
+      setMatches(matchesData);
+
+      if (user) {
+        const { data: predictionsData, error: predictionsError } = await supabase
+          .from('match_predictions')
+          .select('*')
+          .eq('user_id', user.id);
+
+        if (predictionsError) throw predictionsError;
+
+        const loadedPredictions: { [matchId: string]: LocalPrediction } = {};
+        predictionsData.forEach(p => {
+          loadedPredictions[p.match_id] = {
+            match_id: p.match_id,
+            home_score: p.home_score.toString(),
+            away_score: p.away_score.toString(),
+            prediction_id: p.id,
+          };
+        });
+        setDailyPredictions(loadedPredictions);
+      }
+
+      const { data: teamsData, error: teamsError } = await supabase
+        .from('teams')
+        .select('*')
+        .order('name', { ascending: true });
+      if (teamsError) throw teamsError;
+      setTeams(teamsData);
+
+      const { data: groupsData, error: groupsError } = await supabase
+        .from('groups')
+        .select('id, name')
+        .order('name', { ascending: true });
+      if (groupsError) throw groupsError;
+      setGroups(groupsData);
+
+      if (user) {
+        const { data: groupPredData, error: groupPredError } = await supabase
+          .from('group_predictions')
+          .select('*')
+          .eq('user_id', user.id);
+
+        if (groupPredError) throw groupPredError;
+
+        const loadedGroupPredictions: { [groupId: string]: GroupPredictionState } = {};
+        groupPredData.forEach(gp => {
+          loadedGroupPredictions[gp.group_id] = {
+            group_id: gp.group_id,
+            predicted_first_team_id: gp.predicted_first_team_id,
+            predicted_second_team_id: gp.predicted_second_team_id,
+            prediction_id: gp.id,
+          };
+        });
+        setGroupPredictions(loadedGroupPredictions);
+      }
+
+      if (user) {
+        const { data: finalPredData, error: finalPredError } = await supabase
+          .from('final_predictions')
+          .select('id, champion_id, vice_champion_id, third_place_id, fourth_place_id, final_home_score, final_away_score')
+          .eq('user_id', user.id)
+          .single();
+
+        if (finalPredError && finalPredError.code !== 'PGRST116') {
+          throw finalPredError;
+        }
+
+        if (finalPredData) {
+          setFinalPrediction({
+            champion_id: finalPredData.champion_id,
+            vice_champion_id: finalPredData.vice_champion_id,
+            third_place_id: finalPredData.third_place_id,
+            fourth_place_id: finalPredData.fourth_place_id,
+            final_home_score: finalPredData.final_home_score,
+            final_away_score: finalPredData.final_away_score,
+            prediction_id: finalPredData.id,
+          });
+        }
+      }
+
+    } catch (error: any) {
+      console.error("Erro ao carregar dados iniciais:", error);
+      toast.error("Erro ao carregar dados: " + error.message);
+    } finally {
+      setLoading(false);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    fetchInitialData();
+  }, [fetchInitialData]);
+
+  // --- MANIPULADORES DE ESTADO ---
+
+  const handleScoreChange = useCallback((matchId: string, type: 'home' | 'away', value: string) => {
+    setDailyPredictions(prev => ({
+      ...prev,
+      [matchId]: {
+        ...prev[matchId],
+        match_id: matchId,
+        [type]: value, // Armazena a string exata do input
+      }
+    }));
+  }, []);
+
+  const handleGroupTeamChange = useCallback((groupId: string, type: 'first' | 'second', teamId: string) => {
+    setGroupPredictions(prev => ({
+      ...prev,
+      [groupId]: {
+        ...prev[groupId],
+        group_id: groupId,
+        [`predicted_${type}_team_id`]: teamId,
+      }
+    }));
+  }, []);
+
+  const handleFinalPredictionChange = useCallback((field: keyof FinalPredictionState, value: string | number | null) => {
+    setFinalPrediction(prev => ({
+      ...prev,
+      [field]: value,
+    }));
   }, []);
 
 
-  // --- Efeitos de Carga de Dados Iniciais ---
-  useEffect(() => {
+  // --- FUNÇÕES DE SALVAMENTO ---
+
+  const handleSaveDailyPrediction = async (matchId: string) => {
     if (!user) {
-      navigate("/login");
-      toast.warning("Você precisa estar logado para acessar os palpites.");
+      toast.error("Você precisa estar logado para salvar seu palpite.");
       return;
     }
 
-    const fetchInitialData = async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        // --- Fetch Partidas e Palpites de Partida (DailyPredictions faria isso agora) ---
-        // Se DailyPredictions não for mais um componente filho passando dados,
-        // você precisaria buscar as partidas e os palpites de partida aqui
-        // ou deixar o DailyPredictions lidar com isso internamente.
-        const today = format(new Date(), 'yyyy-MM-dd');
-        const { data: matchesData, error: matchesError } = await supabase
-            .from('matches')
-            .select('*, home_team(*), away_team(*)')
-            .gte('match_date', today)
-            .order('match_date', { ascending: true });
+    const prediction = dailyPredictions[matchId];
+    // A validação para campos vazios é crucial aqui
+    if (!prediction || prediction.home_score === "" || prediction.home_score === null ||
+        prediction.away_score === "" || prediction.away_score === null) {
+      toast.error("Por favor, preencha ambos os placares para o palpite (use 0 se for o caso).");
+      return;
+    }
 
-        if (matchesError) throw matchesError;
-        setMatches(matchesData as MatchWithTeams[] || []);
+    const match = matches.find(m => m.id === matchId);
+    if (!match) {
+      toast.error("Partida não encontrada.");
+      return;
+    }
 
+    const matchDate = parseISO(match.match_date);
+    if (matchDate.getTime() <= Date.now()) {
+      toast.error("O prazo para palpites desta partida já encerrou.");
+      return;
+    }
 
-        // --- Fetch Grupos e Times ---
-        const { data: groupsData, error: groupsError } = await supabase.from('groups').select('*').order('name');
-        if (groupsError) throw groupsError;
-        setGroups(groupsData || []);
+    // Convertendo para número AQUI, usando Number() que é mais robusto para strings vazias
+    // e para 0. Se não for um número válido, Number() retorna NaN.
+    const homeScoreNum = Number(prediction.home_score);
+    const awayScoreNum = Number(prediction.away_score);
 
-        const { data: teamsData, error: teamsError } = await supabase.from('teams').select('id, name');
-        if (teamsError) throw teamsError;
-        setTeams(teamsData || []);
+    // Agora, verificar se a conversão resultou em NaN (para entradas como "abc")
+    if (isNaN(homeScoreNum) || isNaN(awayScoreNum)) {
+        toast.error("Placares inválidos. Por favor, insira apenas números.");
+        return;
+    }
 
-        // --- Fetch Palpites de Grupo Existentes ---
-        const { data: existingGroupPredictions, error: existingGroupError } = await supabase
+    setSubmitting(true);
+    try {
+      let data, error;
+      if (prediction.prediction_id) {
+        ({ data, error } = await supabase
+          .from('match_predictions')
+          .update({
+            home_score: homeScoreNum,
+            away_score: awayScoreNum,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', prediction.prediction_id)
+          .select()
+          .single());
+      } else {
+        ({ data, error } = await supabase
+          .from('match_predictions')
+          .insert({
+            match_id: matchId,
+            user_id: user.id,
+            home_score: homeScoreNum,
+            away_score: awayScoreNum,
+          })
+          .select()
+          .single());
+      }
+
+      if (error) {
+        throw error;
+      }
+
+      setDailyPredictions(prev => ({
+        ...prev,
+        [matchId]: {
+          ...prev[matchId],
+          prediction_id: data.id,
+        }
+      }));
+      toast.success("Palpite salvo com sucesso!");
+    } catch (error: any) {
+      console.error("Erro ao salvar palpite:", error);
+      toast.error(`Erro ao salvar palpite: ${error.message || error.toString()}`);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleSaveGroupPrediction = useCallback(async (groupId: string) => {
+    if (!user) {
+      toast.error("Você precisa estar logado para salvar seu palpite de grupo.");
+      return;
+    }
+
+    if (globalPredictionCutoffDate.getTime() <= Date.now()) {
+      toast.error("O prazo para palpites de grupo já encerrou.");
+      return;
+    }
+
+    const prediction = groupPredictions[groupId];
+    if (!prediction || !prediction.predicted_first_team_id || !prediction.predicted_second_team_id) {
+      toast.error("Por favor, selecione os dois times classificados para o grupo.");
+      return;
+    }
+
+    if (prediction.predicted_first_team_id === prediction.predicted_second_team_id) {
+      toast.error("Os times do 1º e 2º lugar não podem ser os mesmos.");
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      let data, error;
+      if (prediction.prediction_id) {
+        ({ data, error } = await supabase
           .from('group_predictions')
-          .select('*, predicted_first_team(*), predicted_second_team(*)')
-          .eq('user_id', user.id);
-        if (existingGroupError) throw existingGroupError;
-
-        const initialGroupPredictions: GroupPrediction[] = (groupsData || []).map(group => {
-            const existing = existingGroupPredictions?.find(p => p.group_id === group.id);
-            return {
-                group_name: group.name,
-                group_id: group.id,
-                predicted_first_team_id: existing?.predicted_first_team_id || '',
-                predicted_second_team_id: existing?.predicted_second_team_id || '',
-                id: existing?.id, // ID do palpite existente
-                predicted_first_team: existing?.predicted_first_team || undefined,
-                predicted_second_team: existing?.predicted_second_team || undefined,
-            };
-        });
-        setGroupPredictions(initialGroupPredictions);
-
-        // --- Fetch Palpites da Final Existentes ---
-        const { data: existingFinalPrediction, error: existingFinalError } = await supabase
-          .from('final_predictions')
-          .select('*, champion(*), runner_up(*), third_place(*), fourth_place(*)')
-          .eq('user_id', user.id)
-          .single(); // Espera apenas um resultado ou null
-
-        if (existingFinalError && existingFinalError.code !== 'PGRST116') { // PGRST116 = no rows found
-          throw existingFinalError;
-        }
-
-        if (existingFinalPrediction) {
-          setFinalPrediction({
-            id: existingFinalPrediction.id,
-            champion_id: existingFinalPrediction.champion_id,
-            runner_up_id: existingFinalPrediction.runner_up_id,
-            third_place_id: existingFinalPrediction.third_place_id,
-            fourth_place_id: existingFinalPrediction.fourth_place_id,
-            champion: existingFinalPrediction.champion || undefined,
-            runner_up: existingFinalPrediction.runner_up || undefined,
-            third_place: existingFinalPrediction.third_place || undefined,
-            fourth_place: existingFinalPrediction.fourth_place || undefined,
-          });
-        }
-
-
-      } catch (err: any) {
-        console.error("Erro ao carregar dados iniciais:", err);
-        setError(err.message || "Falha ao carregar os dados.");
-        toast.error("Erro ao carregar dados iniciais: " + (err.message || "Tente novamente."));
-      } finally {
-        setLoading(false);
+          .update({
+            predicted_first_team_id: prediction.predicted_first_team_id,
+            predicted_second_team_id: prediction.predicted_second_team_id,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', prediction.prediction_id)
+          .select()
+          .single());
+      } else {
+        ({ data, error } = await supabase
+          .from('group_predictions')
+          .insert({
+            group_id: groupId,
+            user_id: user.id,
+            predicted_first_team_id: prediction.predicted_first_team_id,
+            predicted_second_team_id: prediction.predicted_second_team_id,
+          })
+          .select()
+          .single());
       }
-    };
 
-    fetchInitialData();
-  }, [user, navigate, toast]);
-
-  // --- Handlers para Palpites de Grupo ---
-  const handleGroupPredictionChange = (
-    groupId: string,
-    type: 'first' | 'second',
-    teamId: string
-  ) => {
-    setGroupPredictions(prev => prev.map(gp => {
-      if (gp.group_id === groupId) {
-        if (type === 'first') {
-          return { ...gp, predicted_first_team_id: teamId };
-        } else {
-          return { ...gp, predicted_second_team_id: teamId };
-        }
+      if (error) {
+        throw error;
       }
-      return gp;
-    }));
-  };
+      setGroupPredictions(prev => ({
+        ...prev,
+        [groupId]: {
+          ...prev[groupId],
+          prediction_id: data.id,
+        }
+      }));
+      toast.success(`Palpite do grupo ${groups.find(g => g.id === groupId)?.name || ''} salvo com sucesso!`);
+    } catch (error: any) {
+      console.error("Erro ao salvar palpite de grupo:", error);
+      toast.error(`Erro ao salvar palpite de grupo: ${error.message || error.toString()}`);
+    } finally {
+      setSubmitting(false);
+    }
+  }, [user, groupPredictions, groups, globalPredictionCutoffDate]);
 
-  // --- Handlers para Palpites da Final ---
-  const handleFinalPredictionChange = (
-    type: 'champion' | 'runnerUp' | 'thirdPlace' | 'fourthPlace',
-    teamId: string
-  ) => {
-    setFinalPrediction(prev => ({
-      ...(prev || {} as FinalPrediction), // Inicializa se for null
-      [`${type}_id`]: teamId,
-    }));
-  };
 
-  // --- Função de Salvamento Geral (Confirmar Palpites) ---
+  const handleSaveFinalPrediction = useCallback(async () => {
+    if (!user) {
+      toast.error("Você precisa estar logado para salvar seu palpite da final.");
+      return;
+    }
+
+    if (finalPredictionCutoffDate.getTime() <= Date.now()) {
+      toast.error("O prazo para palpites da final já encerrou.");
+      return;
+    }
+
+    if (!finalPrediction.champion_id || !finalPrediction.vice_champion_id ||
+        !finalPrediction.third_place_id || !finalPrediction.fourth_place_id ||
+        finalPrediction.final_home_score === null || finalPrediction.final_away_score === null) {
+      toast.error("Por favor, preencha todos os campos do palpite da final (Campeão, Vice-Campeão, 3º lugar, 4º lugar e Placar).");
+      return;
+    }
+
+    const finalTeams = [
+      finalPrediction.champion_id,
+      finalPrediction.vice_champion_id,
+      finalPrediction.third_place_id,
+      finalPrediction.fourth_place_id
+    ];
+    const uniqueTeams = new Set(finalTeams);
+    if (uniqueTeams.size !== 4) {
+      toast.error("Os times do 1º, 2º, 3º e 4º lugar devem ser diferentes.");
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const { data, error } = await supabase.rpc('insert_final_prediction', {
+        champion_id_param: finalPrediction.champion_id,
+        vice_champion_id_param: finalPrediction.vice_champion_id,
+        third_place_id_param: finalPrediction.third_place_id,
+        fourth_place_id_param: finalPrediction.fourth_place_id,
+        final_home_score_param: finalPrediction.final_home_score,
+        final_away_score_param: finalPrediction.final_away_score,
+        user_id_param: user.id,
+      });
+
+      if (error) {
+        throw error;
+      }
+      toast.success("Palpite da final salvo com sucesso!");
+    } catch (error: any) {
+      console.error("Erro ao inserir palpite final:", error);
+      toast.error(`Erro ao inserir palpite final: ${error.message || error.toString()}`);
+    } finally {
+      setSubmitting(false);
+    }
+  }, [user, finalPrediction, finalPredictionCutoffDate, toast]);
+
+
   const handleSubmitBets = async () => {
     if (!user) {
-      toast.error("Você precisa estar logado para confirmar palpites.");
+      toast.error("Você precisa estar logado para confirmar os palpites.");
       return;
     }
     setSubmitting(true);
-
-    // Validação de prazo global para TODOS os palpites
-    if (isAfter(new Date(), globalPredictionCutoffDate)) {
-      toast.error(`O prazo para enviar palpites (partidas, grupos e final) já se encerrou em ${format(globalPredictionCutoffDate, 'dd/MM/yyyy HH:mm', { locale: ptBR })}.`);
-      setSubmitting(false);
-      return;
-    }
-
-    let allSuccess = true;
-    let successCount = 0;
-    let errorCount = 0;
-
     try {
-      // --- SALVAR PALPITES DE PARTIDA (Assumindo que DailyPredictions já faz isso ou seria feito aqui) ---
-      // Na versão anterior, o DailyPredictions tinha seus próprios botões "Salvar".
-      // Se você quer um único botão "Confirmar Palpites", a lógica de salvamento
-      // de partidas precisaria ser puxada para cá, iterando sobre 'matchPredictions'
-      // ou o estado gerenciado por DailyPredictions (se ele fosse filho passando dados).
-      // POR ENQUANTO, este bloco de partida será apenas um placeholder,
-      // pois DailyPredictions ainda tem seu próprio botão.
-      // Você pode adaptar isso para iterar sobre `matchPredictionsFromDaily` se quiser
-      // que o botão "Confirmar Palpites" salve as partidas também.
-      console.log("Palpites de partida seriam salvos/confirmados aqui pelo DailyPredictions.");
-
-
-      // --- SALVAR PALPITES DE GRUPO ---
-      for (const gp of groupPredictions) {
-        if (!gp.predicted_first_team_id || !gp.predicted_second_team_id) {
-          console.warn(`Palpite de grupo ${gp.group_name} incompleto, pulando.`);
-          errorCount++;
-          continue;
-        }
-        if (gp.predicted_first_team_id === gp.predicted_second_team_id) {
-          toast.error(`No Grupo ${gp.group_name}: os times classificados não podem ser os mesmos.`);
-          allSuccess = false;
-          errorCount++;
-          continue;
-        }
-
-        const dataToSave = {
-          user_id: user.id,
-          group_id: gp.group_id,
-          predicted_first_team_id: gp.predicted_first_team_id,
-          predicted_second_team_id: gp.predicted_second_team_id,
-        };
-
-        if (gp.id) { // Palpite existente, atualiza
-          const { error: updateError } = await supabase
-            .from('group_predictions')
-            .update(dataToSave)
-            .eq('id', gp.id);
-          if (updateError) throw updateError;
-        } else { // Novo palpite, insere
-          const { error: insertError } = await supabase
-            .from('group_predictions')
-            .insert(dataToSave);
-          if (insertError) throw insertError;
-        }
-        successCount++;
-      }
-
-      // --- SALVAR PALPITES DA FINAL ---
-      if (finalPrediction) {
-        // Validação de prazo específico para a final (se houver, caso contrário, usa o global)
-        if (isAfter(new Date(), finalPredictionCutoffDate)) { // Se o prazo da final for diferente do global
-          toast.error(`O prazo para palpites da final já se encerrou em ${format(finalPredictionCutoffDate, 'dd/MM/yyyy HH:mm', { locale: ptBR })}.`);
-          allSuccess = false;
-          errorCount++;
-        } else if (
-          !finalPrediction.champion_id ||
-          !finalPrediction.runner_up_id ||
-          !finalPrediction.third_place_id ||
-          !finalPrediction.fourth_place_id
-        ) {
-          toast.error("Por favor, preencha todos os campos dos palpites da final.");
-          allSuccess = false;
-          errorCount++;
-        } else if (
-            new Set([
-                finalPrediction.champion_id,
-                finalPrediction.runner_up_id,
-                finalPrediction.third_place_id,
-                finalPrediction.fourth_place_id
-            ]).size !== 4 // Verifica se todos os 4 são únicos
-        ) {
-            toast.error("Os times campeão, vice, terceiro e quarto lugar devem ser únicos.");
-            allSuccess = false;
-            errorCount++;
-        } else {
-            const dataToSave = {
-                user_id: user.id,
-                champion_id: finalPrediction.champion_id,
-                runner_up_id: finalPrediction.runner_up_id,
-                third_place_id: finalPrediction.third_place_id,
-                fourth_place_id: finalPrediction.fourth_place_id,
-            };
-
-            if (finalPrediction.id) { // Palpite existente, atualiza
-                const { error: updateError } = await supabase
-                    .from('final_predictions')
-                    .update(dataToSave)
-                    .eq('id', finalPrediction.id);
-                if (updateError) throw updateError;
-            } else { // Novo palpite, insere
-                const { error: insertError } = await supabase
-                    .from('final_predictions')
-                    .insert(dataToSave);
-                if (insertError) throw insertError;
-            }
-            successCount++;
-        }
-      }
-
-      if (allSuccess && successCount > 0) {
-        toast.success("Palpites confirmados com sucesso!");
-      } else if (successCount > 0) {
-        toast.warning(`Alguns palpites foram confirmados. ${errorCount > 0 ? `No entanto, ${errorCount} tiveram problemas (incompletos ou fora do prazo).` : ''}`);
-      } else {
-        toast.error("Nenhum palpite válido foi salvo. Verifique os prazos e preenchimento.");
-      }
-
-    } catch (err: any) {
-      console.error("Erro ao salvar todos os palpites:", err);
-      toast.error("Erro geral ao salvar palpites: " + (err.message || "Tente novamente."));
-      allSuccess = false;
+      toast.success("Palpites confirmados com sucesso! (Lembre-se de usar os botões Salvar/Atualizar para cada tipo de palpite)");
+    } catch (error) {
+      toast.error("Erro ao confirmar palpites. Verifique os erros individuais.");
     } finally {
       setSubmitting(false);
-      // Para garantir que o UI do DailyPredictions reflete o estado atual,
-      // você pode precisar refetch os dados se ele não estiver sendo
-      // totalmente controlado pelo estado global aqui.
-      // window.location.reload(); // Isso seria um hack, melhor refetch específico
     }
   };
 
-  // Ref para o container de impressão
-  const printRef = useRef<HTMLDivElement>(null);
-
-  const handlePrintReceipt = async () => {
+  const handlePrintReceipt = useCallback(() => {
     if (!user) {
-      toast.error("Você precisa estar logado para imprimir o comprovante.");
+      toast.error("Você precisa estar logado para gerar o comprovante.");
       return;
     }
 
-    try {
-        // Fetch ALL match predictions for the user
-        const { data: userMatchPredictions, error: matchPredictionsError } = await supabase
-            .from('match_predictions')
-            .select('*')
-            .eq('user_id', user.id);
-        if (matchPredictionsError) throw matchPredictionsError;
+    const userMatchPredictionsForReceipt = Object.values(dailyPredictions)
+      .map(p => {
+        const match = matches.find(m => m.id === p.match_id);
+        if (!match) return null;
+        return {
+          match: {
+            ...match,
+            home_team: teams.find(t => t.id === match.home_team_id),
+            away_team: teams.find(t => t.id === match.away_team_id),
+          },
+          home_score_prediction: Number(p.home_score), // Use Number() aqui também
+          away_score_prediction: Number(p.away_score), // Use Number() aqui também
+        };
+      }).filter(Boolean);
 
-        // Fetch details for all matches involved in predictions
-        const matchIds = userMatchPredictions.map(p => p.match_id);
-        const { data: matchesDetails, error: matchesDetailsError } = await supabase
-            .from('matches')
-            .select('*, home_team(*), away_team(*)')
-            .in('id', matchIds);
-        if (matchesDetailsError) throw matchesDetailsError;
+    const userGroupPredictionsForReceipt = Object.values(groupPredictions)
+      .map(gp => {
+        const group = groups.find(g => g.id === gp.group_id);
+        if (!group) return null;
+        return {
+          group_name: group.name,
+          predicted_first_team: teams.find(t => t.id === gp.predicted_first_team_id),
+          predicted_second_team: teams.find(t => t.id === gp.predicted_second_team_id),
+        };
+      }).filter(Boolean);
 
-        const predictionsForReceipt = userMatchPredictions.map(p => {
-            const matchDetail = matchesDetails.find(m => m.id === p.match_id);
-            if (!matchDetail) return null;
+    const finalPredictionReceipt = {
+      champion: teams.find(t => t.id === finalPrediction.champion_id),
+      vice_champion: teams.find(t => t.id === finalPrediction.vice_champion_id),
+      third_place: teams.find(t => t.id === finalPrediction.third_place_id),
+      fourth_place: teams.find(t => t.id === finalPrediction.fourth_place_id),
+      final_home_score: finalPrediction.final_home_score,
+      final_away_score: finalPrediction.final_away_score,
+    };
 
-            return {
-                match: matchDetail,
-                home_score_prediction: p.home_score,
-                away_score_prediction: p.away_score,
-            };
-        }).filter(Boolean); // Remove nulls
+    const dateGenerated = new Date();
 
+    const receiptHtml = ReactDOMServer.renderToString(
+      <PredictionReceipt
+        user={{ name: user.user_metadata.full_name || user.email }}
+        predictions={userMatchPredictionsForReceipt as any}
+        groupPredictions={userGroupPredictionsForReceipt as any}
+        finalPrediction={finalPredictionReceipt as any}
+        dateGenerated={dateGenerated}
+      />
+    );
 
-        const receiptComponent = (
-            <PredictionReceipt
-                user={{ id: user.id, name: user.user_metadata?.full_name || user.email || 'Usuário', avatar_url: user.user_metadata?.avatar_url || '' }}
-                predictions={predictionsForReceipt as any} // Cast para o tipo correto se necessário
-                dateGenerated={new Date()} // Data de geração do comprovante
-            />
-        );
-
-        const printContent = ReactDOMServer.renderToString(receiptComponent);
-        const printWindow = window.open('', '', 'height=600,width=800');
-        if (printWindow) {
-            printWindow.document.write('<html><head><title>Comprovante de Palpites</title>');
-            printWindow.document.write('</head><body>');
-            printWindow.document.write(printContent);
-            printWindow.document.write('</body></html>');
-            printWindow.document.close();
-            printWindow.print();
-        } else {
-            toast.error("Erro ao abrir janela de impressão. Verifique se pop-ups estão bloqueados.");
-        }
-    } catch (error: any) {
-        console.error("Erro ao gerar comprovante:", error);
-        toast.error("Erro ao gerar comprovante: " + error.message);
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Comprovante de Palpites</title>
+          <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+          <style>
+            @media print {
+              body {
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+              }
+              .print-only {
+                display: block !important;
+              }
+              .no-print {
+                display: none !important;
+              }
+              /* Garante que o fundo das cards apareça */
+              .bg-white, .bg-gray-50 {
+                background-color: #ffffff !important;
+              }
+              .border-gray-200 {
+                border-color: #e5e7eb !important;
+              }
+            }
+            body {
+                font-family: sans-serif;
+            }
+          </style>
+        </head>
+        <body>
+          ${receiptHtml}
+        </body>
+        </html>
+      `);
+      printWindow.document.close();
+      printWindow.focus();
+      printWindow.print();
     }
-};
+  }, [user, dailyPredictions, matches, teams, groupPredictions, groups, finalPrediction]);
 
 
   if (loading) {
     return (
       <Layout>
-        <div className="container mx-auto p-4 md:p-6 lg:p-8 text-center">
-          <Loader2 className="h-10 w-10 animate-spin text-fifa-blue mx-auto mb-4" />
-          <p className="text-gray-600">Carregando seus palpites...</p>
+        <div className="flex justify-center items-center h-[calc(100vh-64px)]">
+          <Loader2 className="h-10 w-10 animate-spin text-fifa-blue" />
         </div>
       </Layout>
     );
   }
 
-  if (error) {
-    return (
-      <Layout>
-        <div className="container mx-auto p-4 md:p-6 lg:p-8">
-          <Card className="w-full max-w-2xl mx-auto">
-            <CardHeader>
-              <CardTitle className="text-red-600">Erro ao Carregar</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-red-500">{error}</p>
-              <Button onClick={() => window.location.reload()} className="mt-4">Recarregar Página</Button>
-            </CardContent>
-          </Card>
-        </div>
-      </Layout>
-    );
+  if (!user) {
+    navigate("/login");
+    return null;
   }
 
   return (
     <Layout>
-      <div className="container mx-auto p-4 md:p-6 lg:p-8">
-        <h1 className="text-3xl font-bold text-center text-fifa-blue mb-6">
-          Seus Palpites
-        </h1>
+      <div className="container mx-auto p-4 sm:p-6 lg:p-8">
+        <h1 className="text-3xl font-bold text-center text-fifa-blue mb-6">Meus Palpites</h1>
 
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-3 md:grid-cols-3 mb-6">
-            <TabsTrigger value="matches">
-              <SoccerBallIcon className="mr-2 h-4 w-4" /> Partidas
-            </TabsTrigger>
-            <TabsTrigger value="groups">
-              <UsersIcon className="mr-2 h-4 w-4" /> Grupos
-            </TabsTrigger>
-            <TabsTrigger value="final">
-              <TrophyIcon className="mr-2 h-4 w-4" /> Final
-            </TabsTrigger>
+        <Tabs defaultValue="daily" className="w-full">
+          <TabsList className="grid w-full grid-cols-3 mb-6">
+            <TabsTrigger value="daily">Partidas</TabsTrigger>
+            <TabsTrigger value="groups">Grupos</TabsTrigger>
+            <TabsTrigger value="final">Final</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="matches">
-            {/* O DailyPredictions agora é renderizado aqui e gerencia seus próprios estados */}
-            {/* Na versão anterior, o DailyPredictions era renderizado sozinho na rota de home.
-                Se você o incluiu aqui antes, ele ficaria assim. */}
-            <DailyPredictions />
+          <TabsContent value="daily">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-xl">Palpites das Partidas</CardTitle>
+                <CardDescription>
+                  Preencha seus placares para cada partida. O prazo para palpitar em uma partida encerra no horário do jogo.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {matches.length === 0 ? (
+                  <p className="text-center text-gray-500">Nenhuma partida encontrada com times definidos.</p>
+                ) : (
+                  matches.map(match => {
+                    const matchDate = parseISO(match.match_date);
+                    const canPredict = matchDate.getTime() > Date.now();
+                    const prediction = dailyPredictions[match.id] || { home_score: '', away_score: '' };
+
+                    // --- ADICIONE ESTE CONSOLE.LOG AQUI ---
+                    console.log(`--- Debug Palpite Partida: ${match.home_team?.name} vs ${match.away_team?.name} (ID: ${match.id}) ---`);
+                    console.log(`  canPredict (Prazo aberto?): ${canPredict}`);
+                    console.log(`  prediction.home_score (valor atual): '${prediction.home_score}'`);
+                    console.log(`  prediction.away_score (valor atual): '${prediction.away_score}'`);
+                    console.log(`  isNaN(Number(home_score)) (É NaN?): ${isNaN(Number(prediction.home_score))}`);
+                    console.log(`  isNaN(Number(away_score)) (É NaN?): ${isNaN(Number(prediction.away_score))}`);
+                    console.log(`  submitting (global): ${submitting}`);
+                    const isDisabledBy = {
+                      submitting: submitting,
+                      notCanPredict: !canPredict,
+                      homeScoreEmpty: prediction.home_score === "",
+                      awayScoreEmpty: prediction.away_score === "",
+                      homeScoreNaN: isNaN(Number(prediction.home_score)),
+                      awayScoreNaN: isNaN(Number(prediction.away_score))
+                    };
+                    console.log(`  Detalhes da desabilitação:`, isDisabledBy);
+                    console.log(`  Botão FINALMENTE DISABILITADO? ${submitting || !canPredict || prediction.home_score === "" || prediction.away_score === "" || isNaN(Number(prediction.home_score)) || isNaN(Number(prediction.away_score))}`);
+                    console.log(`--------------------------------------------------------------------------------`);
+                    // --- FIM DO CONSOLE.LOG ---
+
+                    return (
+                      <Card key={match.id} className={`p-4 ${!canPredict ? 'bg-gray-100 opacity-80' : ''}`}>
+                        <div className="flex justify-between items-center mb-2">
+                          <div>
+                            <p className="text-lg font-semibold">{match.home_team?.name} vs {match.away_team?.name}</p>
+                            <p className="text-sm text-gray-600">{format(matchDate, 'dd/MM/yyyy HH:mm', { locale: ptBR })}</p>
+                          </div>
+                          {!canPredict && (
+                            <span className="text-red-500 font-semibold text-sm">Prazo encerrado</span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Input
+                            type="number"
+                            min="0"
+                            className="w-16 text-center"
+                            placeholder="0"
+                            value={prediction.home_score}
+                            onChange={(e) => handleScoreChange(match.id, 'home', e.target.value)}
+                            disabled={submitting || !canPredict}
+                          />
+                          <span className="text-xl font-bold">x</span>
+                          <Input
+                            type="number"
+                            min="0"
+                            className="w-16 text-center"
+                            placeholder="0"
+                            value={prediction.away_score}
+                            onChange={(e) => handleScoreChange(match.id, 'away', e.target.value)}
+                            disabled={submitting || !canPredict}
+                          />
+                          <Button
+                            className="ml-auto bg-fifa-green hover:bg-green-700"
+                            onClick={() => handleSaveDailyPrediction(match.id)}
+                            // O botão só fica habilitado se ambos os placares não estiverem vazios e forem números válidos (após parseInt)
+                            disabled={submitting || !canPredict ||
+                                      prediction.home_score === "" || prediction.away_score === "" ||
+                                      isNaN(Number(prediction.home_score)) || isNaN(Number(prediction.away_score))}
+                          >
+                            {prediction.prediction_id ? "Atualizar" : "Salvar"}
+                          </Button>
+                        </div>
+                      </Card>
+                    );
+                  })
+                )}
+              </CardContent>
+            </Card>
           </TabsContent>
 
           <TabsContent value="groups">
             <Card>
               <CardHeader>
-                <CardTitle className="text-fifa-blue">Palpites de Grupos</CardTitle>
+                <CardTitle className="text-xl">Palpites dos Grupos</CardTitle>
                 <CardDescription>
-                  Selecione os dois times que você acha que se classificarão de cada grupo.
+                  Selecione os dois times que você acredita que se classificarão em 1º e 2º lugar em cada grupo.
+                  O prazo para palpites de grupo encerra em: {format(globalPredictionCutoffDate, 'dd/MM/yyyy HH:mm', { locale: ptBR })}.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <Alert variant="default">
-                  <AlertTitle>Prazo para Palpites de Grupo</AlertTitle>
-                  <AlertDescription>
-                    Os palpites de grupo devem ser enviados até{" "}
-                    <span className="font-semibold">
-                      {format(globalPredictionCutoffDate, "dd/MM/yyyy HH:mm", { locale: ptBR })}
-                    </span>
-                    .
-                  </AlertDescription>
-                </Alert>
-                {groups.map(group => (
-                  <div key={group.id} className="border p-4 rounded-lg bg-gray-50">
-                    <h3 className="text-lg font-bold mb-2">{group.name}</h3>
-                    <div className="flex flex-col gap-2">
-                      <Label htmlFor={`first-place-${group.id}`}>1º Lugar:</Label>
-                      <Select
-                        value={groupPredictions.find(gp => gp.group_id === group.id)?.predicted_first_team_id || ''}
-                        onValueChange={(value) => handleGroupPredictionChange(group.id, 'first', value)}
-                        disabled={isAfter(new Date(), globalPredictionCutoffDate) || submitting}
-                      >
-                        <SelectTrigger id={`first-place-${group.id}`}>
-                          <SelectValue placeholder="Selecione o 1º time" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {teams.filter(team => team.group_id === group.id).map(team => ( // Filtra times por grupo
-                            <SelectItem key={team.id} value={team.id}>
-                              {team.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                {groups.length === 0 ? (
+                  <p className="text-center text-gray-500">Nenhum grupo encontrado.</p>
+                ) : (
+                  groups.map(group => {
+                    const groupPrediction = groupPredictions[group.id] || { predicted_first_team_id: null, predicted_second_team_id: null };
+                    const canPredictGroup = globalPredictionCutoffDate.getTime() > Date.now();
+                    const filteredTeams = teams.filter(team => team.group_id === group.id);
 
-                      <Label htmlFor={`second-place-${group.id}`} className="mt-2">2º Lugar:</Label>
-                      <Select
-                        value={groupPredictions.find(gp => gp.group_id === group.id)?.predicted_second_team_id || ''}
-                        onValueChange={(value) => handleGroupPredictionChange(group.id, 'second', value)}
-                        disabled={isAfter(new Date(), globalPredictionCutoffDate) || submitting}
-                      >
-                        <SelectTrigger id={`second-place-${group.id}`}>
-                          <SelectValue placeholder="Selecione o 2º time" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {teams.filter(team => team.group_id === group.id).map(team => ( // Filtra times por grupo
-                            <SelectItem key={team.id} value={team.id}>
-                              {team.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      {groupPredictions.find(gp => gp.group_id === group.id)?.predicted_first_team_id === groupPredictions.find(gp => gp.group_id === group.id)?.predicted_second_team_id &&
-                       groupPredictions.find(gp => gp.group_id === group.id)?.predicted_first_team_id !== '' && (
-                        <p className="text-red-500 text-sm mt-1">Os times não podem ser os mesmos.</p>
-                      )}
-                    </div>
-                  </div>
-                ))}
+                    return (
+                      <Card key={group.id} className={`p-4 ${!canPredictGroup ? 'bg-gray-100 opacity-80' : ''}`}>
+                        <h3 className="text-lg font-semibold mb-2">Grupo {group.name}</h3>
+                        {!canPredictGroup && (
+                          <p className="text-red-500 font-semibold text-sm mb-2">Prazo encerrado</p>
+                        )}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <Label htmlFor={`first-${group.id}`}>1º Lugar:</Label>
+                            <Select
+                              value={groupPrediction.predicted_first_team_id || ''}
+                              onValueChange={(value) => handleGroupTeamChange(group.id, 'first', value)}
+                              disabled={submitting || !canPredictGroup}
+                            >
+                              <SelectTrigger id={`first-${group.id}`}>
+                                <SelectValue placeholder="Selecione o 1º lugar" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {filteredTeams.map(team => (
+                                  <SelectItem key={team.id} value={team.id}>
+                                    <div className="flex items-center">
+                                      {team.flag_url && <Avatar className="h-5 w-5 mr-2"><AvatarImage src={team.flag_url} /><AvatarFallback>{team.name.substring(0, 2)}</AvatarFallback></Avatar>}
+                                      {team.name}
+                                    </div>
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div>
+                            <Label htmlFor={`second-${group.id}`}>2º Lugar:</Label>
+                            <Select
+                              value={groupPrediction.predicted_second_team_id || ''}
+                              onValueChange={(value) => handleGroupTeamChange(group.id, 'second', value)}
+                              disabled={submitting || !canPredictGroup}
+                            >
+                              <SelectTrigger id={`second-${group.id}`}>
+                                <SelectValue placeholder="Selecione o 2º lugar" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {filteredTeams.map(team => (
+                                  <SelectItem key={team.id} value={team.id}>
+                                    <div className="flex items-center">
+                                      {team.flag_url && <Avatar className="h-5 w-5 mr-2"><AvatarImage src={team.flag_url} /><AvatarFallback>{team.name.substring(0, 2)}</AvatarFallback></Avatar>}
+                                      {team.name}
+                                    </div>
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+                        <Button
+                          className="mt-4 bg-fifa-green hover:bg-green-700"
+                          onClick={() => handleSaveGroupPrediction(group.id)}
+                          disabled={submitting || !canPredictGroup}
+                        >
+                          {groupPrediction.prediction_id ? "Atualizar Palpite" : "Salvar Palpite"}
+                        </Button>
+                      </Card>
+                    );
+                  })
+                )}
               </CardContent>
             </Card>
           </TabsContent>
@@ -567,104 +746,163 @@ const Palpites = () => {
           <TabsContent value="final">
             <Card>
               <CardHeader>
-                <CardTitle className="text-fifa-blue">Palpites da Final</CardTitle>
+                <CardTitle className="text-xl">Palpite da Fase Final</CardTitle>
                 <CardDescription>
-                  Palpite quem será o campeão, vice, terceiro e quarto lugar.
+                  Preencha seus palpites para o Campeão, Vice-Campeão, 3º lugar, 4º lugar e o placar da final.
+                  O prazo para palpites da final encerra em: {format(finalPredictionCutoffDate, 'dd/MM/yyyy HH:mm', { locale: ptBR })}.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-              <Alert variant="default">
-                  <AlertTitle>Prazo para Palpites da Final</AlertTitle>
-                  <AlertDescription>
-                    Os palpites da fase final devem ser enviados até{" "}
-                    <span className="font-semibold">
-                      {format(finalPredictionCutoffDate, "dd/MM/yyyy HH:mm", { locale: ptBR })}
-                    </span>
-                    .
-                  </AlertDescription>
-                </Alert>
-
-                <div className="flex flex-col gap-4">
-                  <Label htmlFor="champion">Campeão:</Label>
-                  <Select
-                    value={finalPrediction?.champion_id || ''}
-                    onValueChange={(value) => handleFinalPredictionChange('champion', value)}
-                    disabled={isAfter(new Date(), finalPredictionCutoffDate) || submitting}
-                  >
-                    <SelectTrigger id="champion">
-                      <SelectValue placeholder="Selecione o Campeão" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {teams.map(team => (
-                        <SelectItem key={team.id} value={team.id}>{team.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-
-                  <Label htmlFor="runner-up">Vice-Campeão:</Label>
-                  <Select
-                    value={finalPrediction?.runner_up_id || ''}
-                    onValueChange={(value) => handleFinalPredictionChange('runnerUp', value)}
-                    disabled={isAfter(new Date(), finalPredictionCutoffDate) || submitting}
-                  >
-                    <SelectTrigger id="runner-up">
-                      <SelectValue placeholder="Selecione o Vice-Campeão" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {teams.map(team => (
-                        <SelectItem key={team.id} value={team.id}>{team.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-
-                  <Label htmlFor="third-place">Terceiro Lugar:</Label>
-                  <Select
-                    value={finalPrediction?.third_place_id || ''}
-                    onValueChange={(value) => handleFinalPredictionChange('thirdPlace', value)}
-                    disabled={isAfter(new Date(), finalPredictionCutoffDate) || submitting}
-                  >
-                    <SelectTrigger id="third-place">
-                      <SelectValue placeholder="Selecione o Terceiro Lugar" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {teams.map(team => (
-                        <SelectItem key={team.id} value={team.id}>{team.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-
-                  <Label htmlFor="fourth-place">Quarto Lugar:</Label>
-                  <Select
-                    value={finalPrediction?.fourth_place_id || ''}
-                    onValueChange={(value) => handleFinalPredictionChange('fourthPlace', value)}
-                    disabled={isAfter(new Date(), finalPredictionCutoffDate) || submitting}
-                  >
-                    <SelectTrigger id="fourth-place">
-                      <SelectValue placeholder="Selecione o Quarto Lugar" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {teams.map(team => (
-                        <SelectItem key={team.id} value={team.id}>{team.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-
-                    {finalPrediction && new Set([
-                        finalPrediction.champion_id,
-                        finalPrediction.runner_up_id,
-                        finalPrediction.third_place_id,
-                        finalPrediction.fourth_place_id
-                    ]).size < 4 && (
-                        <p className="text-red-500 text-sm mt-1">Os quatro times devem ser únicos.</p>
+                {!teams.length ? (
+                  <p className="text-center text-gray-500">Carregando times...</p>
+                ) : (
+                  <div className="space-y-4">
+                    {! (finalPredictionCutoffDate.getTime() > Date.now()) && (
+                      <Alert className="bg-red-50 border-red-200 text-red-700">
+                        <AlertTitle>Prazo encerrado!</AlertTitle>
+                        <AlertDescription>Você não pode mais alterar seu palpite da final.</AlertDescription>
+                      </Alert>
                     )}
-                </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <Label htmlFor="champion-select">Campeão:</Label>
+                        <Select
+                          value={finalPrediction.champion_id || ''}
+                          onValueChange={(value) => handleFinalPredictionChange('champion_id', value)}
+                          disabled={submitting || !(finalPredictionCutoffDate.getTime() > Date.now())}
+                        >
+                          <SelectTrigger id="champion-select">
+                            <SelectValue placeholder="Selecione o Campeão" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {teams.map(team => (
+                              <SelectItem key={team.id} value={team.id}>
+                                <div className="flex items-center">
+                                  {team.flag_url && <Avatar className="h-5 w-5 mr-2"><AvatarImage src={team.flag_url} /><AvatarFallback>{team.name.substring(0, 2)}</AvatarFallback></Avatar>}
+                                  {team.name}
+                                </div>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label htmlFor="vice-champion-select">Vice-Campeão:</Label>
+                        <Select
+                          value={finalPrediction.vice_champion_id || ''}
+                          onValueChange={(value) => handleFinalPredictionChange('vice_champion_id', value)}
+                          disabled={submitting || !(finalPredictionCutoffDate.getTime() > Date.now())}
+                        >
+                          <SelectTrigger id="vice-champion-select">
+                            <SelectValue placeholder="Selecione o Vice-Campeão" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {teams.map(team => (
+                              <SelectItem key={team.id} value={team.id}>
+                                <div className="flex items-center">
+                                  {team.flag_url && <Avatar className="h-5 w-5 mr-2"><AvatarImage src={team.flag_url} /><AvatarFallback>{team.name.substring(0, 2)}</AvatarFallback></Avatar>}
+                                  {team.name}
+                                </div>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div>
+                        <Label htmlFor="third-place-select">3º Lugar:</Label>
+                        <Select
+                          value={finalPrediction.third_place_id || ''}
+                          onValueChange={(value) => handleFinalPredictionChange('third_place_id', value)}
+                          disabled={submitting || !(finalPredictionCutoffDate.getTime() > Date.now())}
+                        >
+                          <SelectTrigger id="third-place-select">
+                            <SelectValue placeholder="Selecione o 3º Lugar" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {teams.map(team => (
+                              <SelectItem key={team.id} value={team.id}>
+                                <div className="flex items-center">
+                                  {team.flag_url && <Avatar className="h-5 w-5 mr-2"><AvatarImage src={team.flag_url} /><AvatarFallback>{team.name.substring(0, 2)}</AvatarFallback></Avatar>}
+                                  {team.name}
+                                </div>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label htmlFor="fourth-place-select">4º Lugar:</Label>
+                        <Select
+                          value={finalPrediction.fourth_place_id || ''}
+                          onValueChange={(value) => handleFinalPredictionChange('fourth_place_id', value)}
+                          disabled={submitting || !(finalPredictionCutoffDate.getTime() > Date.now())}
+                        >
+                          <SelectTrigger id="fourth-place-select">
+                            <SelectValue placeholder="Selecione o 4º Lugar" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {teams.map(team => (
+                              <SelectItem key={team.id} value={team.id}>
+                                <div className="flex items-center">
+                                  {team.flag_url && <Avatar className="h-5 w-5 mr-2"><AvatarImage src={team.flag_url} /><AvatarFallback>{team.name.substring(0, 2)}</AvatarFallback></Avatar>}
+                                  {team.name}
+                                </div>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                    </div>
+
+                    <div className="flex flex-col gap-2">
+                      <Label htmlFor="final-score">Placar da Final:</Label>
+                      <div className="flex items-center gap-2">
+                        <Input
+                          id="final-home-score"
+                          type="number"
+                          min="0"
+                          className="w-24 text-center"
+                          placeholder="0"
+                          value={finalPrediction.final_home_score === null ? '' : finalPrediction.final_home_score}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            handleFinalPredictionChange('final_home_score', value === '' ? null : parseInt(value));
+                          }}
+                          disabled={submitting || !(finalPredictionCutoffDate.getTime() > Date.now())}
+                        />
+                        <span className="text-xl font-bold">x</span>
+                        <Input
+                          id="final-away-score"
+                          type="number"
+                          min="0"
+                          className="w-24 text-center"
+                          placeholder="0"
+                          value={finalPrediction.final_away_score === null ? '' : finalPrediction.final_away_score}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            handleFinalPredictionChange('final_away_score', value === '' ? null : parseInt(value));
+                          }}
+                          disabled={submitting || !(finalPredictionCutoffDate.getTime() > Date.now())}
+                        />
+                      </div>
+                    </div>
+                    <Button
+                      className="w-full bg-fifa-green hover:bg-green-700"
+                      onClick={handleSaveFinalPrediction}
+                      disabled={submitting || !(finalPredictionCutoffDate.getTime() > Date.now())}
+                    >
+                      {finalPrediction.prediction_id ? "Atualizar Palpite da Final" : "Salvar Palpite da Final"}
+                    </Button>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
-        </Tabs>
 
-        <Card className="mt-6">
           <CardContent className="p-6 space-y-4">
+
             <Button
               className="w-full bg-fifa-blue hover:bg-opacity-90 mb-4"
               onClick={handleSubmitBets}
@@ -680,7 +918,6 @@ const Palpites = () => {
               )}
             </Button>
 
-            {/* Botão para Imprimir Comprovante */}
             <Button
               className="w-full bg-gray-600 hover:bg-gray-700 text-white"
               onClick={handlePrintReceipt}
@@ -694,7 +931,7 @@ const Palpites = () => {
               Atenção: Ao confirmar, os palpites de partidas com prazo encerrado e palpites de grupo/final após o dia {format(globalPredictionCutoffDate, 'dd/MM/yyyy HH:mm', { locale: ptBR })} não serão salvos.
             </p>
           </CardContent>
-        </Card>
+        </Tabs>
       </div>
     </Layout>
   );

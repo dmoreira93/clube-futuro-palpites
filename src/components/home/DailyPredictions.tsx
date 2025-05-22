@@ -31,18 +31,25 @@ const DailyPredictions = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [matches, setMatches] = useState<SupabaseMatchResultFromMatches[]>([]);
+  const [predictions, setPredictions] = useState<SupabaseMatchPrediction[]>([]);
   const [currentPredictions, setCurrentPredictions] = useState<LocalPrediction[]>([]);
-  const [isSaving, setIsSaving] = useState<string | null>(null); // Armazena o ID da partida que está sendo salva
+  const [isSaving, setIsSaving] = useState(false); // Global saving flag
 
-  // Função para verificar se o usuário pode palpitar em uma partida
+  // Função para verificar se o usuário pode palpitar em uma partida (prazo e status)
   const getCanPredict = (matchDate: string, isFinished: boolean) => {
     const matchTime = parseISO(matchDate).getTime();
     const now = new Date().getTime();
+    // Exemplo: Prazo final para palpite é 1 hora antes do início da partida
+    // Ajuste este valor conforme a regra do seu bolão
     const cutoffTime = matchTime - (1 * 60 * 60 * 1000); // 1 hora antes do jogo
 
-    if (isFinished) return false; // Se a partida já terminou, não pode palpitar
-    if (now > cutoffTime) return false; // Se o prazo limite passou, não pode palpitar
-    return true;
+    // Se a partida já terminou, não pode palpitar
+    if (isFinished) return false;
+
+    // Se o tempo atual já passou do prazo limite, não pode palpitar
+    if (now > cutoffTime) return false;
+
+    return true; // Caso contrário, pode palpitar
   };
 
   useEffect(() => {
@@ -56,42 +63,45 @@ const DailyPredictions = () => {
       setError(null);
 
       try {
-        const today = format(new Date(), 'yyyy-MM-dd'); // Formato YYYY-MM-DD para a query SQL
+        // Fetch matches for today (assuming you want today's matches)
+        const today = format(new Date(), 'yyyy-MM-dd');
         const { data: matchesData, error: matchesError } = await supabase
           .from('matches')
-          .select('*, home_team(*), away_team(*)') // Seleciona dados dos times relacionados
-          .gte('match_date', today) // Pega partidas a partir de hoje
-          .order('match_date', { ascending: true }); // Ordena por data
+          .select('*, home_team(*), away_team(*)')
+          .eq('match_date', today)
+          .order('match_date', { ascending: true });
 
         if (matchesError) throw matchesError;
 
         setMatches(matchesData || []);
 
-        // Buscar palpites existentes do usuário para as partidas retornadas
+        // Fetch user's predictions for these matches
         const matchIds = (matchesData || []).map(m => m.id);
-        let predictionsData: SupabaseMatchPrediction[] = [];
         if (matchIds.length > 0) {
-          const { data, error: predictionsError } = await supabase
+          const { data: predictionsData, error: predictionsError } = await supabase
             .from('match_predictions')
             .select('*')
             .eq('user_id', user.id)
             .in('match_id', matchIds);
 
           if (predictionsError) throw predictionsError;
-          predictionsData = data || [];
-        }
 
-        // Inicializar o estado dos palpites com dados existentes ou vazio
-        const initialCurrentPredictions: LocalPrediction[] = (matchesData || []).map(match => {
-          const existingPrediction = predictionsData.find(p => p.match_id === match.id);
-          return {
-            match_id: match.id,
-            home_score: existingPrediction ? String(existingPrediction.home_score) : '',
-            away_score: existingPrediction ? String(existingPrediction.away_score) : '',
-            prediction_id: existingPrediction ? existingPrediction.id : undefined,
-          };
-        });
-        setCurrentPredictions(initialCurrentPredictions);
+          setPredictions(predictionsData || []);
+
+          // Initialize currentPredictions with existing predictions or empty values
+          const initialCurrentPredictions: LocalPrediction[] = (matchesData || []).map(match => {
+            const existingPrediction = (predictionsData || []).find(p => p.match_id === match.id);
+            return {
+              match_id: match.id,
+              home_score: existingPrediction ? String(existingPrediction.home_score) : '',
+              away_score: existingPrediction ? String(existingPrediction.away_score) : '',
+              prediction_id: existingPrediction ? existingPrediction.id : undefined,
+            };
+          });
+          setCurrentPredictions(initialCurrentPredictions);
+        } else {
+          setCurrentPredictions([]); // No matches, so no predictions
+        }
 
       } catch (err: any) {
         console.error("Error fetching data:", err);
@@ -107,7 +117,7 @@ const DailyPredictions = () => {
     };
 
     fetchInitialData();
-  }, [user, toast]); // Refetch quando o usuário muda
+  }, [user, toast]); // Dependência do 'user' para re-fetch se o login mudar
 
   const handleScoreChange = (matchId: string, type: 'home' | 'away', value: string) => {
     setCurrentPredictions(prev =>
@@ -129,64 +139,71 @@ const DailyPredictions = () => {
       return;
     }
 
+    setIsSaving(true);
     const predictionToSave = currentPredictions.find(p => p.match_id === matchId);
+
     if (!predictionToSave) {
       toast({
         title: "Erro",
         description: "Palpite não encontrado para salvar.",
         variant: "destructive",
       });
-      return;
-    }
-
-    const match = matches.find(m => m.id === matchId);
-    if (!match) {
-      toast({
-        title: "Erro",
-        description: "Detalhes da partida não encontrados.",
-        variant: "destructive",
-      });
+      setIsSaving(false);
       return;
     }
 
     const homeScore = Number(predictionToSave.home_score);
     const awayScore = Number(predictionToSave.away_score);
 
+    // Validação extra antes de enviar para o DB
     if (predictionToSave.home_score === '' || predictionToSave.away_score === '' || isNaN(homeScore) || isNaN(awayScore)) {
       toast({
-        title: "Erro",
-        description: "Por favor, insira placares válidos para a partida.",
+        title: "Erro de Validação",
+        description: "Por favor, insira placares válidos para ambos os times.",
         variant: "destructive",
       });
+      setIsSaving(false);
       return;
     }
 
-    const canPredict = getCanPredict(match.match_date, match.is_finished);
-    if (!canPredict) {
-      toast({
-        title: "Prazo Encerrado",
-        description: "O prazo para enviar palpites para esta partida já se encerrou.",
-        variant: "warning",
-      });
-      return;
+    const match = matches.find(m => m.id === matchId);
+    if (!match) {
+        toast({
+            title: "Erro",
+            description: "Partida não encontrada.",
+            variant: "destructive",
+        });
+        setIsSaving(false);
+        return;
     }
 
-    setIsSaving(matchId); // Começa a salvar para esta partida específica
+    // Verifica novamente se o prazo está aberto antes de salvar no backend
+    const canPredictNow = getCanPredict(match.match_date, match.is_finished);
+    if (!canPredictNow) {
+        toast({
+            title: "Prazo Encerrado",
+            description: "O prazo para palpitar nesta partida já se encerrou.",
+            variant: "destructive",
+        });
+        setIsSaving(false);
+        return;
+    }
+
     try {
       if (predictionToSave.prediction_id) {
-        // Atualizar palpite existente
+        // Update existing prediction
         const { error: updateError } = await supabase
           .from('match_predictions')
           .update({ home_score: homeScore, away_score: awayScore })
           .eq('id', predictionToSave.prediction_id);
+
         if (updateError) throw updateError;
         toast({
           title: "Sucesso!",
           description: "Palpite atualizado com sucesso.",
-          variant: "success",
         });
       } else {
-        // Inserir novo palpite
+        // Insert new prediction
         const { data, error: insertError } = await supabase
           .from('match_predictions')
           .insert({
@@ -195,32 +212,35 @@ const DailyPredictions = () => {
             home_score: homeScore,
             away_score: awayScore,
           })
-          .select(); // Retorna o registro inserido
+          .select(); // Select the inserted data to get the new prediction_id
+
         if (insertError) throw insertError;
 
-        // Atualizar o prediction_id no estado local
-        setCurrentPredictions(prev =>
-          prev.map(p =>
-            p.match_id === matchId
-              ? { ...p, prediction_id: data?.[0]?.id }
-              : p
-          )
-        );
+        // Update the local state with the new prediction_id
+        if (data && data.length > 0) {
+            setCurrentPredictions(prev =>
+                prev.map(p =>
+                    p.match_id === matchId
+                        ? { ...p, prediction_id: data[0].id }
+                        : p
+                )
+            );
+        }
+
         toast({
           title: "Sucesso!",
           description: "Palpite salvo com sucesso.",
-          variant: "success",
         });
       }
     } catch (err: any) {
-      console.error("Erro ao salvar palpite:", err);
+      console.error("Error saving prediction:", err);
       toast({
-        title: "Erro ao salvar",
-        description: err.message || "Não foi possível salvar o palpite. Tente novamente.",
+        title: "Erro ao salvar palpite",
+        description: err.message || "Não foi possível salvar seu palpite.",
         variant: "destructive",
       });
     } finally {
-      setIsSaving(null); // Finaliza o salvamento
+      setIsSaving(false);
     }
   };
 
@@ -279,7 +299,7 @@ const DailyPredictions = () => {
     <Card className="w-full max-w-2xl mx-auto shadow-lg">
       <CardHeader>
         <CardTitle className="flex justify-between items-center text-fifa-blue">
-          Palpites de Partidas
+          Palpites do Dia ({today})
           {isAdmin && (
             <Link to="/admin/dashboard" className="text-sm text-gray-500 hover:underline">
               Ir para Admin
@@ -289,16 +309,17 @@ const DailyPredictions = () => {
       </CardHeader>
       <CardContent>
         {matches.length === 0 ? (
-          <p className="text-center text-gray-500">Nenhuma partida programada para hoje ou nos próximos dias.</p>
+          <p className="text-center text-gray-500">Nenhuma partida programada para hoje.</p>
         ) : (
           <div className="space-y-6">
             {matches.map(match => {
-              const currentPrediction = currentPredictions.find(p => p.match_id === match.id) || {
-                match_id: match.id,
-                home_score: '',
-                away_score: '',
-              };
+              const currentPrediction = currentPredictions.find(p => p.match_id === match.id) || { match_id: match.id, home_score: '', away_score: '' };
               const canPredictForMatch = getCanPredict(match.match_date, match.is_finished);
+
+              // *** NOVA LÓGICA DE VALIDAÇÃO PARA HABILITAR/DESABILITAR O BOTÃO ***
+              const isHomeScoreValid = currentPrediction.home_score !== '' && !isNaN(Number(currentPrediction.home_score));
+              const isAwayScoreValid = currentPrediction.away_score !== '' && !isNaN(Number(currentPrediction.away_score));
+              const areScoresFilledAndValid = isHomeScoreValid && isAwayScoreValid;
 
               return (
                 <div key={match.id} className="border p-4 rounded-lg bg-gray-50">
@@ -309,6 +330,7 @@ const DailyPredictions = () => {
                     {format(parseISO(match.match_date), "HH:mm 'h' - dd/MM", { locale: ptBR })} - {match.stage}
                   </p>
 
+                  {/* Condição para desabilitar o input se a partida já terminou ou prazo expirou */}
                   {!canPredictForMatch && (
                     <p className="text-sm text-red-500 mb-2">
                       {match.is_finished ? "Partida encerrada." : "Prazo para palpite encerrado."}
@@ -323,7 +345,7 @@ const DailyPredictions = () => {
                       placeholder="0"
                       value={currentPrediction.home_score}
                       onChange={(e) => handleScoreChange(match.id, 'home', e.target.value)}
-                      disabled={isSaving === match.id || !canPredictForMatch}
+                      disabled={isSaving || !canPredictForMatch} // Inputs desabilitados se salvando ou prazo fechado
                     />
                     <span className="text-xl font-bold">x</span>
                     <Input
@@ -333,14 +355,19 @@ const DailyPredictions = () => {
                       placeholder="0"
                       value={currentPrediction.away_score}
                       onChange={(e) => handleScoreChange(match.id, 'away', e.target.value)}
-                      disabled={isSaving === match.id || !canPredictForMatch}
+                      disabled={isSaving || !canPredictForMatch} // Inputs desabilitados se salvando ou prazo fechado
                     />
                     <Button
                       className="ml-auto bg-fifa-green hover:bg-green-700"
                       onClick={() => handleSavePrediction(match.id)}
-                      disabled={isSaving === match.id || !canPredictForMatch}
+                      // *** AQUI ESTÁ A ALTERAÇÃO CRÍTICA ***
+                      // O botão será desabilitado se:
+                      // 1. Uma operação de salvamento global estiver em andamento (isSaving)
+                      // 2. O prazo para palpitar nesta partida específica tiver se encerrado (!canPredictForMatch)
+                      // 3. Os placares não estiverem preenchidos OU não forem números válidos (!areScoresFilledAndValid)
+                      disabled={isSaving || !canPredictForMatch || !areScoresFilledAndValid}
                     >
-                      {isSaving === match.id ? "Salvando..." : (currentPrediction.prediction_id ? "Atualizar" : "Salvar")}
+                      {currentPrediction.prediction_id ? "Atualizar" : "Salvar"}
                     </Button>
                   </div>
                 </div>
