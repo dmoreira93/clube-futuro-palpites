@@ -29,7 +29,7 @@ import { Match, Team } from "@/types/matches";
 import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import ReactDOMServer from 'react-dom/server';
-import { PredictionReceipt } from '@/components/home/predictions/PredictionReceipt';
+import PredictionReceipt from '@/components/home/predictions/PredictionReceipt';
 
 // --- INTERFACES PARA O ESTADO ---
 interface LocalPrediction {
