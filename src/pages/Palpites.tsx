@@ -25,17 +25,17 @@ import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
-import { Match, Team } from "@/types/matches"; // Certifique-se de que 'Team' está em '@/types/matches' ou importe de '@/utils/pointsCalculator/types'
+import { Match, Team } from "@/types/matches";
 import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import ReactDOMServer from 'react-dom/server'; // Importação NECESSÁRIA para renderizar HTML em string
-import { PredictionReceipt } from '@/components/home/predictions/PredictionReceipt'; // Importar o componente do comprovante COM AS CHAVES E O CAMINHO CORRETO
+import ReactDOMServer from 'react-dom/server';
+import { PredictionReceipt } from '@/components/home/predictions/PredictionReceipt';
 
 // --- INTERFACES PARA O ESTADO ---
 interface LocalPrediction {
   match_id: string;
-  home_score: string; // Mantém como string para o input
-  away_score: string; // Mantém como string para o input
+  home_score: string;
+  away_score: string;
   prediction_id?: string;
 }
 
@@ -80,21 +80,19 @@ const Palpites = () => {
   });
 
   // Datas de corte (ajuste conforme a data real do seu bolão)
-  const globalPredictionCutoffDate = parseISO("2026-06-12T12:00:00-03:00"); // Data de início do torneio ou global
-  const finalPredictionCutoffDate = parseISO("2026-07-01T12:00:00-03:00"); // Exemplo: Antes do início da fase final
+  const globalPredictionCutoffDate = parseISO("2026-06-12T12:00:00-03:00");
+  const finalPredictionCutoffDate = parseISO("2026-07-01T12:00:00-03:00");
 
   // --- FUNÇÕES DE CARREGAMENTO DE DADOS ---
 
   const fetchInitialData = useCallback(async () => {
     setLoading(true);
     try {
-      // 1. Carregar Partidas e Palpites Diários
-      // FILTRO APLICADO AQUI: somente jogos com home_team e away_team definidos
       const { data: matchesData, error: matchesError } = await supabase
         .from('matches')
         .select('*, home_team:home_team_id(*), away_team:away_team_id(*)')
-        .not('home_team_id', 'is', null) // Garante que home_team_id não é nulo
-        .not('away_team_id', 'is', null) // Garante que away_team_id não é nulo
+        .not('home_team_id', 'is', null)
+        .not('away_team_id', 'is', null)
         .order('match_date', { ascending: true });
 
       if (matchesError) throw matchesError;
@@ -120,7 +118,6 @@ const Palpites = () => {
         setDailyPredictions(loadedPredictions);
       }
 
-      // 2. Carregar Times e Grupos
       const { data: teamsData, error: teamsError } = await supabase
         .from('teams')
         .select('*')
@@ -135,7 +132,6 @@ const Palpites = () => {
       if (groupsError) throw groupsError;
       setGroups(groupsData);
 
-      // 3. Carregar Palpites de Grupo
       if (user) {
         const { data: groupPredData, error: groupPredError } = await supabase
           .from('group_predictions')
@@ -156,15 +152,14 @@ const Palpites = () => {
         setGroupPredictions(loadedGroupPredictions);
       }
 
-      // 4. Carregar Palpites da Final
       if (user) {
         const { data: finalPredData, error: finalPredError } = await supabase
-          .from('final_predictions') // Assegure-se de que esta é a sua tabela de palpites da final
+          .from('final_predictions')
           .select('id, champion_id, vice_champion_id, third_place_id, fourth_place_id, final_home_score, final_away_score')
           .eq('user_id', user.id)
-          .single(); // Assumimos que o usuário só tem um palpite final
+          .single();
 
-        if (finalPredError && finalPredError.code !== 'PGRST116') { // PGRST116 = No rows found
+        if (finalPredError && finalPredError.code !== 'PGRST116') {
           throw finalPredError;
         }
 
@@ -196,14 +191,12 @@ const Palpites = () => {
   // --- MANIPULADORES DE ESTADO ---
 
   const handleScoreChange = useCallback((matchId: string, type: 'home' | 'away', value: string) => {
-    // Permite que o input seja vazio, mas armazena como string.
-    // A conversão para número será feita apenas na hora de salvar.
     setDailyPredictions(prev => ({
       ...prev,
       [matchId]: {
         ...prev[matchId],
         match_id: matchId,
-        [type]: value,
+        [type]: value, // Armazena a string exata do input
       }
     }));
   }, []);
@@ -236,8 +229,9 @@ const Palpites = () => {
     }
 
     const prediction = dailyPredictions[matchId];
-    if (!prediction || prediction.home_score === "" || prediction.away_score === "") {
-      // Modificado para avisar se algum placar estiver vazio
+    // A validação para campos vazios é crucial aqui
+    if (!prediction || prediction.home_score === "" || prediction.home_score === null ||
+        prediction.away_score === "" || prediction.away_score === null) {
       toast.error("Por favor, preencha ambos os placares para o palpite (use 0 se for o caso).");
       return;
     }
@@ -254,12 +248,12 @@ const Palpites = () => {
       return;
     }
 
-    // Convertendo para número AQUI, garantindo que "0" seja 0 e que não haja NaN.
-    // Se a string estiver vazia, a validação acima já bloqueia.
-    const homeScoreNum = parseInt(prediction.home_score);
-    const awayScoreNum = parseInt(prediction.away_score);
+    // Convertendo para número AQUI, usando Number() que é mais robusto para strings vazias
+    // e para 0. Se não for um número válido, Number() retorna NaN.
+    const homeScoreNum = Number(prediction.home_score);
+    const awayScoreNum = Number(prediction.away_score);
 
-    // Verificação adicional para garantir que são números válidos após parseInt
+    // Agora, verificar se a conversão resultou em NaN (para entradas como "abc")
     if (isNaN(homeScoreNum) || isNaN(awayScoreNum)) {
         toast.error("Placares inválidos. Por favor, insira apenas números.");
         return;
@@ -269,7 +263,6 @@ const Palpites = () => {
     try {
       let data, error;
       if (prediction.prediction_id) {
-        // Atualizar palpite existente
         ({ data, error } = await supabase
           .from('match_predictions')
           .update({
@@ -281,7 +274,6 @@ const Palpites = () => {
           .select()
           .single());
       } else {
-        // Inserir novo palpite
         ({ data, error } = await supabase
           .from('match_predictions')
           .insert({
@@ -302,7 +294,7 @@ const Palpites = () => {
         ...prev,
         [matchId]: {
           ...prev[matchId],
-          prediction_id: data.id, // Armazena o ID do palpite salvo/atualizado
+          prediction_id: data.id,
         }
       }));
       toast.success("Palpite salvo com sucesso!");
@@ -394,7 +386,6 @@ const Palpites = () => {
       return;
     }
 
-    // Validação de todos os 6 IDs e 2 placares
     if (!finalPrediction.champion_id || !finalPrediction.vice_champion_id ||
         !finalPrediction.third_place_id || !finalPrediction.fourth_place_id ||
         finalPrediction.final_home_score === null || finalPrediction.final_away_score === null) {
@@ -402,7 +393,6 @@ const Palpites = () => {
       return;
     }
 
-    // Verificação de times duplicados para os 4 primeiros lugares
     const finalTeams = [
       finalPrediction.champion_id,
       finalPrediction.vice_champion_id,
@@ -424,7 +414,7 @@ const Palpites = () => {
         fourth_place_id_param: finalPrediction.fourth_place_id,
         final_home_score_param: finalPrediction.final_home_score,
         final_away_score_param: finalPrediction.final_away_score,
-        user_id_param: user.id, // user_id_param deve ser o último conforme a função SQL que te passei
+        user_id_param: user.id,
       });
 
       if (error) {
@@ -446,21 +436,7 @@ const Palpites = () => {
       return;
     }
     setSubmitting(true);
-    // Aqui você pode adicionar lógica para salvar todos os palpites
-    // Chame as funções de salvar para cada tipo de palpite que foi alterado/preenchido
-    // Para simplificar, vou chamar apenas para os palpites da final como exemplo,
-    // mas você pode estender isso para palpites diários e de grupo se quiser que o botão "Confirmar" salve tudo.
-    // Para este cenário, o ideal é que cada tipo de palpite seja salvo em seu próprio botão ou que o "Confirmar"
-    // itere sobre os palpites pendentes de salvamento.
-
-    // No seu caso, como você já tem botões de "Salvar" individuais,
-    // este botão "Confirmar Palpites" poderia ser um feedback visual,
-    // ou você pode transformá-lo para iterar e salvar todos os palpites modificados.
-    // Por enquanto, ele apenas mostra uma mensagem de sucesso ou erro.
-
     try {
-      // Exemplo: Salvar palpite da final (já tem um botão específico para isso, mas pode ser chamado aqui)
-      // await handleSaveFinalPrediction(); // Chame esta função se quiser que este botão salve a final
       toast.success("Palpites confirmados com sucesso! (Lembre-se de usar os botões Salvar/Atualizar para cada tipo de palpite)");
     } catch (error) {
       toast.error("Erro ao confirmar palpites. Verifique os erros individuais.");
@@ -475,7 +451,6 @@ const Palpites = () => {
       return;
     }
 
-    // Preparar os dados para o comprovante de palpites de partida
     const userMatchPredictionsForReceipt = Object.values(dailyPredictions)
       .map(p => {
         const match = matches.find(m => m.id === p.match_id);
@@ -486,12 +461,11 @@ const Palpites = () => {
             home_team: teams.find(t => t.id === match.home_team_id),
             away_team: teams.find(t => t.id === match.away_team_id),
           },
-          home_score_prediction: parseInt(p.home_score),
-          away_score_prediction: parseInt(p.away_score),
+          home_score_prediction: Number(p.home_score), // Use Number() aqui também
+          away_score_prediction: Number(p.away_score), // Use Number() aqui também
         };
-      }).filter(Boolean); // Remover nulos
+      }).filter(Boolean);
 
-    // Preparar os dados para o comprovante de palpites de grupo
     const userGroupPredictionsForReceipt = Object.values(groupPredictions)
       .map(gp => {
         const group = groups.find(g => g.id === gp.group_id);
@@ -503,7 +477,6 @@ const Palpites = () => {
         };
       }).filter(Boolean);
 
-    // Preparar os dados para o comprovante de palpite da final
     const finalPredictionReceipt = {
       champion: teams.find(t => t.id === finalPrediction.champion_id),
       vice_champion: teams.find(t => t.id === finalPrediction.vice_champion_id),
@@ -517,10 +490,10 @@ const Palpites = () => {
 
     const receiptHtml = ReactDOMServer.renderToString(
       <PredictionReceipt
-        user={{ name: user.user_metadata.full_name || user.email }} // Ajuste conforme seu AuthContext
-        predictions={userMatchPredictionsForReceipt as any} // Cast provisório, ajuste os tipos
-        groupPredictions={userGroupPredictionsForReceipt as any} // Cast provisório
-        finalPrediction={finalPredictionReceipt as any} // Cast provisório
+        user={{ name: user.user_metadata.full_name || user.email }}
+        predictions={userMatchPredictionsForReceipt as any}
+        groupPredictions={userGroupPredictionsForReceipt as any}
+        finalPrediction={finalPredictionReceipt as any}
         dateGenerated={dateGenerated}
       />
     );
@@ -580,9 +553,8 @@ const Palpites = () => {
     );
   }
 
-  // Se não houver usuário logado, redireciona ou mostra uma mensagem
   if (!user) {
-    navigate("/login"); // Ou exiba um componente de "login necessário"
+    navigate("/login");
     return null;
   }
 
@@ -598,7 +570,6 @@ const Palpites = () => {
             <TabsTrigger value="final">Final</TabsTrigger>
           </TabsList>
 
-          {/* TAB: Partidas */}
           <TabsContent value="daily">
             <Card>
               <CardHeader>
@@ -650,7 +621,10 @@ const Palpites = () => {
                           <Button
                             className="ml-auto bg-fifa-green hover:bg-green-700"
                             onClick={() => handleSaveDailyPrediction(match.id)}
-                            disabled={submitting || !canPredict || prediction.home_score === "" || prediction.away_score === ""}
+                            // O botão só fica habilitado se ambos os placares não estiverem vazios e forem números válidos (após parseInt)
+                            disabled={submitting || !canPredict || 
+                                      prediction.home_score === "" || prediction.away_score === "" ||
+                                      isNaN(Number(prediction.home_score)) || isNaN(Number(prediction.away_score))}
                           >
                             {prediction.prediction_id ? "Atualizar" : "Salvar"}
                           </Button>
@@ -663,7 +637,6 @@ const Palpites = () => {
             </Card>
           </TabsContent>
 
-          {/* TAB: Grupos */}
           <TabsContent value="groups">
             <Card>
               <CardHeader>
@@ -749,7 +722,6 @@ const Palpites = () => {
             </Card>
           </TabsContent>
 
-          {/* TAB: Final */}
           <TabsContent value="final">
             <Card>
               <CardHeader>
@@ -816,7 +788,6 @@ const Palpites = () => {
                         </Select>
                       </div>
 
-                      {/* NOVOS SELECTS PARA 3º E 4º LUGAR */}
                       <div>
                         <Label htmlFor="third-place-select">3º Lugar:</Label>
                         <Select
@@ -892,7 +863,7 @@ const Palpites = () => {
                             const value = e.target.value;
                             handleFinalPredictionChange('final_away_score', value === '' ? null : parseInt(value));
                           }}
-                          disabled={submitting || !(finalPredictionCutoffDate.getTime() > Date.now())}
+                          disabled={submitting || !(finalPredictionCutoffDate.getTime() > Date.2025/05/22)}
                         />
                       </div>
                     </div>
@@ -926,7 +897,6 @@ const Palpites = () => {
               )}
             </Button>
 
-            {/* Botão para Imprimir Comprovante */}
             <Button
               className="w-full bg-gray-600 hover:bg-gray-700 text-white"
               onClick={handlePrintReceipt}
