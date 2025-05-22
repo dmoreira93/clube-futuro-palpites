@@ -5,14 +5,14 @@ import {
   MatchResult,
   Prediction,
   ScoringCriteria,
-  PointsResult,
+  PointsResult, // Certifique-se que este tipo está correto para o upsert
   SupabaseMatchPrediction,
   SupabaseMatchResultFromMatches,
-  User, // Certifique-se de que este tipo 'User' inclui 'is_admin: boolean'
-  TournamentFinalResults, // Importe o tipo TournamentFinalResults (ou o nome correto que você usa)
-  SupabaseFinalPrediction, // Adicione este tipo se ele existir e for usado para final_predictions
-  SupabaseGroupPrediction, // Adicione este tipo se ele existir e for usado para group_predictions
-} from "./types"; // Certifique-se que o caminho para o seu 'types.ts' está correto
+  User,
+  TournamentFinalResults,
+  SupabaseFinalPrediction,
+  SupabaseGroupPrediction,
+} from "./types";
 
 /**
  * Busca o resultado da partida (apenas partidas finalizadas)
@@ -50,13 +50,13 @@ export async function fetchPredictions(matchId: string): Promise<Prediction[]> {
 
     if (error) {
       console.error('Erro ao buscar palpites:', error);
-      return []; // Retorna array vazio em caso de erro
+      return [];
     }
 
     return data as Prediction[];
   } catch (error) {
     console.error('Erro ao buscar palpites:', error);
-    return []; // Retorna array vazio em caso de erro
+    return [];
   }
 }
 
@@ -89,7 +89,7 @@ export async function fetchUsersCustom(): Promise<User[] | null> {
   try {
     const { data, error } = await supabase
       .from('users_custom')
-      .select('id, name, username, avatar_url, is_admin, total_points'); // Adicione 'total_points' se for usado
+      .select('id, name, username, avatar_url, is_admin, total_points');
 
     if (error) {
       console.error('Erro ao buscar usuários customizados:', error);
@@ -192,6 +192,29 @@ export async function fetchTournamentResults(): Promise<TournamentFinalResults |
 }
 
 /**
+ * Salva os pontos de um usuário para uma partida.
+ * Assume que 'user_points' é a tabela onde os pontos são registrados.
+ */
+export async function saveUserPoints(pointsResult: PointsResult): Promise<boolean> {
+  try {
+    // Utilize upsert para evitar duplicatas e atualizar se já existir um registro para prediction_id
+    const { data, error } = await supabase
+      .from('user_points')
+      .upsert(pointsResult, { onConflict: 'prediction_id' }); // Certifique-se que 'prediction_id' é uma coluna única ou chave primária
+
+    if (error) {
+      console.error('Erro ao salvar pontos do usuário:', error);
+      return false;
+    }
+    return true;
+  } catch (error) {
+    console.error('Erro ao salvar pontos do usuário:', error);
+    return false;
+  }
+}
+
+
+/**
  * Busca os palpites finais de um usuário para o torneio.
  */
 export async function fetchUserFinalPrediction(userId: string): Promise<SupabaseFinalPrediction | null> {
@@ -250,7 +273,7 @@ export async function fetchUserGroupPredictions(userId: string): Promise<Supabas
 
     if (error) {
       console.error('Erro ao buscar palpites de grupo do usuário:', error);
-      return null; // Retorna null em caso de erro
+      return null;
     }
 
     return data as SupabaseGroupPrediction[];
