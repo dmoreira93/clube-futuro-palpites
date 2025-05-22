@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { supabase } from "@/lib/supabaseClient";
+import { supabase } from "@/integrations/supabase/client";
 import { calculateMatchPoints } from "@/utils/points/matchPoints";
 import { calculateTournamentFinalPoints } from "@/utils/points/finalPoints";
 import { Database } from "@/types/supabase";
