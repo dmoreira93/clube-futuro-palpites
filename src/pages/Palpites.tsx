@@ -587,6 +587,27 @@ const Palpites = () => {
                     const canPredict = matchDate.getTime() > Date.now();
                     const prediction = dailyPredictions[match.id] || { home_score: '', away_score: '' };
 
+                    // --- ADICIONE ESTE CONSOLE.LOG AQUI ---
+                    console.log(`--- Debug Palpite Partida: ${match.home_team?.name} vs ${match.away_team?.name} (ID: ${match.id}) ---`);
+                    console.log(`  canPredict (Prazo aberto?): ${canPredict}`);
+                    console.log(`  prediction.home_score (valor atual): '${prediction.home_score}'`);
+                    console.log(`  prediction.away_score (valor atual): '${prediction.away_score}'`);
+                    console.log(`  isNaN(Number(home_score)) (É NaN?): ${isNaN(Number(prediction.home_score))}`);
+                    console.log(`  isNaN(Number(away_score)) (É NaN?): ${isNaN(Number(prediction.away_score))}`);
+                    console.log(`  submitting (global): ${submitting}`);
+                    const isDisabledBy = {
+                      submitting: submitting,
+                      notCanPredict: !canPredict,
+                      homeScoreEmpty: prediction.home_score === "",
+                      awayScoreEmpty: prediction.away_score === "",
+                      homeScoreNaN: isNaN(Number(prediction.home_score)),
+                      awayScoreNaN: isNaN(Number(prediction.away_score))
+                    };
+                    console.log(`  Detalhes da desabilitação:`, isDisabledBy);
+                    console.log(`  Botão FINALMENTE DISABILITADO? ${submitting || !canPredict || prediction.home_score === "" || prediction.away_score === "" || isNaN(Number(prediction.home_score)) || isNaN(Number(prediction.away_score))}`);
+                    console.log(`--------------------------------------------------------------------------------`);
+                    // --- FIM DO CONSOLE.LOG ---
+
                     return (
                       <Card key={match.id} className={`p-4 ${!canPredict ? 'bg-gray-100 opacity-80' : ''}`}>
                         <div className="flex justify-between items-center mb-2">
@@ -622,7 +643,7 @@ const Palpites = () => {
                             className="ml-auto bg-fifa-green hover:bg-green-700"
                             onClick={() => handleSaveDailyPrediction(match.id)}
                             // O botão só fica habilitado se ambos os placares não estiverem vazios e forem números válidos (após parseInt)
-                            disabled={submitting || !canPredict || 
+                            disabled={submitting || !canPredict ||
                                       prediction.home_score === "" || prediction.away_score === "" ||
                                       isNaN(Number(prediction.home_score)) || isNaN(Number(prediction.away_score))}
                           >
