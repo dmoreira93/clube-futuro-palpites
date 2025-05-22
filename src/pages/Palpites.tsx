@@ -1,5 +1,6 @@
 // src/pages/Palpites.tsx
-import { useState, useEffect, useCallback, useRef } from "react"; // Adicionado useRef
+
+import { useState, useEffect, useCallback, useRef } from "react";
 import Layout from "@/components/layout/Layout";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -25,26 +26,15 @@ import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
-import { Match } from "@/types/matches";
-import { format, parseISO } from "date-fns";
+import { Match } from "@/types/matches"; // Certifique-se que o tipo Match está completo
+import { format, parseISO, isAfter } from "date-fns"; // Adicionado isAfter
 import { ptBR } from "date-fns/locale";
 import ReactDOMServer from 'react-dom/server';
 
 // Importações para o comprovante
-import PredictionReceipt from "@/components/home/predictions/PredictionReceipt";
+import PredictionReceipt from "@/components/predictions/PredictionReceipt";
 
-// Importa DailyPredictions e a interface LocalPrediction
-import DailyPredictions, { LocalPrediction } from "@/components/home/DailyPredictions"; // Importa o componente e a interface
-
-// ... (seus tipos existentes MatchPrediction, GroupPrediction, FinalPrediction)
-
-// Variáveis para datas de corte (ajuste conforme necessário)
-const globalPredictionCutoffDate = new Date("2025-06-14T12:00:00Z"); // Exemplo: data limite global para o bolão
-const finalPredictionCutoffDate = new Date("2025-06-20T12:00:00Z"); // Exemplo: data limite para palpites de final
-
-// ... (resto dos tipos, como o seu FinalPrediction, GroupPrediction, etc.)
-
-// Certifique-se que o tipo Match está completo com home_team e away_team
+// --- NOVAS INTERFACES (ou ajuste as suas existentes) ---
 interface Team {
   id: string;
   name: string;
@@ -55,90 +45,196 @@ export interface MatchWithTeams extends Match {
   away_team?: Team;
 }
 
+// Assumindo seus tipos para GroupPrediction e FinalPrediction
+// Você deve ter essas interfaces definidas em algum lugar, talvez em '@/types/predictions' ou similar
+interface GroupPrediction {
+  id?: string;
+  group_name: string;
+  predicted_first_team_id: string;
+  predicted_second_team_id: string;
+  predicted_first_team?: Team; // Para exibir o nome do time
+  predicted_second_team?: Team; // Para exibir o nome do time
+}
+
+interface FinalPrediction {
+  id?: string;
+  champion_id: string;
+  runner_up_id: string;
+  third_place_id: string;
+  fourth_place_id: string;
+  champion?: Team;
+  runner_up?: Team;
+  third_place?: Team;
+  fourth_place?: Team;
+}
+
+// Variáveis para datas de corte (ajuste conforme necessário)
+// Use estas para as regras específicas do seu bolão
+const globalPredictionCutoffDate = parseISO("2025-06-14T12:00:00-03:00"); // Exemplo: data limite global para o bolão (ajuste fuso horário)
+const finalPredictionCutoffDate = parseISO("2025-06-20T12:00:00-03:00"); // Exemplo: data limite para palpites de final (ajuste fuso horário)
 
 const Palpites = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
 
   const [submitting, setSubmitting] = useState(false);
-  const [activeTab, setActiveTab] = useState("matches"); // Estado para controlar a aba ativa
+  const [activeTab, setActiveTab] = useState("matches");
 
-  // --- NOVO ESTADO para os palpites das partidas gerenciados por DailyPredictions ---
-  const [matchPredictionsFromDaily, setMatchPredictionsFromDaily] = useState<LocalPrediction[]>([]);
+  // --- Estados para Palpites de Partida (seria DailyPredictions) ---
+  const [matchPredictions, setMatchPredictions] = useState<any[]>([]); // Pode ser vazio ou removido se DailyPredictions cuida disso
+  const [matches, setMatches] = useState<MatchWithTeams[]>([]); // Para obter detalhes dos times no comprovante
 
-  // Referência para a função handleSavePrediction de DailyPredictions
-  // Vamos definir essa função aqui, pois ela fará as chamadas ao Supabase
-  // e precisa de acesso a 'user' e 'toast' deste escopo.
-  const getCanPredict = useCallback((matchDate: string, isFinished: boolean) => {
+  // --- Estados para Palpites de Grupo ---
+  const [groups, setGroups] = useState<any[]>([]); // Supondo que você tenha uma tabela 'groups'
+  const [teams, setTeams] = useState<Team[]>([]); // Para as opções de seleção de times
+  const [groupPredictions, setGroupPredictions] = useState<GroupPrediction[]>([]);
+
+  // --- Estados para Palpites da Final ---
+  const [finalPrediction, setFinalPrediction] = useState<FinalPrediction | null>(null);
+
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+
+  // Função auxiliar para verificar se o prazo global ou da partida foi atingido
+  const getCanPredictMatch = useCallback((matchDate: string, isFinished: boolean) => {
     const matchTime = parseISO(matchDate).getTime();
     const now = new Date().getTime();
     const cutoffTime = matchTime - (1 * 60 * 60 * 1000); // 1 hora antes do jogo
 
     if (isFinished) return false;
     if (now > cutoffTime) return false;
+    // Se quiser aplicar o prazo global para partidas também, adicione:
+    // if (isAfter(new Date(), globalPredictionCutoffDate)) return false;
     return true;
-  }, []); // Sem dependências, pois só usa `Date` e `parseISO`
+  }, []);
 
 
-  const handleSaveSinglePrediction = useCallback(async (
-    predictionToSave: LocalPrediction,
-    currentUserId: string,
-    showToast: boolean = false // Adiciona um flag para controlar o toast
+  // --- Efeitos de Carga de Dados Iniciais ---
+  useEffect(() => {
+    if (!user) {
+      navigate("/login");
+      toast.warning("Você precisa estar logado para acessar os palpites.");
+      return;
+    }
+
+    const fetchInitialData = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        // --- Fetch Partidas e Palpites de Partida (DailyPredictions faria isso agora) ---
+        // Se DailyPredictions não for mais um componente filho passando dados,
+        // você precisaria buscar as partidas e os palpites de partida aqui
+        // ou deixar o DailyPredictions lidar com isso internamente.
+        const today = format(new Date(), 'yyyy-MM-dd');
+        const { data: matchesData, error: matchesError } = await supabase
+            .from('matches')
+            .select('*, home_team(*), away_team(*)')
+            .gte('match_date', today)
+            .order('match_date', { ascending: true });
+
+        if (matchesError) throw matchesError;
+        setMatches(matchesData as MatchWithTeams[] || []);
+
+
+        // --- Fetch Grupos e Times ---
+        const { data: groupsData, error: groupsError } = await supabase.from('groups').select('*').order('name');
+        if (groupsError) throw groupsError;
+        setGroups(groupsData || []);
+
+        const { data: teamsData, error: teamsError } = await supabase.from('teams').select('id, name');
+        if (teamsError) throw teamsError;
+        setTeams(teamsData || []);
+
+        // --- Fetch Palpites de Grupo Existentes ---
+        const { data: existingGroupPredictions, error: existingGroupError } = await supabase
+          .from('group_predictions')
+          .select('*, predicted_first_team(*), predicted_second_team(*)')
+          .eq('user_id', user.id);
+        if (existingGroupError) throw existingGroupError;
+
+        const initialGroupPredictions: GroupPrediction[] = (groupsData || []).map(group => {
+            const existing = existingGroupPredictions?.find(p => p.group_id === group.id);
+            return {
+                group_name: group.name,
+                group_id: group.id,
+                predicted_first_team_id: existing?.predicted_first_team_id || '',
+                predicted_second_team_id: existing?.predicted_second_team_id || '',
+                id: existing?.id, // ID do palpite existente
+                predicted_first_team: existing?.predicted_first_team || undefined,
+                predicted_second_team: existing?.predicted_second_team || undefined,
+            };
+        });
+        setGroupPredictions(initialGroupPredictions);
+
+        // --- Fetch Palpites da Final Existentes ---
+        const { data: existingFinalPrediction, error: existingFinalError } = await supabase
+          .from('final_predictions')
+          .select('*, champion(*), runner_up(*), third_place(*), fourth_place(*)')
+          .eq('user_id', user.id)
+          .single(); // Espera apenas um resultado ou null
+
+        if (existingFinalError && existingFinalError.code !== 'PGRST116') { // PGRST116 = no rows found
+          throw existingFinalError;
+        }
+
+        if (existingFinalPrediction) {
+          setFinalPrediction({
+            id: existingFinalPrediction.id,
+            champion_id: existingFinalPrediction.champion_id,
+            runner_up_id: existingFinalPrediction.runner_up_id,
+            third_place_id: existingFinalPrediction.third_place_id,
+            fourth_place_id: existingFinalPrediction.fourth_place_id,
+            champion: existingFinalPrediction.champion || undefined,
+            runner_up: existingFinalPrediction.runner_up || undefined,
+            third_place: existingFinalPrediction.third_place || undefined,
+            fourth_place: existingFinalPrediction.fourth_place || undefined,
+          });
+        }
+
+
+      } catch (err: any) {
+        console.error("Erro ao carregar dados iniciais:", err);
+        setError(err.message || "Falha ao carregar os dados.");
+        toast.error("Erro ao carregar dados iniciais: " + (err.message || "Tente novamente."));
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchInitialData();
+  }, [user, navigate, toast]);
+
+  // --- Handlers para Palpites de Grupo ---
+  const handleGroupPredictionChange = (
+    groupId: string,
+    type: 'first' | 'second',
+    teamId: string
   ) => {
-    const homeScore = Number(predictionToSave.home_score);
-    const awayScore = Number(predictionToSave.away_score);
-
-    // Validação de placares (já que Inputs não tinham disabled por !areScoresFilledAndValid)
-    if (predictionToSave.home_score === '' || predictionToSave.away_score === '' || isNaN(homeScore) || isNaN(awayScore)) {
-        if (showToast) {
-            toast.error("Por favor, preencha todos os placares das partidas válidas antes de confirmar.");
+    setGroupPredictions(prev => prev.map(gp => {
+      if (gp.group_id === groupId) {
+        if (type === 'first') {
+          return { ...gp, predicted_first_team_id: teamId };
+        } else {
+          return { ...gp, predicted_second_team_id: teamId };
         }
-        return { success: false, message: "Placares inválidos ou incompletos." };
-    }
-
-    const canPredictNow = getCanPredict(predictionToSave.match_date, predictionToSave.is_finished);
-    if (!canPredictNow) {
-        if (showToast) {
-            toast.warning(`Palpite para partida ${predictionToSave.match_id} não salvo. Prazo encerrado.`);
-        }
-        return { success: false, message: "Prazo para palpite encerrado." };
-    }
-
-    try {
-      if (predictionToSave.prediction_id) {
-        const { error: updateError } = await supabase
-          .from('match_predictions')
-          .update({ home_score: homeScore, away_score: awayScore })
-          .eq('id', predictionToSave.prediction_id);
-        if (updateError) throw updateError;
-        return { success: true, message: "Atualizado." };
-      } else {
-        const { data, error: insertError } = await supabase
-          .from('match_predictions')
-          .insert({
-            user_id: currentUserId,
-            match_id: predictionToSave.match_id,
-            home_score: homeScore,
-            away_score: awayScore,
-          })
-          .select();
-        if (insertError) throw insertError;
-        // Se um novo palpite foi inserido, atualize o prediction_id no estado local
-        // Isso será mais complexo aqui pois o estado está em DailyPredictions.
-        // O ideal é que handleSaveSinglePrediction retorne o novo ID e o Palpites.tsx
-        // atualize o estado de matchPredictionsFromDaily (ou solicite um re-fetch do DailyPredictions)
-        return { success: true, message: "Inserido.", newPredictionId: data?.[0]?.id };
       }
-    } catch (err: any) {
-      console.error("Erro ao salvar palpite:", err);
-      if (showToast) {
-        toast.error(`Erro ao salvar palpite para partida ${predictionToSave.match_id}.`);
-      }
-      return { success: false, message: err.message || "Erro desconhecido." };
-    }
-  }, [getCanPredict, toast]); // Depende de getCanPredict e toast
+      return gp;
+    }));
+  };
 
-  // --- Função para o botão "Confirmar Palpites" ---
+  // --- Handlers para Palpites da Final ---
+  const handleFinalPredictionChange = (
+    type: 'champion' | 'runnerUp' | 'thirdPlace' | 'fourthPlace',
+    teamId: string
+  ) => {
+    setFinalPrediction(prev => ({
+      ...(prev || {} as FinalPrediction), // Inicializa se for null
+      [`${type}_id`]: teamId,
+    }));
+  };
+
+  // --- Função de Salvamento Geral (Confirmar Palpites) ---
   const handleSubmitBets = async () => {
     if (!user) {
       toast.error("Você precisa estar logado para confirmar palpites.");
@@ -146,56 +242,138 @@ const Palpites = () => {
     }
     setSubmitting(true);
 
-    let allSuccess = true;
-    let successfulCount = 0;
-    let skippedCount = 0; // Para palpites com prazo encerrado ou inválidos
-
-    // --- SALVAR PALPITES DE PARTIDAS ---
-    for (const prediction of matchPredictionsFromDaily) {
-        const homeScore = Number(prediction.home_score);
-        const awayScore = Number(prediction.away_score);
-
-        // Validação adicional: não tenta salvar se os campos estão vazios ou inválidos
-        if (prediction.home_score === '' || prediction.away_score === '' || isNaN(homeScore) || isNaN(awayScore)) {
-            skippedCount++;
-            continue; // Pula para a próxima partida
-        }
-
-        const result = await handleSaveSinglePrediction(prediction, user.id);
-        if (result.success) {
-            successfulCount++;
-            // Se foi uma inserção, precisamos atualizar o prediction_id no estado
-            if (result.newPredictionId) {
-                setMatchPredictionsFromDaily(prev =>
-                    prev.map(p => p.match_id === prediction.match_id ? { ...p, prediction_id: result.newPredictionId } : p)
-                );
-            }
-        } else {
-            allSuccess = false;
-            skippedCount++;
-            console.warn(`Palpite para partida ${prediction.match_id} não salvo: ${result.message}`);
-        }
+    // Validação de prazo global para TODOS os palpites
+    if (isAfter(new Date(), globalPredictionCutoffDate)) {
+      toast.error(`O prazo para enviar palpites (partidas, grupos e final) já se encerrou em ${format(globalPredictionCutoffDate, 'dd/MM/yyyy HH:mm', { locale: ptBR })}.`);
+      setSubmitting(false);
+      return;
     }
 
-    // --- TODO: Lógica para salvar palpites de GRUPO e FINAL aqui ---
-    // Você precisará ter estados para esses palpites também e iterar sobre eles de forma similar.
-    // Exemplo:
-    // for (const groupPrediction of groupPredictions) { ... salvar ... }
-    // for (const finalPrediction of finalPredictions) { ... salvar ... }
+    let allSuccess = true;
+    let successCount = 0;
+    let errorCount = 0;
 
-    setSubmitting(false);
+    try {
+      // --- SALVAR PALPITES DE PARTIDA (Assumindo que DailyPredictions já faz isso ou seria feito aqui) ---
+      // Na versão anterior, o DailyPredictions tinha seus próprios botões "Salvar".
+      // Se você quer um único botão "Confirmar Palpites", a lógica de salvamento
+      // de partidas precisaria ser puxada para cá, iterando sobre 'matchPredictions'
+      // ou o estado gerenciado por DailyPredictions (se ele fosse filho passando dados).
+      // POR ENQUANTO, este bloco de partida será apenas um placeholder,
+      // pois DailyPredictions ainda tem seu próprio botão.
+      // Você pode adaptar isso para iterar sobre `matchPredictionsFromDaily` se quiser
+      // que o botão "Confirmar Palpites" salve as partidas também.
+      console.log("Palpites de partida seriam salvos/confirmados aqui pelo DailyPredictions.");
 
-    if (allSuccess && successfulCount > 0) {
-      toast.success("Todos os palpites válidos foram confirmados com sucesso!");
-    } else if (successfulCount > 0) {
-        toast.warning(`Alguns palpites foram confirmados (${successfulCount}). ${skippedCount > 0 ? `No entanto, ${skippedCount} foram ignorados (prazo encerrado ou incompletos).` : ''}`);
-    } else {
+
+      // --- SALVAR PALPITES DE GRUPO ---
+      for (const gp of groupPredictions) {
+        if (!gp.predicted_first_team_id || !gp.predicted_second_team_id) {
+          console.warn(`Palpite de grupo ${gp.group_name} incompleto, pulando.`);
+          errorCount++;
+          continue;
+        }
+        if (gp.predicted_first_team_id === gp.predicted_second_team_id) {
+          toast.error(`No Grupo ${gp.group_name}: os times classificados não podem ser os mesmos.`);
+          allSuccess = false;
+          errorCount++;
+          continue;
+        }
+
+        const dataToSave = {
+          user_id: user.id,
+          group_id: gp.group_id,
+          predicted_first_team_id: gp.predicted_first_team_id,
+          predicted_second_team_id: gp.predicted_second_team_id,
+        };
+
+        if (gp.id) { // Palpite existente, atualiza
+          const { error: updateError } = await supabase
+            .from('group_predictions')
+            .update(dataToSave)
+            .eq('id', gp.id);
+          if (updateError) throw updateError;
+        } else { // Novo palpite, insere
+          const { error: insertError } = await supabase
+            .from('group_predictions')
+            .insert(dataToSave);
+          if (insertError) throw insertError;
+        }
+        successCount++;
+      }
+
+      // --- SALVAR PALPITES DA FINAL ---
+      if (finalPrediction) {
+        // Validação de prazo específico para a final (se houver, caso contrário, usa o global)
+        if (isAfter(new Date(), finalPredictionCutoffDate)) { // Se o prazo da final for diferente do global
+          toast.error(`O prazo para palpites da final já se encerrou em ${format(finalPredictionCutoffDate, 'dd/MM/yyyy HH:mm', { locale: ptBR })}.`);
+          allSuccess = false;
+          errorCount++;
+        } else if (
+          !finalPrediction.champion_id ||
+          !finalPrediction.runner_up_id ||
+          !finalPrediction.third_place_id ||
+          !finalPrediction.fourth_place_id
+        ) {
+          toast.error("Por favor, preencha todos os campos dos palpites da final.");
+          allSuccess = false;
+          errorCount++;
+        } else if (
+            new Set([
+                finalPrediction.champion_id,
+                finalPrediction.runner_up_id,
+                finalPrediction.third_place_id,
+                finalPrediction.fourth_place_id
+            ]).size !== 4 // Verifica se todos os 4 são únicos
+        ) {
+            toast.error("Os times campeão, vice, terceiro e quarto lugar devem ser únicos.");
+            allSuccess = false;
+            errorCount++;
+        } else {
+            const dataToSave = {
+                user_id: user.id,
+                champion_id: finalPrediction.champion_id,
+                runner_up_id: finalPrediction.runner_up_id,
+                third_place_id: finalPrediction.third_place_id,
+                fourth_place_id: finalPrediction.fourth_place_id,
+            };
+
+            if (finalPrediction.id) { // Palpite existente, atualiza
+                const { error: updateError } = await supabase
+                    .from('final_predictions')
+                    .update(dataToSave)
+                    .eq('id', finalPrediction.id);
+                if (updateError) throw updateError;
+            } else { // Novo palpite, insere
+                const { error: insertError } = await supabase
+                    .from('final_predictions')
+                    .insert(dataToSave);
+                if (insertError) throw insertError;
+            }
+            successCount++;
+        }
+      }
+
+      if (allSuccess && successCount > 0) {
+        toast.success("Palpites confirmados com sucesso!");
+      } else if (successCount > 0) {
+        toast.warning(`Alguns palpites foram confirmados. ${errorCount > 0 ? `No entanto, ${errorCount} tiveram problemas (incompletos ou fora do prazo).` : ''}`);
+      } else {
         toast.error("Nenhum palpite válido foi salvo. Verifique os prazos e preenchimento.");
+      }
+
+    } catch (err: any) {
+      console.error("Erro ao salvar todos os palpites:", err);
+      toast.error("Erro geral ao salvar palpites: " + (err.message || "Tente novamente."));
+      allSuccess = false;
+    } finally {
+      setSubmitting(false);
+      // Para garantir que o UI do DailyPredictions reflete o estado atual,
+      // você pode precisar refetch os dados se ele não estiver sendo
+      // totalmente controlado pelo estado global aqui.
+      // window.location.reload(); // Isso seria um hack, melhor refetch específico
     }
   };
-
-
-  // ... (handlePrintReceipt e outras lógicas existentes) ...
 
   // Ref para o container de impressão
   const printRef = useRef<HTMLDivElement>(null);
@@ -206,38 +384,39 @@ const Palpites = () => {
       return;
     }
 
-    // Você precisará buscar os dados necessários para o comprovante aqui,
-    // já que DailyPredictions só gerencia os inputs.
-    // Ou passar os dados já existentes em 'matchPredictionsFromDaily'
-    // e buscar os dados das partidas que correspondem a eles.
     try {
-        const { data: userMatches, error: userMatchesError } = await supabase
+        // Fetch ALL match predictions for the user
+        const { data: userMatchPredictions, error: matchPredictionsError } = await supabase
+            .from('match_predictions')
+            .select('*')
+            .eq('user_id', user.id);
+        if (matchPredictionsError) throw matchPredictionsError;
+
+        // Fetch details for all matches involved in predictions
+        const matchIds = userMatchPredictions.map(p => p.match_id);
+        const { data: matchesDetails, error: matchesDetailsError } = await supabase
             .from('matches')
             .select('*, home_team(*), away_team(*)')
-            .in('id', matchPredictionsFromDaily.map(p => p.match_id));
+            .in('id', matchIds);
+        if (matchesDetailsError) throw matchesDetailsError;
 
-        if (userMatchesError) throw userMatchesError;
-
-        const predictionsForReceipt = matchPredictionsFromDaily.map(p => {
-            const matchDetail = userMatches.find(m => m.id === p.match_id);
-            if (!matchDetail) return null; // Ou trate o erro
+        const predictionsForReceipt = userMatchPredictions.map(p => {
+            const matchDetail = matchesDetails.find(m => m.id === p.match_id);
+            if (!matchDetail) return null;
 
             return {
                 match: matchDetail,
-                home_score_prediction: Number(p.home_score),
-                away_score_prediction: Number(p.away_score),
+                home_score_prediction: p.home_score,
+                away_score_prediction: p.away_score,
             };
-        }).filter(Boolean); // Remove nulos
+        }).filter(Boolean); // Remove nulls
 
-        if (predictionsForReceipt.length === 0) {
-            toast.warning("Nenhum palpite para gerar comprovante.");
-            return;
-        }
 
         const receiptComponent = (
             <PredictionReceipt
                 user={{ id: user.id, name: user.user_metadata?.full_name || user.email || 'Usuário', avatar_url: user.user_metadata?.avatar_url || '' }}
-                predictions={predictionsForReceipt as any} // Cast provisório, ajuste os tipos
+                predictions={predictionsForReceipt as any} // Cast para o tipo correto se necessário
+                dateGenerated={new Date()} // Data de geração do comprovante
             />
         );
 
@@ -245,8 +424,6 @@ const Palpites = () => {
         const printWindow = window.open('', '', 'height=600,width=800');
         if (printWindow) {
             printWindow.document.write('<html><head><title>Comprovante de Palpites</title>');
-            // Inclua estilos se necessário, por exemplo, carregando um CSS específico para impressão
-            // printWindow.document.write('<link rel="stylesheet" href="/path/to/print.css">');
             printWindow.document.write('</head><body>');
             printWindow.document.write(printContent);
             printWindow.document.write('</body></html>');
@@ -262,14 +439,34 @@ const Palpites = () => {
 };
 
 
-  useEffect(() => {
-    // Redireciona se o usuário não estiver logado
-    if (!user) {
-      navigate("/login");
-      toast.warning("Você precisa estar logado para acessar os palpites.");
-    }
-  }, [user, navigate, toast]);
+  if (loading) {
+    return (
+      <Layout>
+        <div className="container mx-auto p-4 md:p-6 lg:p-8 text-center">
+          <Loader2 className="h-10 w-10 animate-spin text-fifa-blue mx-auto mb-4" />
+          <p className="text-gray-600">Carregando seus palpites...</p>
+        </div>
+      </Layout>
+    );
+  }
 
+  if (error) {
+    return (
+      <Layout>
+        <div className="container mx-auto p-4 md:p-6 lg:p-8">
+          <Card className="w-full max-w-2xl mx-auto">
+            <CardHeader>
+              <CardTitle className="text-red-600">Erro ao Carregar</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-red-500">{error}</p>
+              <Button onClick={() => window.location.reload()} className="mt-4">Recarregar Página</Button>
+            </CardContent>
+          </Card>
+        </div>
+      </Layout>
+    );
+  }
 
   return (
     <Layout>
@@ -293,7 +490,9 @@ const Palpites = () => {
 
           <TabsContent value="matches">
             {/* O DailyPredictions agora é renderizado aqui e gerencia seus próprios estados */}
-            <DailyPredictions onPredictionsChange={setMatchPredictionsFromDaily} />
+            {/* Na versão anterior, o DailyPredictions era renderizado sozinho na rota de home.
+                Se você o incluiu aqui antes, ele ficaria assim. */}
+            <DailyPredictions />
           </TabsContent>
 
           <TabsContent value="groups">
@@ -315,8 +514,52 @@ const Palpites = () => {
                     .
                   </AlertDescription>
                 </Alert>
-                {/* Lógica para palpites de grupo aqui */}
-                <p className="text-gray-600">Conteúdo para palpites de grupos.</p>
+                {groups.map(group => (
+                  <div key={group.id} className="border p-4 rounded-lg bg-gray-50">
+                    <h3 className="text-lg font-bold mb-2">{group.name}</h3>
+                    <div className="flex flex-col gap-2">
+                      <Label htmlFor={`first-place-${group.id}`}>1º Lugar:</Label>
+                      <Select
+                        value={groupPredictions.find(gp => gp.group_id === group.id)?.predicted_first_team_id || ''}
+                        onValueChange={(value) => handleGroupPredictionChange(group.id, 'first', value)}
+                        disabled={isAfter(new Date(), globalPredictionCutoffDate) || submitting}
+                      >
+                        <SelectTrigger id={`first-place-${group.id}`}>
+                          <SelectValue placeholder="Selecione o 1º time" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {teams.filter(team => team.group_id === group.id).map(team => ( // Filtra times por grupo
+                            <SelectItem key={team.id} value={team.id}>
+                              {team.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+
+                      <Label htmlFor={`second-place-${group.id}`} className="mt-2">2º Lugar:</Label>
+                      <Select
+                        value={groupPredictions.find(gp => gp.group_id === group.id)?.predicted_second_team_id || ''}
+                        onValueChange={(value) => handleGroupPredictionChange(group.id, 'second', value)}
+                        disabled={isAfter(new Date(), globalPredictionCutoffDate) || submitting}
+                      >
+                        <SelectTrigger id={`second-place-${group.id}`}>
+                          <SelectValue placeholder="Selecione o 2º time" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {teams.filter(team => team.group_id === group.id).map(team => ( // Filtra times por grupo
+                            <SelectItem key={team.id} value={team.id}>
+                              {team.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {groupPredictions.find(gp => gp.group_id === group.id)?.predicted_first_team_id === groupPredictions.find(gp => gp.group_id === group.id)?.predicted_second_team_id &&
+                       groupPredictions.find(gp => gp.group_id === group.id)?.predicted_first_team_id !== '' && (
+                        <p className="text-red-500 text-sm mt-1">Os times não podem ser os mesmos.</p>
+                      )}
+                    </div>
+                  </div>
+                ))}
               </CardContent>
             </Card>
           </TabsContent>
@@ -340,8 +583,81 @@ const Palpites = () => {
                     .
                   </AlertDescription>
                 </Alert>
-                {/* Lógica para palpites de final aqui */}
-                <p className="text-gray-600">Conteúdo para palpites da final.</p>
+
+                <div className="flex flex-col gap-4">
+                  <Label htmlFor="champion">Campeão:</Label>
+                  <Select
+                    value={finalPrediction?.champion_id || ''}
+                    onValueChange={(value) => handleFinalPredictionChange('champion', value)}
+                    disabled={isAfter(new Date(), finalPredictionCutoffDate) || submitting}
+                  >
+                    <SelectTrigger id="champion">
+                      <SelectValue placeholder="Selecione o Campeão" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {teams.map(team => (
+                        <SelectItem key={team.id} value={team.id}>{team.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+
+                  <Label htmlFor="runner-up">Vice-Campeão:</Label>
+                  <Select
+                    value={finalPrediction?.runner_up_id || ''}
+                    onValueChange={(value) => handleFinalPredictionChange('runnerUp', value)}
+                    disabled={isAfter(new Date(), finalPredictionCutoffDate) || submitting}
+                  >
+                    <SelectTrigger id="runner-up">
+                      <SelectValue placeholder="Selecione o Vice-Campeão" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {teams.map(team => (
+                        <SelectItem key={team.id} value={team.id}>{team.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+
+                  <Label htmlFor="third-place">Terceiro Lugar:</Label>
+                  <Select
+                    value={finalPrediction?.third_place_id || ''}
+                    onValueChange={(value) => handleFinalPredictionChange('thirdPlace', value)}
+                    disabled={isAfter(new Date(), finalPredictionCutoffDate) || submitting}
+                  >
+                    <SelectTrigger id="third-place">
+                      <SelectValue placeholder="Selecione o Terceiro Lugar" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {teams.map(team => (
+                        <SelectItem key={team.id} value={team.id}>{team.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+
+                  <Label htmlFor="fourth-place">Quarto Lugar:</Label>
+                  <Select
+                    value={finalPrediction?.fourth_place_id || ''}
+                    onValueChange={(value) => handleFinalPredictionChange('fourthPlace', value)}
+                    disabled={isAfter(new Date(), finalPredictionCutoffDate) || submitting}
+                  >
+                    <SelectTrigger id="fourth-place">
+                      <SelectValue placeholder="Selecione o Quarto Lugar" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {teams.map(team => (
+                        <SelectItem key={team.id} value={team.id}>{team.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+
+                    {finalPrediction && new Set([
+                        finalPrediction.champion_id,
+                        finalPrediction.runner_up_id,
+                        finalPrediction.third_place_id,
+                        finalPrediction.fourth_place_id
+                    ]).size < 4 && (
+                        <p className="text-red-500 text-sm mt-1">Os quatro times devem ser únicos.</p>
+                    )}
+                </div>
               </CardContent>
             </Card>
           </TabsContent>
@@ -349,7 +665,6 @@ const Palpites = () => {
 
         <Card className="mt-6">
           <CardContent className="p-6 space-y-4">
-
             <Button
               className="w-full bg-fifa-blue hover:bg-opacity-90 mb-4"
               onClick={handleSubmitBets}

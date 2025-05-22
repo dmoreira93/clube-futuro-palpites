@@ -1,10 +1,10 @@
 // src/components/home/DailyPredictions.tsx
 
-import { useState, useEffect, useCallback } from "react"; // Adicionado useCallback
+import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-// import { Button } from "@/components/ui/button"; // REMOVIDO: Não precisamos mais do Button aqui
+import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { format, parseISO } from "date-fns";
@@ -14,43 +14,34 @@ import {
   SupabaseMatchPrediction,
 } from "@/utils/pointsCalculator/types";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Link } from "react-router-dom";
+import { Link } from "react-router-dom"; // Importar Link para o link do painel de admin
 
 // Interface para um palpite no estado local
-export interface LocalPrediction { // EXPORTADO para ser usado em Palpites.tsx
+interface LocalPrediction {
   match_id: string;
   home_score: string; // Mantém como string para input
   away_score: string; // Mantém como string para input
   prediction_id?: string; // ID do palpite existente, se houver
-  match_date: string; // Adicionado para a lógica de prazo no componente pai
-  is_finished: boolean; // Adicionado para a lógica de prazo no componente pai
 }
 
-// Props que este componente receberá do pai (Palpites.tsx)
-interface DailyPredictionsProps {
-  onPredictionsChange: (predictions: LocalPrediction[]) => void;
-  // onSave: (predictionsToSave: LocalPrediction[]) => void; // Opcional, se quisesse um botão interno para salvar tudo
-  // isSavingGlobal?: boolean; // Se o botão geral de salvar deve desabilitar os inputs
-}
-
-// Renomeado para DailyPredictions, mas agora recebe props
-const DailyPredictions: React.FC<DailyPredictionsProps> = ({ onPredictionsChange }) => {
-  const { user, isAdmin } = useAuth();
+const DailyPredictions = () => {
+  const { user, isAdmin } = useAuth(); // Obter o usuário logado e o status de admin
   const { toast } = useToast();
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [matches, setMatches] = useState<SupabaseMatchResultFromMatches[]>([]);
   const [currentPredictions, setCurrentPredictions] = useState<LocalPrediction[]>([]);
-  // 'isSaving' global será gerenciado no componente pai (Palpites.tsx)
+  const [isSaving, setIsSaving] = useState<string | null>(null); // Armazena o ID da partida que está sendo salva
 
+  // Função para verificar se o usuário pode palpitar em uma partida
   const getCanPredict = (matchDate: string, isFinished: boolean) => {
     const matchTime = parseISO(matchDate).getTime();
     const now = new Date().getTime();
     const cutoffTime = matchTime - (1 * 60 * 60 * 1000); // 1 hora antes do jogo
 
-    if (isFinished) return false;
-    if (now > cutoffTime) return false;
+    if (isFinished) return false; // Se a partida já terminou, não pode palpitar
+    if (now > cutoffTime) return false; // Se o prazo limite passou, não pode palpitar
     return true;
   };
 
@@ -65,17 +56,18 @@ const DailyPredictions: React.FC<DailyPredictionsProps> = ({ onPredictionsChange
       setError(null);
 
       try {
-        const today = format(new Date(), 'yyyy-MM-dd');
+        const today = format(new Date(), 'yyyy-MM-dd'); // Formato YYYY-MM-DD para a query SQL
         const { data: matchesData, error: matchesError } = await supabase
           .from('matches')
-          .select('*, home_team(*), away_team(*)')
-          .gte('match_date', today) // Buscar a partir de hoje em diante
-          .order('match_date', { ascending: true });
+          .select('*, home_team(*), away_team(*)') // Seleciona dados dos times relacionados
+          .gte('match_date', today) // Pega partidas a partir de hoje
+          .order('match_date', { ascending: true }); // Ordena por data
 
         if (matchesError) throw matchesError;
 
         setMatches(matchesData || []);
 
+        // Buscar palpites existentes do usuário para as partidas retornadas
         const matchIds = (matchesData || []).map(m => m.id);
         let predictionsData: SupabaseMatchPrediction[] = [];
         if (matchIds.length > 0) {
@@ -89,6 +81,7 @@ const DailyPredictions: React.FC<DailyPredictionsProps> = ({ onPredictionsChange
           predictionsData = data || [];
         }
 
+        // Inicializar o estado dos palpites com dados existentes ou vazio
         const initialCurrentPredictions: LocalPrediction[] = (matchesData || []).map(match => {
           const existingPrediction = predictionsData.find(p => p.match_id === match.id);
           return {
@@ -96,12 +89,9 @@ const DailyPredictions: React.FC<DailyPredictionsProps> = ({ onPredictionsChange
             home_score: existingPrediction ? String(existingPrediction.home_score) : '',
             away_score: existingPrediction ? String(existingPrediction.away_score) : '',
             prediction_id: existingPrediction ? existingPrediction.id : undefined,
-            match_date: match.match_date, // Incluindo para uso na validação externa
-            is_finished: match.is_finished, // Incluindo para uso na validação externa
           };
         });
         setCurrentPredictions(initialCurrentPredictions);
-        onPredictionsChange(initialCurrentPredictions); // Notifica o pai com os palpites iniciais
 
       } catch (err: any) {
         console.error("Error fetching data:", err);
@@ -117,20 +107,122 @@ const DailyPredictions: React.FC<DailyPredictionsProps> = ({ onPredictionsChange
     };
 
     fetchInitialData();
-  }, [user, toast, onPredictionsChange]); // Adicionado onPredictionsChange nas dependências
+  }, [user, toast]); // Refetch quando o usuário muda
 
-  const handleScoreChange = useCallback((matchId: string, type: 'home' | 'away', value: string) => {
-    setCurrentPredictions(prev => {
-      const updatedPredictions = prev.map(p =>
+  const handleScoreChange = (matchId: string, type: 'home' | 'away', value: string) => {
+    setCurrentPredictions(prev =>
+      prev.map(p =>
         p.match_id === matchId
           ? { ...p, [type]: value }
           : p
-      );
-      onPredictionsChange(updatedPredictions); // Notifica o pai sobre CADA mudança
-      return updatedPredictions;
-    });
-  }, [onPredictionsChange]);
+      )
+    );
+  };
 
+  const handleSavePrediction = async (matchId: string) => {
+    if (!user) {
+      toast({
+        title: "Erro",
+        description: "Você precisa estar logado para salvar palpites.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const predictionToSave = currentPredictions.find(p => p.match_id === matchId);
+    if (!predictionToSave) {
+      toast({
+        title: "Erro",
+        description: "Palpite não encontrado para salvar.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const match = matches.find(m => m.id === matchId);
+    if (!match) {
+      toast({
+        title: "Erro",
+        description: "Detalhes da partida não encontrados.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const homeScore = Number(predictionToSave.home_score);
+    const awayScore = Number(predictionToSave.away_score);
+
+    if (predictionToSave.home_score === '' || predictionToSave.away_score === '' || isNaN(homeScore) || isNaN(awayScore)) {
+      toast({
+        title: "Erro",
+        description: "Por favor, insira placares válidos para a partida.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const canPredict = getCanPredict(match.match_date, match.is_finished);
+    if (!canPredict) {
+      toast({
+        title: "Prazo Encerrado",
+        description: "O prazo para enviar palpites para esta partida já se encerrou.",
+        variant: "warning",
+      });
+      return;
+    }
+
+    setIsSaving(matchId); // Começa a salvar para esta partida específica
+    try {
+      if (predictionToSave.prediction_id) {
+        // Atualizar palpite existente
+        const { error: updateError } = await supabase
+          .from('match_predictions')
+          .update({ home_score: homeScore, away_score: awayScore })
+          .eq('id', predictionToSave.prediction_id);
+        if (updateError) throw updateError;
+        toast({
+          title: "Sucesso!",
+          description: "Palpite atualizado com sucesso.",
+          variant: "success",
+        });
+      } else {
+        // Inserir novo palpite
+        const { data, error: insertError } = await supabase
+          .from('match_predictions')
+          .insert({
+            user_id: user.id,
+            match_id: matchId,
+            home_score: homeScore,
+            away_score: awayScore,
+          })
+          .select(); // Retorna o registro inserido
+        if (insertError) throw insertError;
+
+        // Atualizar o prediction_id no estado local
+        setCurrentPredictions(prev =>
+          prev.map(p =>
+            p.match_id === matchId
+              ? { ...p, prediction_id: data?.[0]?.id }
+              : p
+          )
+        );
+        toast({
+          title: "Sucesso!",
+          description: "Palpite salvo com sucesso.",
+          variant: "success",
+        });
+      }
+    } catch (err: any) {
+      console.error("Erro ao salvar palpite:", err);
+      toast({
+        title: "Erro ao salvar",
+        description: err.message || "Não foi possível salvar o palpite. Tente novamente.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSaving(null); // Finaliza o salvamento
+    }
+  };
 
   if (loading) {
     return (
@@ -205,8 +297,6 @@ const DailyPredictions: React.FC<DailyPredictionsProps> = ({ onPredictionsChange
                 match_id: match.id,
                 home_score: '',
                 away_score: '',
-                match_date: match.match_date, // Garante que a data da partida está no objeto
-                is_finished: match.is_finished, // Garante que o status está no objeto
               };
               const canPredictForMatch = getCanPredict(match.match_date, match.is_finished);
 
@@ -233,7 +323,7 @@ const DailyPredictions: React.FC<DailyPredictionsProps> = ({ onPredictionsChange
                       placeholder="0"
                       value={currentPrediction.home_score}
                       onChange={(e) => handleScoreChange(match.id, 'home', e.target.value)}
-                      disabled={!canPredictForMatch} // Inputs desabilitados se o prazo fechou
+                      disabled={isSaving === match.id || !canPredictForMatch}
                     />
                     <span className="text-xl font-bold">x</span>
                     <Input
@@ -243,9 +333,15 @@ const DailyPredictions: React.FC<DailyPredictionsProps> = ({ onPredictionsChange
                       placeholder="0"
                       value={currentPrediction.away_score}
                       onChange={(e) => handleScoreChange(match.id, 'away', e.target.value)}
-                      disabled={!canPredictForMatch} // Inputs desabilitados se o prazo fechou
+                      disabled={isSaving === match.id || !canPredictForMatch}
                     />
-                    {/* Botão de salvar individual REMOVIDO AQUI */}
+                    <Button
+                      className="ml-auto bg-fifa-green hover:bg-green-700"
+                      onClick={() => handleSavePrediction(match.id)}
+                      disabled={isSaving === match.id || !canPredictForMatch}
+                    >
+                      {isSaving === match.id ? "Salvando..." : (currentPrediction.prediction_id ? "Atualizar" : "Salvar")}
+                    </Button>
                   </div>
                 </div>
               );
