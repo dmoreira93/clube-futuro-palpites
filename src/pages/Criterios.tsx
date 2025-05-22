@@ -32,7 +32,7 @@ const Criterios = () => {
                   <div>
                     <h3 className="font-semibold">Placar Exato</h3>
                     <p className="text-sm text-gray-600">
-                      Você acerta o vencedor **E** o placar exato da partida. **(Prioridade Máxima)**
+                      Você acerta o **PLACAR** exato da partida. **(Prioridade Máxima)**
                     </p>
                   </div>
                 </div>
