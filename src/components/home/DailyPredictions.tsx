@@ -52,7 +52,7 @@ const DailyPredictions = () => {
     );
   }
 
-  // ***** NOVO: Verifica se o usuário é um administrador *****
+  // Verifica se o usuário é um administrador
   if (isAdmin) {
     return (
       <Card className="shadow-lg">
@@ -66,14 +66,10 @@ const DailyPredictions = () => {
       </Card>
     );
   }
-  // ***** FIM NOVO *****
 
 
   useEffect(() => {
     const fetchMatchesAndPredictions = async () => {
-      // O if (!user) acima já trata o caso de não logado
-      // E o if (isAdmin) acima já trata o caso de admin logado
-
       setLoading(true);
       setError(null);
       try {
@@ -137,7 +133,7 @@ const DailyPredictions = () => {
   };
 
   const handleSavePrediction = async (matchId: string) => {
-    if (!user) { // Já tratado acima, mas mantido como fallback de segurança
+    if (!user) {
       toast({
         title: "Erro",
         description: "Você precisa estar logado para salvar um palpite.",
@@ -158,7 +154,7 @@ const DailyPredictions = () => {
 
     // LÓGICA DE BLOQUEIO DE ENVIO/EDIÇÃO DE PALPITES
     const matchDate = parseISO(matchToPredict.match_date);
-    if (matchDate <= globalPredictionCutoffDate) { // Ou matchDate <= new Date() se o limite for o próprio início do jogo
+    if (matchDate <= globalPredictionCutoffDate) {
       toast({
         title: "Palpite Bloqueado",
         description: `Não é possível registrar ou alterar palpites para esta partida após ${format(globalPredictionCutoffDate, 'dd/MM/yyyy HH:mm', { locale: ptBR })}.`,
@@ -187,7 +183,7 @@ const DailyPredictions = () => {
         variant: "destructive",
       });
       return;
-    ` }
+    }
 
     setIsSaving(true);
     try {
@@ -260,7 +256,7 @@ const DailyPredictions = () => {
             {matches.map((match) => {
               const currentPrediction = predictions[match.id] || { home_score: '', away_score: '' };
               const matchDateTime = parseISO(match.match_date);
-              const canPredict = matchDateTime > globalPredictionCutoffDate; // Permite palpite APENAS ANTES do cutoff
+              const canPredict = matchDateTime > globalPredictionCutoffDate;
 
               return (
                 <div key={match.id} className="border p-4 rounded-md shadow-sm bg-gray-50">
