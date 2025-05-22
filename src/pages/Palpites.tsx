@@ -32,7 +32,7 @@ import { ptBR } from "date-fns/locale";
 import ReactDOMServer from 'react-dom/server';
 
 // Importações para o comprovante
-import PredictionReceipt from "@/components/predictions/PredictionReceipt";
+import PredictionReceipt from "@/components/home/predictions/PredictionReceipt";
 
 // --- NOVAS INTERFACES (ou ajuste as suas existentes) ---
 interface Team {
