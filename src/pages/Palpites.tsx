@@ -407,7 +407,7 @@ const Palpites = () => {
         fourth_place_id_param: finalPrediction.fourth_place_id, // <<< ADICIONADO AQUI
         final_home_score_param: finalPrediction.final_home_score,
         final_away_score_param: finalPrediction.final_away_score,
-        user_id_param: user.id, // O user_id_param DEVE SER O ÚLTIMO, CONFORME A ORDEM NA FUNÇÃO SQL
+        user_id_param: user.id, // user_id_param deve ser o último conforme a função SQL que te passei
       });
 
       if (error) {
