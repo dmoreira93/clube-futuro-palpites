@@ -11,7 +11,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import RankingRow from "@/components/ranking/RankingRow";
-import useParticipantsRanking from "@/hooks/useParticipantsRanking"; // <--- Importação correta do hook
+import { useParticipantsRanking } from "@/hooks/useParticipantsRanking";
 import { Users as UsersIcon } from "lucide-react"; 
 
 
