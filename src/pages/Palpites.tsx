@@ -863,7 +863,39 @@ const Palpites = () => {
                             const value = e.target.value;
                             handleFinalPredictionChange('final_away_score', value === '' ? null : parseInt(value));
                           }}
-                          disabled={submitting || !(finalPredictionCutoffDate.getTime() > Date.2025/05/22)}
+                          // src/pages/Palpites.tsx
+
+// ... (código anterior)
+
+                    <div className="flex flex-col gap-2">
+                      <Label htmlFor="final-score">Placar da Final:</Label>
+                      <div className="flex items-center gap-2">
+                        <Input
+                          id="final-home-score"
+                          type="number"
+                          min="0"
+                          className="w-24 text-center"
+                          placeholder="0"
+                          value={finalPrediction.final_home_score === null ? '' : finalPrediction.final_home_score}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            handleFinalPredictionChange('final_home_score', value === '' ? null : parseInt(value));
+                          }}
+                          disabled={submitting || !(finalPredictionCutoffDate.getTime() > Date.now())}
+                        />
+                        <span className="text-xl font-bold">x</span>
+                        <Input
+                          id="final-away-score"
+                          type="number"
+                          min="0"
+                          className="w-24 text-center"
+                          placeholder="0"
+                          value={finalPrediction.final_away_score === null ? '' : finalPrediction.final_away_score}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            handleFinalPredictionChange('final_away_score', value === '' ? null : parseInt(value));
+                          }}
+                          disabled={submitting || !(finalPredictionCutoffDate.getTime() > Date.now())} // LINHA 866 CORRIGIDA AQUI
                         />
                       </div>
                     </div>
