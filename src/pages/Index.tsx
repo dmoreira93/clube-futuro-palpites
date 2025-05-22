@@ -7,7 +7,7 @@ import RankingTable from "@/components/home/RankingTable";
 import NextMatches from "@/components/home/NextMatches";
 import DailyPredictions from "@/components/home/DailyPredictions";
 import StatsCard from "@/components/home/StatsCard";
-import { Trophy as TrophyIcon, User as UserIcon, Volleyball as SoccerBallIcon, Flag as FlagIcon, Users } from "lucide-react";
+import { Trophy as TrophyIcon, Users, Volleyball as SoccerBallIcon, Flag as FlagIcon } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
@@ -30,26 +30,26 @@ const Index = () => {
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        // 1. Contar usuários (apenas não-administradores)
+        // Contar usuários (excluindo administradores)
         const { count: userCount, error: userCountError } = await supabase
           .from('users_custom')
           .select('*', { count: 'exact', head: true })
-          .eq('is_admin', false); // <--- FILTRO ADICIONADO AQUI
+          .eq('is_admin', false); // Filtra apenas usuários que NÃO são admin
         if (userCountError) throw userCountError;
 
-        // 2. Contar partidas da fase de grupos que já foram finalizadas
+        // Contar partidas finalizadas APENAS da fase de grupos
         const { count: finishedGroupStageMatchCount, error: finishedMatchCountError } = await supabase
           .from('matches')
           .select('*', { count: 'exact', head: true })
           .eq('is_finished', true)
-          .eq('stage', 'Fase de Grupos'); // <--- FILTRO ADICIONADO AQUI para "Grupos"
+          .eq('stage', 'Fase de Grupos'); // <--- CORRIGIDO: Usa "Fase de Grupos"
         if (finishedMatchCountError) throw finishedMatchCountError;
 
-        // 3. Contar total de partidas da fase de grupos
+        // Contar total de partidas APENAS da fase de grupos
         const { count: totalGroupStageMatchCount, error: totalMatchCountError } = await supabase
           .from('matches')
           .select('*', { count: 'exact', head: true })
-          .eq('stage', 'Fase de Grupos'); // <--- FILTRO ADICIONADO AQUI para "Grupos"
+          .eq('stage', 'Fase de Grupos'); // <--- CORRIGIDO: Usa "Fase de Grupos"
         if (totalMatchCountError) throw totalMatchCountError;
 
         // Buscar pontuação máxima
@@ -58,7 +58,7 @@ const Index = () => {
           .select('points, user_id, users_custom(name)')
           .order('points', { ascending: false })
           .limit(1);
-        
+
         let topScore = { points: 0, userName: "" };
         if (topUserPoints && topUserPoints.length > 0) {
           const user = topUserPoints[0].users_custom as { name: string } | null;
@@ -68,7 +68,6 @@ const Index = () => {
           };
         }
         if (topUserPointsError) console.error("Erro ao buscar pontuação máxima:", topUserPointsError);
-
 
         // Buscar próxima partida (exemplo, você pode ajustar a lógica de filtro)
         const { data: nextMatchData, error: nextMatchError } = await supabase
@@ -92,8 +91,8 @@ const Index = () => {
 
         setStats({
           totalUsers: userCount || 0,
-          matchesPlayed: finishedGroupStageMatchCount || 0, // <--- ATUALIZADO AQUI
-          totalMatches: totalGroupStageMatchCount || 0,     // <--- ATUALIZADO AQUI
+          matchesPlayed: finishedGroupStageMatchCount || 0,
+          totalMatches: totalGroupStageMatchCount || 0,
           topScore: topScore,
           nextMatch: nextMatch
         });
@@ -118,10 +117,10 @@ const Index = () => {
             description="Participantes registrados no bolão"
           />
           <StatsCard
-            title="Partidas da Fase de Grupos" {/* <--- TÍTULO ATUALIZADO */}
+            title="Partidas da Fase de Grupos" // Título corrigido para evitar o erro de deploy
             value={`${stats.matchesPlayed} / ${stats.totalMatches}`}
             icon={<SoccerBallIcon className="h-5 w-5" />}
-            description="Jogos da fase de grupos com resultados registrados" {/* <--- DESCRIÇÃO ATUALIZADA */}
+            description="Jogos da fase de grupos com resultados registrados"
           />
           <StatsCard
             title="Maior Pontuação"
@@ -161,20 +160,16 @@ const Index = () => {
                   <h3 className="text-lg font-semibold mb-4 text-fifa-blue">Regras Rápidas</h3>
                   <ul className="space-y-2">
                     <li className="flex items-start">
-                      <span className="bg-fifa-gold text-white rounded-full w-5 h-5 flex items-center justify-center text-xs mr-2 mt-0.5">15</span> {/* Atualizado para 15 conforme scoring.ts */}
-                      <span>Acerto do placar exato</span>
+                      <span className="bg-fifa-gold text-white rounded-full w-5 h-5 flex items-center justify-center text-xs mr-2 mt-0.5">10</span>
+                      <span>Acerto do vencedor e placar</span>
                     </li>
                     <li className="flex items-start">
-                      <span className="bg-fifa-blue text-white rounded-full w-5 h-5 flex items-center justify-center text-xs mr-2 mt-0.5">10</span> {/* Atualizado para 10 conforme scoring.ts */}
-                      <span>Acerto do vencedor e gols de um time</span>
+                      <span className="bg-fifa-blue text-white rounded-full w-5 h-5 flex items-center justify-center text-xs mr-2 mt-0.5">7</span>
+                      <span>Acerto apenas do vencedor</span>
                     </li>
                     <li className="flex items-start">
-                      <span className="bg-fifa-green text-white rounded-full w-5 h-5 flex items-center justify-center text-xs mr-2 mt-0.5">8</span> {/* Novo: Acerto vencedor e diferença de gols */}
-                      <span>Acerto do vencedor e diferença de gols</span>
-                    </li>
-                     <li className="flex items-start">
-                      <span className="bg-gray-400 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs mr-2 mt-0.5">5</span> {/* Novo: Acerto apenas do vencedor ou empate */}
-                      <span>Acerto do vencedor ou empate (não exato)</span>
+                      <span className="bg-fifa-green text-white rounded-full w-5 h-5 flex items-center justify-center text-xs mr-2 mt-0.5">2</span>
+                      <span>Acerto parcial (placar de um time)</span>
                     </li>
                   </ul>
                   <div className="mt-4">
