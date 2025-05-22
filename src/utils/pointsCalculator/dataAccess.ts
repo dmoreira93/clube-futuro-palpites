@@ -8,8 +8,8 @@ import {
   PointsResult,
   SupabaseMatchPrediction,
   SupabaseMatchResultFromMatches,
-  User,
-} from "./types"; // Certifique-se de que esses tipos estão disponíveis
+  User, // Certifique-se de que este tipo 'User' inclui 'is_admin: boolean'
+} from "./types";
 
 /**
  * Busca o resultado da partida (apenas partidas finalizadas)
@@ -41,8 +41,9 @@ export async function fetchMatchResult(matchId: string): Promise<MatchResult | n
  */
 export async function fetchPredictions(matchId: string): Promise<Prediction[]> {
   try {
+    // Verifique se esta é a tabela correta para palpites individuais (ex: 'match_predictions')
     const { data, error } = await supabase
-      .from('predictions') // <--- VERIFIQUE se esta é a tabela correta para palpites individuais (ex: 'match_predictions')
+      .from('match_predictions') // <-- CORRIGIDO para 'match_predictions' se for a sua tabela de palpites
       .select('id, match_id, user_id, home_score, away_score')
       .eq('match_id', matchId);
 
@@ -209,14 +210,14 @@ export async function updateUserStats(userId: string): Promise<boolean> {
 }
 
 /**
- * Busca todas as partidas para uma data específica, incluindo dados dos times e do grupo.
+ * Busca todas as partidas para uma data específica, incluindo dados dos timess e do grupo.
  * @param dateString Uma string de data no formato 'YYYY-MM-DD'.
  */
 export async function fetchMatchesForDate(dateString: string): Promise<SupabaseMatchResultFromMatches[] | null> {
   try {
     const { data, error } = await supabase
       .from('matches')
-      .select('*, home_team:home_team_id(*, group:group_id(name)), away_team:away_team_id(*, group:group_id(name))') // <--- MUDANÇA AQUI: Pegando o 'name' da tabela 'groups'
+      .select('*, home_team:home_team_id(*, group:group_id(name)), away_team:away_team_id(*, group:group_id(name))')
       .gte('match_date', `${dateString}T00:00:00Z`)
       .lte('match_date', `${dateString}T23:59:59Z`)
       .order('match_date', { ascending: true });
@@ -245,7 +246,7 @@ export async function fetchMatchPredictionsForMatches(matchIds: string[]): Promi
     }
 
     const { data, error } = await supabase
-      .from('match_predictions') // <--- VERIFIQUE se esta é a tabela correta para palpites de partidas
+      .from('match_predictions') // Verifique se esta é a tabela correta para palpites de partidas
       .select('*')
       .in('match_id', matchIds);
 
@@ -269,7 +270,7 @@ export async function fetchUsersCustom(): Promise<User[] | null> {
   try {
     const { data, error } = await supabase
       .from('users_custom')
-      .select('id, name, username, avatar_url'); // Selecione apenas as colunas que você precisa
+      .select('id, name, username, avatar_url, is_admin'); // <--- AQUI ESTÁ A MUDANÇA ESSENCIAL!
 
     if (error) {
       console.error('Erro ao buscar usuários customizados:', error);

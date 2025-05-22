@@ -11,12 +11,12 @@ import {
   fetchMatchesForDate,
   fetchMatchPredictionsForMatches,
   fetchUsersCustom,
-} from '@/utils/pointsCalculator/dataAccess';
+} from '@/utils/pointsCalculator/dataAccess'; // Ajuste o caminho se for '@/lib/dataAccess'
 import {
   SupabaseMatchResultFromMatches,
   SupabaseMatchPrediction,
-  User,
-} from '@/utils/pointsCalculator/types';
+  User, // Certifique-se de que User tem 'is_admin'
+} from '@/utils/pointsCalculator/types'; // Ajuste o caminho se for '@/lib/types'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
   Tooltip,
@@ -27,234 +27,158 @@ import {
 
 // Definição de tipos para o que vamos exibir
 interface DisplayMatch extends SupabaseMatchResultFromMatches {
-  // home_team e away_team agora podem ter uma propriedade 'group' aninhada
   home_team: { name: string; flag_url?: string; group_id?: string; group?: { name: string } } | null;
   away_team: { name: string; flag_url?: string; group_id?: string; group?: { name: string } } | null;
-  predictionsByUserId?: {
-    [userId: string]: SupabaseMatchPrediction;
-  };
+  predictionsByUserId?: { [userId: string]: SupabaseMatchPrediction }; // Adicione esta linha se não tiver
 }
 
-const DailyMatchesAndPredictions = () => {
-  const [currentDate, setCurrentDate] = useState(new Date());
+const DailyMatchesAndPredictions: React.FC = () => {
+  const [matches, setMatches] = useState<DisplayMatch[]>([]);
+  const [allPredictions, setAllPredictions] = useState<SupabaseMatchPrediction[]>([]);
+  const [allUsers, setAllUsers] = useState<User[]>([]); // Renomeado para 'allUsers' para clareza
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [dailyMatches, setDailyMatches] = useState<DisplayMatch[]>([]);
-  const [allUsers, setAllUsers] = useState<User[]>([]);
+  const [currentDate, setCurrentDate] = useState(new Date());
+
+  // Data de corte para exibir os palpites (14/06/2025 às 18:00)
+  // Certifique-se de que o fuso horário está correto ou use UTC se preferir.
+  const predictionDisplayCutoffDate = new Date('2025-06-14T18:00:00-03:00');
 
   useEffect(() => {
-    const loadDailyData = async () => {
+    const loadData = async () => {
       setLoading(true);
       setError(null);
       try {
-        const dateString = format(currentDate, 'yyyy-MM-dd');
+        const formattedDate = format(currentDate, 'yyyy-MM-dd');
 
-        // 1. Fetch matches for the selected date
-        const matches = await fetchMatchesForDate(dateString);
-        if (!matches || matches.length === 0) {
-          setDailyMatches([]);
+        // Fetch matches for the current date
+        const matchesData = await fetchMatchesForDate(formattedDate);
+        if (!matchesData) {
+          setMatches([]);
+          setAllPredictions([]);
+          setAllUsers([]);
           setLoading(false);
           return;
         }
 
-        // 2. Fetch all users (to map user_id to user name/avatar)
-        const users = await fetchUsersCustom();
-        if (!users) {
-          throw new Error('Não foi possível carregar os usuários.');
-        }
-        setAllUsers(users);
+        // Fetch predictions for these matches
+        const matchIds = matchesData.map(match => match.id);
+        const predictionsData = await fetchMatchPredictionsForMatches(matchIds);
 
-        // 3. Fetch predictions for all fetched matches
-        const matchIds = matches.map((m) => m.id);
-        const allPredictions = await fetchMatchPredictionsForMatches(matchIds);
+        // Fetch all users and FILTER OUT ADMINS here
+        const usersData = await fetchUsersCustom();
+        const nonAdminUsers = usersData.filter(user => !user.is_admin); // <--- FILTRAGEM DE ADMINS
 
-        // 4. Combine data
-        const combinedMatches: DisplayMatch[] = matches.map((match) => {
-          const predictionsForThisMatch = (allPredictions || []).filter(
-            (p) => p.match_id === match.id
-          );
+        setMatches(matchesData);
+        setAllPredictions(predictionsData || []);
+        setAllUsers(nonAdminUsers || []); // Armazena apenas usuários não administradores
 
-          const predictionsByUserId: { [userId: string]: SupabaseMatchPrediction } = {};
-          predictionsForThisMatch.forEach((p) => {
-            predictionsByUserId[p.user_id] = p;
-          });
-
-          return {
-            ...match,
-            predictionsByUserId,
-          };
-        });
-
-        setDailyMatches(combinedMatches);
       } catch (err: any) {
-        console.error('Erro ao carregar dados diários:', err);
-        setError('Não foi possível carregar os jogos e palpites do dia. Tente novamente.');
+        console.error("Erro ao carregar dados:", err.message);
+        setError("Não foi possível carregar os dados das partidas e palpites.");
       } finally {
         setLoading(false);
       }
     };
 
-    loadDailyData();
-  }, [currentDate]);
+    loadData();
+  }, [currentDate]); // Dependência para recarregar quando a data mudar
 
   const handleDateChange = (days: number) => {
-    const newDate = new Date(currentDate);
-    newDate.setDate(currentDate.getDate() + days);
-    setCurrentDate(newDate);
-  };
-
-  const getDayLabel = (date: Date) => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const selected = new Date(date);
-    selected.setHours(0, 0, 0, 0);
-
-    if (selected.getTime() === today.getTime()) {
-      return 'Hoje';
-    } else if (selected.getTime() === today.getTime() + 24 * 60 * 60 * 1000) {
-      return 'Amanhã';
-    } else if (selected.getTime() === today.getTime() - 24 * 60 * 60 * 1000) {
-      return 'Ontem';
-    } else {
-      return format(date, 'dd/MM', { locale: ptBR });
-    }
+    setCurrentDate(prevDate => {
+      const newDate = new Date(prevDate);
+      newDate.setDate(prevDate.getDate() + days);
+      return newDate;
+    });
   };
 
   if (error) {
     return (
       <Layout>
-        <div className="container mx-auto p-4">
-          <Card className="shadow-lg bg-red-100 border-red-400 text-red-700">
-            <CardHeader>
-              <CardTitle>Erro</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p>{error}</p>
-            </CardContent>
-          </Card>
+        <div className="container mx-auto p-4 text-center text-red-600">
+          <Alert variant="destructive">
+            <Info className="h-4 w-4" />
+            <AlertTitle>Erro ao carregar</AlertTitle>
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
         </div>
       </Layout>
     );
   }
 
-  // Definindo a data limite para exibição dos palpites.
-  // Idealmente, esta data viria de uma configuração global ou de uma coluna 'prediction_deadline' na tabela 'matches'.
-  // Para este exemplo, estou usando uma data fixa.
-  const predictionDisplayCutoffDate = new Date('2025-06-14T23:59:59Z'); // Usar um fuso horário adequado, se aplicável
-
   return (
     <Layout>
       <div className="container mx-auto px-4 py-8">
-        <h1 className="text-3xl font-bold text-center text-fifa-blue mb-8">
-          Palpites do Dia
-        </h1>
+        <h1 className="text-3xl font-bold text-center text-fifa-blue mb-8">Palpites dos Participantes por Partida</h1>
 
         <div className="flex justify-center items-center gap-4 mb-8">
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => handleDateChange(-1)}
-            aria-label="Dia anterior"
-          >
-            <ChevronLeft className="h-4 w-4" />
+          <Button variant="outline" onClick={() => handleDateChange(-1)}>
+            <ChevronLeft className="h-5 w-5" />
           </Button>
-          <h2 className="text-xl font-semibold text-gray-700">
-            {getDayLabel(currentDate)}{' '}
-            <span className="text-gray-500">
-              {format(currentDate, 'dd/MM/yyyy', { locale: ptBR })}
-            </span>
-          </h2>
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => handleDateChange(1)}
-            aria-label="Próximo dia"
-          >
-            <ChevronRight className="h-4 w-4" />
+          <span className="text-xl font-semibold text-gray-700">
+            {format(currentDate, 'EEEE, dd \'de\' MMMM', { locale: ptBR })}
+          </span>
+          <Button variant="outline" onClick={() => handleDateChange(1)}>
+            <ChevronRight className="h-5 w-5" />
           </Button>
         </div>
 
         {loading ? (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <Skeleton className="h-[200px] w-full" />
-            <Skeleton className="h-[200px] w-full" />
+          <div className="space-y-6">
+            <Skeleton className="h-40 w-full" />
+            <Skeleton className="h-40 w-full" />
           </div>
-        ) : dailyMatches.length === 0 ? (
-          <div className="text-center py-12 bg-gray-50 rounded-lg">
-            <p className="text-gray-600 font-semibold text-lg">
-              Nenhum jogo encontrado para esta data.
-            </p>
-            <p className="text-gray-500 text-sm mt-2">
-              Tente selecionar outra data.
-            </p>
-          </div>
+        ) : matches.length === 0 ? (
+          <p className="text-center text-gray-600 text-lg">Nenhuma partida programada para esta data.</p>
         ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {dailyMatches.map((match) => {
-              const matchDateTime = parseISO(match.match_date);
-              // Os palpites só serão visíveis se a data da partida já passou do cutoff.
-              const canShowPredictions = matchDateTime <= predictionDisplayCutoffDate;
+          <div className="space-y-6">
+            {matches.map(match => {
+              // Filtrar os palpites relevantes para esta partida E que são de usuários não administradores
+              const matchPredictions = allPredictions.filter(
+                p => p.match_id === match.id && allUsers.some(u => u.id === p.user_id) // Verifica se o user_id do palpite está na lista de usuários não admin
+              );
+
+              const shouldShowPredictions = Date.now() > predictionDisplayCutoffDate.getTime();
 
               return (
                 <Card key={match.id} className="shadow-lg">
                   <CardHeader className="bg-fifa-blue text-white rounded-t-lg">
-                    <CardTitle className="text-lg flex justify-between items-center">
-                      <span>
-                        {match.home_team?.name || 'Time Casa'} vs{' '}
-                        {match.away_team?.name || 'Time Fora'}
-                      </span>
-                      <span className="text-sm">
-                        {format(matchDateTime, 'HH:mm', { locale: ptBR })}
-                        {/* Acessando o nome do grupo através do relacionamento aninhado */}
-                        {match.home_team?.group?.name && (
-                          <span className="ml-2"> - Grupo {match.home_team.group.name}</span>
-                        )}
-                      </span>
+                    <CardTitle className="text-lg">
+                      {match.home_team?.name || 'Time Casa'} vs {match.away_team?.name || 'Time Fora'}
                     </CardTitle>
+                    <p className="text-sm">
+                      {format(parseISO(match.match_date), 'dd/MM HH:mm', { locale: ptBR })} - {match.stage}
+                    </p>
                   </CardHeader>
                   <CardContent className="p-4">
-                    {canShowPredictions ? (
+                    {shouldShowPredictions ? (
                       <>
-                        <h3 className="font-bold text-md mb-3 text-fifa-blue">Palpites dos Participantes:</h3>
-                        {allUsers.length === 0 ? (
-                          <p className="text-gray-500 text-sm">Nenhum participante encontrado.</p>
+                        <h3 className="text-md font-semibold mb-2 text-fifa-blue">Palpites dos Participantes:</h3>
+                        {matchPredictions.length === 0 ? (
+                          <p className="text-gray-500 text-sm">Nenhum palpite registrado para esta partida ainda.</p>
                         ) : (
-                          <div className="grid grid-cols-2 md:grid-cols-3 gap-y-3 gap-x-2">
-                            {allUsers.map((user) => {
-                              const prediction = match.predictionsByUserId?.[user.id];
-                              const hasPredicted = !!prediction;
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
+                            {matchPredictions.map(prediction => {
+                              const user = allUsers.find(u => u.id === prediction.user_id);
+                              // Garante que o usuário existe e não é admin (já filtrado em allUsers)
+                              if (!user) return null;
 
                               return (
-                                <TooltipProvider key={user.id} delayDuration={0}>
+                                <TooltipProvider key={prediction.id}>
                                   <Tooltip>
                                     <TooltipTrigger asChild>
-                                      <div className="flex items-center space-x-2 p-2 rounded-md hover:bg-gray-100 transition-colors">
-                                        <Avatar className="h-8 w-8">
-                                          {user.avatar_url ? (
-                                            <AvatarImage src={user.avatar_url} alt={user.name} />
-                                          ) : (
-                                            <AvatarFallback>
-                                              {user.name ? user.name.substring(0, 2).toUpperCase() : <UserIcon className="h-4 w-4" />}
-                                            </AvatarFallback>
-                                          )}
+                                      <div className="flex items-center gap-2 bg-gray-50 p-2 rounded-md">
+                                        <Avatar className="h-6 w-6">
+                                          <AvatarImage src={user.avatar_url || ''} />
+                                          <AvatarFallback>{user.name ? user.name.substring(0, 2).toUpperCase() : '?'}</AvatarFallback>
                                         </Avatar>
-                                        <div className="flex-grow">
-                                          <p className="font-medium text-sm truncate">{user.username || user.name || 'Desconhecido'}</p>
-                                          <p className="text-xs text-muted-foreground">
-                                            {hasPredicted
-                                              ? `Palpite: ${prediction.home_score} x ${prediction.away_score}`
-                                              : 'Não palpitou'}
-                                          </p>
-                                        </div>
+                                        <span className="font-medium">{user.name || 'Usuário Desconhecido'}:</span>
+                                        <span>{prediction.home_score} x {prediction.away_score}</span>
                                       </div>
                                     </TooltipTrigger>
-                                    {hasPredicted && (
-                                      <TooltipContent className="bg-white border shadow-md p-2 rounded-md">
-                                        <p className="font-semibold">{user.username || user.name}</p>
-                                        <p>Palpite: {prediction.home_score} x {prediction.away_score}</p>
-                                        <p className="text-xs text-gray-500">Para {match.home_team?.name} vs {match.away_team?.name}</p>
-                                      </TooltipContent>
-                                    )}
+                                    <TooltipContent>
+                                      <p>{user.name || 'Usuário Desconhecido'}</p>
+                                    </TooltipContent>
                                   </Tooltip>
                                 </TooltipProvider>
                               );
