@@ -42,14 +42,14 @@ const Index = () => {
           .from('matches')
           .select('*', { count: 'exact', head: true })
           .eq('is_finished', true)
-          .eq('stage', 'Grupos'); // <--- FILTRO ADICIONADO AQUI para "Grupos"
+          .eq('stage', 'Fase de Grupos'); // <--- FILTRO ADICIONADO AQUI para "Grupos"
         if (finishedMatchCountError) throw finishedMatchCountError;
 
         // 3. Contar total de partidas da fase de grupos
         const { count: totalGroupStageMatchCount, error: totalMatchCountError } = await supabase
           .from('matches')
           .select('*', { count: 'exact', head: true })
-          .eq('stage', 'Grupos'); // <--- FILTRO ADICIONADO AQUI para "Grupos"
+          .eq('stage', 'Fase de Grupos'); // <--- FILTRO ADICIONADO AQUI para "Grupos"
         if (totalMatchCountError) throw totalMatchCountError;
 
         // Buscar pontuação máxima
