@@ -34,8 +34,8 @@ import { PredictionReceipt } from '@/components/home/predictions/PredictionRecei
 // --- INTERFACES PARA O ESTADO ---
 interface LocalPrediction {
   match_id: string;
-  home_score: string;
-  away_score: string;
+  home_score: string; // Mantém como string para o input
+  away_score: string; // Mantém como string para o input
   prediction_id?: string;
 }
 
@@ -89,9 +89,12 @@ const Palpites = () => {
     setLoading(true);
     try {
       // 1. Carregar Partidas e Palpites Diários
+      // FILTRO APLICADO AQUI: somente jogos com home_team e away_team definidos
       const { data: matchesData, error: matchesError } = await supabase
         .from('matches')
         .select('*, home_team:home_team_id(*), away_team:away_team_id(*)')
+        .not('home_team_id', 'is', null) // Garante que home_team_id não é nulo
+        .not('away_team_id', 'is', null) // Garante que away_team_id não é nulo
         .order('match_date', { ascending: true });
 
       if (matchesError) throw matchesError;
@@ -193,11 +196,13 @@ const Palpites = () => {
   // --- MANIPULADORES DE ESTADO ---
 
   const handleScoreChange = useCallback((matchId: string, type: 'home' | 'away', value: string) => {
+    // Permite que o input seja vazio, mas armazena como string.
+    // A conversão para número será feita apenas na hora de salvar.
     setDailyPredictions(prev => ({
       ...prev,
       [matchId]: {
         ...prev[matchId],
-        match_id: matchId, // Garante que match_id está presente para novos palpites
+        match_id: matchId,
         [type]: value,
       }
     }));
@@ -232,7 +237,8 @@ const Palpites = () => {
 
     const prediction = dailyPredictions[matchId];
     if (!prediction || prediction.home_score === "" || prediction.away_score === "") {
-      toast.error("Por favor, preencha ambos os placares para o palpite.");
+      // Modificado para avisar se algum placar estiver vazio
+      toast.error("Por favor, preencha ambos os placares para o palpite (use 0 se for o caso).");
       return;
     }
 
@@ -248,6 +254,17 @@ const Palpites = () => {
       return;
     }
 
+    // Convertendo para número AQUI, garantindo que "0" seja 0 e que não haja NaN.
+    // Se a string estiver vazia, a validação acima já bloqueia.
+    const homeScoreNum = parseInt(prediction.home_score);
+    const awayScoreNum = parseInt(prediction.away_score);
+
+    // Verificação adicional para garantir que são números válidos após parseInt
+    if (isNaN(homeScoreNum) || isNaN(awayScoreNum)) {
+        toast.error("Placares inválidos. Por favor, insira apenas números.");
+        return;
+    }
+
     setSubmitting(true);
     try {
       let data, error;
@@ -256,8 +273,8 @@ const Palpites = () => {
         ({ data, error } = await supabase
           .from('match_predictions')
           .update({
-            home_score: parseInt(prediction.home_score),
-            away_score: parseInt(prediction.away_score),
+            home_score: homeScoreNum,
+            away_score: awayScoreNum,
             updated_at: new Date().toISOString(),
           })
           .eq('id', prediction.prediction_id)
@@ -270,8 +287,8 @@ const Palpites = () => {
           .insert({
             match_id: matchId,
             user_id: user.id,
-            home_score: parseInt(prediction.home_score),
-            away_score: parseInt(prediction.away_score),
+            home_score: homeScoreNum,
+            away_score: awayScoreNum,
           })
           .select()
           .single());
@@ -592,7 +609,7 @@ const Palpites = () => {
               </CardHeader>
               <CardContent className="space-y-4">
                 {matches.length === 0 ? (
-                  <p className="text-center text-gray-500">Nenhuma partida encontrada.</p>
+                  <p className="text-center text-gray-500">Nenhuma partida encontrada com times definidos.</p>
                 ) : (
                   matches.map(match => {
                     const matchDate = parseISO(match.match_date);
@@ -633,7 +650,7 @@ const Palpites = () => {
                           <Button
                             className="ml-auto bg-fifa-green hover:bg-green-700"
                             onClick={() => handleSaveDailyPrediction(match.id)}
-                            disabled={submitting || !canPredict}
+                            disabled={submitting || !canPredict || prediction.home_score === "" || prediction.away_score === ""}
                           >
                             {prediction.prediction_id ? "Atualizar" : "Salvar"}
                           </Button>
