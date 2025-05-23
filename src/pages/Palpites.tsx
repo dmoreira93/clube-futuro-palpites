@@ -29,7 +29,7 @@ import { Match, Team } from "@/types/matches"; // Certifique-se de que 'Team' es
 import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import ReactDOMServer from 'react-dom/server'; // Importação NECESSÁRIA para renderizar HTML em string
-import PredictionReceipt from '@/components/home/predictions/PredictionReceipt';
+import { PredictionReceipt } from '@/components/home/predictions/PredictionReceipt'; // Importar o componente do comprovante COM AS CHAVES E O CAMINHO CORRETO
 
 // --- INTERFACES PARA O ESTADO ---
 interface LocalPrediction {
