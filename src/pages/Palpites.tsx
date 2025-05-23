@@ -291,40 +291,80 @@ const Palpites = () => {
 
     const predictionsToUpsert = Object.values(dailyPredictions)
       .filter(p => {
+        const match = matches.find(m => m.id === p.match_id);
+        const canPredict = match && parseISO(match.match_date).getTime() > Date.now();
+        if (!canPredict) return false;
+
+        if (p.prediction_id) return true; // Palpites existentes são incluídos se o prazo não passou
+
+        // Para novos palpites, os scores devem ser válidos
         const homeScoreNum = parseInt(p.home_score, 10);
         const awayScoreNum = parseInt(p.away_score, 10);
         const homeScoreValid = p.home_score.trim() !== "" && !isNaN(homeScoreNum) && homeScoreNum >= 0;
         const awayScoreValid = p.away_score.trim() !== "" && !isNaN(awayScoreNum) && awayScoreNum >= 0;
-        const match = matches.find(m => m.id === p.match_id);
-        const canPredict = match && parseISO(match.match_date).getTime() > Date.now();
-        return (p.prediction_id || (homeScoreValid && awayScoreValid)) && canPredict;
+        return homeScoreValid && awayScoreValid;
       })
-      .map(p => ({
-        ...(p.prediction_id && { id: p.prediction_id }),
-        match_id: p.match_id,
-        user_id: user.id,
-        home_score: parseInt(p.home_score, 10),
-        away_score: parseInt(p.away_score, 10),
-      }));
+      .map(p => {
+        const homeScoreNum = parseInt(p.home_score, 10);
+        const awayScoreNum = parseInt(p.away_score, 10);
+
+        // Se as colunas no DB forem NOT NULL e um score for inválido (NaN),
+        // precisamos decidir o que enviar. Ex: 0 ou não enviar o palpite.
+        // Aqui, assumimos que o filtro já cuidou dos novos palpites.
+        // Para palpites existentes, se o usuário apagar um score, resultará em NaN.
+        // Se as colunas do DB forem NOT NULL, isso causará erro.
+        // Se forem NULLABLE, JSON.stringify(NaN) vira null, o que pode ser aceitável.
+        
+        // Exemplo de tratamento para scores NaN (ajuste conforme a lógica de negócio e schema do DB):
+        // Se as colunas de score no DB são NOT NULL:
+        const finalHomeScore = isNaN(homeScoreNum) ? (p.prediction_id ? 0 : undefined) : homeScoreNum;
+        const finalAwayScore = isNaN(awayScoreNum) ? (p.prediction_id ? 0 : undefined) : awayScoreNum;
+        
+        // Se um palpite existente ficou com scores inválidos (NaN) e as colunas são NOT NULL,
+        // ou você envia um default (como 0), ou impede o envio (ajustando o filtro),
+        // ou torna as colunas NULLABLE no DB e envia null.
+        if (p.prediction_id && (finalHomeScore === undefined || finalAwayScore === undefined)) {
+            console.warn(`Palpite existente ${p.prediction_id} para partida ${p.match_id} com scores inválidos ('${p.home_score}', '${p.away_score}'). Verifique a lógica ou permita scores nulos no DB.`);
+            // Poderia retornar null aqui e filtrar depois para não enviar este palpite,
+            // ou ajustar a UI para não permitir limpar scores de palpites existentes se eles são NOT NULL.
+        }
+
+
+        return {
+          ...(p.prediction_id && { id: p.prediction_id }),
+          match_id: p.match_id,
+          user_id: user.id,
+          home_score: finalHomeScore,
+          away_score: finalAwayScore,
+        };
+      })
+      // .filter(Boolean); // Adicionar se você retornar null no map para palpites problemáticos
 
     if (predictionsToUpsert.length === 0) {
       toast.info("Nenhum palpite válido para salvar/atualizar ou todos os prazos encerraram.");
       setSubmitting(false);
       return;
     }
+    
+    // Log do payload antes de enviar
+    console.log("Payload para upsert (handleSubmitBets):", JSON.stringify(predictionsToUpsert, null, 2));
 
     try {
       const { error } = await supabase
         .from('match_predictions')
         .upsert(predictionsToUpsert, { onConflict: 'user_id, match_id' });
 
-      if (error) throw error;
+      if (error) {
+        // Log detalhado do erro do Supabase
+        console.error("Erro detalhado do Supabase ao salvar palpites:", error);
+        throw error;
+      }
 
       toast.success("Palpites das partidas salvos/atualizados com sucesso!");
-      await fetchInitialData();
+      await fetchInitialData(); // Recarrega os dados, incluindo os prediction_ids atualizados
     } catch (error: any) {
       console.error("Erro ao salvar palpites das partidas:", error);
-      toast.error(`Erro ao salvar palpites das partidas: ${error.message || error.toString()}`);
+      toast.error(`Erro ao salvar palpites das partidas: ${error.details || error.message || error.toString()}`);
     } finally {
       setSubmitting(false);
     }
@@ -388,7 +428,7 @@ const Palpites = () => {
     } finally {
       setSubmitting(false);
     }
-  }, [user, groupPredictions, groups, globalPredictionCutoffDate, fetchInitialData]);
+  }, [user, groupPredictions, groups, globalPredictionCutoffDate, fetchInitialData]); // Removido fetchInitialData daqui, pois ele é chamado no useEffect principal
 
   const handleSaveFinalPrediction = useCallback(async () => {
     if (!user) {
@@ -451,20 +491,13 @@ const Palpites = () => {
     } finally {
       setSubmitting(false);
     }
-  }, [user, finalPrediction, finalPredictionCutoffDate, fetchInitialData]);
+  }, [user, finalPrediction, finalPredictionCutoffDate, fetchInitialData]); // Removido fetchInitialData
 
   const handlePrintReceipt = useCallback(() => {
     if (!user) {
       toast.error("Você precisa estar logado para gerar o comprovante.");
       return;
     }
-
-    // DEBUGGING console.logs para o comprovante
-    console.log("DEBUG Comprovante - Estado dailyPredictions:", JSON.stringify(dailyPredictions, null, 2));
-    console.log("DEBUG Comprovante - Estado groupPredictions:", JSON.stringify(groupPredictions, null, 2));
-    console.log("DEBUG Comprovante - Estado finalPrediction:", JSON.stringify(finalPrediction, null, 2));
-    console.log("DEBUG Comprovante - Lista de Times (primeiros 5 para ver se carregou):", teams.slice(0, 5).map(t => ({id: t.id, name: t.name})));
-
 
     const userMatchPredictionsForReceipt = Object.values(dailyPredictions)
       .map(p => {
@@ -509,8 +542,7 @@ const Palpites = () => {
       }).filter(Boolean);
 
     const finalChampionData = teams.find(t => t.id === finalPrediction.champion_id);
-    const finalViceChampionData = teams.find(t => t.id === finalPrediction.vice_champion_id); // Esta é a linha chave
-    console.log(`DEBUG Comprovante - Buscando Vice ID: ${finalPrediction.vice_champion_id}, Encontrado:`, finalViceChampionData); // DEBUG ESPECÍFICO
+    const finalViceChampionData = teams.find(t => t.id === finalPrediction.vice_champion_id);
     const finalThirdPlaceData = teams.find(t => t.id === finalPrediction.third_place_id);
     const finalFourthPlaceData = teams.find(t => t.id === finalPrediction.fourth_place_id);
 
@@ -581,10 +613,6 @@ const Palpites = () => {
       printWindow.print();
     }
   }, [user, dailyPredictions, matches, teams, groupPredictions, groups, finalPrediction]);
-
-  // Removidos os console.logs daqui para não poluir tanto, já que os de cima são mais específicos para o comprovante
-  // console.log("DEBUG: User object:", user);
-  // console.log("DEBUG: Submitting state:", submitting);
 
   if (loading) {
     return (
