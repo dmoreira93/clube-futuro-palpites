@@ -1,5 +1,5 @@
 // src/pages/Palpites.tsx
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react"; // Adicionado useMemo
 import Layout from "@/components/layout/Layout";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -18,24 +18,25 @@ import {
 } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { Label } from "@/components/ui/label";
-import { Loader2, Printer, Save } from "lucide-react"; // Adicionado Save icon
+import { Loader2, Printer, Save } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
-import { Match, Team } from "@/types/matches";
+import { Match, Team } from "@/types/matches"; //
 import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import ReactDOMServer from 'react-dom/server';
 import PredictionReceipt from '@/components/home/predictions/PredictionReceipt';
 
+// ... (interfaces LocalPrediction, GroupPredictionState, FinalPredictionState permanecem as mesmas)
 interface LocalPrediction {
   match_id: string;
   home_score: string;
   away_score: string;
-  prediction_id?: string; // ID do palpite se já existir no banco
+  prediction_id?: string;
 }
 
 interface GroupPredictionState {
@@ -55,15 +56,15 @@ interface FinalPredictionState {
   prediction_id?: string;
 }
 
+
 const Palpites = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
 
   const [loading, setLoading] = useState(true);
-  // const [submitting, setSubmitting] = useState(false); // Removido, pois o submit em lote foi removido
   const [submittingMatchId, setSubmittingMatchId] = useState<string | null>(null);
 
-  const [matches, setMatches] = useState<Match[]>([]);
+  const [allMatches, setAllMatches] = useState<Match[]>([]); // Renomeado para allMatches
   const [teams, setTeams] = useState<Team[]>([]);
   const [groups, setGroups] = useState<{ id: string; name: string }[]>([]);
 
@@ -89,7 +90,7 @@ const Palpites = () => {
         .select('*, home_team:home_team_id(*), away_team:away_team_id(*)')
         .order('match_date', { ascending: true });
       if (matchesError) throw matchesError;
-      setMatches(matchesData || []);
+      setAllMatches(matchesData || []); // Armazena todas as partidas aqui
 
       if (user) {
         const { data: predictionsData, error: predictionsError } = await supabase
@@ -110,6 +111,7 @@ const Palpites = () => {
         setDailyPredictions(loadedPredictions);
       }
 
+      // ... (resto do fetchInitialData para teams, groups, finalPrediction)
       const { data: teamsData, error: teamsError } = await supabase
         .from('teams')
         .select('*')
@@ -177,6 +179,11 @@ const Palpites = () => {
     fetchInitialData();
   }, [fetchInitialData]);
 
+  // Filtra as partidas para mostrar apenas "Fase de Grupos"
+  const groupStageMatches = useMemo(() => {
+    return allMatches.filter(match => match.stage === "Fase de Grupos");
+  }, [allMatches]);
+
   const handleScoreChange = useCallback((matchId: string, type: 'home' | 'away', value: string) => {
     setDailyPredictions(prev => ({
       ...prev,
@@ -187,6 +194,7 @@ const Palpites = () => {
     }));
   }, []);
 
+  // ... (handleGroupTeamChange, handleFinalPredictionChange, handleSaveDailyPrediction, handleSaveGroupPrediction, handleSaveFinalPrediction, handlePrintReceipt permanecem os mesmos)
   const handleGroupTeamChange = useCallback((groupId: string, type: 'first' | 'second', teamId: string) => {
     setGroupPredictions(prev => ({
       ...prev,
@@ -204,7 +212,6 @@ const Palpites = () => {
     }));
   }, []);
 
-  // Esta função agora é a ÚNICA forma de salvar/atualizar palpites de partida
   const handleSaveDailyPrediction = async (matchId: string) => {
     if (!user) {
       toast.error("Você precisa estar logado para salvar seu palpite.");
@@ -225,7 +232,7 @@ const Palpites = () => {
       return;
     }
 
-    const match = matches.find(m => m.id === matchId);
+    const match = allMatches.find(m => m.id === matchId); // Usa allMatches para encontrar a partida
     if (!match) {
       toast.error("Partida não encontrada.");
       return;
@@ -237,7 +244,7 @@ const Palpites = () => {
       return;
     }
 
-    setSubmittingMatchId(matchId); // Indica que esta partida específica está sendo salva
+    setSubmittingMatchId(matchId);
     try {
       let data, error;
       const payload = {
@@ -251,11 +258,11 @@ const Palpites = () => {
       console.log("Payload:", payload);
 
 
-      if (prediction.prediction_id) { // Se já existe um ID, atualiza (UPDATE)
+      if (prediction.prediction_id) {
         console.log("Tentando ATUALIZAR palpite existente com ID:", prediction.prediction_id);
         ({ data, error } = await supabase
           .from('match_predictions')
-          .update({ // Não precisa enviar match_id e user_id no update se não mudam
+          .update({
             home_score: payload.home_score,
             away_score: payload.away_score,
             updated_at: new Date().toISOString(),
@@ -263,11 +270,11 @@ const Palpites = () => {
           .eq('id', prediction.prediction_id)
           .select()
           .single());
-      } else { // Se não existe ID, insere (INSERT)
+      } else {
         console.log("Tentando INSERIR novo palpite.");
         ({ data, error } = await supabase
           .from('match_predictions')
-          .insert(payload) // Supabase irá gerar o 'id' (UUID)
+          .insert(payload)
           .select()
           .single());
       }
@@ -278,15 +285,12 @@ const Palpites = () => {
       }
 
       if (data) {
-        // Atualiza o estado local com o prediction_id (se for um novo palpite)
-        // ou confirma que o palpite existente foi processado
         setDailyPredictions(prev => ({
           ...prev,
           [matchId]: { ...prev[matchId], home_score: homeScoreNum.toString(), away_score: awayScoreNum.toString(), prediction_id: data.id }
         }));
         toast.success(`Palpite para ${match.home_team?.name} vs ${match.away_team?.name} salvo!`);
       } else {
-        // Isso não deveria acontecer se não houver erro, mas é uma checagem de segurança
         toast.warn("Palpite processado, mas não houve retorno de dados do servidor.");
       }
       
@@ -294,11 +298,9 @@ const Palpites = () => {
       console.error("Erro ao salvar palpite (handleSaveDailyPrediction):", error);
       toast.error(`Erro ao salvar palpite: ${error.details || error.message || error.toString()}`);
     } finally {
-      setSubmittingMatchId(null); // Limpa o indicador de submissão para esta partida
+      setSubmittingMatchId(null);
     }
   };
-
-  // Removida a função handleSubmitBets (salvamento em lote para aba de partidas)
 
   const handleSaveGroupPrediction = useCallback(async (groupId: string) => {
     if (!user) {
@@ -318,7 +320,7 @@ const Palpites = () => {
       toast.error("Os times do 1º e 2º lugar não podem ser os mesmos.");
       return;
     }
-    // setSubmitting(true); // Se você tiver um estado de submitting global para grupos/final
+    setSubmittingMatchId(groupId); // Reutilizando submittingMatchId para indicar loading
     try {
       let data, error;
       const payload = {
@@ -356,7 +358,7 @@ const Palpites = () => {
       console.error("Erro ao salvar palpite de grupo:", error);
       toast.error(`Erro ao salvar palpite de grupo: ${error.message || error.toString()}`);
     } finally {
-      // setSubmitting(false);
+      setSubmittingMatchId(null);
     }
   }, [user, groupPredictions, groups, globalPredictionCutoffDate]);
 
@@ -387,7 +389,7 @@ const Palpites = () => {
       toast.error("Os times do 1º, 2º, 3º e 4º lugar devem ser diferentes.");
       return;
     }
-    // setSubmitting(true);
+    setSubmittingMatchId('final'); // Usando 'final' para indicar loading do palpite final
     try {
       const payloadToUpsert = {
         user_id: user.id,
@@ -419,7 +421,7 @@ const Palpites = () => {
       console.error("Erro ao salvar palpite final:", error);
       toast.error(`Erro ao salvar palpite final: ${error.message || error.toString()}`);
     } finally {
-      // setSubmitting(false);
+      setSubmittingMatchId(null);
     }
   }, [user, finalPrediction, finalPredictionCutoffDate]);
 
@@ -428,20 +430,20 @@ const Palpites = () => {
       toast.error("Você precisa estar logado para gerar o comprovante.");
       return;
     }
-
+  
     const userMatchPredictionsForReceipt = Object.values(dailyPredictions)
       .map(p => {
-        const match = matches.find(m => m.id === p.match_id);
+        const match = allMatches.find(m => m.id === p.match_id); // Usa allMatches
         if (!match) return null;
         
         const homeScoreNum = parseInt(p.home_score, 10);
         const awayScoreNum = parseInt(p.away_score, 10);
-
+  
         if (p.home_score.trim() === "" || p.away_score.trim() === "" || isNaN(homeScoreNum) || isNaN(awayScoreNum)) return null;
-
+  
         const homeTeamData = teams.find(t => t.id === match.home_team_id);
         const awayTeamData = teams.find(t => t.id === match.away_team_id);
-
+  
         return {
           match: {
             id: match.id,
@@ -454,95 +456,96 @@ const Palpites = () => {
           away_score_prediction: awayScoreNum,
         };
       }).filter(p => p !== null);
-
+  
+    // ... (resto da função handlePrintReceipt permanece o mesmo)
     const userGroupPredictionsForReceipt = Object.values(groupPredictions)
-      .filter(gp => gp.predicted_first_team_id && gp.predicted_second_team_id)
-      .map(gp => {
-        const group = groups.find(g => g.id === gp.group_id);
-        if (!group) return null;
+    .filter(gp => gp.predicted_first_team_id && gp.predicted_second_team_id)
+    .map(gp => {
+      const group = groups.find(g => g.id === gp.group_id);
+      if (!group) return null;
 
-        const firstTeamData = teams.find(t => t.id === gp.predicted_first_team_id);
-        const secondTeamData = teams.find(t => t.id === gp.predicted_second_team_id);
+      const firstTeamData = teams.find(t => t.id === gp.predicted_first_team_id);
+      const secondTeamData = teams.find(t => t.id === gp.predicted_second_team_id);
 
-        return {
-          group_name: group.name,
-          predicted_first_team: firstTeamData || { id: `unknown_first_${gp.predicted_first_team_id || 'id_not_found'}`, name: (firstTeamData as Team)?.name || 'Não Definido', flag_url: (firstTeamData as Team)?.flag_url || '' },
-          predicted_second_team: secondTeamData || { id: `unknown_second_${gp.predicted_second_team_id || 'id_not_found'}`, name: (secondTeamData as Team)?.name || 'Não Definido', flag_url: (secondTeamData as Team)?.flag_url || '' },
-        };
-      }).filter(Boolean);
+      return {
+        group_name: group.name,
+        predicted_first_team: firstTeamData || { id: `unknown_first_${gp.predicted_first_team_id || 'id_not_found'}`, name: (firstTeamData as Team)?.name || 'Não Definido', flag_url: (firstTeamData as Team)?.flag_url || '' },
+        predicted_second_team: secondTeamData || { id: `unknown_second_${gp.predicted_second_team_id || 'id_not_found'}`, name: (secondTeamData as Team)?.name || 'Não Definido', flag_url: (secondTeamData as Team)?.flag_url || '' },
+      };
+    }).filter(Boolean);
 
-    const finalChampionData = teams.find(t => t.id === finalPrediction.champion_id);
-    const finalViceChampionData = teams.find(t => t.id === finalPrediction.vice_champion_id);
-    const finalThirdPlaceData = teams.find(t => t.id === finalPrediction.third_place_id);
-    const finalFourthPlaceData = teams.find(t => t.id === finalPrediction.fourth_place_id);
+  const finalChampionData = teams.find(t => t.id === finalPrediction.champion_id);
+  const finalViceChampionData = teams.find(t => t.id === finalPrediction.vice_champion_id);
+  const finalThirdPlaceData = teams.find(t => t.id === finalPrediction.third_place_id);
+  const finalFourthPlaceData = teams.find(t => t.id === finalPrediction.fourth_place_id);
 
-    const finalPredictionReceipt = {
-      champion: finalChampionData || { id: 'unknown_champ', name: (finalChampionData as Team)?.name || 'Não Definido', flag_url: (finalChampionData as Team)?.flag_url || '' },
-      vice_champion: finalViceChampionData || { id: 'unknown_vice', name: (finalViceChampionData as Team)?.name || 'Não Definido', flag_url: (finalViceChampionData as Team)?.flag_url || '' },
-      third_place: finalThirdPlaceData || { id: 'unknown_third', name: (finalThirdPlaceData as Team)?.name || 'Não Definido', flag_url: (finalThirdPlaceData as Team)?.flag_url || '' },
-      fourth_place: finalFourthPlaceData || { id: 'unknown_fourth', name: (finalFourthPlaceData as Team)?.name || 'Não Definido', flag_url: (finalFourthPlaceData as Team)?.flag_url || '' },
-      final_home_score: finalPrediction.final_home_score,
-      final_away_score: finalPrediction.final_away_score,
-    };
-    
-    if (userMatchPredictionsForReceipt.length === 0 && userGroupPredictionsForReceipt.length === 0 && (!finalPrediction.champion_id || !finalPrediction.vice_champion_id)) {
-        toast.info("Nenhum palpite completo para gerar o comprovante.");
-        return;
-    }
+  const finalPredictionReceipt = {
+    champion: finalChampionData || { id: 'unknown_champ', name: (finalChampionData as Team)?.name || 'Não Definido', flag_url: (finalChampionData as Team)?.flag_url || '' },
+    vice_champion: finalViceChampionData || { id: 'unknown_vice', name: (finalViceChampionData as Team)?.name || 'Não Definido', flag_url: (finalViceChampionData as Team)?.flag_url || '' },
+    third_place: finalThirdPlaceData || { id: 'unknown_third', name: (finalThirdPlaceData as Team)?.name || 'Não Definido', flag_url: (finalThirdPlaceData as Team)?.flag_url || '' },
+    fourth_place: finalFourthPlaceData || { id: 'unknown_fourth', name: (finalFourthPlaceData as Team)?.name || 'Não Definido', flag_url: (finalFourthPlaceData as Team)?.flag_url || '' },
+    final_home_score: finalPrediction.final_home_score,
+    final_away_score: finalPrediction.final_away_score,
+  };
+  
+  if (userMatchPredictionsForReceipt.length === 0 && userGroupPredictionsForReceipt.length === 0 && (!finalPrediction.champion_id || !finalPrediction.vice_champion_id)) {
+      toast.info("Nenhum palpite completo para gerar o comprovante.");
+      return;
+  }
 
-    const dateGenerated = new Date();
+  const dateGenerated = new Date();
 
-    const receiptHtml = ReactDOMServer.renderToString(
-      <PredictionReceipt
-        user={user}
-        predictions={userMatchPredictionsForReceipt as any}
-        groupPredictions={userGroupPredictionsForReceipt as any}
-        finalPrediction={finalPredictionReceipt as any}
-        dateGenerated={dateGenerated}
-      />
-    );
+  const receiptHtml = ReactDOMServer.renderToString(
+    <PredictionReceipt
+      user={user}
+      predictions={userMatchPredictionsForReceipt as any}
+      groupPredictions={userGroupPredictionsForReceipt as any}
+      finalPrediction={finalPredictionReceipt as any}
+      dateGenerated={dateGenerated}
+    />
+  );
 
-    const printWindow = window.open('', '_blank');
-    if (printWindow) {
-      printWindow.document.write(`
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <title>Comprovante de Palpites</title>
-          <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
-          <style>
-            @media print { 
-              body { 
-                -webkit-print-color-adjust: exact; 
-                print-color-adjust: exact;
-              } 
-              .print-only { display: block !important; } 
-              .no-print { display: none !important; } 
-              .bg-white, .bg-gray-50 { background-color: #ffffff !important; } 
-              .border-gray-200 { border-color: #e5e7eb !important; } 
-            } 
+  const printWindow = window.open('', '_blank');
+  if (printWindow) {
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Comprovante de Palpites</title>
+        <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+        <style>
+          @media print { 
             body { 
-              font-family: Verdana, sans-serif;
-              font-size: 9pt;
-              margin: 20px;
-            }
-            h1 { font-size: 14pt; font-weight: bold; margin-bottom: 10px; }
-            h2 { font-size: 11pt; font-weight: bold; margin-top: 15px; margin-bottom: 5px; border-bottom: 1px solid #ccc; padding-bottom: 3px;}
-            p { margin-bottom: 4px; line-height: 1.4; }
-            .font-medium { font-weight: 600; }
-            .text-sm { font-size: 8pt; }
-          </style>
-        </head>
-        <body>
-          ${receiptHtml}
-        </body>
-        </html>
-      `);
-      printWindow.document.close();
-      printWindow.focus();
-      printWindow.print();
-    }
-  }, [user, dailyPredictions, matches, teams, groupPredictions, groups, finalPrediction]);
+              -webkit-print-color-adjust: exact; 
+              print-color-adjust: exact;
+            } 
+            .print-only { display: block !important; } 
+            .no-print { display: none !important; } 
+            .bg-white, .bg-gray-50 { background-color: #ffffff !important; } 
+            .border-gray-200 { border-color: #e5e7eb !important; } 
+          } 
+          body { 
+            font-family: Verdana, sans-serif;
+            font-size: 9pt;
+            margin: 20px;
+          }
+          h1 { font-size: 14pt; font-weight: bold; margin-bottom: 10px; }
+          h2 { font-size: 11pt; font-weight: bold; margin-top: 15px; margin-bottom: 5px; border-bottom: 1px solid #ccc; padding-bottom: 3px;}
+          p { margin-bottom: 4px; line-height: 1.4; }
+          .font-medium { font-weight: 600; }
+          .text-sm { font-size: 8pt; }
+        </style>
+      </head>
+      <body>
+        ${receiptHtml}
+      </body>
+      </html>
+    `);
+    printWindow.document.close();
+    printWindow.focus();
+    printWindow.print();
+  }
+  }, [user, dailyPredictions, allMatches, teams, groupPredictions, groups, finalPrediction]);
 
 
   if (loading) {
@@ -566,7 +569,7 @@ const Palpites = () => {
         <h1 className="text-3xl font-bold text-center text-fifa-blue mb-6">Meus Palpites</h1>
         <Tabs defaultValue="daily" className="w-full">
           <TabsList className="grid w-full grid-cols-3 mb-6">
-            <TabsTrigger value="daily">Partidas</TabsTrigger>
+            <TabsTrigger value="daily">Partidas (Fase de Grupos)</TabsTrigger> {/* Título da aba atualizado */}
             <TabsTrigger value="groups">Grupos</TabsTrigger>
             <TabsTrigger value="final">Final</TabsTrigger>
           </TabsList>
@@ -574,22 +577,21 @@ const Palpites = () => {
           <TabsContent value="daily">
             <Card>
               <CardHeader>
-                <CardTitle className="text-xl">Palpites das Partidas</CardTitle>
+                <CardTitle className="text-xl">Palpites das Partidas (Fase de Grupos)</CardTitle>
                 <CardDescription>
-                  Preencha seus placares para cada partida e clique em "Salvar Palpite" ou "Atualizar Palpite" individualmente. 
+                  Preencha seus placares para cada partida da fase de grupos e clique em "Salvar Palpite" ou "Atualizar Palpite" individualmente. 
                   O prazo para palpitar em uma partida encerra no horário do jogo.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                {matches.length === 0 ? (
-                  <p className="text-center text-gray-500">Nenhuma partida encontrada.</p>
+                {groupStageMatches.length === 0 ? ( // Usa groupStageMatches aqui
+                  <p className="text-center text-gray-500">Nenhuma partida da fase de grupos encontrada.</p>
                 ) : (
-                  matches.map(match => {
+                  groupStageMatches.map(match => { // Itera sobre groupStageMatches
                     const matchDate = parseISO(match.match_date);
                     const canPredict = matchDate.getTime() > Date.now();
                     const prediction = dailyPredictions[match.id] || { match_id: match.id, home_score: '', away_score: '' };
                     const isPredictionFilled = prediction.home_score.trim() !== "" && prediction.away_score.trim() !== "";
-
 
                     return (
                       <Card key={match.id} className={`p-4 ${!canPredict ? 'bg-gray-100 opacity-80' : ''}`}>
@@ -622,7 +624,7 @@ const Palpites = () => {
                             onChange={(e) => handleScoreChange(match.id, 'away', e.target.value)}
                             disabled={submittingMatchId === match.id || !canPredict}
                           />
-                          {canPredict && isPredictionFilled && ( // Mostra o botão Salvar/Atualizar se pode prever e os campos estão preenchidos
+                          {canPredict && isPredictionFilled && (
                              <Button
                                className={`ml-auto ${prediction.prediction_id ? 'bg-blue-600 hover:bg-blue-700' : 'bg-green-600 hover:bg-green-700'}`}
                                onClick={() => handleSaveDailyPrediction(match.id)}
@@ -641,6 +643,7 @@ const Palpites = () => {
             </Card>
           </TabsContent>
 
+          {/* Abas "groups" e "final" permanecem as mesmas */}
           <TabsContent value="groups">
             <Card>
               <CardHeader>
@@ -815,7 +818,6 @@ const Palpites = () => {
         </Tabs>
         <Card className="mt-6">
           <CardContent className="p-6 space-y-4">
-            {/* Botão de submissão em lote removido */}
             <Button
               className="w-full bg-gray-600 hover:bg-gray-700 text-white"
               onClick={handlePrintReceipt}
