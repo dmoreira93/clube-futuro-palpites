@@ -148,14 +148,11 @@ const useParticipantsRanking = () => {
             .from('tournament_results')
             .select('champion_id, runner_up_id, third_place_id, fourth_place_id, final_home_score, final_away_score');
 
-        // Agora, realTournamentResultsArray será um array (pode ser vazio).
-        // Se o array não estiver vazio, pegue o primeiro (e único esperado) registro.
         const realTournamentResults: SupabaseTournamentResult | null = 
           realTournamentResultsArray && realTournamentResultsArray.length > 0
             ? realTournamentResultsArray[0]
-            : null; // Será null se a tabela estiver vazia
+            : null;
 
-        // Trate erros que não sejam 'nenhum registro encontrado' (PGRST116 não ocorrerá mais aqui diretamente pelo .single())
         if (realTournamentResultsError) {
             console.error('Erro ao buscar resultados do torneio:', realTournamentResultsError);
             throw realTournamentResultsError; 
@@ -164,23 +161,29 @@ const useParticipantsRanking = () => {
         // --- 5. Fetch dos palpites dos usuários das TRES tabelas separadas ---
 
         // Palpites de Partidas
-        const { data: matchPredictionsData, error: matchPredictionsError } = await supabase
+        const { data: matchPredictionsDataFetched, error: matchPredictionsError } = await supabase
           .from('match_predictions')
           .select('id, user_id, match_id, home_score, away_score');
+        // Garante que é um array, mesmo que o fetch retorne null/undefined
+        const matchPredictionsData = matchPredictionsDataFetched || [];
 
         if (matchPredictionsError) throw matchPredictionsError;
 
         // Palpites de Grupos
-        const { data: groupPredictionsData, error: groupPredictionsError } = await supabase
+        const { data: groupPredictionsDataFetched, error: groupPredictionsError } = await supabase
           .from('group_predictions')
           .select('id, user_id, group_id, predicted_first_team_id, predicted_second_team_id');
+        // Garante que é um array, mesmo que o fetch retorne null/undefined
+        const groupPredictionsData = groupPredictionsDataFetched || [];
         
         if (groupPredictionsError) throw groupPredictionsError;
 
         // Palpites Finais (CORRIGIDO com vice_champion_id)
-        const { data: finalPredictionsData, error: finalPredictionsError } = await supabase
+        const { data: finalPredictionsDataFetched, error: finalPredictionsError } = await supabase
           .from('final_predictions')
-          .select('id, user_id, champion_id, vice_champion_id, third_place_id, fourth_place_id, final_home_score, final_away_score'); // <-- CORRIGIDO AQUI
+          .select('id, user_id, champion_id, vice_champion_id, third_place_id, fourth_place_id, final_home_score, final_away_score');
+        // Garante que é um array, mesmo que o fetch retorne null/undefined
+        const finalPredictionsData = finalPredictionsDataFetched || [];
 
         if (finalPredictionsError) throw finalPredictionsError;
         // --- FIM DO FETCH ---
@@ -191,15 +194,13 @@ const useParticipantsRanking = () => {
         users.forEach((user: SupabaseUserCustom) => {
           if (!user.is_admin) {
               userPoints[user.id] = { 
-                points: user.total_points, // Usa os pontos já calculados e armazenados no banco
+                points: user.total_points, 
                 matchesCount: 0, 
                 correctMatches: 0 
               };
           }
         });
 
-        // --- ADICIONADOS OS CONSOLE.LOGS AQUI ---
-        console.log("DEBUG: matchPredictionsData antes do forEach:", matchPredictionsData);
         // 7. Processa palpites de partidas para calcular acurácia (os pontos já vêm de total_points)
         matchPredictionsData.forEach((prediction: SupabaseMatchPrediction) => {
           const realMatch = realMatchResults.find(m => m.id === prediction.match_id);
@@ -226,7 +227,6 @@ const useParticipantsRanking = () => {
           }
         });
 
-        console.log("DEBUG: groupPredictionsData antes do forEach:", groupPredictionsData);
         // 8. Processa palpites de grupo (pontos já vêm de total_points)
         groupPredictionsData.forEach((prediction: SupabaseGroupPrediction) => {
           const realGroup = realGroupResults.find(g => g.group_id === prediction.group_id);
@@ -246,13 +246,12 @@ const useParticipantsRanking = () => {
           }
         });
 
-        console.log("DEBUG: finalPredictionsData antes do forEach:", finalPredictionsData);
         // 9. Processa palpites finais (pontos já vêm de total_points)
         if (realTournamentResults) { // Só processa se houver resultados finais reais
             finalPredictionsData.forEach((prediction: SupabaseFinalPrediction) => {
                 const userFinalPred: TournamentFinalPredictions = {
                     champion: prediction.champion_id,
-                    runnerUp: prediction.vice_champion_id, // <-- ATUALIZADO AQUI
+                    runnerUp: prediction.vice_champion_id,
                     thirdPlace: prediction.third_place_id,
                     fourthPlace: prediction.fourth_place_id,
                     finalScore: {
@@ -262,7 +261,7 @@ const useParticipantsRanking = () => {
                 };
                 const realResult: TournamentFinalResults = {
                     champion: realTournamentResults.champion_id,
-                    runnerUp: realTournamentResults.runner_up_id, // <-- Mantenha 'runner_up_id' aqui se tournament_results usa esse nome
+                    runnerUp: realTournamentResults.runner_up_id,
                     thirdPlace: realTournamentResults.third_place_id,
                     fourthPlace: realTournamentResults.fourth_place_id,
                     finalScore: {
