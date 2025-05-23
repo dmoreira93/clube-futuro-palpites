@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { Label } from "@/components/ui/label";
-import { Loader2, Printer } from "lucide-react"; // Removidos ícones não usados
+import { Loader2, Printer } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
@@ -31,7 +31,6 @@ import { ptBR } from "date-fns/locale";
 import ReactDOMServer from 'react-dom/server';
 import PredictionReceipt from '@/components/home/predictions/PredictionReceipt';
 
-// --- INTERFACES PARA O ESTADO ---
 interface LocalPrediction {
   match_id: string;
   home_score: string;
@@ -56,7 +55,6 @@ interface FinalPredictionState {
   prediction_id?: string;
 }
 
-// --- COMPONENTE PRINCIPAL ---
 const Palpites = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -322,7 +320,8 @@ const Palpites = () => {
 
       toast.success("Palpites das partidas salvos/atualizados com sucesso!");
       await fetchInitialData();
-    } catch (error: any)      console.error("Erro ao salvar palpites das partidas:", error);
+    } catch (error: any) { // CORREÇÃO: Bloco catch estava com sintaxe errada
+      console.error("Erro ao salvar palpites das partidas:", error);
       toast.error(`Erro ao salvar palpites das partidas: ${error.message || error.toString()}`);
     } finally {
       setSubmitting(false);
@@ -387,7 +386,7 @@ const Palpites = () => {
     } finally {
       setSubmitting(false);
     }
-  }, [user, groupPredictions, groups, globalPredictionCutoffDate]);
+  }, [user, groupPredictions, groups, globalPredictionCutoffDate, fetchInitialData]); // Adicionado fetchInitialData
 
   const handleSaveFinalPrediction = useCallback(async () => {
     if (!user) {
@@ -450,9 +449,8 @@ const Palpites = () => {
     } finally {
       setSubmitting(false);
     }
-  }, [user, finalPrediction, finalPredictionCutoffDate]);
+  }, [user, finalPrediction, finalPredictionCutoffDate, fetchInitialData]); // Adicionado fetchInitialData
 
-  // ATUALIZAÇÃO NA LÓGICA DE PREPARAÇÃO DE DADOS PARA O COMPROVANTE
   const handlePrintReceipt = useCallback(() => {
     if (!user) {
       toast.error("Você precisa estar logado para gerar o comprovante.");
@@ -467,7 +465,6 @@ const Palpites = () => {
         const homeScoreNum = parseInt(p.home_score, 10);
         const awayScoreNum = parseInt(p.away_score, 10);
 
-        // Apenas inclui no comprovante se os placares são números válidos
         if (isNaN(homeScoreNum) || isNaN(awayScoreNum)) return null;
 
         const homeTeamData = teams.find(t => t.id === match.home_team_id);
@@ -478,13 +475,13 @@ const Palpites = () => {
             id: match.id,
             match_date: match.match_date,
             stage: match.stage,
-            home_team: homeTeamData || { id: `unknown_home_${match.home_team_id || 'id_not_found'}`, name: 'A Definir', flag_url: '' },
-            away_team: awayTeamData || { id: `unknown_away_${match.away_team_id || 'id_not_found'}`, name: 'A Definir', flag_url: '' },
+            home_team: homeTeamData || { id: `unknown_home_${match.home_team_id || 'id_not_found'}`, name: (homeTeamData as Team)?.name || 'A Definir', flag_url: (homeTeamData as Team)?.flag_url || '' },
+            away_team: awayTeamData || { id: `unknown_away_${match.away_team_id || 'id_not_found'}`, name: (awayTeamData as Team)?.name || 'A Definir', flag_url: (awayTeamData as Team)?.flag_url || '' },
           },
           home_score_prediction: homeScoreNum,
           away_score_prediction: awayScoreNum,
         };
-      }).filter(p => p !== null); // Remove nulos (palpites incompletos ou partidas não encontradas)
+      }).filter(p => p !== null);
 
     const userGroupPredictionsForReceipt = Object.values(groupPredictions)
       .filter(gp => gp.predicted_first_team_id && gp.predicted_second_team_id)
@@ -497,8 +494,8 @@ const Palpites = () => {
 
         return {
           group_name: group.name,
-          predicted_first_team: firstTeamData || { id: `unknown_first_${gp.predicted_first_team_id || 'id_not_found'}`, name: 'Não Definido', flag_url: '' },
-          predicted_second_team: secondTeamData || { id: `unknown_second_${gp.predicted_second_team_id || 'id_not_found'}`, name: 'Não Definido', flag_url: '' },
+          predicted_first_team: firstTeamData || { id: `unknown_first_${gp.predicted_first_team_id || 'id_not_found'}`, name: (firstTeamData as Team)?.name || 'Não Definido', flag_url: (firstTeamData as Team)?.flag_url || '' },
+          predicted_second_team: secondTeamData || { id: `unknown_second_${gp.predicted_second_team_id || 'id_not_found'}`, name: (secondTeamData as Team)?.name || 'Não Definido', flag_url: (secondTeamData as Team)?.flag_url || '' },
         };
       }).filter(Boolean);
 
@@ -508,10 +505,10 @@ const Palpites = () => {
     const finalFourthPlaceData = teams.find(t => t.id === finalPrediction.fourth_place_id);
 
     const finalPredictionReceipt = {
-      champion: finalChampionData || { id: 'unknown_champ', name: 'Não Definido', flag_url: '' },
-      vice_champion: finalViceChampionData || { id: 'unknown_vice', name: 'Não Definido', flag_url: '' },
-      third_place: finalThirdPlaceData || { id: 'unknown_third', name: 'Não Definido', flag_url: '' },
-      fourth_place: finalFourthPlaceData || { id: 'unknown_fourth', name: 'Não Definido', flag_url: '' },
+      champion: finalChampionData || { id: 'unknown_champ', name: (finalChampionData as Team)?.name || 'Não Definido', flag_url: (finalChampionData as Team)?.flag_url || '' },
+      vice_champion: finalViceChampionData || { id: 'unknown_vice', name: (finalViceChampionData as Team)?.name || 'Não Definido', flag_url: (finalViceChampionData as Team)?.flag_url || '' },
+      third_place: finalThirdPlaceData || { id: 'unknown_third', name: (finalThirdPlaceData as Team)?.name || 'Não Definido', flag_url: (finalThirdPlaceData as Team)?.flag_url || '' },
+      fourth_place: finalFourthPlaceData || { id: 'unknown_fourth', name: (finalFourthPlaceData as Team)?.name || 'Não Definido', flag_url: (finalFourthPlaceData as Team)?.flag_url || '' },
       final_home_score: finalPrediction.final_home_score,
       final_away_score: finalPrediction.final_away_score,
     };
@@ -526,9 +523,9 @@ const Palpites = () => {
     const receiptHtml = ReactDOMServer.renderToString(
       <PredictionReceipt
         user={{ name: user.user_metadata?.full_name || user.email || "Usuário" }}
-        predictions={userMatchPredictionsForReceipt as any} // O cast pode ser refinado com tipos mais estritos
-        groupPredictions={userGroupPredictionsForReceipt as any} // O cast pode ser refinado
-        finalPrediction={finalPredictionReceipt as any} // O cast pode ser refinado
+        predictions={userMatchPredictionsForReceipt as any}
+        groupPredictions={userGroupPredictionsForReceipt as any}
+        finalPrediction={finalPredictionReceipt as any}
         dateGenerated={dateGenerated}
       />
     );
@@ -557,8 +554,8 @@ const Palpites = () => {
   }, [user, dailyPredictions, matches, teams, groupPredictions, groups, finalPrediction]);
 
   // CONSOLE LOGS PARA DEBUG DO BOTÃO "IMPRIMIR COMPROVANTE"
-  console.log("DEBUG: User object:", user);
-  console.log("DEBUG: Submitting state:", submitting);
+  // console.log("DEBUG: User object:", user);
+  // console.log("DEBUG: Submitting state:", submitting);
 
   if (loading) {
     return (
@@ -571,8 +568,8 @@ const Palpites = () => {
   }
 
   if (!user) {
-    navigate("/login"); // Redireciona para login se não houver usuário
-    return null; // Retorna null para evitar renderização adicional
+    navigate("/login");
+    return null;
   }
 
   return (
@@ -829,7 +826,7 @@ const Palpites = () => {
             <Button
               className="w-full bg-gray-600 hover:bg-gray-700 text-white"
               onClick={handlePrintReceipt}
-              disabled={submitting || !user } // Mantém a lógica original, o console.log nos ajudará
+              disabled={submitting || !user }
             >
               <Printer className="mr-2 h-4 w-4" />
               Imprimir Comprovante
