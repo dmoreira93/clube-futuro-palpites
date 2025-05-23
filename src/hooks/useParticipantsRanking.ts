@@ -109,11 +109,8 @@ const useParticipantsRanking = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  console.log("DEBUG: useEffect Hook entered.");
-
   useEffect(() => {
     const fetchAndCalculateRanking = async () => {
-      console.log("DEBUG: fetchAndCalculateRanking function started.");
       setLoading(true);
       setError(null);
       try {
@@ -126,7 +123,6 @@ const useParticipantsRanking = () => {
         if (usersError) {
           throw usersError;
         }
-        console.log("DEBUG: Fetched users:", users); // <--- NOVO LOG
 
         // 2. Fetch todos os resultados reais de partidas finalizadas
         const { data: realMatchResults, error: realMatchResultsError } = await supabase
@@ -189,10 +185,9 @@ const useParticipantsRanking = () => {
 
         // 6. Inicializa pontos e estatísticas dos usuários (não-administradores)
         const userPoints: { [userId: string]: { points: number; matchesCount: number; correctMatches: number } } = {};
-        console.log("DEBUG: Before users.forEach to initialize userPoints"); // <--- NOVO LOG
         users.forEach((user: SupabaseUserCustom) => {
           if (!user) { // Defensiva extra
-              console.error("DEBUG: Found an undefined/null user in the users array. Skipping this user.");
+              console.error("DEBUG: Found an undefined/null user in the users array. Skipping this user."); 
               return; 
           }
           if (!user.is_admin) {
@@ -205,9 +200,7 @@ const useParticipantsRanking = () => {
         });
 
         // 7. Processa palpites de partidas para calcular acurácia
-        console.log("DEBUG: Before matchPredictionsData.forEach"); // <--- NOVO LOG
         matchPredictionsData.forEach((prediction: SupabaseMatchPrediction) => {
-          console.log("DEBUG: Inside matchPredictionsData.forEach, Before realMatchResults.find for match ID:", prediction.match_id); // <--- NOVO LOG
           const realMatch = realMatchResults.find(m => m.id === prediction.match_id);
 
           if (realMatch && realMatch.is_finished) {
@@ -232,9 +225,7 @@ const useParticipantsRanking = () => {
         });
 
         // 8. Processa palpites de grupo
-        console.log("DEBUG: Before groupPredictionsData.forEach"); // <--- NOVO LOG
         groupPredictionsData.forEach((prediction: SupabaseGroupPrediction) => {
-          console.log("DEBUG: Inside groupPredictionsData.forEach, Before realGroupResults.find for group ID:", prediction.group_id); // <--- NOVO LOG
           const realGroup = realGroupResults.find(g => g.group_id === prediction.group_id);
 
           if (realGroup) {
@@ -253,7 +244,6 @@ const useParticipantsRanking = () => {
 
         // 9. Processa palpites finais
         if (realTournamentResults) { 
-            console.log("DEBUG: Before finalPredictionsData.forEach (realTournamentResults is not null)"); // <--- NOVO LOG
             finalPredictionsData.forEach((prediction: SupabaseFinalPrediction) => {
                 const userFinalPred: TournamentFinalPredictions = {
                     champion: prediction.champion_id,
@@ -281,7 +271,6 @@ const useParticipantsRanking = () => {
         }
 
         // 10. Constrói o ranking final
-        console.log("DEBUG: Before users.map to build finalRanking"); // <--- NOVO LOG
         const finalRanking: Participant[] = users.map((user: UserForRanking) => {
           const userStats = userPoints[user.id]; 
 
@@ -312,7 +301,6 @@ const useParticipantsRanking = () => {
         });
 
         setParticipants(finalRanking);
-        console.log("Final Ranking Calculated:", finalRanking); 
 
       } catch (err: any) {
         console.error("Erro ao carregar o ranking:", err);

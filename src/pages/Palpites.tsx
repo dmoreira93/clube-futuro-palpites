@@ -64,11 +64,11 @@ interface GroupPrediction {
 interface FinalPrediction {
   id?: string;
   champion_id: string;
-  runner_up_id: string;
+  vice_champion_id: string; // CORRIGIDO: de runner_up_id para vice_champion_id
   third_place_id: string;
   fourth_place_id: string;
   champion_name?: string;
-  runner_up_name?: string;
+  vice_champion_name?: string; // CORRIGIDO: de runner_up_name para vice_champion_name
   third_place_name?: string;
   fourth_place_name?: string;
 }
@@ -166,7 +166,7 @@ const Palpites = () => {
   const fetchUserFinalPrediction = useCallback(async (userId: string) => {
     const { data, error } = await supabase
       .from('final_predictions')
-      .select('*, champion:teams_champion_id(name), runner_up:teams_runner_up_id(name), third_place:teams_third_place_id(name), fourth_place:teams_fourth_place_id(name)')
+      .select('*, champion:teams_champion_id(name), vice_champion:teams_vice_champion_id(name), third_place:teams_third_place_id(name), fourth_place:teams_fourth_place_id(name)') // CORRIGIDO: 'runner_up' para 'vice_champion'
       .eq('user_id', userId)
       .single();
 
@@ -179,11 +179,11 @@ const Palpites = () => {
       setFinalPrediction({
         id: data.id,
         champion_id: data.champion_id,
-        runner_up_id: data.runner_up_id,
+        vice_champion_id: data.vice_champion_id, // CORRIGIDO: de runner_up_id para vice_champion_id
         third_place_id: data.third_place_id,
         fourth_place_id: data.fourth_place_id,
         champion_name: data.champion?.name,
-        runner_up_name: data.runner_up?.name,
+        vice_champion_name: data.vice_champion?.name, // CORRIGIDO: de runner_up_name para vice_champion_name
         third_place_name: data.third_place?.name,
         fourth_place_name: data.fourth_place?.name,
       });
@@ -265,8 +265,8 @@ const Palpites = () => {
           newPrediction.champion_name = team?.name;
           break;
         case 'runnerUp':
-          newPrediction.runner_up_id = teamId;
-          newPrediction.runner_up_name = team?.name;
+          newPrediction.vice_champion_id = teamId; // CORRIGIDO: de runner_up_id para vice_champion_id
+          newPrediction.vice_champion_name = team?.name; // CORRIGIDO: de runner_up_name para vice_champion_name
           break;
         case 'thirdPlace':
           newPrediction.third_place_id = teamId;
@@ -373,10 +373,10 @@ const Palpites = () => {
                 errorCount++;
             } else if (
                 !finalPrediction.champion_id ||
-                !finalPrediction.runner_up_id ||
+                !finalPrediction.vice_champion_id || // CORRIGIDO: de runner_up_id para vice_champion_id
                 !finalPrediction.third_place_id ||
                 !finalPrediction.fourth_place_id ||
-                new Set([finalPrediction.champion_id, finalPrediction.runner_up_id, finalPrediction.third_place_id, finalPrediction.fourth_place_id]).size !== 4
+                new Set([finalPrediction.champion_id, finalPrediction.vice_champion_id, finalPrediction.third_place_id, finalPrediction.fourth_place_id]).size !== 4 // CORRIGIDO
             ) {
                 toast.error("Por favor, preencha todos os campos dos palpites da final com times únicos.");
                 errorCount++;
@@ -385,9 +385,9 @@ const Palpites = () => {
                     const dataToSave = {
                         user_id: user.id,
                         champion_id: finalPrediction.champion_id,
-                        runner_up_id: finalPrediction.runner_up_id,
+                        vice_champion_id: finalPrediction.vice_champion_id, // CORRIGIDO: de runner_up_id para vice_champion_id
                         third_place_id: finalPrediction.third_place_id,
-                        fourth_place_id: finalPrediction.fourth_place_id, // CORRIGIDO AQUI!
+                        fourth_place_id: finalPrediction.fourth_place_id,
                     };
 
                     if (finalPrediction.id) { // Palpite existente, atualiza
@@ -448,7 +448,7 @@ const Palpites = () => {
       // 3. Buscar palpite final
       const { data: userFinalPrediction, error: finalPredictionError } = await supabase
         .from('final_predictions')
-        .select('*, champion:teams_champion_id(name), runner_up:teams_runner_up_id(name), third_place:teams_third_place_id(name), fourth_place:teams_fourth_place_id(name)')
+        .select('*, champion:teams_champion_id(name), vice_champion:teams_vice_champion_id(name), third_place:teams_third_place_id(name), fourth_place:teams_fourth_place_id(name)') // CORRIGIDO: 'runner_up' para 'vice_champion'
         .eq('user_id', user.id)
         .single();
       if (finalPredictionError && finalPredictionError.code !== 'PGRST116') { // PGRST116 = no rows found
@@ -460,7 +460,10 @@ const Palpites = () => {
               user={{ id: user.id, name: user.user_metadata?.full_name || user.email || 'Usuário', avatar_url: user.user_metadata?.avatar_url || '' }}
               predictions={predictionsForReceipt as any} // Palpites de partida
               groupPredictions={userGroupPredictions as any} // Palpites de grupo
-              finalPrediction={userFinalPrediction as any} // Palpite final
+              finalPrediction={userFinalPrediction ? {
+                ...userFinalPrediction,
+                runner_up: userFinalPrediction.vice_champion // Mapeia para o tipo esperado por PredictionReceipt
+              } as any : null} // Palpite final
               dateGenerated={new Date()}
           />
       );
@@ -641,7 +644,7 @@ const Palpites = () => {
                       <div>
                         <Label htmlFor="runnerUp">Vice-Campeão:</Label>
                         <Select
-                          value={finalPrediction?.runner_up_id || ''}
+                          value={finalPrediction?.vice_champion_id || ''} // CORRIGIDO: de runner_up_id para vice_champion_id
                           onValueChange={(value) => handleFinalPredictionChange('runnerUp', value)}
                           disabled={isAfter(new Date(), finalPredictionCutoffDate) || submitting}
                         >
