@@ -133,6 +133,7 @@ const useParticipantsRanking = () => {
         if (realMatchResultsError) {
           throw realMatchResultsError;
         }
+        console.log("DEBUG: realMatchResults:", realMatchResults); // <--- ADICIONADO
 
         // 3. Fetch todos os resultados reais de classificação de grupos
         const { data: realGroupResults, error: realGroupResultsError } = await supabase
@@ -142,6 +143,7 @@ const useParticipantsRanking = () => {
         if (realGroupResultsError) {
           throw realGroupResultsError;
         }
+        console.log("DEBUG: realGroupResults:", realGroupResults); // <--- ADICIONADO
 
         // 4. Fetch resultados finais do torneio de 'tournament_results'
         const { data: realTournamentResultsArray, error: realTournamentResultsError } = await supabase
@@ -157,6 +159,7 @@ const useParticipantsRanking = () => {
             console.error('Erro ao buscar resultados do torneio:', realTournamentResultsError);
             throw realTournamentResultsError; 
         }
+        console.log("DEBUG: realTournamentResults:", realTournamentResults); // <--- ADICIONADO
         
         // --- 5. Fetch dos palpites dos usuários das TRES tabelas separadas ---
 
