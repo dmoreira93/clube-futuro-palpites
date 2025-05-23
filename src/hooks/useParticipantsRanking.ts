@@ -90,7 +90,7 @@ type UserForRanking = {
   username: string;
   avatar_url: string | null;
   is_admin: boolean;
-  total_points: number;
+  total_points: number; // Coluna para armazenar o total de pontos do usuário
 };
 
 // Tipo do participante final que será exposto pelo hook
@@ -144,15 +144,22 @@ const useParticipantsRanking = () => {
         }
 
         // 4. Fetch resultados finais do torneio de 'tournament_results'
-        // ATENÇÃO: Confirme se esta tabela tem APENAS UM REGISTRO. Se não, o .single() falhará (erro 406).
-        const { data: realTournamentResults, error: realTournamentResultsError } = await supabase
+        // MUDANÇA AQUI: REMOVIDO O .single()
+        const { data: realTournamentResultsArray, error: realTournamentResultsError } = await supabase
             .from('tournament_results')
-            .select('champion_id, runner_up_id, third_place_id, fourth_place_id, final_home_score, final_away_score')
-            .single();
+            .select('champion_id, runner_up_id, third_place_id, fourth_place_id, final_home_score, final_away_score');
 
-        // PGRST116 significa "no rows found" (nenhum registro encontrado), que é esperado se ainda não houver resultados finais.
-        if (realTournamentResultsError && realTournamentResultsError.code !== 'PGRST116') {
-            throw realTournamentResultsError;
+        // Agora, realTournamentResultsArray será um array (pode ser vazio).
+        // Se o array não estiver vazio, pegue o primeiro (e único esperado) registro.
+        const realTournamentResults: SupabaseTournamentResult | null = 
+          realTournamentResultsArray && realTournamentResultsArray.length > 0
+            ? realTournamentResultsArray[0]
+            : null; // Será null se a tabela estiver vazia
+
+        // Trate erros que não sejam 'nenhum registro encontrado' (PGRST116 não ocorrerá mais aqui diretamente pelo .single())
+        if (realTournamentResultsError) {
+            console.error('Erro ao buscar resultados do torneio:', realTournamentResultsError);
+            throw realTournamentResultsError; 
         }
         
         // --- 5. Fetch dos palpites dos usuários das TRES tabelas separadas ---
@@ -184,11 +191,11 @@ const useParticipantsRanking = () => {
         const userPoints: { [userId: string]: { points: number; matchesCount: number; correctMatches: number } } = {};
         users.forEach((user: SupabaseUserCustom) => {
           if (!user.is_admin) {
-             userPoints[user.id] = { 
-               points: user.total_points, // Usa os pontos já calculados e armazenados no banco
-               matchesCount: 0, 
-               correctMatches: 0 
-             };
+              userPoints[user.id] = { 
+                points: user.total_points, // Usa os pontos já calculados e armazenados no banco
+                matchesCount: 0, 
+                correctMatches: 0 
+              };
           }
         });
 
