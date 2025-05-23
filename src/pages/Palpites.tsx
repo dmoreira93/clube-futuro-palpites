@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { Label } from "@/components/ui/label";
-import { Loader2, Printer } from "lucide-react";
+import { Loader2, Printer, Save } from "lucide-react"; // Adicionado Save icon
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
@@ -35,7 +35,7 @@ interface LocalPrediction {
   match_id: string;
   home_score: string;
   away_score: string;
-  prediction_id?: string;
+  prediction_id?: string; // ID do palpite se já existir no banco
 }
 
 interface GroupPredictionState {
@@ -60,7 +60,7 @@ const Palpites = () => {
   const navigate = useNavigate();
 
   const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
+  // const [submitting, setSubmitting] = useState(false); // Removido, pois o submit em lote foi removido
   const [submittingMatchId, setSubmittingMatchId] = useState<string | null>(null);
 
   const [matches, setMatches] = useState<Match[]>([]);
@@ -204,6 +204,7 @@ const Palpites = () => {
     }));
   }, []);
 
+  // Esta função agora é a ÚNICA forma de salvar/atualizar palpites de partida
   const handleSaveDailyPrediction = async (matchId: string) => {
     if (!user) {
       toast.error("Você precisa estar logado para salvar seu palpite.");
@@ -236,7 +237,7 @@ const Palpites = () => {
       return;
     }
 
-    setSubmittingMatchId(matchId);
+    setSubmittingMatchId(matchId); // Indica que esta partida específica está sendo salva
     try {
       let data, error;
       const payload = {
@@ -246,10 +247,15 @@ const Palpites = () => {
         away_score: awayScoreNum,
       };
 
-      if (prediction.prediction_id) {
+      console.log(`Salvando palpite para match_id: ${matchId}, prediction_id: ${prediction.prediction_id}`);
+      console.log("Payload:", payload);
+
+
+      if (prediction.prediction_id) { // Se já existe um ID, atualiza (UPDATE)
+        console.log("Tentando ATUALIZAR palpite existente com ID:", prediction.prediction_id);
         ({ data, error } = await supabase
           .from('match_predictions')
-          .update({
+          .update({ // Não precisa enviar match_id e user_id no update se não mudam
             home_score: payload.home_score,
             away_score: payload.away_score,
             updated_at: new Date().toISOString(),
@@ -257,118 +263,42 @@ const Palpites = () => {
           .eq('id', prediction.prediction_id)
           .select()
           .single());
-      } else {
+      } else { // Se não existe ID, insere (INSERT)
+        console.log("Tentando INSERIR novo palpite.");
         ({ data, error } = await supabase
           .from('match_predictions')
-          .insert(payload)
+          .insert(payload) // Supabase irá gerar o 'id' (UUID)
           .select()
           .single());
       }
 
-      if (error) throw error;
-
-      if (data) {
-        setDailyPredictions(prev => ({
-          ...prev,
-          [matchId]: { ...prev[matchId], prediction_id: data.id }
-        }));
-      }
-      toast.success("Palpite salvo com sucesso!");
-    } catch (error: any) {
-      console.error("Erro ao salvar palpite:", error);
-      toast.error(`Erro ao salvar palpite: ${error.message || error.toString()}`);
-    } finally {
-      setSubmittingMatchId(null);
-    }
-  };
-
-  const handleSubmitBets = async () => {
-    if (!user) {
-      toast.error("Você precisa estar logado para confirmar os palpites.");
-      return;
-    }
-    setSubmitting(true);
-
-    const predictionsToUpsert = Object.values(dailyPredictions)
-      .filter(p => {
-        const match = matches.find(m => m.id === p.match_id);
-        const canPredict = match && parseISO(match.match_date).getTime() > Date.now();
-        if (!canPredict) return false;
-
-        if (p.prediction_id) return true; // Palpites existentes são incluídos se o prazo não passou
-
-        // Para novos palpites, os scores devem ser válidos
-        const homeScoreNum = parseInt(p.home_score, 10);
-        const awayScoreNum = parseInt(p.away_score, 10);
-        const homeScoreValid = p.home_score.trim() !== "" && !isNaN(homeScoreNum) && homeScoreNum >= 0;
-        const awayScoreValid = p.away_score.trim() !== "" && !isNaN(awayScoreNum) && awayScoreNum >= 0;
-        return homeScoreValid && awayScoreValid;
-      })
-      .map(p => {
-        const homeScoreNum = parseInt(p.home_score, 10);
-        const awayScoreNum = parseInt(p.away_score, 10);
-
-        // Se as colunas no DB forem NOT NULL e um score for inválido (NaN),
-        // precisamos decidir o que enviar. Ex: 0 ou não enviar o palpite.
-        // Aqui, assumimos que o filtro já cuidou dos novos palpites.
-        // Para palpites existentes, se o usuário apagar um score, resultará em NaN.
-        // Se as colunas do DB forem NOT NULL, isso causará erro.
-        // Se forem NULLABLE, JSON.stringify(NaN) vira null, o que pode ser aceitável.
-        
-        // Exemplo de tratamento para scores NaN (ajuste conforme a lógica de negócio e schema do DB):
-        // Se as colunas de score no DB são NOT NULL:
-        const finalHomeScore = isNaN(homeScoreNum) ? (p.prediction_id ? 0 : undefined) : homeScoreNum;
-        const finalAwayScore = isNaN(awayScoreNum) ? (p.prediction_id ? 0 : undefined) : awayScoreNum;
-        
-        // Se um palpite existente ficou com scores inválidos (NaN) e as colunas são NOT NULL,
-        // ou você envia um default (como 0), ou impede o envio (ajustando o filtro),
-        // ou torna as colunas NULLABLE no DB e envia null.
-        if (p.prediction_id && (finalHomeScore === undefined || finalAwayScore === undefined)) {
-            console.warn(`Palpite existente ${p.prediction_id} para partida ${p.match_id} com scores inválidos ('${p.home_score}', '${p.away_score}'). Verifique a lógica ou permita scores nulos no DB.`);
-            // Poderia retornar null aqui e filtrar depois para não enviar este palpite,
-            // ou ajustar a UI para não permitir limpar scores de palpites existentes se eles são NOT NULL.
-        }
-
-
-        return {
-          ...(p.prediction_id && { id: p.prediction_id }),
-          match_id: p.match_id,
-          user_id: user.id,
-          home_score: finalHomeScore,
-          away_score: finalAwayScore,
-        };
-      })
-      // .filter(Boolean); // Adicionar se você retornar null no map para palpites problemáticos
-
-    if (predictionsToUpsert.length === 0) {
-      toast.info("Nenhum palpite válido para salvar/atualizar ou todos os prazos encerraram.");
-      setSubmitting(false);
-      return;
-    }
-    
-    // Log do payload antes de enviar
-    console.log("Payload para upsert (handleSubmitBets):", JSON.stringify(predictionsToUpsert, null, 2));
-
-    try {
-      const { error } = await supabase
-        .from('match_predictions')
-        .upsert(predictionsToUpsert, { onConflict: 'user_id, match_id' });
-
       if (error) {
-        // Log detalhado do erro do Supabase
-        console.error("Erro detalhado do Supabase ao salvar palpites:", error);
+        console.error("Erro detalhado do Supabase (handleSaveDailyPrediction):", error);
         throw error;
       }
 
-      toast.success("Palpites das partidas salvos/atualizados com sucesso!");
-      await fetchInitialData(); // Recarrega os dados, incluindo os prediction_ids atualizados
+      if (data) {
+        // Atualiza o estado local com o prediction_id (se for um novo palpite)
+        // ou confirma que o palpite existente foi processado
+        setDailyPredictions(prev => ({
+          ...prev,
+          [matchId]: { ...prev[matchId], home_score: homeScoreNum.toString(), away_score: awayScoreNum.toString(), prediction_id: data.id }
+        }));
+        toast.success(`Palpite para ${match.home_team?.name} vs ${match.away_team?.name} salvo!`);
+      } else {
+        // Isso não deveria acontecer se não houver erro, mas é uma checagem de segurança
+        toast.warn("Palpite processado, mas não houve retorno de dados do servidor.");
+      }
+      
     } catch (error: any) {
-      console.error("Erro ao salvar palpites das partidas:", error);
-      toast.error(`Erro ao salvar palpites das partidas: ${error.details || error.message || error.toString()}`);
+      console.error("Erro ao salvar palpite (handleSaveDailyPrediction):", error);
+      toast.error(`Erro ao salvar palpite: ${error.details || error.message || error.toString()}`);
     } finally {
-      setSubmitting(false);
+      setSubmittingMatchId(null); // Limpa o indicador de submissão para esta partida
     }
   };
+
+  // Removida a função handleSubmitBets (salvamento em lote para aba de partidas)
 
   const handleSaveGroupPrediction = useCallback(async (groupId: string) => {
     if (!user) {
@@ -388,7 +318,7 @@ const Palpites = () => {
       toast.error("Os times do 1º e 2º lugar não podem ser os mesmos.");
       return;
     }
-    setSubmitting(true);
+    // setSubmitting(true); // Se você tiver um estado de submitting global para grupos/final
     try {
       let data, error;
       const payload = {
@@ -426,9 +356,9 @@ const Palpites = () => {
       console.error("Erro ao salvar palpite de grupo:", error);
       toast.error(`Erro ao salvar palpite de grupo: ${error.message || error.toString()}`);
     } finally {
-      setSubmitting(false);
+      // setSubmitting(false);
     }
-  }, [user, groupPredictions, groups, globalPredictionCutoffDate, fetchInitialData]); // Removido fetchInitialData daqui, pois ele é chamado no useEffect principal
+  }, [user, groupPredictions, groups, globalPredictionCutoffDate]);
 
   const handleSaveFinalPrediction = useCallback(async () => {
     if (!user) {
@@ -457,7 +387,7 @@ const Palpites = () => {
       toast.error("Os times do 1º, 2º, 3º e 4º lugar devem ser diferentes.");
       return;
     }
-    setSubmitting(true);
+    // setSubmitting(true);
     try {
       const payloadToUpsert = {
         user_id: user.id,
@@ -489,9 +419,9 @@ const Palpites = () => {
       console.error("Erro ao salvar palpite final:", error);
       toast.error(`Erro ao salvar palpite final: ${error.message || error.toString()}`);
     } finally {
-      setSubmitting(false);
+      // setSubmitting(false);
     }
-  }, [user, finalPrediction, finalPredictionCutoffDate, fetchInitialData]); // Removido fetchInitialData
+  }, [user, finalPrediction, finalPredictionCutoffDate]);
 
   const handlePrintReceipt = useCallback(() => {
     if (!user) {
@@ -614,6 +544,7 @@ const Palpites = () => {
     }
   }, [user, dailyPredictions, matches, teams, groupPredictions, groups, finalPrediction]);
 
+
   if (loading) {
     return (
       <Layout>
@@ -645,9 +576,8 @@ const Palpites = () => {
               <CardHeader>
                 <CardTitle className="text-xl">Palpites das Partidas</CardTitle>
                 <CardDescription>
-                  Preencha seus placares para cada partida. O prazo para palpitar em uma partida encerra no horário do jogo.
-                  Use o botão "Confirmar Palpites da Aba Partidas" abaixo da lista para salvar todos os seus palpites desta aba.
-                  Se um palpite já foi salvo, um botão "Atualizar" aparecerá ao lado da partida para alterações rápidas.
+                  Preencha seus placares para cada partida e clique em "Salvar Palpite" ou "Atualizar Palpite" individualmente. 
+                  O prazo para palpitar em uma partida encerra no horário do jogo.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -658,6 +588,8 @@ const Palpites = () => {
                     const matchDate = parseISO(match.match_date);
                     const canPredict = matchDate.getTime() > Date.now();
                     const prediction = dailyPredictions[match.id] || { match_id: match.id, home_score: '', away_score: '' };
+                    const isPredictionFilled = prediction.home_score.trim() !== "" && prediction.away_score.trim() !== "";
+
 
                     return (
                       <Card key={match.id} className={`p-4 ${!canPredict ? 'bg-gray-100 opacity-80' : ''}`}>
@@ -678,7 +610,7 @@ const Palpites = () => {
                             placeholder="0"
                             value={prediction.home_score}
                             onChange={(e) => handleScoreChange(match.id, 'home', e.target.value)}
-                            disabled={submitting || submittingMatchId === match.id || !canPredict}
+                            disabled={submittingMatchId === match.id || !canPredict}
                           />
                           <span className="text-xl font-bold">x</span>
                           <Input
@@ -688,16 +620,17 @@ const Palpites = () => {
                             placeholder="0"
                             value={prediction.away_score}
                             onChange={(e) => handleScoreChange(match.id, 'away', e.target.value)}
-                            disabled={submitting || submittingMatchId === match.id || !canPredict}
+                            disabled={submittingMatchId === match.id || !canPredict}
                           />
-                          {prediction.prediction_id && canPredict && (
-                            <Button
-                              className="ml-auto bg-blue-600 hover:bg-blue-700"
-                              onClick={() => handleSaveDailyPrediction(match.id)}
-                              disabled={submittingMatchId === match.id || submitting}
-                            >
-                              {submittingMatchId === match.id ? <Loader2 className="h-4 w-4 animate-spin" /> : "Atualizar"}
-                            </Button>
+                          {canPredict && isPredictionFilled && ( // Mostra o botão Salvar/Atualizar se pode prever e os campos estão preenchidos
+                             <Button
+                               className={`ml-auto ${prediction.prediction_id ? 'bg-blue-600 hover:bg-blue-700' : 'bg-green-600 hover:bg-green-700'}`}
+                               onClick={() => handleSaveDailyPrediction(match.id)}
+                               disabled={submittingMatchId === match.id}
+                             >
+                               {submittingMatchId === match.id ? <Loader2 className="h-4 w-4 animate-spin" /> : (prediction.prediction_id ? "Atualizar" : <Save className="h-4 w-4"/> )}
+                               {!submittingMatchId && !prediction.prediction_id && <span className="ml-1">Salvar</span>}
+                             </Button>
                           )}
                         </div>
                       </Card>
@@ -738,7 +671,7 @@ const Palpites = () => {
                             <Select
                               value={groupPrediction.predicted_first_team_id || ''}
                               onValueChange={(value) => handleGroupTeamChange(group.id, 'first', value)}
-                              disabled={submitting || !canPredictGroup}
+                              disabled={submittingMatchId !== null || !canPredictGroup}
                             >
                               <SelectTrigger id={`first-${group.id}`}>
                                 <SelectValue placeholder="Selecione o 1º lugar" />
@@ -760,7 +693,7 @@ const Palpites = () => {
                             <Select
                               value={groupPrediction.predicted_second_team_id || ''}
                               onValueChange={(value) => handleGroupTeamChange(group.id, 'second', value)}
-                              disabled={submitting || !canPredictGroup}
+                              disabled={submittingMatchId !== null || !canPredictGroup}
                             >
                               <SelectTrigger id={`second-${group.id}`}>
                                 <SelectValue placeholder="Selecione o 2º lugar" />
@@ -781,9 +714,9 @@ const Palpites = () => {
                         <Button
                           className="mt-4 bg-fifa-green hover:bg-green-700"
                           onClick={() => handleSaveGroupPrediction(group.id)}
-                          disabled={submitting || !canPredictGroup}
+                          disabled={submittingMatchId !== null || !canPredictGroup}
                         >
-                          {groupPrediction.prediction_id ? "Atualizar Palpite" : "Salvar Palpite"}
+                           {submittingMatchId === group.id ? <Loader2 className="h-4 w-4 animate-spin" /> : (groupPrediction.prediction_id ? "Atualizar Palpite" : "Salvar Palpite")}
                         </Button>
                       </Card>
                     );
@@ -819,7 +752,7 @@ const Palpites = () => {
                         <Select
                           value={finalPrediction.champion_id || ''}
                           onValueChange={(value) => handleFinalPredictionChange('champion_id', value)}
-                          disabled={submitting || !(finalPredictionCutoffDate.getTime() > Date.now())}
+                          disabled={submittingMatchId !== null || !(finalPredictionCutoffDate.getTime() > Date.now())}
                         >
                           <SelectTrigger id="champion-select"><SelectValue placeholder="Selecione o Campeão" /></SelectTrigger>
                           <SelectContent>{teams.map(team => (<SelectItem key={team.id} value={team.id}><div className="flex items-center">{team.flag_url && <Avatar className="h-5 w-5 mr-2"><AvatarImage src={team.flag_url} /><AvatarFallback>{team.name.substring(0,2)}</AvatarFallback></Avatar>}{team.name}</div></SelectItem>))}</SelectContent>
@@ -830,7 +763,7 @@ const Palpites = () => {
                         <Select
                           value={finalPrediction.vice_champion_id || ''}
                           onValueChange={(value) => handleFinalPredictionChange('vice_champion_id', value)}
-                          disabled={submitting || !(finalPredictionCutoffDate.getTime() > Date.now())}
+                          disabled={submittingMatchId !== null || !(finalPredictionCutoffDate.getTime() > Date.now())}
                         >
                           <SelectTrigger id="vice-champion-select"><SelectValue placeholder="Selecione o Vice-Campeão" /></SelectTrigger>
                           <SelectContent>{teams.map(team => (<SelectItem key={team.id} value={team.id}><div className="flex items-center">{team.flag_url && <Avatar className="h-5 w-5 mr-2"><AvatarImage src={team.flag_url} /><AvatarFallback>{team.name.substring(0,2)}</AvatarFallback></Avatar>}{team.name}</div></SelectItem>))}</SelectContent>
@@ -841,7 +774,7 @@ const Palpites = () => {
                         <Select
                           value={finalPrediction.third_place_id || ''}
                           onValueChange={(value) => handleFinalPredictionChange('third_place_id', value)}
-                          disabled={submitting || !(finalPredictionCutoffDate.getTime() > Date.now())}
+                          disabled={submittingMatchId !== null || !(finalPredictionCutoffDate.getTime() > Date.now())}
                         >
                           <SelectTrigger id="third-place-select"><SelectValue placeholder="Selecione o 3º Lugar" /></SelectTrigger>
                           <SelectContent>{teams.map(team => (<SelectItem key={team.id} value={team.id}><div className="flex items-center">{team.flag_url && <Avatar className="h-5 w-5 mr-2"><AvatarImage src={team.flag_url} /><AvatarFallback>{team.name.substring(0,2)}</AvatarFallback></Avatar>}{team.name}</div></SelectItem>))}</SelectContent>
@@ -852,7 +785,7 @@ const Palpites = () => {
                         <Select
                           value={finalPrediction.fourth_place_id || ''}
                           onValueChange={(value) => handleFinalPredictionChange('fourth_place_id', value)}
-                          disabled={submitting || !(finalPredictionCutoffDate.getTime() > Date.now())}
+                          disabled={submittingMatchId !== null || !(finalPredictionCutoffDate.getTime() > Date.now())}
                         >
                           <SelectTrigger id="fourth-place-select"><SelectValue placeholder="Selecione o 4º Lugar" /></SelectTrigger>
                           <SelectContent>{teams.map(team => (<SelectItem key={team.id} value={team.id}><div className="flex items-center">{team.flag_url && <Avatar className="h-5 w-5 mr-2"><AvatarImage src={team.flag_url} /><AvatarFallback>{team.name.substring(0,2)}</AvatarFallback></Avatar>}{team.name}</div></SelectItem>))}</SelectContent>
@@ -862,17 +795,17 @@ const Palpites = () => {
                     <div className="flex flex-col gap-2">
                       <Label htmlFor="final-score">Placar da Final (Campeão x Vice):</Label>
                       <div className="flex items-center gap-2">
-                        <Input id="final-home-score" type="number" min="0" className="w-24 text-center" placeholder="0" value={finalPrediction.final_home_score === null ? '' : finalPrediction.final_home_score.toString()} onChange={(e) => handleFinalPredictionChange('final_home_score', e.target.value === '' ? null : parseInt(e.target.value))} disabled={submitting || !(finalPredictionCutoffDate.getTime() > Date.now())} />
+                        <Input id="final-home-score" type="number" min="0" className="w-24 text-center" placeholder="0" value={finalPrediction.final_home_score === null ? '' : finalPrediction.final_home_score.toString()} onChange={(e) => handleFinalPredictionChange('final_home_score', e.target.value === '' ? null : parseInt(e.target.value))} disabled={submittingMatchId !== null || !(finalPredictionCutoffDate.getTime() > Date.now())} />
                         <span className="text-xl font-bold">x</span>
-                        <Input id="final-away-score" type="number" min="0" className="w-24 text-center" placeholder="0" value={finalPrediction.final_away_score === null ? '' : finalPrediction.final_away_score.toString()} onChange={(e) => handleFinalPredictionChange('final_away_score', e.target.value === '' ? null : parseInt(e.target.value))} disabled={submitting || !(finalPredictionCutoffDate.getTime() > Date.now())} />
+                        <Input id="final-away-score" type="number" min="0" className="w-24 text-center" placeholder="0" value={finalPrediction.final_away_score === null ? '' : finalPrediction.final_away_score.toString()} onChange={(e) => handleFinalPredictionChange('final_away_score', e.target.value === '' ? null : parseInt(e.target.value))} disabled={submittingMatchId !== null || !(finalPredictionCutoffDate.getTime() > Date.now())} />
                       </div>
                     </div>
                     <Button
                       className="w-full bg-fifa-green hover:bg-green-700"
                       onClick={handleSaveFinalPrediction}
-                      disabled={submitting || !(finalPredictionCutoffDate.getTime() > Date.now())}
+                      disabled={submittingMatchId !== null || !(finalPredictionCutoffDate.getTime() > Date.now())}
                     >
-                      {finalPrediction.prediction_id ? "Atualizar Palpite da Final" : "Salvar Palpite da Final"}
+                      {submittingMatchId === 'final' ? <Loader2 className="h-4 w-4 animate-spin" /> : (finalPrediction.prediction_id ? "Atualizar Palpite da Final" : "Salvar Palpite da Final")}
                     </Button>
                   </div>
                 )}
@@ -882,24 +815,17 @@ const Palpites = () => {
         </Tabs>
         <Card className="mt-6">
           <CardContent className="p-6 space-y-4">
-            <Button
-              className="w-full bg-fifa-blue hover:bg-opacity-90"
-              onClick={handleSubmitBets}
-              disabled={submitting}
-            >
-              {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Confirmar Palpites da Aba Partidas
-            </Button>
+            {/* Botão de submissão em lote removido */}
             <Button
               className="w-full bg-gray-600 hover:bg-gray-700 text-white"
               onClick={handlePrintReceipt}
-              disabled={submitting || !user }
+              disabled={submittingMatchId !== null || !user }
             >
               <Printer className="mr-2 h-4 w-4" />
               Imprimir Comprovante
             </Button>
             <p className="text-sm text-gray-500 text-center">
-              Atenção: O botão "Confirmar Palpites da Aba Partidas" salva todos os seus palpites preenchidos na aba de Partidas. Para Grupos e Final, use os botões "Salvar/Atualizar Palpite" específicos de cada seção.
+              Atenção: Salve cada palpite de partida individualmente. Para Grupos e Final, use os botões "Salvar/Atualizar Palpite" específicos de cada seção.
             </p>
           </CardContent>
         </Card>
