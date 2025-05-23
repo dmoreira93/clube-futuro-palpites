@@ -35,7 +35,7 @@ interface LocalPrediction {
   match_id: string;
   home_score: string;
   away_score: string;
-  prediction_id?: string;
+  prediction_id?: string; // ID do palpite no banco de dados
 }
 
 interface GroupPredictionState {
@@ -60,7 +60,9 @@ const Palpites = () => {
   const navigate = useNavigate();
 
   const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
+  const [submitting, setSubmitting] = useState(false); // Estado de submitting geral
+  const [submittingMatchId, setSubmittingMatchId] = useState<string | null>(null); // Para botões individuais
+
   const [matches, setMatches] = useState<Match[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
   const [groups, setGroups] = useState<{ id: string; name: string }[]>([]);
@@ -234,7 +236,7 @@ const Palpites = () => {
       return;
     }
 
-    setSubmitting(true);
+    setSubmittingMatchId(matchId); // Submitting para este botão específico
     try {
       let data, error;
       const payload = {
@@ -276,16 +278,16 @@ const Palpites = () => {
       console.error("Erro ao salvar palpite:", error);
       toast.error(`Erro ao salvar palpite: ${error.message || error.toString()}`);
     } finally {
-      setSubmitting(false);
+      setSubmittingMatchId(null);
     }
   };
 
-  const handleSubmitBets = async () => {
+  const handleSubmitBets = async () => { // Botão "Confirmar Palpites da Aba Partidas"
     if (!user) {
       toast.error("Você precisa estar logado para confirmar os palpites.");
       return;
     }
-    setSubmitting(true);
+    setSubmitting(true); // Submitting geral para o botão da aba
 
     const predictionsToUpsert = Object.values(dailyPredictions)
       .filter(p => {
@@ -295,14 +297,15 @@ const Palpites = () => {
         const awayScoreValid = p.away_score.trim() !== "" && !isNaN(awayScoreNum) && awayScoreNum >= 0;
         const match = matches.find(m => m.id === p.match_id);
         const canPredict = match && parseISO(match.match_date).getTime() > Date.now();
-        return homeScoreValid && awayScoreValid && canPredict;
+        // Inclui palpites que já têm ID (para atualizar) ou são novos e válidos
+        return (p.prediction_id || (homeScoreValid && awayScoreValid)) && canPredict;
       })
       .map(p => ({
         ...(p.prediction_id && { id: p.prediction_id }),
         match_id: p.match_id,
         user_id: user.id,
-        home_score: parseInt(p.home_score, 10),
-        away_score: parseInt(p.away_score, 10),
+        home_score: parseInt(p.home_score, 10), // Garante que é número
+        away_score: parseInt(p.away_score, 10), // Garante que é número
       }));
 
     if (predictionsToUpsert.length === 0) {
@@ -320,7 +323,7 @@ const Palpites = () => {
 
       toast.success("Palpites das partidas salvos/atualizados com sucesso!");
       await fetchInitialData();
-    } catch (error: any) { // CORREÇÃO: Bloco catch estava com sintaxe errada
+    } catch (error: any) {
       console.error("Erro ao salvar palpites das partidas:", error);
       toast.error(`Erro ao salvar palpites das partidas: ${error.message || error.toString()}`);
     } finally {
@@ -386,7 +389,7 @@ const Palpites = () => {
     } finally {
       setSubmitting(false);
     }
-  }, [user, groupPredictions, groups, globalPredictionCutoffDate, fetchInitialData]); // Adicionado fetchInitialData
+  }, [user, groupPredictions, groups, globalPredictionCutoffDate, fetchInitialData]);
 
   const handleSaveFinalPrediction = useCallback(async () => {
     if (!user) {
@@ -449,7 +452,7 @@ const Palpites = () => {
     } finally {
       setSubmitting(false);
     }
-  }, [user, finalPrediction, finalPredictionCutoffDate, fetchInitialData]); // Adicionado fetchInitialData
+  }, [user, finalPrediction, finalPredictionCutoffDate, fetchInitialData]);
 
   const handlePrintReceipt = useCallback(() => {
     if (!user) {
@@ -465,7 +468,7 @@ const Palpites = () => {
         const homeScoreNum = parseInt(p.home_score, 10);
         const awayScoreNum = parseInt(p.away_score, 10);
 
-        if (isNaN(homeScoreNum) || isNaN(awayScoreNum)) return null;
+        if (p.home_score.trim() === "" || p.away_score.trim() === "" || isNaN(homeScoreNum) || isNaN(awayScoreNum)) return null;
 
         const homeTeamData = teams.find(t => t.id === match.home_team_id);
         const awayTeamData = teams.find(t => t.id === match.away_team_id);
@@ -522,7 +525,7 @@ const Palpites = () => {
 
     const receiptHtml = ReactDOMServer.renderToString(
       <PredictionReceipt
-        user={{ name: user.user_metadata?.full_name || user.email || "Usuário" }}
+        user={user} // Passando o objeto user completo
         predictions={userMatchPredictionsForReceipt as any}
         groupPredictions={userGroupPredictionsForReceipt as any}
         finalPrediction={finalPredictionReceipt as any}
@@ -553,8 +556,7 @@ const Palpites = () => {
     }
   }, [user, dailyPredictions, matches, teams, groupPredictions, groups, finalPrediction]);
 
-  // CONSOLE LOGS PARA DEBUG DO BOTÃO "IMPRIMIR COMPROVANTE"
-  // console.log("DEBUG: User object:", user);
+  // console.log("DEBUG: User object:", user); // Removidos para evitar poluir o console agora que o build passou
   // console.log("DEBUG: Submitting state:", submitting);
 
   if (loading) {
@@ -588,7 +590,9 @@ const Palpites = () => {
               <CardHeader>
                 <CardTitle className="text-xl">Palpites das Partidas</CardTitle>
                 <CardDescription>
-                  Preencha seus placares para cada partida. O prazo para palpitar em uma partida encerra no horário do jogo. Use o botão "Confirmar Palpites da Aba Partidas" abaixo da lista para salvar todos os seus palpites desta aba.
+                  Preencha seus placares para cada partida. O prazo para palpitar em uma partida encerra no horário do jogo.
+                  Use o botão "Confirmar Palpites da Aba Partidas" abaixo da lista para salvar todos os seus palpites desta aba.
+                  Se um palpite já foi salvo, um botão "Atualizar" aparecerá ao lado da partida para alterações rápidas.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -619,7 +623,7 @@ const Palpites = () => {
                             placeholder="0"
                             value={prediction.home_score}
                             onChange={(e) => handleScoreChange(match.id, 'home', e.target.value)}
-                            disabled={submitting || !canPredict}
+                            disabled={submitting || submittingMatchId === match.id || !canPredict}
                           />
                           <span className="text-xl font-bold">x</span>
                           <Input
@@ -629,9 +633,18 @@ const Palpites = () => {
                             placeholder="0"
                             value={prediction.away_score}
                             onChange={(e) => handleScoreChange(match.id, 'away', e.target.value)}
-                            disabled={submitting || !canPredict}
+                            disabled={submitting || submittingMatchId === match.id || !canPredict}
                           />
-                          {/* Botão de salvar individual removido para incentivar o uso do botão de salvar da aba */}
+                          {/* LÓGICA DO BOTÃO INDIVIDUAL: APARECE APENAS SE JÁ EXISTIR UM PALPITE SALVO */}
+                          {prediction.prediction_id && canPredict && (
+                            <Button
+                              className="ml-auto bg-blue-600 hover:bg-blue-700" // Cor diferente para "Atualizar"
+                              onClick={() => handleSaveDailyPrediction(match.id)}
+                              disabled={submittingMatchId === match.id || submitting}
+                            >
+                              {submittingMatchId === match.id ? <Loader2 className="h-4 w-4 animate-spin" /> : "Atualizar"}
+                            </Button>
+                          )}
                         </div>
                       </Card>
                     );

@@ -2,54 +2,50 @@
 import React from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { Match, Team as OriginalTeamType } from '@/types/matches'; // Usando Team de matches
+import { User } from '@supabase/supabase-js'; // Tipo User do Supabase
 
-// Certifique-se de que estes tipos estão corretos de acordo com seus arquivos
-import { Match } from '@/types/matches'; // Assumindo que MatchType tem a estrutura de uma partida
-import { UserType } from '@/contexts/AuthContext';
-
-// --- Tipos de Dados ---
-type Team = {
+// Tipos de Dados para o Comprovante
+type TeamForReceipt = { // Tipo Team usado internamente no comprovante
   id: string;
   name: string;
   flag_url?: string;
 };
 
-// Tipo para um único palpite de partida dentro da lista de palpites do usuário
 type PredictionItem = {
-  match: Match & { home_team: Team; away_team: Team; }; // Match com times carregados
-  home_score_prediction: number;
-  away_score_prediction: number;
+  match: Match & { home_team: TeamForReceipt; away_team: TeamForReceipt; };
+  home_score_prediction: number | null; // Permitir null se não preenchido
+  away_score_prediction: number | null; // Permitir null se não preenchido
 };
 
-// Tipo para um palpite de grupo para o comprovante
 interface ReceiptGroupPredictionItem {
-  id: string;
-  group: { name: string };
-  predicted_first_team: { name: string };
-  predicted_second_team: { name: string };
+  group_name: string; // Alterado de group: {name: string} para simplificar
+  predicted_first_team: TeamForReceipt;
+  predicted_second_team: TeamForReceipt;
 }
 
-// Tipo para um palpite final para o comprovante
 interface ReceiptFinalPredictionItem {
-  id: string;
-  champion: { name: string };
-  runner_up: { name: string };
-  third_place: { name: string };
-  fourth_place: { name: string };
-  // Adicione final_home_score, final_away_score se precisar exibir o placar final real aqui
+  champion: TeamForReceipt;
+  runner_up: TeamForReceipt;
+  third_place: TeamForReceipt;
+  fourth_place: TeamForReceipt;
+  final_home_score: number | null;
+  final_away_score: number | null;
 }
 
-
-// Propriedades que o componente PredictionReceipt receberá
 type PredictionReceiptProps = {
-  user: UserType; // Dados do usuário logado
-  predictions: PredictionItem[]; // Para palpites de partida
-  groupPredictions?: ReceiptGroupPredictionItem[]; // Opcional, para palpites de grupo
-  finalPrediction?: ReceiptFinalPredictionItem; // Opcional, para palpite final
+  user: User | null; // Recebe o objeto User completo do Supabase, ou null
+  predictions: PredictionItem[];
+  groupPredictions?: ReceiptGroupPredictionItem[];
+  finalPrediction?: ReceiptFinalPredictionItem;
   dateGenerated: Date;
 };
 
 const PredictionReceipt = ({ user, predictions, groupPredictions, finalPrediction, dateGenerated }: PredictionReceiptProps) => {
+  // CORREÇÃO: Acessar nome e email do usuário de forma segura
+  const userName = user?.user_metadata?.full_name || user?.email || 'Usuário Anônimo';
+  const userEmail = user?.email || 'Email não disponível';
+
   return (
     <div className="receipt-container p-6 bg-white border border-gray-300 rounded-lg shadow-lg print:shadow-none print:border-0 print:p-0">
       <div className="text-center mb-6">
@@ -62,23 +58,24 @@ const PredictionReceipt = ({ user, predictions, groupPredictions, finalPredictio
 
       <div className="mb-6 border-b pb-4 border-gray-200 print:border-gray-400">
         <h2 className="text-xl font-bold mb-2 text-gray-800 print:text-black">Dados do Apostador:</h2>
-        <p className="text-gray-700 print:text-gray-800"><span className="font-medium">Nome:</span> {user.name}</p>
-        <p className="text-gray-700 print:text-gray-800"><span className="font-medium">Email:</span> {user.email}</p>
+        {/* CORREÇÃO: Usar as variáveis userName e userEmail */}
+        <p className="text-gray-700 print:text-gray-800"><span className="font-medium">Nome:</span> {userName}</p>
+        <p className="text-gray-700 print:text-gray-800"><span className="font-medium">Email:</span> {userEmail}</p>
       </div>
 
       {/* --- Seus Palpites de Partida --- */}
       <h2 className="text-xl font-bold mb-3 text-gray-800 print:text-black">Seus Palpites de Partida:</h2>
-      {predictions.length === 0 ? (
+      {(!predictions || predictions.length === 0) ? (
         <p className="text-gray-600 italic print:text-gray-700 mb-4">Nenhum palpite de partida registrado para este comprovante.</p>
       ) : (
         <div className="space-y-3 mb-6">
-          {predictions.map((p, index) => (
+          {predictions.map((p) => (
             <div key={p.match.id} className="border-b border-gray-200 pb-3 last:border-b-0 print:border-gray-400 print:pb-2">
               <p className="font-semibold text-gray-700 print:text-black">
                 {format(new Date(p.match.match_date), "dd/MM/yyyy HH:mm", { locale: ptBR })} - {p.match.stage}
               </p>
               <p className="text-gray-600 print:text-gray-800 ml-2">
-                <span className="font-medium">{p.match.home_team?.name || 'Time Casa'}</span> {p.home_score_prediction} x {p.away_score_prediction} <span className="font-medium">{p.match.away_team?.name || 'Time Fora'}</span>
+                <span className="font-medium">{p.match.home_team?.name || 'Time Casa'}</span> {p.home_score_prediction !== null ? p.home_score_prediction : '-'} x {p.away_score_prediction !== null ? p.away_score_prediction : '-'} <span className="font-medium">{p.match.away_team?.name || 'Time Fora'}</span>
               </p>
             </div>
           ))}
@@ -90,15 +87,15 @@ const PredictionReceipt = ({ user, predictions, groupPredictions, finalPredictio
       {groupPredictions && groupPredictions.length > 0 ? (
         <div className="space-y-3 mb-6">
           {groupPredictions.map((gp, index) => (
-            <div key={gp.id || index} className="border-b border-gray-200 pb-3 last:border-b-0 print:border-gray-400 print:pb-2">
+            <div key={gp.group_name + index} className="border-b border-gray-200 pb-3 last:border-b-0 print:border-gray-400 print:pb-2">
               <p className="font-semibold text-gray-700 print:text-black">
-                Grupo: {gp.group.name}
+                Grupo: {gp.group_name}
               </p>
               <p className="text-gray-600 print:text-gray-800 ml-2">
-                <span className="font-medium">1º Lugar:</span> {gp.predicted_first_team.name}
+                <span className="font-medium">1º Lugar:</span> {gp.predicted_first_team?.name || 'Não definido'}
               </p>
               <p className="text-gray-600 print:text-gray-800 ml-2">
-                <span className="font-medium">2º Lugar:</span> {gp.predicted_second_team.name}
+                <span className="font-medium">2º Lugar:</span> {gp.predicted_second_team?.name || 'Não definido'}
               </p>
             </div>
           ))}
@@ -109,12 +106,17 @@ const PredictionReceipt = ({ user, predictions, groupPredictions, finalPredictio
 
       {/* --- Seus Palpites da Final --- */}
       <h2 className="text-xl font-bold mb-3 text-gray-800 print:text-black">Seus Palpites da Final:</h2>
-      {finalPrediction ? (
+      {finalPrediction && finalPrediction.champion?.name !== 'Não Definido' ? ( // Verifica se há um campeão definido
         <div className="space-y-3 mb-6">
-          <p className="text-gray-600 print:text-gray-800 ml-2"><span className="font-medium">Campeão:</span> {finalPrediction.champion.name}</p>
-          <p className="text-gray-600 print:text-gray-800 ml-2"><span className="font-medium">Vice-Campeão:</span> {finalPrediction.runner_up.name}</p>
-          <p className="text-gray-600 print:text-gray-800 ml-2"><span className="font-medium">3º Lugar:</span> {finalPrediction.third_place.name}</p>
-          <p className="text-gray-600 print:text-gray-800 ml-2"><span className="font-medium">4º Lugar:</span> {finalPrediction.fourth_place.name}</p>
+          <p className="text-gray-600 print:text-gray-800 ml-2"><span className="font-medium">Campeão:</span> {finalPrediction.champion?.name || 'Não definido'}</p>
+          <p className="text-gray-600 print:text-gray-800 ml-2"><span className="font-medium">Vice-Campeão:</span> {finalPrediction.runner_up?.name || 'Não definido'}</p>
+          <p className="text-gray-600 print:text-gray-800 ml-2"><span className="font-medium">3º Lugar:</span> {finalPrediction.third_place?.name || 'Não definido'}</p>
+          <p className="text-gray-600 print:text-gray-800 ml-2"><span className="font-medium">4º Lugar:</span> {finalPrediction.fourth_place?.name || 'Não definido'}</p>
+           {finalPrediction.final_home_score !== null && finalPrediction.final_away_score !== null && (
+            <p className="text-gray-600 print:text-gray-800 ml-2">
+              <span className="font-medium">Placar da Final (Campeão x Vice):</span> {finalPrediction.final_home_score} x {finalPrediction.final_away_score}
+            </p>
+          )}
         </div>
       ) : (
         <p className="text-gray-600 italic print:text-gray-700 mb-4">Nenhum palpite da fase final registrado para este comprovante.</p>
