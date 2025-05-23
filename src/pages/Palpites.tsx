@@ -25,16 +25,17 @@ import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
-import { Match, Team } from "@/types/matches";
+import { Match, Team } from "@/types/matches"; // Certifique-se de que 'Team' está em '@/types/matches' ou importe de '@/utils/pointsCalculator/types'
 import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import ReactDOMServer from 'react-dom/server';
-import PredictionReceipt from '@/components/home/predictions/PredictionReceipt';
+import ReactDOMServer from 'react-dom/server'; // Importação NECESSÁRIA para renderizar HTML em string
+import PredictionReceipt from '@/components/home/predictions/PredictionReceipt'; // Importar o componente do comprovante
 
+// --- INTERFACES PARA O ESTADO ---
 interface LocalPrediction {
   match_id: string;
-  home_score: string; // Mantemos como string para o input
-  away_score: string; // Mantemos como string para o input
+  home_score: string;
+  away_score: string;
   prediction_id?: string;
 }
 
@@ -48,13 +49,14 @@ interface GroupPredictionState {
 interface FinalPredictionState {
   champion_id: string | null;
   vice_champion_id: string | null;
-  third_place_id: string | null;
-  fourth_place_id: string | null;
+  third_place_id: string | null; // NOVO CAMPO
+  fourth_place_id: string | null; // NOVO CAMPO
   final_home_score: number | null;
   final_away_score: number | null;
   prediction_id?: string;
 }
 
+// --- COMPONENTE PRINCIPAL ---
 const Palpites = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -65,72 +67,82 @@ const Palpites = () => {
   const [teams, setTeams] = useState<Team[]>([]);
   const [groups, setGroups] = useState<{ id: string; name: string }[]>([]);
 
+  // Estados para os palpites
   const [dailyPredictions, setDailyPredictions] = useState<{ [matchId: string]: LocalPrediction }>({});
   const [groupPredictions, setGroupPredictions] = useState<{ [groupId: string]: GroupPredictionState }>({});
   const [finalPrediction, setFinalPrediction] = useState<FinalPredictionState>({
     champion_id: null,
     vice_champion_id: null,
-    third_place_id: null,
-    fourth_place_id: null,
+    third_place_id: null, // Inicializa novo campo
+    fourth_place_id: null, // Inicializa novo campo
     final_home_score: null,
     final_away_score: null,
   });
 
-  const globalPredictionCutoffDate = parseISO("2026-06-12T12:00:00-03:00");
-  const finalPredictionCutoffDate = parseISO("2026-07-01T12:00:00-03:00");
+  // Datas de corte (ajuste conforme a data real do seu bolão)
+  const globalPredictionCutoffDate = parseISO("2026-06-12T12:00:00-03:00"); // Data de início do torneio ou global
+  const finalPredictionCutoffDate = parseISO("2026-07-01T12:00:00-03:00"); // Exemplo: Antes do início da fase final
+
+  // --- FUNÇÕES DE CARREGAMENTO DE DADOS ---
 
   const fetchInitialData = useCallback(async () => {
     setLoading(true);
     try {
+      // 1. Carregar Partidas e Palpites Diários
       const { data: matchesData, error: matchesError } = await supabase
         .from('matches')
         .select('*, home_team:home_team_id(*), away_team:away_team_id(*)')
         .order('match_date', { ascending: true });
+
       if (matchesError) throw matchesError;
-      setMatches(matchesData || []);
+      setMatches(matchesData || []); // Adiciona '|| []' para segurança
 
       if (user) {
         const { data: predictionsData, error: predictionsError } = await supabase
           .from('match_predictions')
           .select('*')
           .eq('user_id', user.id);
+
         if (predictionsError) throw predictionsError;
 
         const loadedPredictions: { [matchId: string]: LocalPrediction } = {};
-        (predictionsData || []).forEach(p => {
+        (predictionsData || []).forEach(p => { // Adiciona '|| []' para segurança
           loadedPredictions[p.match_id] = {
             match_id: p.match_id,
-            home_score: p.home_score !== null ? p.home_score.toString() : '',
-            away_score: p.away_score !== null ? p.away_score.toString() : '',
+            home_score: p.home_score !== null ? p.home_score.toString() : '', // Evita null no toString
+            away_score: p.away_score !== null ? p.away_score.toString() : '', // Evita null no toString
             prediction_id: p.id,
           };
         });
         setDailyPredictions(loadedPredictions);
       }
 
+      // 2. Carregar Times e Grupos
       const { data: teamsData, error: teamsError } = await supabase
         .from('teams')
         .select('*')
         .order('name', { ascending: true });
       if (teamsError) throw teamsError;
-      setTeams(teamsData || []);
+      setTeams(teamsData || []); // Adiciona '|| []' para segurança
 
       const { data: groupsData, error: groupsError } = await supabase
         .from('groups')
         .select('id, name')
         .order('name', { ascending: true });
       if (groupsError) throw groupsError;
-      setGroups(groupsData || []);
+      setGroups(groupsData || []); // Adiciona '|| []' para segurança
 
+      // 3. Carregar Palpites de Grupo
       if (user) {
         const { data: groupPredData, error: groupPredError } = await supabase
           .from('group_predictions')
           .select('*')
           .eq('user_id', user.id);
+
         if (groupPredError) throw groupPredError;
 
         const loadedGroupPredictions: { [groupId: string]: GroupPredictionState } = {};
-        (groupPredData || []).forEach(gp => {
+        (groupPredData || []).forEach(gp => { // Adiciona '|| []' para segurança
           loadedGroupPredictions[gp.group_id] = {
             group_id: gp.group_id,
             predicted_first_team_id: gp.predicted_first_team_id,
@@ -141,6 +153,7 @@ const Palpites = () => {
         setGroupPredictions(loadedGroupPredictions);
       }
 
+      // 4. Carregar Palpites da Final
       if (user) {
         const { data: finalPredData, error: finalPredError } = await supabase
           .from('final_predictions')
@@ -151,6 +164,7 @@ const Palpites = () => {
         if (finalPredError && finalPredError.code !== 'PGRST116') {
           throw finalPredError;
         }
+
         if (finalPredData) {
           setFinalPrediction({
             champion_id: finalPredData.champion_id,
@@ -163,6 +177,7 @@ const Palpites = () => {
           });
         }
       }
+
     } catch (error: any) {
       console.error("Erro ao carregar dados iniciais:", error);
       toast.error("Erro ao carregar dados: " + error.message);
@@ -217,8 +232,8 @@ const Palpites = () => {
     const homeScoreNum = parseInt(prediction.home_score, 10);
     const awayScoreNum = parseInt(prediction.away_score, 10);
 
-    if (isNaN(homeScoreNum) || isNaN(awayScoreNum)) {
-      toast.error("Os placares devem ser números válidos.");
+    if (isNaN(homeScoreNum) || isNaN(awayScoreNum) || homeScoreNum < 0 || awayScoreNum < 0) {
+      toast.error("Os placares devem ser números válidos e não negativos.");
       return;
     }
 
@@ -265,10 +280,12 @@ const Palpites = () => {
 
       if (error) throw error;
 
-      setDailyPredictions(prev => ({
-        ...prev,
-        [matchId]: { ...prev[matchId], prediction_id: data.id }
-      }));
+      if (data) { // Verifica se data não é null
+        setDailyPredictions(prev => ({
+          ...prev,
+          [matchId]: { ...prev[matchId], prediction_id: data.id }
+        }));
+      }
       toast.success("Palpite salvo com sucesso!");
     } catch (error: any) {
       console.error("Erro ao salvar palpite:", error);
@@ -278,8 +295,7 @@ const Palpites = () => {
     }
   };
 
-  // NOVA FUNÇÃO handleSubmitBets (para aba "Partidas")
-  const handleSubmitBets = async () => {
+  const handleSubmitBets = async () => { // Botão "Confirmar Palpites da Aba Partidas"
     if (!user) {
       toast.error("Você precisa estar logado para confirmar os palpites.");
       return;
@@ -288,15 +304,19 @@ const Palpites = () => {
 
     const predictionsToUpsert = Object.values(dailyPredictions)
       .filter(p => {
-        // Validar se os placares não são vazios e podem ser convertidos para números
-        const homeScoreValid = p.home_score !== "" && !isNaN(parseInt(p.home_score, 10));
-        const awayScoreValid = p.away_score !== "" && !isNaN(parseInt(p.away_score, 10));
+        const homeScoreNum = parseInt(p.home_score, 10);
+        const awayScoreNum = parseInt(p.away_score, 10);
+        const homeScoreValid = p.home_score !== "" && !isNaN(homeScoreNum) && homeScoreNum >= 0;
+        const awayScoreValid = p.away_score !== "" && !isNaN(awayScoreNum) && awayScoreNum >= 0;
         const match = matches.find(m => m.id === p.match_id);
         const canPredict = match && parseISO(match.match_date).getTime() > Date.now();
         return homeScoreValid && awayScoreValid && canPredict;
       })
       .map(p => ({
-        id: p.prediction_id, // Para upsert encontrar o registro se existir
+        // Se p.prediction_id existir, inclua-o para que o upsert possa ATUALIZAR.
+        // Se não existir, o upsert fará um INSERT.
+        // A chave de conflito no Supabase deve ser (user_id, match_id).
+        ...(p.prediction_id && { id: p.prediction_id }), 
         match_id: p.match_id,
         user_id: user.id,
         home_score: parseInt(p.home_score, 10),
@@ -304,7 +324,7 @@ const Palpites = () => {
       }));
 
     if (predictionsToUpsert.length === 0) {
-      toast.info("Nenhum palpite válido para salvar ou todos os prazos encerraram.");
+      toast.info("Nenhum palpite válido para salvar/atualizar ou todos os prazos encerraram.");
       setSubmitting(false);
       return;
     }
@@ -312,13 +332,12 @@ const Palpites = () => {
     try {
       const { error } = await supabase
         .from('match_predictions')
-        .upsert(predictionsToUpsert, { onConflict: 'user_id, match_id' }); // Usando 'user_id, match_id' como chave de conflito
+        .upsert(predictionsToUpsert, { onConflict: 'user_id, match_id' });
 
       if (error) throw error;
 
       toast.success("Palpites das partidas salvos/atualizados com sucesso!");
-      // Recarregar os palpites após o salvamento para obter os IDs
-      await fetchInitialData();
+      await fetchInitialData(); // Recarrega os dados para pegar os prediction_ids atualizados
     } catch (error: any) {
       console.error("Erro ao salvar palpites das partidas:", error);
       toast.error(`Erro ao salvar palpites das partidas: ${error.message || error.toString()}`);
@@ -326,7 +345,6 @@ const Palpites = () => {
       setSubmitting(false);
     }
   };
-
 
   const handleSaveGroupPrediction = useCallback(async (groupId: string) => {
     if (!user) {
@@ -372,10 +390,13 @@ const Palpites = () => {
           .select().single());
       }
       if (error) throw error;
-      setGroupPredictions(prev => ({
-        ...prev,
-        [groupId]: { ...prev[groupId], prediction_id: data.id }
-      }));
+      
+      if(data) { // Verifica se data não é null
+        setGroupPredictions(prev => ({
+          ...prev,
+          [groupId]: { ...prev[groupId], prediction_id: data.id }
+        }));
+      }
       toast.success(`Palpite do grupo ${groups.find(g => g.id === groupId)?.name || ''} salvo com sucesso!`);
     } catch (error: any) {
       console.error("Erro ao salvar palpite de grupo:", error);
@@ -396,8 +417,9 @@ const Palpites = () => {
     }
     if (!finalPrediction.champion_id || !finalPrediction.vice_champion_id ||
         !finalPrediction.third_place_id || !finalPrediction.fourth_place_id ||
-        finalPrediction.final_home_score === null || finalPrediction.final_away_score === null) {
-      toast.error("Por favor, preencha todos os campos do palpite da final (Campeão, Vice-Campeão, 3º lugar, 4º lugar e Placar).");
+        finalPrediction.final_home_score === null || finalPrediction.final_away_score === null ||
+        finalPrediction.final_home_score < 0 || finalPrediction.final_away_score < 0 ) { // Verifica placares não negativos
+      toast.error("Por favor, preencha todos os campos do palpite da final (Campeão, Vice-Campeão, 3º lugar, 4º lugar e Placar com valores não negativos).");
       return;
     }
     const finalTeams = [
@@ -413,34 +435,29 @@ const Palpites = () => {
     }
     setSubmitting(true);
     try {
-      // Usaremos upsert para simplificar e evitar chamar a RPC se ela não for estritamente necessária para insert_or_update
-       const payload = {
-        user_id: user.id, // Chave primária/de conflito
+      const payloadToUpsert = {
+        user_id: user.id,
         champion_id: finalPrediction.champion_id,
         vice_champion_id: finalPrediction.vice_champion_id,
         third_place_id: finalPrediction.third_place_id,
         fourth_place_id: finalPrediction.fourth_place_id,
         final_home_score: finalPrediction.final_home_score,
         final_away_score: finalPrediction.final_away_score,
-        prediction_id: finalPrediction.prediction_id, // Inclui o ID se já existir
+        ...(finalPrediction.prediction_id && { id: finalPrediction.prediction_id }) // Adiciona ID se já existir
       };
-      
-      // Se já existe um prediction_id, ele será usado para o upsert encontrar o registro.
-      // Caso contrário, o Supabase tentará inserir com base nas colunas.
-      // A chave de conflito no Supabase para a tabela final_predictions deve ser (user_id).
+
       const { data, error } = await supabase
         .from('final_predictions')
-        .upsert(payload, { onConflict: 'user_id' }) // Assumindo que user_id é a chave de conflito única
+        .upsert(payloadToUpsert, { onConflict: 'user_id' })
         .select()
         .single();
 
-
       if (error) throw error;
       
-      if (data) {
+      if (data) { // Verifica se data não é null
         setFinalPrediction(prev => ({
             ...prev,
-            prediction_id: data.id // Atualiza o ID no estado
+            prediction_id: data.id
         }));
       }
       toast.success("Palpite da final salvo com sucesso!");
@@ -462,39 +479,47 @@ const Palpites = () => {
       .map(p => {
         const match = matches.find(m => m.id === p.match_id);
         if (!match) return null;
-        // Garante que os scores sejam números ou zero se vazios/inválidos
         const homeScore = parseInt(p.home_score, 10);
         const awayScore = parseInt(p.away_score, 10);
         return {
           match: {
-            ...match,
-            home_team: teams.find(t => t.id === match.home_team_id) || {name: 'Time Desconhecido'},
-            away_team: teams.find(t => t.id === match.away_team_id) || {name: 'Time Desconhecido'},
+            id: match.id,
+            match_date: match.match_date,
+            stage: match.stage,
+            home_team: teams.find(t => t.id === match.home_team_id) || { id: `unknown_home_${match.home_team_id}`, name: 'A Definir', flag_url: '' },
+            away_team: teams.find(t => t.id === match.away_team_id) || { id: `unknown_away_${match.away_team_id}`, name: 'A Definir', flag_url: '' },
           },
           home_score_prediction: isNaN(homeScore) ? null : homeScore,
           away_score_prediction: isNaN(awayScore) ? null : awayScore,
         };
-      }).filter(Boolean);
+      }).filter(p => p && p.home_score_prediction !== null && p.away_score_prediction !== null); // Filtra palpites incompletos também
 
     const userGroupPredictionsForReceipt = Object.values(groupPredictions)
+      .filter(gp => gp.predicted_first_team_id && gp.predicted_second_team_id) // Filtra palpites de grupo incompletos
       .map(gp => {
         const group = groups.find(g => g.id === gp.group_id);
         if (!group) return null;
         return {
           group_name: group.name,
-          predicted_first_team: teams.find(t => t.id === gp.predicted_first_team_id) || {name: 'Não definido'},
-          predicted_second_team: teams.find(t => t.id === gp.predicted_second_team_id) || {name: 'Não definido'},
+          predicted_first_team: teams.find(t => t.id === gp.predicted_first_team_id) || { id: `unknown_first_${gp.predicted_first_team_id}`, name: 'Não Definido', flag_url: '' },
+          predicted_second_team: teams.find(t => t.id === gp.predicted_second_team_id) || { id: `unknown_second_${gp.predicted_second_team_id}`, name: 'Não Definido', flag_url: '' },
         };
       }).filter(Boolean);
 
     const finalPredictionReceipt = {
-      champion: teams.find(t => t.id === finalPrediction.champion_id) || {name: 'Não definido'},
-      vice_champion: teams.find(t => t.id === finalPrediction.vice_champion_id) || {name: 'Não definido'},
-      third_place: teams.find(t => t.id === finalPrediction.third_place_id) || {name: 'Não definido'},
-      fourth_place: teams.find(t => t.id === finalPrediction.fourth_place_id) || {name: 'Não definido'},
+      champion: teams.find(t => t.id === finalPrediction.champion_id) || { id: 'unknown_champ', name: 'Não Definido', flag_url: '' },
+      vice_champion: teams.find(t => t.id === finalPrediction.vice_champion_id) || { id: 'unknown_vice', name: 'Não Definido', flag_url: '' },
+      third_place: teams.find(t => t.id === finalPrediction.third_place_id) || { id: 'unknown_third', name: 'Não Definido', flag_url: '' },
+      fourth_place: teams.find(t => t.id === finalPrediction.fourth_place_id) || { id: 'unknown_fourth', name: 'Não Definido', flag_url: '' },
       final_home_score: finalPrediction.final_home_score,
       final_away_score: finalPrediction.final_away_score,
     };
+    
+    // Verifica se há pelo menos um palpite para imprimir
+    if (userMatchPredictionsForReceipt.length === 0 && userGroupPredictionsForReceipt.length === 0 && (!finalPrediction.champion_id || !finalPrediction.vice_champion_id)) {
+        toast.info("Nenhum palpite completo para gerar o comprovante.");
+        return;
+    }
 
     const dateGenerated = new Date();
 
@@ -530,6 +555,10 @@ const Palpites = () => {
       printWindow.print();
     }
   }, [user, dailyPredictions, matches, teams, groupPredictions, groups, finalPrediction]);
+
+  // ADICIONADOS OS CONSOLE.LOGS AQUI:
+  console.log("DEBUG: User object:", user);
+  console.log("DEBUG: Submitting state:", submitting);
 
   if (loading) {
     return (
@@ -578,7 +607,7 @@ const Palpites = () => {
                       <Card key={match.id} className={`p-4 ${!canPredict ? 'bg-gray-100 opacity-80' : ''}`}>
                         <div className="flex justify-between items-center mb-2">
                           <div>
-                            <p className="text-lg font-semibold">{match.home_team?.name || 'A Definir'} vs {match.away_team?.name || 'A Definir'}</p>
+                            <p className="text-lg font-semibold">{(match.home_team as Team)?.name || 'A Definir'} vs {(match.away_team as Team)?.name || 'A Definir'}</p>
                             <p className="text-sm text-gray-600">{format(matchDate, 'dd/MM/yyyy HH:mm', { locale: ptBR })}</p>
                           </div>
                           {!canPredict && (
@@ -792,9 +821,8 @@ const Palpites = () => {
               </CardContent>
             </Card>
           </TabsContent>
-
-          {/* BOTÃO DE CONFIRMAR GERAL E IMPRIMIR FORA DAS ABAS, NO FINAL */}
         </Tabs>
+        {/* BOTÕES DE CONFIRMAR GERAL E IMPRIMIR MOVIDOS PARA FORA DAS ABAS, DENTRO DE UM CARD PRÓPRIO */}
         <Card className="mt-6">
           <CardContent className="p-6 space-y-4">
             <Button
@@ -817,7 +845,7 @@ const Palpites = () => {
               Imprimir Comprovante
             </Button>
             <p className="text-sm text-gray-500 text-center">
-              Atenção: Ao confirmar, os palpites de partidas com prazo encerrado e palpites de grupo/final após o dia {format(globalPredictionCutoffDate, 'dd/MM/yyyy HH:mm', { locale: ptBR })} não serão salvos.
+              Atenção: O botão "Confirmar Palpites da Aba Partidas" salva todos os seus palpites preenchidos na aba de Partidas. Para Grupos e Final, use os botões "Salvar/Atualizar Palpite" específicos de cada seção.
             </p>
           </CardContent>
         </Card>
