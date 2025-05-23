@@ -35,7 +35,7 @@ interface LocalPrediction {
   match_id: string;
   home_score: string;
   away_score: string;
-  prediction_id?: string; // ID do palpite no banco de dados
+  prediction_id?: string;
 }
 
 interface GroupPredictionState {
@@ -60,8 +60,8 @@ const Palpites = () => {
   const navigate = useNavigate();
 
   const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false); // Estado de submitting geral
-  const [submittingMatchId, setSubmittingMatchId] = useState<string | null>(null); // Para botões individuais
+  const [submitting, setSubmitting] = useState(false);
+  const [submittingMatchId, setSubmittingMatchId] = useState<string | null>(null);
 
   const [matches, setMatches] = useState<Match[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
@@ -236,7 +236,7 @@ const Palpites = () => {
       return;
     }
 
-    setSubmittingMatchId(matchId); // Submitting para este botão específico
+    setSubmittingMatchId(matchId);
     try {
       let data, error;
       const payload = {
@@ -282,12 +282,12 @@ const Palpites = () => {
     }
   };
 
-  const handleSubmitBets = async () => { // Botão "Confirmar Palpites da Aba Partidas"
+  const handleSubmitBets = async () => {
     if (!user) {
       toast.error("Você precisa estar logado para confirmar os palpites.");
       return;
     }
-    setSubmitting(true); // Submitting geral para o botão da aba
+    setSubmitting(true);
 
     const predictionsToUpsert = Object.values(dailyPredictions)
       .filter(p => {
@@ -297,15 +297,14 @@ const Palpites = () => {
         const awayScoreValid = p.away_score.trim() !== "" && !isNaN(awayScoreNum) && awayScoreNum >= 0;
         const match = matches.find(m => m.id === p.match_id);
         const canPredict = match && parseISO(match.match_date).getTime() > Date.now();
-        // Inclui palpites que já têm ID (para atualizar) ou são novos e válidos
         return (p.prediction_id || (homeScoreValid && awayScoreValid)) && canPredict;
       })
       .map(p => ({
         ...(p.prediction_id && { id: p.prediction_id }),
         match_id: p.match_id,
         user_id: user.id,
-        home_score: parseInt(p.home_score, 10), // Garante que é número
-        away_score: parseInt(p.away_score, 10), // Garante que é número
+        home_score: parseInt(p.home_score, 10),
+        away_score: parseInt(p.away_score, 10),
       }));
 
     if (predictionsToUpsert.length === 0) {
@@ -460,6 +459,13 @@ const Palpites = () => {
       return;
     }
 
+    // DEBUGGING console.logs para o comprovante
+    console.log("DEBUG Comprovante - Estado dailyPredictions:", JSON.stringify(dailyPredictions, null, 2));
+    console.log("DEBUG Comprovante - Estado groupPredictions:", JSON.stringify(groupPredictions, null, 2));
+    console.log("DEBUG Comprovante - Estado finalPrediction:", JSON.stringify(finalPrediction, null, 2));
+    console.log("DEBUG Comprovante - Lista de Times (primeiros 5 para ver se carregou):", teams.slice(0, 5).map(t => ({id: t.id, name: t.name})));
+
+
     const userMatchPredictionsForReceipt = Object.values(dailyPredictions)
       .map(p => {
         const match = matches.find(m => m.id === p.match_id);
@@ -503,7 +509,8 @@ const Palpites = () => {
       }).filter(Boolean);
 
     const finalChampionData = teams.find(t => t.id === finalPrediction.champion_id);
-    const finalViceChampionData = teams.find(t => t.id === finalPrediction.vice_champion_id);
+    const finalViceChampionData = teams.find(t => t.id === finalPrediction.vice_champion_id); // Esta é a linha chave
+    console.log(`DEBUG Comprovante - Buscando Vice ID: ${finalPrediction.vice_champion_id}, Encontrado:`, finalViceChampionData); // DEBUG ESPECÍFICO
     const finalThirdPlaceData = teams.find(t => t.id === finalPrediction.third_place_id);
     const finalFourthPlaceData = teams.find(t => t.id === finalPrediction.fourth_place_id);
 
@@ -525,7 +532,7 @@ const Palpites = () => {
 
     const receiptHtml = ReactDOMServer.renderToString(
       <PredictionReceipt
-        user={user} // Passando o objeto user completo
+        user={user}
         predictions={userMatchPredictionsForReceipt as any}
         groupPredictions={userGroupPredictionsForReceipt as any}
         finalPrediction={finalPredictionReceipt as any}
@@ -542,7 +549,26 @@ const Palpites = () => {
           <title>Comprovante de Palpites</title>
           <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
           <style>
-            @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } .print-only { display: block !important; } .no-print { display: none !important; } .bg-white, .bg-gray-50 { background-color: #ffffff !important; } .border-gray-200 { border-color: #e5e7eb !important; } } body { font-family: sans-serif; }
+            @media print { 
+              body { 
+                -webkit-print-color-adjust: exact; 
+                print-color-adjust: exact;
+              } 
+              .print-only { display: block !important; } 
+              .no-print { display: none !important; } 
+              .bg-white, .bg-gray-50 { background-color: #ffffff !important; } 
+              .border-gray-200 { border-color: #e5e7eb !important; } 
+            } 
+            body { 
+              font-family: Verdana, sans-serif;
+              font-size: 9pt;
+              margin: 20px;
+            }
+            h1 { font-size: 14pt; font-weight: bold; margin-bottom: 10px; }
+            h2 { font-size: 11pt; font-weight: bold; margin-top: 15px; margin-bottom: 5px; border-bottom: 1px solid #ccc; padding-bottom: 3px;}
+            p { margin-bottom: 4px; line-height: 1.4; }
+            .font-medium { font-weight: 600; }
+            .text-sm { font-size: 8pt; }
           </style>
         </head>
         <body>
@@ -556,7 +582,8 @@ const Palpites = () => {
     }
   }, [user, dailyPredictions, matches, teams, groupPredictions, groups, finalPrediction]);
 
-  // console.log("DEBUG: User object:", user); // Removidos para evitar poluir o console agora que o build passou
+  // Removidos os console.logs daqui para não poluir tanto, já que os de cima são mais específicos para o comprovante
+  // console.log("DEBUG: User object:", user);
   // console.log("DEBUG: Submitting state:", submitting);
 
   if (loading) {
@@ -635,10 +662,9 @@ const Palpites = () => {
                             onChange={(e) => handleScoreChange(match.id, 'away', e.target.value)}
                             disabled={submitting || submittingMatchId === match.id || !canPredict}
                           />
-                          {/* LÓGICA DO BOTÃO INDIVIDUAL: APARECE APENAS SE JÁ EXISTIR UM PALPITE SALVO */}
                           {prediction.prediction_id && canPredict && (
                             <Button
-                              className="ml-auto bg-blue-600 hover:bg-blue-700" // Cor diferente para "Atualizar"
+                              className="ml-auto bg-blue-600 hover:bg-blue-700"
                               onClick={() => handleSaveDailyPrediction(match.id)}
                               disabled={submittingMatchId === match.id || submitting}
                             >
