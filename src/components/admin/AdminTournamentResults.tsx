@@ -15,6 +15,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react"; // Importar Loader2
 import { calculateTournamentFinalPoints } from "@/lib/scoring"; // Importe sua função de pontuação
+import { Badge } from "@/components/ui/badge";
 
 // --- Interfaces para mapear os dados das tabelas ---
 interface Team {
