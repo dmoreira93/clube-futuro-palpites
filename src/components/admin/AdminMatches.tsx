@@ -99,7 +99,7 @@ const AdminMatches = () => {
 
       // 2. **Buscar TODOS os palpites dos usuários para ESTA partida específica**
       const { data: userPredictions, error: fetchPredictionsError } = await supabase
-        .from("predictions")
+        .from("match_predictions")
         .select("user_id, home_score, away_score")
         .eq("match_id", matchId);
 
