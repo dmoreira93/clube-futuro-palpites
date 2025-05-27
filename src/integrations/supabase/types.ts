@@ -131,28 +131,28 @@ export type Database = {
       group_predictions: {
         Row: {
           created_at: string | null
-          first_team_id: string
+          predicted_first_team_id: string
           group_id: string
           id: string
-          second_team_id: string
+          predicted_second_team_id: string
           updated_at: string | null
           user_id: string
         }
         Insert: {
           created_at?: string | null
-          first_team_id: string
+          predicted_first_team_id: string
           group_id: string
           id?: string
-          second_team_id: string
+          predicted_second_team_id: string
           updated_at?: string | null
           user_id: string
         }
         Update: {
           created_at?: string | null
-          first_team_id?: string
+          predicted_first_team_id?: string
           group_id?: string
           id?: string
-          second_team_id?: string
+          predicted_second_team_id?: string
           updated_at?: string | null
           user_id?: string
         }
