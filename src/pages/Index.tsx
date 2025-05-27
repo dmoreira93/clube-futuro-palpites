@@ -5,10 +5,11 @@ import { supabase } from "@/integrations/supabase/client";
 import Layout from "@/components/layout/Layout";
 import RankingTable from "@/components/home/RankingTable";
 import NextMatches from "@/components/home/NextMatches";
-import { DailyPredictions } from "@/components/home/DailyPredictions"; // Certifique-se que a importação está correta
+import { DailyPredictions } from "@/components/home/DailyPredictions";
 import StatsCard from "@/components/home/StatsCard";
 import { Trophy as TrophyIcon, Users, Volleyball as SoccerBallIcon, Flag as FlagIcon } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
+// CORREÇÃO: Adicionado CardHeader à importação
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
 
@@ -120,12 +121,12 @@ const Index = () => {
             {[...Array(4)].map((_, i) => (
               <Card key={i} className="shadow-md">
                 <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <div className="h-4 bg-gray-200 rounded w-3/4"></div>
-                  <div className="h-5 w-5 bg-gray-200 rounded-full"></div>
+                  <div className="h-4 bg-gray-200 rounded w-3/4 animate-pulse"></div>
+                  <div className="h-5 w-5 bg-gray-200 rounded-full animate-pulse"></div>
                 </CardHeader>
                 <CardContent>
-                  <div className="h-8 bg-gray-300 rounded w-1/2 mb-2"></div>
-                  <div className="h-3 bg-gray-200 rounded w-full"></div>
+                  <div className="h-8 bg-gray-300 rounded w-1/2 mb-2 animate-pulse"></div>
+                  <div className="h-3 bg-gray-200 rounded w-full animate-pulse"></div>
                 </CardContent>
               </Card>
             ))}
@@ -146,9 +147,9 @@ const Index = () => {
             />
             <StatsCard
               title="Maior Pontuador"
-              value={`${stats.topScorer.userName} (${stats.topScorer.points} pts)`} // Exibe NOME (PONTOS pts)
+              value={`${stats.topScorer.userName} (${stats.topScorer.points} pts)`}
               icon={<TrophyIcon className="h-5 w-5" />}
-              description="Quem está liderando o bolão" // Descrição atualizada
+              description="Quem está liderando o bolão"
             />
             <StatsCard
               title="Próxima Partida"
@@ -181,8 +182,10 @@ const Index = () => {
 
             <div className="hidden lg:block">
               <Card className="shadow-lg">
-                <CardContent className="p-6">
-                  <h3 className="text-lg font-semibold mb-4 text-fifa-blue">Regras Rápidas</h3>
+                <CardHeader> {/* Adicionado CardHeader para envolver o título */}
+                  <h3 className="text-lg font-semibold text-fifa-blue">Regras Rápidas</h3>
+                </CardHeader>
+                <CardContent className="p-6 pt-2"> {/* Ajustado padding top */}
                   <ul className="space-y-2 text-sm text-gray-700">
                     <li className="flex items-start">
                       <span className="bg-green-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs mr-2.5 mt-0.5 shrink-0">10</span>
