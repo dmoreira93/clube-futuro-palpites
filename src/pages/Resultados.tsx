@@ -1,36 +1,39 @@
+// src/pages/Resultados.tsx
 import { useState, useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query"; // Adicionado useQueryClient
 import { useToast } from "@/components/ui/use-toast";
-import Layout from "@/components/layout/Layout"; // <-- ADICIONADO: Importe o componente Layout
+import Layout from "@/components/layout/Layout";
 import { MatchCard } from "@/components/results/MatchCard";
 import { MatchFilter } from "@/components/results/MatchFilter";
 import { ResultForm } from "@/components/results/ResultForm";
-import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { Match } from "@/types/matches"; // Certifique-se de que Match está importado se for um tipo externo
+import { Match as MatchType } from "@/types/matches"; // Renomeado para evitar conflito
+import { Loader2, AlertTriangle } from "lucide-react"; // Ícones para loading e alerta
+
+// Tipo para os dados retornados pela query, incluindo os nomes dos grupos aninhados
+type FetchedMatch = MatchType & {
+  home_team: { id: string; name: string; flag_url: string | null; group: { name: string } | null } | null;
+  away_team: { id: string; name: string; flag_url: string | null; group: { name: string } | null } | null;
+};
 
 const Resultados = () => {
   const { isAdmin } = useAuth();
   const { toast } = useToast();
-  const [filter, setFilter] = useState("all");
+  const queryClient = useQueryClient(); // Para invalidar a query após submissão
+  const [filter, setFilter] = useState("all"); // Opções: "all", "fase-de-grupos", "A", "B", ...
   const [selectedMatch, setSelectedMatch] = useState<string | null>(null);
 
   const groups = [
-    { id: 'A', text: 'A' },
-    { id: 'B', text: 'B' },
-    { id: 'C', text: 'C' },
-    { id: 'D', text: 'D' },
-    { id: 'E', text: 'E' },
-    { id: 'F', text: 'F' },
-    { id: 'G', text: 'G' },
-    { id: 'H', text: 'H' },
+    { id: 'A', text: 'A' }, { id: 'B', text: 'B' }, { id: 'C', text: 'C' }, { id: 'D', text: 'D' },
+    { id: 'E', text: 'E' }, { id: 'F', text: 'F' }, { id: 'G', text: 'G' }, { id: 'H', text: 'H' },
   ];
 
-  const { data: matches = [], isLoading, error } = useQuery({
-    queryKey: ['matches'],
+  const { data: matches = [], isLoading, error, refetch } = useQuery<FetchedMatch[]>({ // Especificando o tipo aqui
+    queryKey: ['matchesResults'], // Chave de query única para esta tela
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data, error: queryError } = await supabase
         .from('matches')
         .select(`
           id,
@@ -43,18 +46,16 @@ const Resultados = () => {
           away_team_id,
           home_team:home_team_id(id, name, flag_url, group:group_id(name)),
           away_team:away_team_id(id, name, flag_url, group:group_id(name))
-        `) // <--- ALTERADO: Buscando o nome do grupo através da FK
+        `)
+        .not('home_team_id', 'is', null) // Garante que home_team_id não é null
+        .not('away_team_id', 'is', null) // Garante que away_team_id não é null
         .order('match_date', { ascending: true });
 
-      if (error) {
-        console.error("Erro ao buscar partidas:", error.message);
-        throw new Error("Não foi possível carregar as partidas.");
+      if (queryError) {
+        console.error("Erro ao buscar partidas:", queryError.message);
+        throw new Error(queryError.message || "Não foi possível carregar as partidas.");
       }
-      // Ajuste o tipo de retorno para garantir que o 'group' seja reconhecido
-      return data as (Match & {
-        home_team: { name: string; flag_url: string; group: { name: string } } | null;
-        away_team: { name: string; flag_url: string; group: { name: string } } | null;
-      })[] || [];
+      return data as FetchedMatch[] || [];
     },
   });
 
@@ -62,93 +63,110 @@ const Resultados = () => {
     if (error) {
       toast({
         title: "Erro ao carregar partidas",
-        description: "Não foi possível carregar as partidas do banco de dados.",
+        description: error.message || "Não foi possível carregar as partidas do banco de dados.",
         variant: "destructive",
       });
     }
   }, [error, toast]);
 
   const handleSelectMatch = (matchId: string) => {
-    setSelectedMatch(matchId);
+    setSelectedMatch(matchId === selectedMatch ? null : matchId); // Permite deselecionar
   };
 
   const handleFormComplete = () => {
     setSelectedMatch(null);
+    toast({
+      title: "Resultado Atualizado",
+      description: "A lista de partidas será atualizada em breve.",
+    });
+    // Invalida a query para forçar o refetch dos dados e mostrar o resultado atualizado
+    queryClient.invalidateQueries({ queryKey: ['matchesResults'] });
+    // Ou chamar refetch() diretamente, mas invalidateQueries é geralmente preferido
+    // refetch(); 
   };
 
   const filteredMatches = matches.filter((match) => {
+    if (!match.home_team || !match.away_team) return false; // Adicionalmente, garante que os times existem
+
     if (filter === "all") {
       return true;
     }
-    // Verifica se o nome do grupo da equipe da casa (ou de fora) corresponde ao filtro
-    // Acessando o nome do grupo através do relacionamento aninhado
+    if (filter === "fase-de-grupos") {
+      return match.stage === "Fase de Grupos";
+    }
+    // Filtro por grupo específico (A, B, C...)
     return match.home_team?.group?.name === filter || match.away_team?.group?.name === filter;
   });
 
-  const selectedMatchData = matches.find((m) => m.id === selectedMatch) as Match | undefined;
+  const selectedMatchData = matches.find((m) => m.id === selectedMatch);
 
   if (isLoading) {
     return (
-      <Layout> {/* <-- ADICIONADO: Envolvendo com Layout */}
-        <div className="max-w-4xl mx-auto flex justify-center items-center min-h-[400px]">
-          <div className="animate-spin h-8 w-8 border-4 border-fifa-blue border-t-transparent rounded-full"></div>
+      <Layout>
+        <div className="max-w-4xl mx-auto flex justify-center items-center min-h-[calc(100vh-200px)]">
+          <Loader2 className="h-12 w-12 animate-spin text-fifa-blue" />
         </div>
       </Layout>
     );
   }
 
   return (
-    <Layout> {/* <-- ADICIONADO: Envolvendo com Layout */}
-      <div className="max-w-4xl mx-auto px-4 py-8">
+    <Layout>
+      <div className="max-w-5xl mx-auto px-4 py-8"> {/* Aumentado max-w para melhor acomodação */}
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-fifa-blue">Resultados dos Jogos</h1>
-          <p className="text-gray-600 mt-2">
-            Administrador: insira os resultados das partidas para atualizar a pontuação dos participantes
-          </p>
+          <h1 className="text-3xl font-bold text-fifa-blue">Resultados e Gerenciamento</h1>
+          {isAdmin && (
+            <p className="text-gray-600 mt-2">
+              Insira os resultados das partidas para atualizar a pontuação dos participantes.
+            </p>
+          )}
+           {!isAdmin && (
+            <p className="text-gray-600 mt-2">
+              Confira os resultados oficiais das partidas do torneio.
+            </p>
+          )}
         </div>
 
         {isAdmin && (
-          <Alert className="mb-6 bg-amber-50 border-amber-200">
-            <AlertTitle className="text-amber-800">Área restrita</AlertTitle>
-            <AlertDescription className="text-amber-700">
-              Apenas administradores podem inserir resultados. Os participantes devem aguardar a atualização oficial.
-              <strong className="block mt-2">
-                Ao registrar um resultado, o sistema calculará automaticamente os pontos dos participantes conforme os critérios estabelecidos.
-              </strong>
+          <Alert className="mb-6 bg-amber-50 border-amber-300 text-amber-800">
+            <AlertTriangle className="h-5 w-5 text-amber-600" />
+            <AlertTitle className="font-semibold">Área de Administração</AlertTitle>
+            <AlertDescription>
+              As alterações aqui impactam diretamente os resultados e pontuações.
+              Ao registrar um resultado, o sistema calculará automaticamente os pontos.
             </AlertDescription>
           </Alert>
         )}
 
         <MatchFilter value={filter} onValueChange={setFilter} groups={groups} />
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
-          {filteredMatches.length === 0 ? (
-            <div className="col-span-2 text-center py-12 bg-gray-50 rounded-md">
-              <p className="text-gray-500">Nenhuma partida encontrada para este filtro.</p>
+        {/* Formulário de resultado aparece acima da lista se uma partida estiver selecionada */}
+        {isAdmin && selectedMatch && selectedMatchData && (
+          <div className="mb-8">
+            <ResultForm match={selectedMatchData} onComplete={handleFormComplete} />
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8"> {/* Aumentado o gap */}
+          {filteredMatches.length === 0 && !isLoading ? (
+            <div className="col-span-full text-center py-12 bg-gray-50 rounded-lg shadow">
+              <SoccerBallIcon className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+              <p className="text-xl font-semibold text-gray-700">Nenhuma partida encontrada.</p>
+              <p className="text-gray-500">
+                Verifique os filtros ou aguarde novas partidas serem cadastradas.
+              </p>
             </div>
           ) : (
-            (filteredMatches as any[]).map((match) => (
+            filteredMatches.map((match) => (
               <MatchCard
                 key={match.id}
-                id={match.id}
-                homeTeam={match.home_team?.name || ""}
-                awayTeam={match.away_team?.name || ""}
-                date={match.match_date ? new Date(match.match_date).toISOString() : ""}
-                time={match.match_date ? new Date(match.match_date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ""}
-                group={match.home_team?.group ? { name: match.home_team.group.name } : undefined}
-                homeTeamFlag={match.home_team?.flag_url || ""}
-                awayTeamFlag={match.away_team?.flag_url || ""}
-                stage={match.stage || ""}
+                match={match} // Passa o objeto match inteiro
                 selected={selectedMatch === match.id}
-                onClick={isAdmin ? handleSelectMatch : undefined}
+                onClick={isAdmin ? handleSelectMatch : undefined} // Só permite click para admin
               />
             ))
           )}
         </div>
-
-        {selectedMatch && isAdmin && (
-          <ResultForm match={selectedMatchData} onComplete={handleFormComplete} />
-        )}
       </div>
     </Layout>
   );

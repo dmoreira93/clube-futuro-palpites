@@ -1,33 +1,30 @@
 // src/components/results/MatchCard.tsx
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Volleyball as SoccerBallIcon } from "lucide-react";
+import { CalendarDays, ShieldCheck, Star, Loader2 } from "lucide-react"; // Ícones atualizados
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import { Match as MatchType } from "@/types/matches"; // Tipo original da partida
 
+// Tipo para os dados da partida que o card espera, incluindo times aninhados
 type MatchCardProps = {
-  id: string;
-  homeTeam: string;
-  awayTeam: string;
-  date: string; // ISO string expected
-  stage: string;
-  time?: string; // This prop is actually passed in `Resultados.tsx` as `new Date(match.match_date).toLocaleTimeString`
-  group?: { name: string };
+  match: MatchType & { // Estende o tipo original
+    home_team: { name: string; flag_url?: string | null } | null;
+    away_team: { name: string; flag_url?: string | null } | null;
+    // Adicione home_score e away_score aqui se não estiverem no MatchType original
+    home_score?: number | null;
+    away_score?: number | null;
+  };
   selected: boolean;
   onClick?: (id: string) => void;
-  homeTeamFlag?: string;
-  awayTeamFlag?: string;
-  homeScore?: number | null; // Adicionado para exibir o placar
-  awayScore?: number | null; // Adicionado para exibir o placar
 };
 
 const formatDate = (dateStr: string) => {
   try {
     return format(new Date(dateStr), "dd/MM/yyyy", { locale: ptBR });
   } catch (e) {
-    // Se a data for inválida, retorna a string original ou uma string vazia
-    console.error("Erro ao formatar data:", dateStr, e);
-    return dateStr;
+    console.warn("Erro ao formatar data:", dateStr, e);
+    return "Data inválida";
   }
 };
 
@@ -35,91 +32,97 @@ const formatTime = (dateStr: string) => {
   try {
     return format(new Date(dateStr), "HH:mm", { locale: ptBR });
   } catch (e) {
-    // Se a data for inválida, retorna uma string vazia
-    console.error("Erro ao formatar hora:", dateStr, e);
-    return "";
+    console.warn("Erro ao formatar hora:", dateStr, e);
+    return "--:--";
   }
 };
 
-export const MatchCard = ({
-  id,
-  homeTeam,
-  awayTeam,
-  date,
-  stage,
-  time, // 'time' is received, but 'formatTime(date)' is also used directly below.
-  group,
-  selected,
-  onClick,
-  homeTeamFlag,
-  awayTeamFlag,
-  homeScore, // Score prop
-  awayScore, // Score prop
-}: MatchCardProps) => {
+export const MatchCard = ({ match, selected, onClick }: MatchCardProps) => {
   const handleClick = () => {
-    if (onClick) onClick(id);
+    if (onClick) onClick(match.id);
   };
 
-  // Determina se a partida terminou para exibir o placar ou "vs"
-  const isMatchFinished = homeScore !== null && awayScore !== null;
+  const isMatchFinished = match.is_finished && match.home_score !== null && match.away_score !== null;
+  const homeTeamName = match.home_team?.name || "A definir";
+  const awayTeamName = match.away_team?.name || "A definir";
+  const homeTeamFlag = match.home_team?.flag_url;
+  const awayTeamFlag = match.away_team?.flag_url;
 
   return (
     <Card
-      className={`shadow-md hover:shadow-lg transition-shadow duration-300 ${
-        selected ? "border-2 border-fifa-blue" : ""
-      } ${onClick ? "cursor-pointer" : ""}`}
+      className={`shadow-lg hover:shadow-xl transition-all duration-300 rounded-xl overflow-hidden ${
+        selected ? "ring-2 ring-fifa-blue ring-offset-2" : "border-gray-200"
+      } ${onClick ? "cursor-pointer" : "cursor-default"}`}
       onClick={handleClick}
     >
-      <CardHeader className="flex flex-row items-center justify-between pb-2">
-        <div className="flex flex-col">
-          <CardTitle className="text-sm font-medium">
-            {formatDate(date)}
-          </CardTitle>
-          <CardDescription className="text-xs text-muted-foreground">
-            {formatTime(date)} {stage && <span className="ml-2">• {stage}</span>}
-            {group && <span className="ml-2">• Grupo {group.name}</span>}
-          </CardDescription>
-        </div>
-        <SoccerBallIcon className="h-5 w-5 text-fifa-blue" />
-      </CardHeader>
-      <CardContent>
+      <CardHeader className="p-4 bg-gradient-to-r from-fifa-blue to-fifa-green text-white">
         <div className="flex justify-between items-center">
-          <div className="flex items-center gap-2 w-2/5">
-            <div className="w-6 h-6 flex justify-center flex-shrink-0"> {/* Adicionado flex-shrink-0 */}
-              <Avatar className="h-6 w-6">
-                {homeTeamFlag ? (
-                  <AvatarImage src={homeTeamFlag} alt={homeTeam} />
-                ) : (
-                  <AvatarFallback className="text-xs">{homeTeam.substring(0, 2)}</AvatarFallback>
-                )}
-              </Avatar>
-            </div>
-            <span className="font-semibold truncate">{homeTeam}</span>
+          <CardTitle className="text-base font-semibold truncate">
+            {match.stage}
+          </CardTitle>
+          {isMatchFinished ? (
+            <ShieldCheck className="h-5 w-5 text-green-300" />
+          ) : (
+            <CalendarDays className="h-5 w-5 text-blue-200" />
+          )}
+        </div>
+        <CardDescription className="text-xs text-blue-100">
+          {formatDate(match.match_date)} às {formatTime(match.match_date)}
+          {match.stadium && <span className="block text-xs truncate">Estádio: {match.stadium}</span>}
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="p-4 md:p-5">
+        <div className="flex items-center justify-around">
+          {/* Time da Casa */}
+          <div className="flex flex-col items-center w-2/5 text-center">
+            <Avatar className="h-10 w-10 md:h-12 md:w-12 mb-2 border-2 border-gray-200">
+              {homeTeamFlag ? (
+                <AvatarImage src={homeTeamFlag} alt={homeTeamName} />
+              ) : (
+                <AvatarFallback className="text-sm bg-gray-200 text-gray-600">
+                  {homeTeamName.substring(0, 2).toUpperCase()}
+                </AvatarFallback>
+              )}
+            </Avatar>
+            <span className="font-medium text-sm md:text-base text-gray-800 truncate max-w-full">{homeTeamName}</span>
           </div>
 
-          {isMatchFinished ? (
-            <div className="mx-3 px-4 py-1 bg-fifa-blue text-white rounded-lg font-bold text-lg flex items-center justify-center min-w-[70px]"> {/* Adjusted width */}
-              {homeScore} - {awayScore}
-            </div>
-          ) : (
-            <div className="mx-3 px-4 py-1 bg-gray-100 rounded-lg font-bold text-center min-w-[70px]"> {/* Adjusted width */}
-              vs
-            </div>
-          )}
-          
-          <div className="flex items-center gap-2 justify-end w-2/5">
-            <span className="font-semibold truncate">{awayTeam}</span>
-            <div className="w-6 h-6 flex justify-center flex-shrink-0"> {/* Adicionado flex-shrink-0 */}
-              <Avatar className="h-6 w-6">
-                {awayTeamFlag ? (
-                  <AvatarImage src={awayTeamFlag} alt={awayTeam} />
-                ) : (
-                  <AvatarFallback className="text-xs">{awayTeam.substring(0, 2)}</AvatarFallback>
-                )}
-              </Avatar>
-            </div>
+          {/* Placar ou VS */}
+          <div className="flex flex-col items-center justify-center px-2">
+            {isMatchFinished ? (
+              <div className="text-2xl md:text-3xl font-bold text-fifa-blue tabular-nums">
+                <span>{match.home_score}</span>
+                <span className="mx-1 md:mx-2">-</span>
+                <span>{match.away_score}</span>
+              </div>
+            ) : (
+              <div className="text-xl md:text-2xl font-semibold text-gray-400">VS</div>
+            )}
+            {match.is_finished && !isMatchFinished && ( // Caso is_finished seja true mas placares sejam null
+                <Loader2 className="h-5 w-5 animate-spin text-gray-400 mt-1"/>
+            )}
+          </div>
+
+          {/* Time Visitante */}
+          <div className="flex flex-col items-center w-2/5 text-center">
+            <Avatar className="h-10 w-10 md:h-12 md:w-12 mb-2 border-2 border-gray-200">
+              {awayTeamFlag ? (
+                <AvatarImage src={awayTeamFlag} alt={awayTeamName} />
+              ) : (
+                <AvatarFallback className="text-sm bg-gray-200 text-gray-600">
+                  {awayTeamName.substring(0, 2).toUpperCase()}
+                </AvatarFallback>
+              )}
+            </Avatar>
+            <span className="font-medium text-sm md:text-base text-gray-800 truncate max-w-full">{awayTeamName}</span>
           </div>
         </div>
+         {selected && onClick && ( // Pequena indicação de que o card está selecionado para edição (se clicável)
+          <div className="text-center mt-3">
+            <Star className="h-4 w-4 text-yellow-400 inline-block" />
+            <span className="text-xs text-gray-500 ml-1">Selecionado para edição</span>
+          </div>
+        )}
       </CardContent>
     </Card>
   );

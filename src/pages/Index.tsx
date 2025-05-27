@@ -5,10 +5,9 @@ import { supabase } from "@/integrations/supabase/client";
 import Layout from "@/components/layout/Layout";
 import RankingTable from "@/components/home/RankingTable";
 import NextMatches from "@/components/home/NextMatches";
-import { DailyPredictions } from "@/components/home/DailyPredictions";
+// import { DailyPredictions } from "@/components/home/DailyPredictions"; // Comentado se não usado/ajustado
 import StatsCard from "@/components/home/StatsCard";
 import { Trophy as TrophyIcon, Users, Volleyball as SoccerBallIcon, Flag as FlagIcon } from "lucide-react";
-// CORREÇÃO: Adicionado CardHeader à importação
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
@@ -16,11 +15,11 @@ import { Link } from "react-router-dom";
 const Index = () => {
   const [stats, setStats] = useState({
     totalUsers: 0,
-    matchesPlayed: 0, // Partidas da fase de grupos finalizadas
-    totalMatches: 0,  // Total de partidas da fase de grupos
-    topScorer: { // Alterado de topScore para topScorer para clareza
+    matchesPlayed: 0,
+    totalMatches: 0,
+    topScorer: {
       points: 0,
-      userName: "Ninguém", // Valor padrão
+      userName: "Ninguém",
     },
     nextMatch: {
       date: "",
@@ -33,14 +32,12 @@ const Index = () => {
     const fetchStats = async () => {
       setLoadingStats(true);
       try {
-        // Contar usuários (excluindo administradores)
         const { count: userCount, error: userCountError } = await supabase
           .from('users_custom')
           .select('*', { count: 'exact', head: true })
           .eq('is_admin', false);
         if (userCountError) throw userCountError;
 
-        // Contar partidas finalizadas APENAS da fase de grupos
         const { count: finishedGroupStageMatchCount, error: finishedMatchCountError } = await supabase
           .from('matches')
           .select('*', { count: 'exact', head: true })
@@ -48,7 +45,6 @@ const Index = () => {
           .eq('stage', 'Fase de Grupos');
         if (finishedMatchCountError) throw finishedMatchCountError;
 
-        // Contar total de partidas APENAS da fase de grupos
         const { count: totalGroupStageMatchCount, error: totalMatchCountError } = await supabase
           .from('matches')
           .select('*', { count: 'exact', head: true })
@@ -56,25 +52,51 @@ const Index = () => {
         if (totalMatchCountError) throw totalMatchCountError;
 
         // Buscar o participante com a maior pontuação (não admin)
+        // Ordenar por total_points DESC, tratando NULLS como os menores (colocando-os por último na ordem DESC)
         const { data: topUserData, error: topUserError } = await supabase
           .from('users_custom')
           .select('name, total_points')
-          .eq('is_admin', false) // Excluir administradores
-          .order('total_points', { ascending: false })
+          .eq('is_admin', false)
+          // Garante que usuários com pontos apareçam primeiro, e NULLs por último.
+          // Para Supabase JS v2, nullsLast é o padrão para DESC, mas ser explícito pode ajudar em algumas DBs.
+          // Se total_points for NULL, queremos que ele seja tratado como menor que 0.
+          // Uma forma é filtrar por total_points IS NOT NULL, ou confiar na ordenação padrão de NULLS LAST para DESC.
+          // Vamos primeiro tentar garantir que apenas usuários com pontuação > 0 sejam considerados,
+          // ou se todos tiverem 0, que pegue um deles.
+          .order('total_points', { ascending: false, nullsLast: true })
           .limit(1)
-          .maybeSingle(); // Use maybeSingle para tratar o caso de não haver usuários
+          .maybeSingle();
 
         let topScorerData = { points: 0, userName: "Ninguém" };
-        if (topUserError && topUserError.code !== 'PGRST116') { // PGRST116: No rows found, não é um erro crítico aqui
-          console.error("Erro ao buscar maior pontuador:", topUserError);
+        if (topUserError && topUserError.code !== 'PGRST116') {
+          console.error("Erro ao buscar maior pontuador:", topUserError.message);
         } else if (topUserData) {
-          topScorerData = {
-            points: topUserData.total_points || 0,
-            userName: topUserData.name || "Desconhecido",
-          };
+          // Se total_points for null ou undefined, userData.total_points || 0 garante que points seja 0.
+          // Apenas considera como pontuador se os pontos forem maiores que 0,
+          // ou se for o único usuário e tiver 0 pontos.
+          if (topUserData.total_points !== null && topUserData.total_points > 0) {
+            topScorerData = {
+              points: topUserData.total_points,
+              userName: topUserData.name || "Desconhecido",
+            };
+          } else if (topUserData.total_points === 0) {
+             // Se o "maior" pontuador tem 0 pontos, ainda o exibimos.
+             // Se o valor padrão "Ninguém" é mantido, é porque não há usuários com pontos > 0
+             // e o .maybeSingle() retornou um usuário com 0 ou null pontos,
+             // ou não retornou nenhum usuário não-admin.
+            topScorerData = {
+                points: 0,
+                userName: topUserData.name || "Desconhecido",
+            }
+          }
+          // Se topUserData.total_points for null, e for o único retornado,
+          // a lógica de `points: topUserData.total_points || 0` resultaria em 0 pontos.
+          // Se topScorerData permanecer como { points: 0, userName: "Ninguém" },
+          // isso acontecerá se topUserData for null ou se o usuário encontrado tiver total_points null
+          // e não cair nas condições acima.
         }
 
-        // Buscar próxima partida
+
         const { data: nextMatchData, error: nextMatchError } = await supabase
           .from('matches')
           .select(`match_date, home_team:home_team_id(name), away_team:away_team_id(name)`)
@@ -100,9 +122,12 @@ const Index = () => {
           topScorer: topScorerData,
           nextMatch: nextMatchInfo,
         });
-      } catch (error) {
-        console.error("Erro ao buscar estatísticas:", error);
-        // Você pode querer definir um estado de erro aqui para exibir na UI
+      } catch (error: any) {
+        console.error("Erro ao buscar estatísticas:", error.message);
+        setStats(prevStats => ({
+            ...prevStats,
+            topScorer: { points: 0, userName: "Erro ao carregar" }
+        }));
       } finally {
         setLoadingStats(false);
       }
@@ -111,6 +136,7 @@ const Index = () => {
     fetchStats();
   }, []);
 
+  // O restante do componente permanece o mesmo...
   return (
     <Layout>
       <div className="container mx-auto px-4 py-8">
@@ -143,7 +169,7 @@ const Index = () => {
               title="Partidas da Fase de Grupos"
               value={`${stats.matchesPlayed} / ${stats.totalMatches}`}
               icon={<SoccerBallIcon className="h-5 w-5" />}
-              description="Jogos da fase de grupos com resultados"
+              description="Jogos da fase de Grupos com resultados"
             />
             <StatsCard
               title="Maior Pontuador"
@@ -174,18 +200,14 @@ const Index = () => {
           </div>
           <div className="lg:col-span-1 flex flex-col gap-8">
             <NextMatches />
-            {/* O componente DailyPredictions parece precisar de props que não estão sendo passadas aqui.
-              Se ele for para a página inicial, precisará buscar seus próprios dados ou receber via props.
-              Por enquanto, vou comentá-lo para evitar erros, mas você precisará ajustá-lo se quiser usá-lo aqui.
-            */}
             {/* <DailyPredictions matches={[]} matchPredictions={[]} onMatchPredictionsChange={() => {}} /> */}
 
             <div className="hidden lg:block">
               <Card className="shadow-lg">
-                <CardHeader> {/* Adicionado CardHeader para envolver o título */}
+                <CardHeader>
                   <h3 className="text-lg font-semibold text-fifa-blue">Regras Rápidas</h3>
                 </CardHeader>
-                <CardContent className="p-6 pt-2"> {/* Ajustado padding top */}
+                <CardContent className="p-6 pt-2">
                   <ul className="space-y-2 text-sm text-gray-700">
                     <li className="flex items-start">
                       <span className="bg-green-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs mr-2.5 mt-0.5 shrink-0">10</span>
