@@ -29,7 +29,7 @@ export interface MatchResult {
  */
 export interface TournamentFinalPredictions {
   champion: string;
-  runnerUp: string;
+  runnerUp: string; // No código do frontend/lógica, você pode usar runnerUp
   thirdPlace: string;
   fourthPlace: string;
   finalScore: {
@@ -43,7 +43,7 @@ export interface TournamentFinalPredictions {
  */
 export interface TournamentFinalResults {
   champion: string;
-  runnerUp: string;
+  runnerUp: string; // No código do frontend/lógica, você pode usar runnerUp
   thirdPlace: string;
   fourthPlace: string;
   finalScore: {
@@ -77,86 +77,157 @@ export type Database = {
           email: string
           id: string
           name: string
-          password: string
+          password_hash: string // Assumindo que armazena hash e não a senha em texto
         }
         Insert: {
           created_at?: string
           email: string
           id?: string
           name: string
-          password: string
+          password_hash: string
         }
         Update: {
           created_at?: string
           email?: string
           id?: string
           name?: string
-          password?: string
+          password_hash?: string
         }
         Relationships: []
       }
       final_predictions: {
         Row: {
-          champion_id: string
+          champion_id: string | null // Permitindo null se ainda não palpitado
           created_at: string | null
-          fourth_place_id: string
+          fourth_place_id: string | null // Permitindo null
           id: string
-          third_place_id: string
+          third_place_id: string | null // Permitindo null
           updated_at: string | null
           user_id: string
-          vice_champion_id: string
+          vice_champion_id: string | null // Permitindo null (use este nome se for o da coluna no DB)
+          final_home_score: number | null // Placar da final
+          final_away_score: number | null // Placar da final
         }
         Insert: {
-          champion_id: string
+          champion_id?: string | null
           created_at?: string | null
-          fourth_place_id: string
+          fourth_place_id?: string | null
           id?: string
-          third_place_id: string
+          third_place_id?: string | null
           updated_at?: string | null
           user_id: string
-          vice_champion_id: string
+          vice_champion_id?: string | null
+          final_home_score?: number | null
+          final_away_score?: number | null
         }
         Update: {
-          champion_id?: string
+          champion_id?: string | null
           created_at?: string | null
-          fourth_place_id?: string
+          fourth_place_id?: string | null
           id?: string
-          third_place_id?: string
+          third_place_id?: string | null
           updated_at?: string | null
           user_id?: string
-          vice_champion_id?: string
+          vice_champion_id?: string | null
+          final_home_score?: number | null
+          final_away_score?: number | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "final_predictions_champion_id_fkey"
+            columns: ["champion_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "final_predictions_fourth_place_id_fkey"
+            columns: ["fourth_place_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "final_predictions_third_place_id_fkey"
+            columns: ["third_place_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "final_predictions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false // Geralmente um usuário tem uma predição final
+            referencedRelation: "users_custom" // ou auth.users se user_id for o auth.uid()
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "final_predictions_vice_champion_id_fkey"
+            columns: ["vice_champion_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          }
+        ]
       }
       group_predictions: {
         Row: {
           created_at: string | null
-          predicted_first_team_id: string
+          predicted_first_team_id: string | null // ATUALIZADO (era first_team_id) e permitindo null
           group_id: string
           id: string
-          predicted_second_team_id: string
+          predicted_second_team_id: string | null // ATUALIZADO (era second_team_id) e permitindo null
           updated_at: string | null
           user_id: string
         }
         Insert: {
           created_at?: string | null
-          predicted_first_team_id: string
+          predicted_first_team_id?: string | null
           group_id: string
           id?: string
-          predicted_second_team_id: string
+          predicted_second_team_id?: string | null
           updated_at?: string | null
           user_id: string
         }
         Update: {
           created_at?: string | null
-          predicted_first_team_id?: string
+          predicted_first_team_id?: string | null
           group_id?: string
           id?: string
-          predicted_second_team_id?: string
+          predicted_second_team_id?: string | null
           updated_at?: string | null
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "group_predictions_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "group_predictions_predicted_first_team_id_fkey"
+            columns: ["predicted_first_team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "group_predictions_predicted_second_team_id_fkey"
+            columns: ["predicted_second_team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "group_predictions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users_custom" // ou auth.users
+            referencedColumns: ["id"]
+          }
+        ]
       }
       groups: {
         Row: {
@@ -188,7 +259,7 @@ export type Database = {
           match_date: string
           stadium: string | null
           stage: string
-          updated_at: string
+          updated_at: string | null // Permitindo null
         }
         Insert: {
           away_score?: number | null
@@ -201,7 +272,7 @@ export type Database = {
           match_date: string
           stadium?: string | null
           stage: string
-          updated_at?: string
+          updated_at?: string | null
         }
         Update: {
           away_score?: number | null
@@ -214,7 +285,7 @@ export type Database = {
           match_date?: string
           stadium?: string | null
           stage?: string
-          updated_at?: string
+          updated_at?: string | null
         }
         Relationships: [
           {
@@ -230,17 +301,17 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "teams"
             referencedColumns: ["id"]
-          },
+          }
         ]
       }
-      predictions: {
+      match_predictions: { // Nome da tabela de palpites de partida (era 'predictions' no seu tipo antigo)
         Row: {
           away_score: number
           created_at: string
           home_score: number
           id: string
           match_id: string
-          updated_at: string
+          updated_at: string | null
           user_id: string
         }
         Insert: {
@@ -249,7 +320,7 @@ export type Database = {
           home_score: number
           id?: string
           match_id: string
-          updated_at?: string
+          updated_at?: string | null
           user_id: string
         }
         Update: {
@@ -258,10 +329,25 @@ export type Database = {
           home_score?: number
           id?: string
           match_id?: string
-          updated_at?: string
+          updated_at?: string | null
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "match_predictions_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "matches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "match_predictions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users_custom" // ou auth.users
+            referencedColumns: ["id"]
+          }
+        ]
       }
       scoring_criteria: {
         Row: {
@@ -270,7 +356,7 @@ export type Database = {
           id: string
           name: string
           points: number
-          updated_at: string
+          updated_at: string | null
         }
         Insert: {
           created_at?: string
@@ -278,7 +364,7 @@ export type Database = {
           id?: string
           name: string
           points: number
-          updated_at?: string
+          updated_at?: string | null
         }
         Update: {
           created_at?: string
@@ -286,7 +372,7 @@ export type Database = {
           id?: string
           name?: string
           points?: number
-          updated_at?: string
+          updated_at?: string | null
         }
         Relationships: []
       }
@@ -312,38 +398,169 @@ export type Database = {
           id?: string
           name?: string
         }
-        Relationships: []
+        Relationships: [
+           {
+            foreignKeyName: "teams_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "groups"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      tournament_results: { // Nova tabela
+        Row: {
+          id: string;
+          champion_id: string | null;
+          runner_up_id: string | null; // Use este se for o nome da coluna no DB
+          third_place_id: string | null;
+          fourth_place_id: string | null;
+          final_home_score: number | null;
+          final_away_score: number | null;
+          is_completed: boolean;
+          created_at: string | null;
+          updated_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          champion_id?: string | null;
+          runner_up_id?: string | null;
+          third_place_id?: string | null;
+          fourth_place_id?: string | null;
+          final_home_score?: number | null;
+          final_away_score?: number | null;
+          is_completed?: boolean;
+          created_at?: string | null;
+          updated_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          champion_id?: string | null;
+          runner_up_id?: string | null;
+          third_place_id?: string | null;
+          fourth_place_id?: string | null;
+          final_home_score?: number | null;
+          final_away_score?: number | null;
+          is_completed?: boolean;
+          created_at?: string | null;
+          updated_at?: string | null;
+        };
+        Relationships: [
+            {
+            foreignKeyName: "tournament_results_champion_id_fkey"
+            columns: ["champion_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tournament_results_runner_up_id_fkey"
+            columns: ["runner_up_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tournament_results_third_place_id_fkey"
+            columns: ["third_place_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tournament_results_fourth_place_id_fkey"
+            columns: ["fourth_place_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      groups_results: { // Nova tabela
+        Row: {
+          id: string;
+          group_id: string;
+          first_place_team_id: string | null;
+          second_place_team_id: string | null;
+          is_completed: boolean;
+          created_at: string | null;
+          updated_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          group_id: string;
+          first_place_team_id?: string | null;
+          second_place_team_id?: string | null;
+          is_completed?: boolean;
+          created_at?: string | null;
+          updated_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          group_id?: string;
+          first_place_team_id?: string | null;
+          second_place_team_id?: string | null;
+          is_completed?: boolean;
+          created_at?: string | null;
+          updated_at?: string | null;
+        };
+        Relationships: [
+            {
+            foreignKeyName: "groups_results_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false // Um grupo tem um resultado
+            referencedRelation: "groups"
+            referencedColumns: ["id"]
+          },
+           {
+            foreignKeyName: "groups_results_first_place_team_id_fkey"
+            columns: ["first_place_team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "groups_results_second_place_team_id_fkey"
+            columns: ["second_place_team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          }
+        ]
       }
       user_points: {
         Row: {
           created_at: string
           id: string
-          match_id: string
+          match_id: string | null // Permitindo null
           points: number
           points_type: string | null
           prediction_id: string | null
-          updated_at: string
+          updated_at: string | null
           user_id: string
+          related_id: string | null // Para IDs de grupo, resultado do torneio, etc.
         }
         Insert: {
           created_at?: string
           id?: string
-          match_id: string
+          match_id?: string | null
           points?: number
           points_type?: string | null
           prediction_id?: string | null
-          updated_at?: string
+          updated_at?: string | null
           user_id: string
+          related_id?: string | null
         }
         Update: {
           created_at?: string
           id?: string
-          match_id?: string
+          match_id?: string | null
           points?: number
           points_type?: string | null
           prediction_id?: string | null
-          updated_at?: string
+          updated_at?: string | null
           user_id?: string
+          related_id?: string | null
         }
         Relationships: [
           {
@@ -354,22 +571,37 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "user_points_prediction_id_fkey"
+            foreignKeyName: "user_points_prediction_id_fkey" // Esta FK pode ser para diferentes tabelas de palpites
             columns: ["prediction_id"]
             isOneToOne: false
-            referencedRelation: "predictions"
+            referencedRelation: "match_predictions" // Ou group_predictions, final_predictions dependendo do points_type
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "user_points_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
-            referencedRelation: "users"
+            referencedRelation: "users_custom" // ou auth.users
             referencedColumns: ["id"]
-          },
+          }
+          // Adicionar FK para related_id se necessário, ex:
+          // {
+          //   foreignKeyName: "user_points_related_id_group_fkey"
+          //   columns: ["related_id"]
+          //   isOneToOne: false
+          //   referencedRelation: "groups"
+          //   referencedColumns: ["id"]
+          // },
+          // {
+          //   foreignKeyName: "user_points_related_id_tournament_results_fkey"
+          //   columns: ["related_id"]
+          //   isOneToOne: false
+          //   referencedRelation: "tournament_results"
+          //   referencedColumns: ["id"]
+          // }
         ]
       }
-      user_stats: {
+      user_stats: { // Mantida conforme seu arquivo original
         Row: {
           accuracy_percentage: number
           created_at: string
@@ -402,73 +634,60 @@ export type Database = {
             foreignKeyName: "user_stats_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: true
-            referencedRelation: "users"
+            referencedRelation: "users_custom" // ou auth.users
             referencedColumns: ["id"]
-          },
+          }
         ]
       }
-      users: {
+      users_custom: { // Estrutura simplificada, adicione outros campos conforme necessário
         Row: {
-          auth_id: string | null
+          id: string // Geralmente o auth.uid()
+          created_at: string
+          updated_at: string | null // Adicionada
+          name: string
+          username: string // Seu 'nickname'
           avatar_url: string | null
-          created_at: string
-          email: string
-          id: string
-          is_active: boolean
-          name: string
-        }
-        Insert: {
-          auth_id?: string | null
-          avatar_url?: string | null
-          created_at?: string
-          email: string
-          id?: string
-          is_active?: boolean
-          name: string
-        }
-        Update: {
-          auth_id?: string | null
-          avatar_url?: string | null
-          created_at?: string
-          email?: string
-          id?: string
-          is_active?: boolean
-          name?: string
-        }
-        Relationships: []
-      }
-      users_custom: {
-        Row: {
-          created_at: string
-          id: string
           is_admin: boolean
-          name: string
-          password: string
-          username: string
+          first_login: boolean // Para o fluxo de mudança de senha
+          total_points: number | null // Para o ranking
         }
         Insert: {
+          id: string
           created_at?: string
-          id?: string
-          is_admin?: boolean
+          updated_at?: string | null
           name: string
-          password: string
           username: string
+          avatar_url?: string | null
+          is_admin?: boolean
+          first_login?: boolean
+          total_points?: number | null
         }
         Update: {
-          created_at?: string
           id?: string
-          is_admin?: boolean
+          created_at?: string
+          updated_at?: string | null
           name?: string
-          password?: string
           username?: string
+          avatar_url?: string | null
+          is_admin?: boolean
+          first_login?: boolean
+          total_points?: number | null
         }
-        Relationships: []
+        Relationships: [
+          { // Se 'id' em users_custom é uma FK para auth.users.id
+            foreignKeyName: "users_custom_id_fkey"
+            columns: ["id"]
+            isOneToOne: true
+            referencedRelation: "users" // Tabela auth.users
+            referencedColumns: ["id"]
+          }
+        ]
       }
     }
     Views: {
       [_ in never]: never
     }
-    Functions: {
+    Functions: { // Verifique os nomes dos parâmetros de suas funções SQL
       check_table_exists: {
         Args: { table_name: string }
         Returns: boolean
@@ -489,45 +708,57 @@ export type Database = {
         Args: { user_id_param: string }
         Returns: Json[]
       }
-      insert_final_prediction: {
+      insert_final_prediction: { // Verifique os nomes dos parâmetros na sua função SQL
         Args: {
           user_id_param: string
           champion_id_param: string
-          vice_champion_id_param: string
+          vice_champion_id_param: string // Ou runner_up_id_param
           third_place_id_param: string
           fourth_place_id_param: string
+          // Adicionar parâmetros para final_home_score e final_away_score se a função os aceitar
+          final_home_score_param?: number
+          final_away_score_param?: number
         }
         Returns: undefined
       }
-      insert_group_prediction: {
+      insert_group_prediction: { // Verifique os nomes dos parâmetros na sua função SQL
         Args: {
           group_id_param: string
           user_id_param: string
-          first_team_id_param: string
-          second_team_id_param: string
+          // Use os nomes que sua função SQL espera:
+          predicted_first_team_id_param: string // Exemplo, se a função SQL usa este nome
+          predicted_second_team_id_param: string // Exemplo
         }
         Returns: undefined
       }
-      update_final_prediction: {
+      update_final_prediction: { // Verifique os nomes dos parâmetros na sua função SQL
         Args: {
           pred_id: string
           champion_id_param: string
-          vice_champion_id_param: string
+          vice_champion_id_param: string // Ou runner_up_id_param
           third_place_id_param: string
           fourth_place_id_param: string
+          // Adicionar parâmetros para final_home_score e final_away_score se a função os aceitar
+          final_home_score_param?: number
+          final_away_score_param?: number
         }
         Returns: undefined
       }
-      update_group_prediction: {
-        Args: { pred_id: string; first_id: string; second_id: string }
+      update_group_prediction: { // Verifique os nomes dos parâmetros na sua função SQL
+        Args: {
+            pred_id: string;
+            // Use os nomes que sua função SQL espera:
+            predicted_first_id_param: string; // Exemplo
+            predicted_second_id_param: string; // Exemplo
+        }
         Returns: undefined
       }
-      update_user_points_for_match: {
-        Args: { match_id_param: string }
+      update_user_points_for_match: { // Função do seu SQL
+        Args: { match_id_param: string } // string UUID
         Returns: undefined
       }
-      update_user_stats_function: {
-        Args: { user_id_param: string }
+      update_user_stats_function: { // Função do seu SQL
+        Args: { user_id_param: string } // string UUID
         Returns: undefined
       }
     }
@@ -622,7 +853,7 @@ export type Enums<
   EnumName extends DefaultSchemaEnumNameOrOptions extends {
     schema: keyof Database
   }
-    ? keyof Database[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
+    ? keyof Database[DefaultSchemaTableNameOrOptions["schema"]]["Enums"]
     : never = never,
 > = DefaultSchemaEnumNameOrOptions extends { schema: keyof Database }
   ? Database[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
