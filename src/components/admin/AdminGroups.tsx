@@ -39,6 +39,15 @@ interface GroupResult {
   is_completed: boolean;
 }
 
+// Interface para os palpites de grupo dos usuários
+interface UserGroupPrediction {
+  id: string; // ID do palpite
+  user_id: string;
+  group_id: string;
+  predicted_first_team_id: string | null;
+  predicted_second_team_id: string | null;
+}
+
 const AdminGroups = () => {
   const [groups, setGroups] = useState<Group[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
@@ -57,28 +66,28 @@ const AdminGroups = () => {
     try {
       // Fetch Groups
       const { data: groupsData, error: groupsError } = await supabase
-        .from<Group>("groups")
+        .from("groups") // Especificar o tipo aqui não é necessário se já inferido ou pode usar .from<Group>
         .select("*")
         .order("name", { ascending: true });
       if (groupsError) throw groupsError;
-      setGroups(groupsData || []);
+      setGroups(groupsData as Group[] || []);
 
       // Fetch Teams with their group_id
       const { data: teamsData, error: teamsError } = await supabase
-        .from<Team>("teams")
-        .select("id, name, flag_url, group_id") // Certifique-se de que group_id é selecionado
+        .from("teams") // Similarmente .from<Team>
+        .select("id, name, flag_url, group_id")
         .order("name", { ascending: true });
       if (teamsError) throw teamsError;
-      setTeams(teamsData || []);
+      setTeams(teamsData as Team[] || []);
 
       // Fetch existing Group Results
       const { data: groupResultsData, error: groupResultsError } = await supabase
-        .from<GroupResult>("groups_results")
+        .from("groups_results") // Similarmente .from<GroupResult>
         .select("group_id, first_place_team_id, second_place_team_id, is_completed");
       if (groupResultsError) throw groupResultsError;
-      setGroupResults(groupResultsData || []);
+      setGroupResults(groupResultsData as GroupResult[] || []);
 
-      toast.success("Dados de grupos carregados com sucesso.");
+      // Não exibir toast de sucesso aqui para não poluir, apenas em ações do usuário
     } catch (error: any) {
       console.error("Erro ao carregar dados de grupos:", error.message);
       toast.error("Erro ao carregar dados de grupos: " + error.message);
@@ -118,6 +127,7 @@ const AdminGroups = () => {
             first_place_team_id: selectedFirstPlace,
             second_place_team_id: selectedSecondPlace,
             is_completed: true, // Marcar como concluído ao salvar
+            updated_at: new Date().toISOString(),
           })
           .eq("group_id", editingClassificationGroupId);
         upsertError = error;
@@ -134,41 +144,60 @@ const AdminGroups = () => {
       }
 
       if (upsertError) throw upsertError;
+      toast.success("Classificação do grupo salva no banco!");
 
       // 2. Acionar o cálculo de pontos para todos os palpites de grupo
-      // Você precisará buscar todos os palpites de grupo para este grupo
-      const { data: groupPredictions, error: predictionsError } = await supabase
+      const { data: groupPredictionsData, error: predictionsError } = await supabase
         .from("group_predictions")
-        .select("user_id, group_id, predicted_first_team_id, predicted_second_team_id"); // Selecione todos os campos necessários
-      if (predictionsError) throw predictionsError;
+        .select("id, user_id, group_id, predicted_first_team_id, predicted_second_team_id") // CORRIGIDO: Adicionado 'id'
+        .eq("group_id", editingClassificationGroupId); // Filtrar para o grupo atual
 
-      // Chama a função de pontuação para cada palpite
-      for (const prediction of groupPredictions) {
-        // A função calculateGroupClassificationPoints precisa ser refatorada para aceitar
-        // o palpite, o resultado real, e o user_id para atualizar a tabela user_points
-        await calculateGroupClassificationPoints(
-          prediction.user_id,
-          prediction.group_id,
-          prediction.first_team_id,
-          prediction.second_team_id,
-          selectedFirstPlace, // Resultado real 1º
-          selectedSecondPlace // Resultado real 2º
-        );
+      if (predictionsError) throw predictionsError;
+      
+      const userGroupPredictions = groupPredictionsData as UserGroupPrediction[] || [];
+
+      if (userGroupPredictions.length === 0) {
+        toast.info("Nenhum palpite de usuário encontrado para este grupo.");
+      } else {
+        toast.info(`Processando ${userGroupPredictions.length} palpites para o Grupo ${groups.find(g => g.id === editingClassificationGroupId)?.name || ''}...`);
+        
+        for (const prediction of userGroupPredictions) {
+          // Verifica se todos os IDs necessários são strings válidas
+          const safeUserId = typeof prediction.user_id === 'string' ? prediction.user_id : null;
+          const safePredictionId = typeof prediction.id === 'string' ? prediction.id : null; // ID do palpite
+          const safeGroupId = typeof prediction.group_id === 'string' ? prediction.group_id : null;
+          
+          if (!safeUserId || !safePredictionId || !safeGroupId) {
+              console.warn('Skipping prediction due to missing user_id, prediction.id, or group_id', prediction);
+              continue;
+          }
+
+          await calculateGroupClassificationPoints(
+            safeUserId,
+            safePredictionId,                  // CORRIGIDO: Passar o ID do palpite
+            safeGroupId,                     // CORRIGIDO: Passar o ID do grupo
+            prediction.predicted_first_team_id,  // CORRIGIDO: Nome correto do campo
+            prediction.predicted_second_team_id, // CORRIGIDO: Nome correto do campo
+            selectedFirstPlace,
+            selectedSecondPlace
+          );
+        }
+        toast.success("Pontos dos palpites de grupo calculados e atualizados!");
       }
 
-      toast.success("Classificação do grupo salva e pontos calculados com sucesso!");
       setEditingClassificationGroupId(null);
       await fetchData(); // Recarrega os dados para atualizar o estado
     } catch (error: any) {
-      console.error("Erro ao processar classificação do grupo:", error.message);
-      toast.error("Erro ao salvar classificação ou calcular pontos: " + error.message);
+      console.error("Erro ao processar classificação do grupo:", error.message, error.details);
+      toast.error("Erro ao salvar/pontuar: " + error.message);
     } finally {
       setLoading(false);
     }
   };
 
   const getTeamNameById = (teamId: string | null) => {
-    return teams.find(team => team.id === teamId)?.name || "N/A";
+    if (!teamId) return "N/A";
+    return teams.find(team => team.id === teamId)?.name || "Desconhecido";
   };
 
   const getTeamsInGroup = (groupId: string) => {
@@ -185,7 +214,7 @@ const AdminGroups = () => {
 
       <section>
         <h2 className="text-2xl font-semibold mb-4 text-fifa-blue">Grupos</h2>
-        {loading && <p>Carregando grupos...</p>}
+        {loading && groups.length === 0 && <p>Carregando grupos...</p>} {/* Mostra loading inicial se não houver grupos */}
         <Table>
           <TableHeader>
             <TableRow>
@@ -260,14 +289,15 @@ const AdminGroups = () => {
                     )}
                   </TableCell>
                   <TableCell className="text-center">
-                    <Badge variant={currentGroupResult?.is_completed ? "default" : "secondary"}>
+                    <Badge variant={currentGroupResult?.is_completed ? "default" : "secondary"} 
+                           className={currentGroupResult?.is_completed ? "bg-green-500 text-white" : "bg-yellow-400 text-black"}>
                       {currentGroupResult?.is_completed ? "Finalizado" : "Pendente"}
                     </Badge>
                   </TableCell>
                   <TableCell className="text-right">
                     {isEditing ? (
                       <div className="flex gap-2 justify-end">
-                        <Button onClick={processGroupClassificationAndCalculatePoints} disabled={loading}>
+                        <Button onClick={processGroupClassificationAndCalculatePoints} disabled={loading} className="bg-fifa-blue">
                           {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                           {loading ? "Processando..." : "Salvar e Pontuar"}
                         </Button>
@@ -276,7 +306,11 @@ const AdminGroups = () => {
                         </Button>
                       </div>
                     ) : (
-                      <Button onClick={() => handleEditClassificationClick(group.id)} disabled={loading || currentGroupResult?.is_completed}>
+                      <Button 
+                        onClick={() => handleEditClassificationClick(group.id)} 
+                        disabled={loading || (currentGroupResult?.is_completed && !isEditing)}
+                        variant="outline"
+                      >
                         <Edit className="mr-2 h-4 w-4" />
                         {currentGroupResult?.is_completed ? "Editar" : "Inserir Classificação"}
                       </Button>
@@ -287,6 +321,9 @@ const AdminGroups = () => {
             })}
           </TableBody>
         </Table>
+        {groups.length === 0 && !loading && (
+            <div className="text-center py-4">Nenhum grupo encontrado.</div>
+        )}
       </section>
     </div>
   );
