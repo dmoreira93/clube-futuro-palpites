@@ -7,7 +7,7 @@ import RankingTable from "@/components/home/RankingTable";
 import NextMatches from "@/components/home/NextMatches";
 // import { DailyPredictions } from "@/components/home/DailyPredictions"; // Comentado se não usado/ajustado
 import StatsCard from "@/components/home/StatsCard";
-import { Trophy as TrophyIcon, Users, Volleyball as SoccerBallIcon, Flag as FlagIcon } from "lucide-react";
+import { Users, Volleyball as SoccerBallIcon, Flag as FlagIcon } from "lucide-react"; // Removido TrophyIcon se não for mais usado
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
@@ -17,10 +17,7 @@ const Index = () => {
     totalUsers: 0,
     matchesPlayed: 0,
     totalMatches: 0,
-    topScorer: {
-      points: 0,
-      userName: "Ninguém",
-    },
+    // Removido topScorer do estado, pois o card não será mais exibido
     nextMatch: {
       date: "",
       teams: "",
@@ -32,12 +29,14 @@ const Index = () => {
     const fetchStats = async () => {
       setLoadingStats(true);
       try {
+        // Contar usuários (excluindo administradores)
         const { count: userCount, error: userCountError } = await supabase
           .from('users_custom')
           .select('*', { count: 'exact', head: true })
           .eq('is_admin', false);
         if (userCountError) throw userCountError;
 
+        // Contar partidas finalizadas APENAS da fase de grupos
         const { count: finishedGroupStageMatchCount, error: finishedMatchCountError } = await supabase
           .from('matches')
           .select('*', { count: 'exact', head: true })
@@ -45,58 +44,16 @@ const Index = () => {
           .eq('stage', 'Fase de Grupos');
         if (finishedMatchCountError) throw finishedMatchCountError;
 
+        // Contar total de partidas APENAS da fase de grupos
         const { count: totalGroupStageMatchCount, error: totalMatchCountError } = await supabase
           .from('matches')
           .select('*', { count: 'exact', head: true })
           .eq('stage', 'Fase de Grupos');
         if (totalMatchCountError) throw totalMatchCountError;
 
-        // Buscar o participante com a maior pontuação (não admin)
-        // Ordenar por total_points DESC, tratando NULLS como os menores (colocando-os por último na ordem DESC)
-        const { data: topUserData, error: topUserError } = await supabase
-          .from('users_custom')
-          .select('name, total_points')
-          .eq('is_admin', false)
-          // Garante que usuários com pontos apareçam primeiro, e NULLs por último.
-          // Para Supabase JS v2, nullsLast é o padrão para DESC, mas ser explícito pode ajudar em algumas DBs.
-          // Se total_points for NULL, queremos que ele seja tratado como menor que 0.
-          // Uma forma é filtrar por total_points IS NOT NULL, ou confiar na ordenação padrão de NULLS LAST para DESC.
-          // Vamos primeiro tentar garantir que apenas usuários com pontuação > 0 sejam considerados,
-          // ou se todos tiverem 0, que pegue um deles.
-          .order('total_points', { ascending: false, nullsLast: true })
-          .limit(1)
-          .maybeSingle();
+        // Lógica para buscar maior pontuador foi REMOVIDA
 
-        let topScorerData = { points: 0, userName: "Ninguém" };
-        if (topUserError && topUserError.code !== 'PGRST116') {
-          console.error("Erro ao buscar maior pontuador:", topUserError.message);
-        } else if (topUserData) {
-          // Se total_points for null ou undefined, userData.total_points || 0 garante que points seja 0.
-          // Apenas considera como pontuador se os pontos forem maiores que 0,
-          // ou se for o único usuário e tiver 0 pontos.
-          if (topUserData.total_points !== null && topUserData.total_points > 0) {
-            topScorerData = {
-              points: topUserData.total_points,
-              userName: topUserData.name || "Desconhecido",
-            };
-          } else if (topUserData.total_points === 0) {
-             // Se o "maior" pontuador tem 0 pontos, ainda o exibimos.
-             // Se o valor padrão "Ninguém" é mantido, é porque não há usuários com pontos > 0
-             // e o .maybeSingle() retornou um usuário com 0 ou null pontos,
-             // ou não retornou nenhum usuário não-admin.
-            topScorerData = {
-                points: 0,
-                userName: topUserData.name || "Desconhecido",
-            }
-          }
-          // Se topUserData.total_points for null, e for o único retornado,
-          // a lógica de `points: topUserData.total_points || 0` resultaria em 0 pontos.
-          // Se topScorerData permanecer como { points: 0, userName: "Ninguém" },
-          // isso acontecerá se topUserData for null ou se o usuário encontrado tiver total_points null
-          // e não cair nas condições acima.
-        }
-
-
+        // Buscar próxima partida
         const { data: nextMatchData, error: nextMatchError } = await supabase
           .from('matches')
           .select(`match_date, home_team:home_team_id(name), away_team:away_team_id(name)`)
@@ -119,15 +76,11 @@ const Index = () => {
           totalUsers: userCount || 0,
           matchesPlayed: finishedGroupStageMatchCount || 0,
           totalMatches: totalGroupStageMatchCount || 0,
-          topScorer: topScorerData,
+          // Removido topScorer daqui
           nextMatch: nextMatchInfo,
         });
       } catch (error: any) {
         console.error("Erro ao buscar estatísticas:", error.message);
-        setStats(prevStats => ({
-            ...prevStats,
-            topScorer: { points: 0, userName: "Erro ao carregar" }
-        }));
       } finally {
         setLoadingStats(false);
       }
@@ -136,15 +89,15 @@ const Index = () => {
     fetchStats();
   }, []);
 
-  // O restante do componente permanece o mesmo...
   return (
     <Layout>
       <div className="container mx-auto px-4 py-8">
         <h1 className="text-3xl font-bold text-center text-fifa-blue mb-8">Bem-vindo ao Clube Futuro Palpites!</h1>
 
         {loadingStats ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-            {[...Array(4)].map((_, i) => (
+          // Ajustado para 3 colunas de skeleton se o card do Maior Pontuador foi removido
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            {[...Array(3)].map((_, i) => (
               <Card key={i} className="shadow-md">
                 <CardHeader className="flex flex-row items-center justify-between pb-2">
                   <div className="h-4 bg-gray-200 rounded w-3/4 animate-pulse"></div>
@@ -158,7 +111,8 @@ const Index = () => {
             ))}
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+          // Ajustado para 3 colunas de cards
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
             <StatsCard
               title="Total de Usuários"
               value={stats.totalUsers}
@@ -171,12 +125,7 @@ const Index = () => {
               icon={<SoccerBallIcon className="h-5 w-5" />}
               description="Jogos da fase de Grupos com resultados"
             />
-            <StatsCard
-              title="Maior Pontuador"
-              value={`${stats.topScorer.userName} (${stats.topScorer.points} pts)`}
-              icon={<TrophyIcon className="h-5 w-5" />}
-              description="Quem está liderando o bolão"
-            />
+            {/* Card "Maior Pontuador" REMOVIDO */}
             <StatsCard
               title="Próxima Partida"
               value={stats.nextMatch.date}
