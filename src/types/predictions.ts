@@ -20,8 +20,8 @@ export type Prediction = {
 export type GroupPrediction = {
   id?: string;
   group_id: string;
-  first_team_id: string;
-  second_team_id: string;
+  predicted_first_team_id: string;
+  predicted_second_team_id: string;
   user_id: string;
   created_at?: string;
   updated_at?: string;
@@ -42,8 +42,8 @@ export type FinalPrediction = {
 export type RawGroupPrediction = {
   id: string;
   group_id: string;
-  first_team_id: string;
-  second_team_id: string;
+  predicted_first_team_id: string;
+  predicted_second_team_id: string;
   user_id: string;
   created_at?: string;
   updated_at?: string;

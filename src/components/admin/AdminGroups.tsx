@@ -139,7 +139,7 @@ const AdminGroups = () => {
       // Você precisará buscar todos os palpites de grupo para este grupo
       const { data: groupPredictions, error: predictionsError } = await supabase
         .from("group_predictions")
-        .select("user_id, group_id, first_team_id, second_team_id"); // Selecione todos os campos necessários
+        .select("user_id, group_id, predicted_first_team_id, predicted_second_team_id"); // Selecione todos os campos necessários
       if (predictionsError) throw predictionsError;
 
       // Chama a função de pontuação para cada palpite
