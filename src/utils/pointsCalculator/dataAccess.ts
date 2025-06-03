@@ -4,12 +4,20 @@ import { supabase } from "@/integrations/supabase/client";
 import {
   MatchResult,
   Prediction,
-  ScoringCriteria,
+  ScoringCriteria as PointsCalculatorScoringCriteria, // Renomeado para evitar conflito com o tipo local
   PointsResult,
   SupabaseMatchPrediction,
   SupabaseMatchResultFromMatches,
-  User, // Certifique-se de que este tipo 'User' inclui 'is_admin: boolean'
+  User,
 } from "./types";
+
+// Renomeando o tipo local para evitar conflito com o tipo importado de ./types
+// Este tipo ScoringCriteria é específico para a função fetchScoringCriteria
+type LocalScoringCriteria = {
+  exactScore: number;
+  winner: number;
+  partialScore: number;
+};
 
 /**
  * Busca o resultado da partida (apenas partidas finalizadas)
@@ -25,13 +33,13 @@ export async function fetchMatchResult(matchId: string): Promise<MatchResult | n
       .single();
 
     if (error || !data) {
-      console.error('Erro ao buscar resultado da partida:', error);
+      console.error('Erro ao buscar resultado da partida:', error?.message);
       return null;
     }
 
     return data as MatchResult;
-  } catch (error) {
-    console.error('Erro ao buscar resultado da partida:', error);
+  } catch (error: any) {
+    console.error('Erro crítico ao buscar resultado da partida:', error.message);
     return null;
   }
 }
@@ -43,48 +51,49 @@ export async function fetchMatchResult(matchId: string): Promise<MatchResult | n
 export async function fetchPredictions(matchId: string): Promise<Prediction[]> {
   try {
     const { data, error } = await supabase
-      .from('match_predictions')
+      .from('match_predictions') // Corrigido para 'match_predictions' se for essa a tabela de palpites de partida
       .select('id, match_id, user_id, home_score, away_score')
       .eq('match_id', matchId);
 
     if (error || !data) {
-      console.error('Erro ao buscar palpites para a partida (fetchPredictions):', error);
-      return []; // Já estava correto
+      console.error('Erro ao buscar palpites para a partida (fetchPredictions):', error?.message);
+      return [];
     }
 
     return data as Prediction[];
-  } catch (error) {
-    console.error('Erro ao buscar palpites para a partida (fetchPredictions):', error);
-    return []; // Já estava correto
+  } catch (error: any) {
+    console.error('Erro crítico ao buscar palpites para a partida (fetchPredictions):', error.message);
+    return [];
   }
 }
 
 /**
  * Busca os critérios de pontuação do banco de dados
- * Permanece retornando `null` pois é um objeto de critérios, não uma lista.
+ * Retorna um objeto com os pontos para cada critério ou null em caso de erro.
  */
-export async function fetchScoringCriteria(): Promise<ScoringCriteria | null> {
+export async function fetchScoringCriteria(): Promise<LocalScoringCriteria | null> {
   try {
     const { data, error } = await supabase
       .from('scoring_criteria')
       .select('name, points')
-      .order('name')
-      .limit(3);
+      .order('name'); // Ordenar para consistência, se necessário
 
     if (error) {
-      console.error('Erro ao buscar critérios de pontuação:', error);
+      console.error('Erro ao buscar critérios de pontuação:', error.message);
       return null;
     }
 
-    const criteria: ScoringCriteria = {
+    // Assume que os nomes dos critérios no banco são 'Placar exato', 'Acertar vencedor', 'Acertar um placar'
+    // Ajuste os nomes e valores default conforme sua tabela 'scoring_criteria'
+    const criteria: LocalScoringCriteria = {
       exactScore: data?.find(c => c.name === 'Placar exato')?.points || 10,
-      winner: data?.find(c => c.name === 'Acertar vencedor')?.points || 5,
+      winner: data?.find(c => c.name === 'Acertar vencedor')?.points || 5, // Ajustado o default para 'Acertar vencedor'
       partialScore: data?.find(c => c.name === 'Acertar um placar')?.points || 3,
     };
 
     return criteria;
-  } catch (error) {
-    console.error('Erro ao buscar critérios de pontuação:', error);
+  } catch (error: any) {
+    console.error('Erro crítico ao buscar critérios de pontuação:', error.message);
     return null;
   }
 }
@@ -95,190 +104,147 @@ export async function fetchScoringCriteria(): Promise<ScoringCriteria | null> {
  */
 export async function saveUserPoints(pointsResult: PointsResult): Promise<boolean> {
   try {
-    const { data, error } = await supabase
+    // Ajuste a coluna de conflito se 'prediction_id' não for a chave única correta.
+    // Se a combinação de user_id e match_id for a chave, use ['user_id', 'match_id']
+    // Certifique-se que pointsResult contém todos os campos necessários, incluindo user_id, match_id, etc.
+    const { error } = await supabase
       .from('user_points')
-      .upsert(pointsResult, { onConflict: 'prediction_id' });
+      .upsert(pointsResult, { onConflict: 'user_id, match_id' }); // Assumindo que a constraint é em (user_id, match_id)
 
     if (error) {
-      console.error('Erro ao salvar pontos do usuário:', error);
+      console.error('Erro ao salvar pontos do usuário:', error.message);
       return false;
     }
     return true;
-  } catch (error) {
-    console.error('Erro ao salvar pontos do usuário:', error);
+  } catch (error: any) {
+    console.error('Erro crítico ao salvar pontos do usuário:', error.message);
     return false;
   }
 }
 
 /**
  * Atualiza as estatísticas gerais de um usuário (total de pontos, partidas jogadas, etc.).
- * Retorna boolean, está correto.
+ * Esta função agora usa a stored procedure `update_user_stats_function`.
  */
 export async function updateUserStats(userId: string): Promise<boolean> {
   try {
-    // 1. Calcular o total de pontos
-    const { data: userPointsData, error: pointsError } = await supabase
-      .from('user_points')
-      .select('points')
-      .eq('user_id', userId);
+    const { error } = await supabase.rpc('update_user_stats_function', {
+      user_id_param: userId,
+    });
 
-    if (pointsError) {
-      console.error('Erro ao buscar pontos do usuário para estatísticas:', pointsError);
+    if (error) {
+      console.error(`Erro ao chamar RPC update_user_stats_function para ${userId}:`, error.message);
       return false;
     }
-
-    const totalPoints = userPointsData ? userPointsData.reduce((sum, current) => sum + current.points, 0) : 0;
-
-    // 2. Contar partidas jogadas (onde o usuário fez palpite e foi pontuado)
-    const { count: matchesPlayedCount, error: matchesCountError } = await supabase
-      .from('user_points')
-      .select('*', { count: 'exact', head: true })
-      .eq('user_id', userId);
-
-    if (matchesCountError) {
-      console.error('Erro ao contar partidas jogadas para estatísticas:', matchesCountError);
-      return false;
-    }
-
-    // 3. Calcular porcentagem de acerto (exemplo: acertos exatos)
-    const { count: exactScoresCount, error: exactScoresError } = await supabase
-      .from('user_points')
-      .select('*', { count: 'exact', head: true })
-      .eq('user_id', userId)
-      .eq('points_type', 'EXACT_SCORE');
-
-    if (exactScoresError) {
-      console.error('Erro ao contar acertos exatos para estatísticas:', exactScoresError);
-      return false;
-    }
-
-    const accuracyPercentage = matchesPlayedCount > 0
-      ? Math.round(((exactScoresCount || 0) / matchesPlayedCount) * 100)
-      : 0;
-
-    // 4. Inserir ou atualizar na tabela 'user_stats'
-    const { data: existingStats, error: fetchStatsError } = await supabase
-      .from('user_stats')
-      .select('id')
-      .eq('user_id', userId)
-      .single();
-
-    if (fetchStatsError && fetchStatsError.code !== 'PGRST116') {
-      console.error('Erro ao buscar estatísticas existentes para atualização:', fetchStatsError);
-      return false;
-    }
-
-    if (existingStats) {
-      const { error: updateError } = await supabase
-        .from('user_stats')
-        .update({
-          total_points: totalPoints,
-          matches_played: matchesPlayedCount,
-          accuracy_percentage: accuracyPercentage,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', existingStats.id);
-
-      if (updateError) {
-        console.error('Erro ao atualizar estatísticas do usuário:', updateError);
-        return false;
-      }
-    } else {
-      const { error: insertError } = await supabase
-        .from('user_stats')
-        .insert({
-          user_id: userId,
-          total_points: totalPoints,
-          matches_played: matchesPlayedCount,
-          accuracy_percentage: accuracyPercentage,
-        });
-
-      if (insertError) {
-        console.error('Erro ao inserir estatísticas do usuário:', insertError);
-        return false;
-      }
-    }
+    console.log(`Estatísticas do usuário ${userId} atualizadas via RPC.`);
     return true;
-  } catch (error) {
-    console.error('Erro geral ao atualizar estatísticas do usuário:', error);
+  } catch (error: any) {
+    console.error('Erro crítico ao atualizar estatísticas do usuário via RPC:', error.message);
     return false;
   }
 }
 
+
 /**
- * Busca todas as partidas para uma data específica, incluindo dados dos timess e do grupo.
+ * Busca todas as partidas para uma data específica (considerando o dia em UTC), incluindo dados dos times e do grupo.
  * @param dateString Uma string de data no formato 'YYYY-MM-DD'.
- * Corrigido para retornar `[]` em caso de erro.
+ * Esta função filtra pelo dia UTC.
  */
-export async function fetchMatchesForDate(dateString: string): Promise<SupabaseMatchResultFromMatches[]> { // Tipo de retorno alterado
+export async function fetchMatchesForDate(dateString: string): Promise<SupabaseMatchResultFromMatches[]> {
   try {
     const { data, error } = await supabase
       .from('matches')
       .select('*, home_team:home_team_id(*, group:group_id(name)), away_team:away_team_id(*, group:group_id(name))')
-      .gte('match_date', `${dateString}T00:00:00Z`)
-      .lte('match_date', `${dateString}T23:59:59Z`)
+      .gte('match_date', `${dateString}T00:00:00Z`) // Início do dia em UTC
+      .lte('match_date', `${dateString}T23:59:59.999Z`) // Fim do dia em UTC
       .order('match_date', { ascending: true });
 
     if (error) {
-      console.error('Erro ao buscar partidas para a data:', error);
-      return []; // <-- CORRIGIDO
+      console.error('Erro ao buscar partidas para a data (UTC day):', error.message);
+      return [];
     }
 
     return data as SupabaseMatchResultFromMatches[];
-  } catch (error) {
-    console.error('Erro ao buscar partidas para a data:', error);
-    return []; // <-- CORRIGIDO
+  } catch (error: any) {
+    console.error('Erro crítico ao buscar partidas para a data (UTC day):', error.message);
+    return [];
   }
 }
+
+
+/**
+ * Busca todas as partidas dentro de um intervalo UTC específico.
+ * @param utcStartString String ISO da data/hora de início em UTC.
+ * @param utcEndString String ISO da data/hora de fim em UTC (exclusivo).
+ */
+export async function fetchMatchesInUTCRange(utcStartString: string, utcEndString: string): Promise<SupabaseMatchResultFromMatches[]> {
+  try {
+    const { data, error } = await supabase
+      .from('matches')
+      .select('*, home_team:home_team_id(*, group:group_id(name)), away_team:away_team_id(*, group:group_id(name))')
+      .gte('match_date', utcStartString)
+      .lt('match_date', utcEndString) // .lt para que o horário final seja exclusivo
+      .order('match_date', { ascending: true });
+
+    if (error) {
+      console.error('Erro ao buscar partidas por range UTC:', error.message);
+      return [];
+    }
+
+    return data as SupabaseMatchResultFromMatches[];
+  } catch (error: any) {
+    console.error('Erro crítico ao buscar partidas por range UTC:', error.message);
+    return [];
+  }
+}
+
 
 /**
  * Busca todos os palpites para um array de IDs de partida.
  * Usado para coletar todos os palpites para os jogos do dia.
  * @param matchIds Array de IDs de partida.
- * Corrigido para retornar `[]` em caso de erro.
  */
-export async function fetchMatchPredictionsForMatches(matchIds: string[]): Promise<SupabaseMatchPrediction[]> { // Tipo de retorno alterado
+export async function fetchMatchPredictionsForMatches(matchIds: string[]): Promise<SupabaseMatchPrediction[]> {
   try {
     if (matchIds.length === 0) {
       return [];
     }
 
     const { data, error } = await supabase
-      .from('match_predictions')
-      .select('*')
+      .from('match_predictions') // Corrigido para 'match_predictions'
+      .select('*') // Pode ser mais específico se não precisar de todos os campos
       .in('match_id', matchIds);
 
     if (error) {
-      console.error('Erro ao buscar palpites para partidas:', error);
-      return []; // <-- CORRIGIDO
+      console.error('Erro ao buscar palpites para partidas:', error.message);
+      return [];
     }
 
     return data as SupabaseMatchPrediction[];
-  } catch (error) {
-    console.error('Erro ao buscar palpites para partidas:', error);
-    return []; // <-- CORRIGIDO
+  } catch (error: any) {
+    console.error('Erro crítico ao buscar palpites para partidas:', error.message);
+    return [];
   }
 }
 
 /**
  * Busca todos os usuários customizados.
  * Usado para exibir a lista de participantes e seus palpites.
- * Corrigido para retornar `[]` em caso de erro.
  */
-export async function fetchUsersCustom(): Promise<User[]> { // Tipo de retorno alterado
+export async function fetchUsersCustom(): Promise<User[]> {
   try {
     const { data, error } = await supabase
       .from('users_custom')
-      .select('id, name, username, avatar_url, is_admin');
+      .select('id, name, username, avatar_url, is_admin'); // Certifique-se que 'is_admin' existe
 
     if (error) {
-      console.error('Erro ao buscar usuários customizados:', error);
-      return []; // <-- CORRIGIDO
+      console.error('Erro ao buscar usuários customizados:', error.message);
+      return [];
     }
 
     return data as User[];
-  } catch (error) {
-    console.error('Erro ao buscar usuários customizados:', error);
-    return []; // <-- CORRIGIDO
+  } catch (error: any) {
+    console.error('Erro crítico ao buscar usuários customizados:', error.message);
+    return [];
   }
 }
