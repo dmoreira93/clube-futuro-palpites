@@ -16,13 +16,13 @@ const RankingRow = ({ participant, index, totalParticipants }: RankingRowProps) 
   // Lógica para determinar o texto do prêmio
   const getPrizeText = (position: number, total: number): string => {
     if (position === 0) {
-      return "60%";
+      return "R$ 165,00";
     }
     if (position === 1) {
-      return "25%";
+      return "R$ 68,75";
     }
     if (position === 2) {
-      return "15%";
+      return "R$ 41,25";
     }
     // Para o último colocado, verifique se há mais de um participante para evitar que o 1º também seja "último"
     if (position === total - 1 && total > 1) {
