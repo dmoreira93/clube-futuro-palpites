@@ -14,7 +14,7 @@ const RankingPage = () => { // Renomeado para evitar conflito com 'Resultados'
     <Layout>
       <div className="container mx-auto p-4 max-w-4xl">
         <h1 className="text-3xl font-bold text-center mb-8 text-fifa-blue">
-          Ranking dos Participantes (Obs.: IAs não serão consideradas para prêmios e pagamentos)
+          Ranking dos Participantes
         </h1>
 
         {error && (

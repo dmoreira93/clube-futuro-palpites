@@ -56,7 +56,7 @@ const RankingTable = () => {
   return (
     <Card className="shadow-lg">
       <CardHeader className="bg-fifa-blue text-white">
-        <CardTitle>Ranking de Participantes</CardTitle>
+        <CardTitle>Ranking de Participantes (Obs.: as IAs não serão consideradas para vencedores/perdedores)</CardTitle>
       </CardHeader>
       <CardContent className="p-0">
         {participants.length === 0 ? (
