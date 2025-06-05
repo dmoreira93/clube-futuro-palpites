@@ -8,22 +8,30 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"; // Adicionado CardDescription
 import { Skeleton } from "@/components/ui/skeleton";
 import RankingRow from "@/components/ranking/RankingRow";
 import  useParticipantsRanking  from "@/hooks/useParticipantsRanking";
-import { Users as UsersIcon } from "lucide-react"; 
+import { Users as UsersIcon } from "lucide-react";
 
 
 const RankingTable = () => {
   const { participants, loading, error } = useParticipantsRanking();
 
+  // Função para renderizar o cabeçalho do card
+  const renderCardHeader = () => (
+    <CardHeader className="bg-fifa-blue text-white pb-4"> {/* Ajustado padding bottom se necessário */}
+      <CardTitle className="text-xl">Ranking de Participantes</CardTitle>
+      <CardDescription className="text-xs text-blue-200 pt-1"> {/* Usando CardDescription para a observação */}
+        (Obs.: as IAs não serão consideradas para vencedores/perdedores)
+      </CardDescription>
+    </CardHeader>
+  );
+
   if (loading) {
     return (
       <Card className="shadow-lg">
-        <CardHeader className="bg-fifa-blue text-white">
-          <CardTitle>Ranking de Participantes</CardTitle>
-        </CardHeader>
+        {renderCardHeader()} {/* Chama a função para renderizar o cabeçalho */}
         <CardContent className="p-4">
           <div className="space-y-4">
             <Skeleton className="h-10 w-full" />
@@ -50,14 +58,9 @@ const RankingTable = () => {
     );
   }
 
-  // Obter o total de participantes para passar para RankingRow
-  const totalParticipants = participants.length;
-
   return (
     <Card className="shadow-lg">
-      <CardHeader className="bg-fifa-blue text-white">
-        <CardTitle>Ranking de Participantes (Obs.: as IAs não serão consideradas para vencedores/perdedores)</CardTitle>
-      </CardHeader>
+      {renderCardHeader()} {/* Chama a função para renderizar o cabeçalho */}
       <CardContent className="p-0">
         {participants.length === 0 ? (
           <div className="flex flex-col items-center justify-center p-8 text-gray-500">
@@ -72,18 +75,18 @@ const RankingTable = () => {
                 <TableHead className="w-[50px] text-center">Pos</TableHead>
                 <TableHead>Participante</TableHead>
                 <TableHead className="text-right">Pontos</TableHead>
-                <TableHead className="text-right">Jogos Pontuados</TableHead> {/* Alterado 'Partidas Jogadas' para 'Jogos Pontuados' */}
+                <TableHead className="text-right">Jogos Pontuados</TableHead>
                 <TableHead className="text-right">Acerto</TableHead>
-                <TableHead className="text-right">Prêmio</TableHead> {/* Adicionado cabeçalho para o prêmio */}
+                <TableHead className="text-right">Prêmio</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {participants.map((participant, index) => (
-                <RankingRow 
-                  key={participant.id} 
-                  participant={participant} 
+                <RankingRow
+                  key={participant.id}
+                  participant={participant}
                   index={index}
-                  totalParticipants={totalParticipants} // <--- NOVO: Passando o total de participantes
+                  totalParticipants={participants.length}
                 />
               ))}
             </TableBody>
