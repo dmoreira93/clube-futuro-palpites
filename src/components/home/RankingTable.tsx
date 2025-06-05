@@ -8,7 +8,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"; // Adicionado CardDescription
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import RankingRow from "@/components/ranking/RankingRow";
 import  useParticipantsRanking  from "@/hooks/useParticipantsRanking";
@@ -20,9 +20,9 @@ const RankingTable = () => {
 
   // Função para renderizar o cabeçalho do card
   const renderCardHeader = () => (
-    <CardHeader className="bg-fifa-blue text-white pb-4"> {/* Ajustado padding bottom se necessário */}
-      <CardTitle className="text-xl">Ranking de Participantes</CardTitle>
-      <CardDescription className="text-xs text-blue-200 pt-1"> {/* Usando CardDescription para a observação */}
+    <CardHeader className="bg-fifa-blue text-white pb-4"> {/* Mantém o fundo e cor do texto */}
+      <CardTitle>Ranking de Participantes</CardTitle> {/* Removeu text-xl para usar o padrão (text-2xl) */}
+      <CardDescription className="text-sm text-gray-300 pt-1"> {/* Tamanho text-sm e cor text-gray-300 */}
         (Obs.: as IAs não serão consideradas para vencedores/perdedores)
       </CardDescription>
     </CardHeader>
@@ -31,7 +31,7 @@ const RankingTable = () => {
   if (loading) {
     return (
       <Card className="shadow-lg">
-        {renderCardHeader()} {/* Chama a função para renderizar o cabeçalho */}
+        {renderCardHeader()}
         <CardContent className="p-4">
           <div className="space-y-4">
             <Skeleton className="h-10 w-full" />
@@ -50,6 +50,7 @@ const RankingTable = () => {
       <Card className="shadow-lg">
         <CardHeader className="bg-red-500 text-white">
           <CardTitle>Erro ao Carregar Ranking</CardTitle>
+          {/* Você pode adicionar a CardDescription aqui também se o erro precisar de um subtitulo */}
         </CardHeader>
         <CardContent className="p-4">
           <p className="text-red-600">{error}</p>
@@ -60,7 +61,7 @@ const RankingTable = () => {
 
   return (
     <Card className="shadow-lg">
-      {renderCardHeader()} {/* Chama a função para renderizar o cabeçalho */}
+      {renderCardHeader()}
       <CardContent className="p-0">
         {participants.length === 0 ? (
           <div className="flex flex-col items-center justify-center p-8 text-gray-500">
