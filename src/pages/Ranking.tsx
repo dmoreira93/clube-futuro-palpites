@@ -1,21 +1,35 @@
-// src/pages/Ranking.tsx (ou src/components/RankingDisplay.tsx)
-
+// src/pages/Ranking.tsx
 import React from "react";
-import Layout from "@/components/layout/Layout"; // Se for uma página, use seu Layout
+import Layout from "@/components/layout/Layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
-import { Loader2 } from "lucide-react"; // Ícone de carregamento
-import useParticipantsRanking from "@/hooks/useParticipantsRanking"; // AJUSTE O CAMINHO CONFORME ONDE VOCÊ SALVOU O HOOK
+import { Skeleton } from "@/components/ui/skeleton"; // Importe Skeleton se for usar para loading
+import RankingRow from "@/components/ranking/RankingRow";
+import useParticipantsRanking, { Participant } from "@/hooks/useParticipantsRanking";
+import { Loader2 } from "lucide-react";
+import { isAIParticipant } from '@/utils/utils'; // Ajuste o caminho se necessário
 
-const RankingPage = () => { // Renomeado para evitar conflito com 'Resultados'
+const RankingPage = () => {
   const { participants, loading, error } = useParticipantsRanking();
+
+  // Filtra usuários reais e calcula seus ranks
+  const realParticipants = participants.filter(p => !isAIParticipant(p));
+  const totalRealParticipants = realParticipants.length;
+
+  // Mapeia ID do usuário real para seu rank real (0-based)
+  const realUserRankMap = new Map<string, number>();
+  realParticipants.forEach((p, idx) => {
+    realUserRankMap.set(p.id, idx);
+  });
 
   return (
     <Layout>
       <div className="container mx-auto p-4 max-w-4xl">
-        <h1 className="text-3xl font-bold text-center mb-8 text-fifa-blue">
+        <h1 className="text-3xl font-bold text-center mb-2 text-fifa-blue">
           Ranking dos Participantes
         </h1>
+        <p className="text-sm text-center text-gray-600 mb-8">
+          (Obs.: as IAs não serão consideradas para vencedores/perdedores)
+        </p>
 
         {error && (
           <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4" role="alert">
@@ -57,37 +71,26 @@ const RankingPage = () => { // Renomeado para evitar conflito com 'Resultados'
                         <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                           Acurácia
                         </th>
+                        <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Prêmio
+                        </th>
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
-                      {participants.map((participant, index) => (
-                        <tr key={participant.id} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                            {index + 1}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="flex items-center">
-                              <Avatar className="h-8 w-8">
-                                <AvatarImage src={participant.avatar_url || `https://api.dicebear.com/7.x/initials/svg?seed=${participant.name}`} alt={`${participant.name}'s avatar`} />
-                                <AvatarFallback>{participant.name.charAt(0)}</AvatarFallback>
-                              </Avatar>
-                              <div className="ml-4">
-                                <div className="text-sm font-medium text-gray-900">{participant.name}</div>
-                                <div className="text-sm text-gray-500">@{participant.username}</div>
-                              </div>
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium text-fifa-blue">
-                            {participant.points}
-                          </td>
-                           <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-700">
-                            {participant.matches}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-700">
-                            {participant.accuracy}
-                          </td>
-                        </tr>
-                      ))}
+                      {participants.map((participant, overallIndex) => {
+                        const isAI = isAIParticipant(participant);
+                        const realUserRank = isAI ? -1 : (realUserRankMap.get(participant.id) ?? -1);
+
+                        return (
+                          <RankingRow
+                            key={participant.id}
+                            participant={participant}
+                            index={overallIndex}
+                            realUserRank={realUserRank}
+                            totalRealParticipants={totalRealParticipants}
+                          />
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>

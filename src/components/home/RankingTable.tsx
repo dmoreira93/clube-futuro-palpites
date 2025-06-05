@@ -1,9 +1,8 @@
 // src/components/home/RankingTable.tsx
-
+import React from 'react';
 import {
   Table,
   TableBody,
-  TableCell,
   TableHead,
   TableHeader,
   TableRow,
@@ -11,18 +10,27 @@ import {
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import RankingRow from "@/components/ranking/RankingRow";
-import  useParticipantsRanking  from "@/hooks/useParticipantsRanking";
+import useParticipantsRanking, { Participant } from "@/hooks/useParticipantsRanking";
 import { Users as UsersIcon } from "lucide-react";
-
+import { isAIParticipant } from '@/utils/utils'; // Ajuste o caminho se necessário
 
 const RankingTable = () => {
   const { participants, loading, error } = useParticipantsRanking();
 
-  // Função para renderizar o cabeçalho do card
+  // Filtra usuários reais e calcula seus ranks
+  const realParticipants = participants.filter(p => !isAIParticipant(p));
+  const totalRealParticipants = realParticipants.length;
+
+  // Mapeia ID do usuário real para seu rank real (0-based)
+  const realUserRankMap = new Map<string, number>();
+  realParticipants.forEach((p, idx) => {
+    realUserRankMap.set(p.id, idx);
+  });
+
   const renderCardHeader = () => (
-    <CardHeader className="bg-fifa-blue text-white pb-4"> {/* Mantém o fundo e cor do texto */}
-      <CardTitle>Ranking de Participantes</CardTitle> {/* Removeu text-xl para usar o padrão (text-2xl) */}
-      <CardDescription className="text-sm text-gray-300 pt-1"> {/* Tamanho text-sm e cor text-gray-300 */}
+    <CardHeader className="bg-fifa-blue text-white pb-4">
+      <CardTitle>Ranking de Participantes</CardTitle>
+      <CardDescription className="text-sm text-gray-300 pt-1">
         (Obs.: as IAs não serão consideradas para vencedores/perdedores)
       </CardDescription>
     </CardHeader>
@@ -34,11 +42,7 @@ const RankingTable = () => {
         {renderCardHeader()}
         <CardContent className="p-4">
           <div className="space-y-4">
-            <Skeleton className="h-10 w-full" />
-            <Skeleton className="h-10 w-full" />
-            <Skeleton className="h-10 w-full" />
-            <Skeleton className="h-10 w-full" />
-            <Skeleton className="h-10 w-full" />
+            {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}
           </div>
         </CardContent>
       </Card>
@@ -50,7 +54,6 @@ const RankingTable = () => {
       <Card className="shadow-lg">
         <CardHeader className="bg-red-500 text-white">
           <CardTitle>Erro ao Carregar Ranking</CardTitle>
-          {/* Você pode adicionar a CardDescription aqui também se o erro precisar de um subtitulo */}
         </CardHeader>
         <CardContent className="p-4">
           <p className="text-red-600">{error}</p>
@@ -76,20 +79,26 @@ const RankingTable = () => {
                 <TableHead className="w-[50px] text-center">Pos</TableHead>
                 <TableHead>Participante</TableHead>
                 <TableHead className="text-right">Pontos</TableHead>
-                <TableHead className="text-right">Jogos Pontuados</TableHead>
+                <TableHead className="text-right">Jogos Pont.</TableHead>
                 <TableHead className="text-right">Acerto</TableHead>
                 <TableHead className="text-right">Prêmio</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {participants.map((participant, index) => (
-                <RankingRow
-                  key={participant.id}
-                  participant={participant}
-                  index={index}
-                  totalParticipants={participants.length}
-                />
-              ))}
+              {participants.map((participant, overallIndex) => {
+                const isAI = isAIParticipant(participant);
+                const realUserRank = isAI ? -1 : (realUserRankMap.get(participant.id) ?? -1);
+
+                return (
+                  <RankingRow
+                    key={participant.id}
+                    participant={participant}
+                    index={overallIndex}
+                    realUserRank={realUserRank}
+                    totalRealParticipants={totalRealParticipants}
+                  />
+                );
+              })}
             </TableBody>
           </Table>
         )}

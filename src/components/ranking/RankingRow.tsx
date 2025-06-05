@@ -1,65 +1,77 @@
 // src/components/ranking/RankingRow.tsx
+import React from 'react';
+import { TableRow, TableCell } from "@/components/ui/table";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Participant } from "@/hooks/useParticipantsRanking";
+import { isAIParticipant } from '@/utils/utils'; // Ajuste o caminho se necessário (ex: '@/lib/utils')
 
-import React from "react";
-import { TableCell, TableRow } from "@/components/ui/table";
-import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
-import { Participant } from "@/hooks/useParticipantsRanking"; // <--- Importação correta do tipo Participant
-
-type RankingRowProps = {
+interface RankingRowProps {
   participant: Participant;
-  index: number;
-  totalParticipants: number; // <--- NOVO: Adicionada a prop totalParticipants
+  index: number; // Posição geral na lista exibida (0-based)
+  realUserRank: number; // Ranking entre usuários reais (0-based), ou -1 se IA/não aplicável
+  totalRealParticipants: number; // Total de usuários reais
+}
+
+const getPrizeText = (
+  isCurrentUserAI: boolean,
+  realUserRank: number,
+  totalRealUsers: number
+): string => {
+  if (isCurrentUserAI || realUserRank === -1 || totalRealUsers === 0) {
+    return ""; // Sem texto de prêmio para IAs ou se não houver usuários reais
+  }
+
+  // 1º usuário real
+  if (realUserRank === 0) {
+    return "R$ 165,00";
+  }
+  // 2º usuário real (garante que haja mais de 1 usuário real)
+  if (realUserRank === 1 && totalRealUsers > 1) {
+    return "R$  68,75";
+  }
+  // 3º usuário real (garante que haja mais de 2 usuários reais)
+  if (realUserRank === 2 && totalRealUsers > 2) {
+    return "R$  41,25";
+  }
+  // Último usuário real (garante que haja mais de 1 usuário real para não premiar/penalizar o primeiro)
+  if (totalRealUsers > 1 && realUserRank === totalRealUsers - 1) {
+    return "Paga um café da manhã";
+  }
+  return "";
 };
 
-const RankingRow = ({ participant, index, totalParticipants }: RankingRowProps) => {
+const RankingRow = ({
+  participant,
+  index,
+  realUserRank,
+  totalRealParticipants,
+}: RankingRowProps) => {
+  const isCurrentUserAI = isAIParticipant(participant); // Verifica se o participante atual é IA
+  const prizeText = getPrizeText(isCurrentUserAI, realUserRank, totalRealParticipants);
 
-  // Lógica para determinar o texto do prêmio
-  const getPrizeText = (position: number, total: number): string => {
-    if (position === 0) {
-      return "R$ 165,00";
-    }
-    if (position === 1) {
-      return "R$ 68,75";
-    }
-    if (position === 2) {
-      return "R$ 41,25";
-    }
-    // Para o último colocado, verifique se há mais de um participante para evitar que o 1º também seja "último"
-    if (position === total - 1 && total > 1) {
-      return "Paga um café da manhã";
-    }
-    return ""; // Retorna vazio para as outras posições sem prêmio específico
-  };
-
-  const prizeText = getPrizeText(index, totalParticipants);
+  // Ajusta o destaque para os 3 primeiros usuários REAIS
+  const isTopRealUser = !isCurrentUserAI && realUserRank !== -1 && realUserRank < 3;
 
   return (
-    <TableRow className={index < 3 ? "bg-yellow-50" : ""}>
-      <TableCell className="font-medium text-center">
-        {index === 0 ? (
-          <span className="inline-flex items-center justify-center bg-fifa-gold text-white rounded-full w-6 h-6 text-xs font-bold">1</span>
-        ) : index === 1 ? (
-          <span className="inline-flex items-center justify-center bg-gray-300 text-gray-800 rounded-full w-6 h-6 text-xs font-bold">2</span>
-        ) : index === 2 ? (
-          <span className="inline-flex items-center justify-center bg-amber-700 text-white rounded-full w-6 h-6 text-xs font-bold">3</span>
-        ) : (
-          index + 1
-        )}
-      </TableCell>
-      <TableCell className="font-medium">
+    <TableRow className={isTopRealUser ? "bg-yellow-50" : ""}>
+      <TableCell className="text-center font-medium">{index + 1}</TableCell>
+      <TableCell>
         <div className="flex items-center gap-2">
           <Avatar className="h-8 w-8">
-            <AvatarImage src={participant.avatar_url || undefined} /> {/* Certifique-se de que avatar_url é string | undefined para o src */}
-            <AvatarFallback>{participant.name.substring(0, 2)}</AvatarFallback>
+            <AvatarImage src={participant.avatar_url || undefined} alt={participant.name} />
+            <AvatarFallback>{participant.name ? participant.name.substring(0, 2).toUpperCase() : '??'}</AvatarFallback>
           </Avatar>
-          {participant.name}
+          <div>
+            <div className="font-medium">{participant.name}</div>
+            <div className="text-xs text-gray-500">@{participant.username}</div>
+          </div>
         </div>
       </TableCell>
-      <TableCell className="text-right font-bold">{participant.points}</TableCell>
+      <TableCell className="text-right">{participant.points}</TableCell>
       <TableCell className="text-right">{participant.matches}</TableCell>
       <TableCell className="text-right">{participant.accuracy}</TableCell>
       <TableCell className="text-right font-semibold">
-        {prizeText} {/* <--- AGORA USA O TEXTO CALCULADO */}
+        {prizeText}
       </TableCell>
     </TableRow>
   );
