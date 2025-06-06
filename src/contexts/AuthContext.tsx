@@ -3,7 +3,7 @@
 import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { User } from '@supabase/supabase-js';
-import { toast } from 'sonner'; // Importar o sonner para dar feedback
+import { toast } from 'sonner';
 
 export type AppUser = User & {
   username?: string;
@@ -13,13 +13,14 @@ export type AppUser = User & {
   total_points?: number;
 };
 
-// 1. ADICIONAR A FUNÇÃO 'login' À INTERFACE DO CONTEXTO
+// 1. ADICIONAR a propriedade 'isAuthenticated'
 interface AuthContextType {
   user: AppUser | null;
   loading: boolean;
+  isAuthenticated: boolean; // <-- ADICIONADO AQUI
   isFirstLogin: boolean;
-  isAdmin: boolean; // Adicionado para consistência
-  login: (email: string, password: string) => Promise<boolean>; // <-- ADICIONADO AQUI
+  isAdmin: boolean;
+  login: (email: string, password: string) => Promise<boolean>;
   updateUserProfile: (updates: Partial<AppUser>) => Promise<void>;
   signOut: () => Promise<void>;
 }
@@ -44,7 +45,9 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [isFirstLogin, setIsFirstLogin] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
 
-  // 2. IMPLEMENTAR A LÓGICA DE LOGIN
+  // 2. CRIAR A VARIÁVEL 'isAuthenticated' baseada no estado do usuário
+  const isAuthenticated = !!user; // Converte o objeto 'user' (ou null) para um booleano
+
   const login = useCallback(async (email: string, password: string) => {
     try {
       const { data, error } = await supabase.auth.signInWithPassword({
@@ -53,7 +56,6 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       });
 
       if (error) {
-        // Trata erros comuns de login de forma amigável
         if (error.message.includes('Invalid login credentials')) {
           toast.error('Email ou senha inválidos.');
         } else {
@@ -61,11 +63,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         }
         return false;
       }
-      
-      // onAuthStateChange vai lidar com a atualização do estado do usuário.
-      // Apenas retornamos sucesso.
       return true;
-
     } catch (err: any) {
       console.error("Erro inesperado no login:", err);
       toast.error("Ocorreu um erro inesperado. Tente novamente.");
@@ -75,7 +73,6 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
   const signOut = useCallback(async () => {
     await supabase.auth.signOut();
-    // O listener onAuthStateChange irá lidar com a atualização do estado para null
   }, []);
   
   const fetchAndSyncProfile = useCallback(async (sessionUser: User) => {
@@ -94,7 +91,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       
       const combinedUser: AppUser = { ...sessionUser, ...profile };
       setUser(combinedUser);
-      setIsFirstLogin(profile.first_login === false); // Ajuste: !false = true, !true = false
+      setIsFirstLogin(profile.first_login === false);
       setIsAdmin(profile.is_admin === true);
 
     } catch (e) {
@@ -149,8 +146,8 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     }
   };
 
-  // 3. ADICIONAR A FUNÇÃO 'login' AO VALOR FORNECIDO PELO CONTEXTO
-  const value = { user, loading, isFirstLogin, isAdmin, login, updateUserProfile, signOut };
+  // 3. ADICIONAR 'isAuthenticated' ao objeto de valor
+  const value = { user, loading, isAuthenticated, isFirstLogin, isAdmin, login, updateUserProfile, signOut };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
