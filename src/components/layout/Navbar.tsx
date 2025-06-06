@@ -1,3 +1,4 @@
+// src/components/layout/Navbar.tsx
 
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
@@ -13,11 +14,13 @@ import { useAuth } from "@/contexts/AuthContext";
 
 const Navbar = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const { isAuthenticated, isAdmin, user, logout } = useAuth();
+  // --- CORREÇÃO AQUI: Trocar 'logout' por 'signOut' ---
+  const { isAuthenticated, isAdmin, user, signOut } = useAuth();
   const navigate = useNavigate();
 
-  const handleLogout = () => {
-    logout();
+  // --- CORREÇÃO AQUI: Tornar a função async e chamar signOut ---
+  const handleLogout = async () => {
+    await signOut();
     navigate("/");
   };
 
@@ -170,6 +173,7 @@ const Navbar = () => {
                   <div className="px-4 py-2 text-sm">
                     Olá, {user?.name}
                   </div>
+                   {/* --- CORREÇÃO AQUI TAMBÉM --- */}
                   <button
                     className="flex items-center py-2 px-4 hover:bg-fifa-gold hover:text-fifa-blue rounded transition-colors"
                     onClick={() => {
