@@ -3,12 +3,12 @@
 import { type ClassValue, clsx } from "clsx"
 import { twMerge } from "tailwind-merge"
 
-// Função 'cn' padrão do shadcn/ui que já deve estar no seu arquivo
+// Função 'cn' padrão do shadcn/ui que você já deve ter
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
-// --- INÍCIO DA ADIÇÃO ---
+// --- INÍCIO DA CORREÇÃO ---
 
 // 1. Defina a interface para garantir que o objeto participante tenha as propriedades necessárias
 interface ParticipantLike {
@@ -31,4 +31,4 @@ export const isAIParticipant = (participant: ParticipantLike): boolean => {
   );
 };
 
-// --- FIM DA ADIÇÃO ---
+// --- FIM DA CORREÇÃO ---
