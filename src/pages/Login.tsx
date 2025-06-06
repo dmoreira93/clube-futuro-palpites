@@ -1,5 +1,5 @@
 // src/pages/Login.tsx
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Link, useNavigate } from "react-router-dom";
@@ -21,18 +21,8 @@ const Login = () => {
   const [formData, setFormData] = useState({ email: "", password: "" });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { user, loading: authLoading, isFirstLogin } = useAuth();
+  const { user, isFirstLogin } = useAuth();
   const navigate = useNavigate();
-
-  useEffect(() => {
-    if (!authLoading) {
-      if (user && isFirstLogin) {
-        navigate("/change-password", { replace: true });
-      } else if (user) {
-        navigate("/", { replace: true });
-      }
-    }
-  }, [user, authLoading, isFirstLogin, navigate]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -52,16 +42,17 @@ const Login = () => {
         throw signInError;
       }
       
-      // A navegação agora é tratada pelo useEffect acima, que reage à mudança do estado de 'user'.
+      // A navegação será tratada pelo AuthContext e ProtectedRoute ao detectar a mudança de 'user'
+      // Apenas um fallback se necessário.
+      // navigate('/'); 
       
     } catch (error: any) {
       console.error("Erro ao fazer login no componente:", error);
-      const errorMessage = "Email ou senha inválidos. Verifique suas credenciais e tente novamente.";
-      setError(errorMessage);
+      setError("Email ou senha inválidos. Verifique suas credenciais.");
       // 3. Chamando a notificação CORRETA
       toast({
         title: "Erro no Login",
-        description: errorMessage,
+        description: "Email ou senha inválidos. Verifique suas credenciais e tente novamente.",
         variant: "destructive",
       });
     } finally {
@@ -69,13 +60,18 @@ const Login = () => {
     }
   };
 
-  if (authLoading) {
-    return <div className="flex justify-center items-center h-screen"><Loader2 className="h-8 w-8 animate-spin" /></div>;
+  if (user && !isFirstLogin) {
+    navigate("/");
+    return null;
+  }
+  if (user && isFirstLogin) {
+    navigate("/change-password");
+    return null;
   }
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-gray-100">
-      <Card className="mx-auto max-w-sm w-full">
+      <Card className="mx-auto max-w-sm">
         <CardHeader>
           <CardTitle className="text-2xl">Login</CardTitle>
           <CardDescription>
@@ -95,7 +91,6 @@ const Login = () => {
                   required
                   value={formData.email}
                   onChange={handleChange}
-                  autoComplete="email"
                 />
               </div>
               <div className="grid gap-2">
@@ -109,10 +104,9 @@ const Login = () => {
                   required
                   value={formData.password}
                   onChange={handleChange}
-                  autoComplete="current-password"
                 />
               </div>
-              {error && <p className="text-red-500 text-sm mt-2">{error}</p>}
+              {error && <p className="text-red-500 text-sm">{error}</p>}
               <Button type="submit" className="w-full" disabled={loading}>
                 {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Entrar"}
               </Button>
