@@ -3,13 +3,13 @@ import React from 'react';
 import { TableRow, TableCell } from "@/components/ui/table";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Participant } from "@/hooks/useParticipantsRanking";
-import { isAIParticipant } from '@/utils/utils'; // Ajuste o caminho se necessário (ex: '@/lib/utils')
+import { isAIParticipant } from '@/lib/utils'; // Ajuste o caminho para o seu arquivo utils
 
 interface RankingRowProps {
   participant: Participant;
-  index: number; // Posição geral na lista exibida (0-based)
-  realUserRank: number; // Ranking entre usuários reais (0-based), ou -1 se IA/não aplicável
-  totalRealParticipants: number; // Total de usuários reais
+  index: number;
+  realUserRank: number;
+  totalRealParticipants: number;
 }
 
 const getPrizeText = (
@@ -18,25 +18,12 @@ const getPrizeText = (
   totalRealUsers: number
 ): string => {
   if (isCurrentUserAI || realUserRank === -1 || totalRealUsers === 0) {
-    return ""; // Sem texto de prêmio para IAs ou se não houver usuários reais
+    return "";
   }
-
-  // 1º usuário real
-  if (realUserRank === 0) {
-    return "R$ 165,00";
-  }
-  // 2º usuário real (garante que haja mais de 1 usuário real)
-  if (realUserRank === 1 && totalRealUsers > 1) {
-    return "R$  68,75";
-  }
-  // 3º usuário real (garante que haja mais de 2 usuários reais)
-  if (realUserRank === 2 && totalRealUsers > 2) {
-    return "R$  41,25";
-  }
-  // Último usuário real (garante que haja mais de 1 usuário real para não premiar/penalizar o primeiro)
-  if (totalRealUsers > 1 && realUserRank === totalRealUsers - 1) {
-    return "Paga um café da manhã";
-  }
+  if (realUserRank === 0) return "60%";
+  if (realUserRank === 1 && totalRealUsers > 1) return "25%";
+  if (realUserRank === 2 && totalRealUsers > 2) return "15%";
+  if (totalRealUsers > 1 && realUserRank === totalRealUsers - 1) return "Paga um café da manhã";
   return "";
 };
 
@@ -46,10 +33,8 @@ const RankingRow = ({
   realUserRank,
   totalRealParticipants,
 }: RankingRowProps) => {
-  const isCurrentUserAI = isAIParticipant(participant); // Verifica se o participante atual é IA
+  const isCurrentUserAI = isAIParticipant(participant);
   const prizeText = getPrizeText(isCurrentUserAI, realUserRank, totalRealParticipants);
-
-  // Ajusta o destaque para os 3 primeiros usuários REAIS
   const isTopRealUser = !isCurrentUserAI && realUserRank !== -1 && realUserRank < 3;
 
   return (
@@ -68,11 +53,11 @@ const RankingRow = ({
         </div>
       </TableCell>
       <TableCell className="text-right">{participant.points}</TableCell>
-      <TableCell className="text-right">{participant.matches}</TableCell>
-      <TableCell className="text-right">{participant.accuracy}</TableCell>
-      <TableCell className="text-right font-semibold">
-        {prizeText}
-      </TableCell>
+      
+      {/* Células visíveis apenas em telas médias (md) ou maiores */}
+      <TableCell className="hidden md:table-cell text-right">{participant.matches}</TableCell>
+      <TableCell className="hidden md:table-cell text-right">{participant.accuracy}</TableCell>
+      <TableCell className="hidden md:table-cell text-right font-semibold">{prizeText}</TableCell>
     </TableRow>
   );
 };
