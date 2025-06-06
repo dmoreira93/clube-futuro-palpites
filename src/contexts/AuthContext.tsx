@@ -1,10 +1,8 @@
-// src/contexts/AuthContext.tsx
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { User } from '@supabase/supabase-js';
 import { useNavigate } from 'react-router-dom';
 
-// Estendendo o tipo de usuário para incluir nossos campos customizados
 export type AppUser = User & {
   username?: string;
   name?: string;
@@ -13,19 +11,16 @@ export type AppUser = User & {
   total_points?: number;
 };
 
-// Tipo para o valor do contexto
 interface AuthContextType {
   user: AppUser | null;
   loading: boolean;
   isFirstLogin: boolean;
   updateUserProfile: (updates: Partial<AppUser>) => Promise<void>;
-  signOut: () => Promise<void>; // <-- NOVA FUNÇÃO EXPORTADA
+  signOut: () => Promise<void>;
 }
 
-// Criação do contexto com um valor padrão
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Hook customizado para usar o contexto
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (context === undefined) {
@@ -40,108 +35,68 @@ interface AuthProviderProps {
 
 export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [user, setUser] = useState<AppUser | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(true); // Começa como true até a sessão inicial ser verificada
   const [isFirstLogin, setIsFirstLogin] = useState(false);
   const navigate = useNavigate();
 
-  // Função para buscar e sincronizar o perfil customizado
-  const fetchAndSyncProfile = async (sessionUser: User) => {
-    try {
-      const { data: profile, error: profileError } = await supabase
-        .from('users_custom')
-        .select('*')
-        .eq('id', sessionUser.id)
-        .single();
-        
-      let combinedUser: AppUser;
-      let currentIsFirstLogin = false;
-
-      if (profileError && profileError.code === 'PGRST116') {
-        console.log("Perfil não encontrado em users_custom. Criando novo perfil...");
-        const { error: insertError } = await supabase.from("users_custom").insert([
-          {
-            id: sessionUser.id,
-            name: sessionUser.user_metadata?.name || "",
-            username: sessionUser.user_metadata?.nickname || "",
-            is_admin: sessionUser.user_metadata?.is_admin || false,
-            avatar_url: "",
-            first_login: false,
-          },
-        ]);
-
-        if (insertError) {
-          console.error("Erro ao inserir novo perfil:", insertError);
-          throw insertError;
-        }
-
-        combinedUser = {
-          ...sessionUser,
-          name: sessionUser.user_metadata?.name || "",
-          username: sessionUser.user_metadata?.nickname || "",
-          is_admin: false,
-          first_login: false,
-          total_points: 0,
-        };
-        currentIsFirstLogin = true;
-
-      } else if (profileError) {
-        console.error("Erro ao buscar perfil:", profileError);
-        throw profileError;
-      } else {
-        combinedUser = {
-          ...sessionUser,
-          ...profile,
-        };
-        currentIsFirstLogin = !profile.first_login;
-      }
-
-      setUser(combinedUser);
-      setIsFirstLogin(currentIsFirstLogin);
-
-    } catch (error) {
-      console.error("Erro no fetchAndSyncProfile:", error);
-      // Se ocorrer um erro aqui, pode ser um problema de RLS, deslogar é uma boa medida
-      await signOut();
-    }
-  };
-
-  // <-- NOVA FUNÇÃO DE LOGOUT
-  const signOut = async () => {
-    console.log("Sessão inválida ou logout solicitado. Deslogando...");
+  const signOut = useCallback(async () => {
     await supabase.auth.signOut();
-    setUser(null);
-    setIsFirstLogin(false);
-    navigate('/login', { replace: true }); // Redireciona para o login
-  };
-
+    // Não precisa navegar aqui, o useEffect que escuta a sessão vai lidar com isso
+  }, []);
 
   useEffect(() => {
-    const getInitialSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
-        await fetchAndSyncProfile(session.user);
-      }
-      setLoading(false);
-    };
-
-    getInitialSession();
-
+    // Escuta mudanças no estado de autenticação (login, logout, etc.)
     const { data: authListener } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        console.log(`Auth event: ${event}`);
-        if (event === 'SIGNED_OUT') {
+      async (_event, session) => {
+        setLoading(true); // Começa a carregar sempre que o estado de auth muda
+        if (!session) {
+          // Se não há sessão (logout ou sessão expirada)
           setUser(null);
           setIsFirstLogin(false);
-        } else if (session) {
-          await fetchAndSyncProfile(session.user);
+          setLoading(false);
+          navigate('/login');
+          return;
+        }
+
+        try {
+          // Se há uma sessão, busca o perfil customizado
+          const { data: profile, error } = await supabase
+            .from('users_custom')
+            .select('*')
+            .eq('id', session.user.id)
+            .single();
+          
+          if (error) {
+            // Se der erro ao buscar o perfil (ex: RLS), desloga o usuário
+            console.error("Erro ao buscar perfil, deslogando:", error);
+            await signOut();
+            return;
+          }
+
+          if (profile) {
+            // Se encontrou o perfil, combina os dados e atualiza o estado
+            const combinedUser: AppUser = { ...session.user, ...profile };
+            setUser(combinedUser);
+            setIsFirstLogin(!profile.first_login);
+          } else {
+            // Este caso não deveria acontecer se o trigger do BD estiver funcionando, mas é uma salvaguarda
+            console.warn("Usuário autenticado sem perfil em users_custom. Deslogando.");
+            await signOut();
+          }
+        } catch (e) {
+          console.error("Erro crítico no onAuthStateChange, deslogando:", e);
+          await signOut();
+        } finally {
+          setLoading(false); // Termina de carregar
         }
       }
     );
 
     return () => {
+      // Limpa o listener quando o componente é desmontado
       authListener.subscription.unsubscribe();
     };
-  }, []);
+  }, [navigate, signOut]); // Adiciona navigate e signOut como dependências estáveis
 
   const updateUserProfile = async (updates: Partial<AppUser>) => {
     if (!user) return;
@@ -155,8 +110,8 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
       if (error) throw error;
 
-      setUser(prevUser => prevUser ? { ...prevUser, ...data } : null);
-      if(updates.first_login === true) {
+      setUser(prevUser => (prevUser ? { ...prevUser, ...data } : null));
+      if (updates.first_login === true) {
         setIsFirstLogin(false);
       }
     } catch (error) {
@@ -169,7 +124,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     loading,
     isFirstLogin,
     updateUserProfile,
-    signOut // <-- EXPORTA A FUNÇÃO
+    signOut,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
