@@ -1,84 +1,59 @@
+// src/hooks/useMatchResults.ts
 
-import { useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
-import { useToast } from "@/hooks/use-toast";
-import { updateUserPoints } from "@/utils/pointsCalculator";
-import { useAuth } from "@/contexts/AuthContext";
+import { useState, useEffect } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext'; // <-- ADICIONADO
 
-export const useMatchResults = () => {
-  const { toast } = useToast();
-  const { isAdmin } = useAuth();
-  const [isProcessing, setIsProcessing] = useState(false);
-  
-  const submitResult = async (
-    matchId: string, 
-    homeScore: string, 
-    awayScore: string, 
-    adminPassword: string
-  ) => {
-    // Verificar se é administrador pelo contexto Auth
-    // Mantemos a senha como fallback para compatibilidade
-    if (!isAdmin && adminPassword !== "admin123") {
-      toast({
-        title: "Erro de autenticação",
-        description: "Você não possui permissão para esta ação",
-        variant: "destructive",
-      });
-      return false;
-    }
+export interface MatchResult {
+  id: string;
+  home_score: number | null;
+  away_score: number | null;
+  match_date: string;
+  is_finished: boolean;
+  stage: string;
+}
 
-    if (!homeScore || !awayScore) {
-      toast({
-        title: "Dados incompletos",
-        description: "Por favor, informe o placar de ambos os times",
-        variant: "destructive",
-      });
-      return false;
-    }
+const useMatchResults = (matchIds: string[]) => {
+  const { signOut } = useAuth(); // <-- ADICIONADO
+  const [results, setResults] = useState<MatchResult[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-    setIsProcessing(true);
-
-    try {
-      // Em ambiente de produção, salvar o resultado no Supabase
-      const { error } = await supabase
-        .from('matches')
-        .update({
-          home_score: parseInt(homeScore),
-          away_score: parseInt(awayScore),
-          is_finished: true,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', matchId);
-      
-      if (error) {
-        throw error;
+  useEffect(() => {
+    const fetchResults = async () => {
+      if (!matchIds || matchIds.length === 0) {
+        setResults([]);
+        return;
       }
-      
-      // Chamada para atualizar pontuações dos usuários
-      await updateUserPoints(matchId);
-      
-      toast({
-        title: "Resultado registrado",
-        description: "O resultado foi salvo e os pontos foram calculados com sucesso!",
-      });
-      
-      setIsProcessing(false);
-      return true;
-      
-    } catch (error) {
-      toast({
-        title: "Erro ao processar",
-        description: "Houve um erro ao registrar o resultado",
-        variant: "destructive",
-      });
-      console.error("Erro:", error);
-      setIsProcessing(false);
-      return false;
-    }
-  };
+      setLoading(true);
+      setError(null);
+      try {
+        const { data, error: fetchError } = await supabase
+          .from('matches')
+          .select('id, home_score, away_score, match_date, is_finished, stage')
+          .in('id', matchIds);
 
-  return {
-    submitResult,
-    isProcessing
-  };
+        if (fetchError) {
+          throw fetchError;
+        }
+
+        setResults(data || []);
+      } catch (error: any) {
+        console.error('Error fetching match results:', error);
+        setError(error.message);
+        // <-- ADICIONADO
+        if (error?.message?.includes('JWT') || error?.code === 'PGRST301') {
+          await signOut();
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchResults();
+  }, [matchIds, signOut]); // <-- ADICIONADO
+
+  return { results, loading, error };
 };
+
+export default useMatchResults;
