@@ -35,31 +35,28 @@ interface AuthProviderProps {
 
 export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [user, setUser] = useState<AppUser | null>(null);
-  const [loading, setLoading] = useState(true); // Começa como true até a sessão inicial ser verificada
+  const [loading, setLoading] = useState(true);
   const [isFirstLogin, setIsFirstLogin] = useState(false);
   const navigate = useNavigate();
 
   const signOut = useCallback(async () => {
     await supabase.auth.signOut();
-    // Não precisa navegar aqui, o useEffect que escuta a sessão vai lidar com isso
+    // A mudança de estado será capturada pelo onAuthStateChange
   }, []);
 
   useEffect(() => {
-    // Escuta mudanças no estado de autenticação (login, logout, etc.)
     const { data: authListener } = supabase.auth.onAuthStateChange(
       async (_event, session) => {
-        setLoading(true); // Começa a carregar sempre que o estado de auth muda
+        setLoading(true);
         if (!session) {
-          // Se não há sessão (logout ou sessão expirada)
           setUser(null);
           setIsFirstLogin(false);
-          setLoading(false);
           navigate('/login');
+          setLoading(false);
           return;
         }
 
         try {
-          // Se há uma sessão, busca o perfil customizado
           const { data: profile, error } = await supabase
             .from('users_custom')
             .select('*')
@@ -67,36 +64,61 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
             .single();
           
           if (error) {
-            // Se der erro ao buscar o perfil (ex: RLS), desloga o usuário
-            console.error("Erro ao buscar perfil, deslogando:", error);
+            console.error("Erro ao buscar perfil RLS, deslogando:", error);
             await signOut();
             return;
           }
 
           if (profile) {
-            // Se encontrou o perfil, combina os dados e atualiza o estado
             const combinedUser: AppUser = { ...session.user, ...profile };
             setUser(combinedUser);
             setIsFirstLogin(!profile.first_login);
           } else {
-            // Este caso não deveria acontecer se o trigger do BD estiver funcionando, mas é uma salvaguarda
-            console.warn("Usuário autenticado sem perfil em users_custom. Deslogando.");
-            await signOut();
+            console.warn("Usuário autenticado sem perfil em users_custom. Tentando criar...");
+            // Lógica para criar perfil se não existir
+            const { error: insertError } = await supabase.from("users_custom").insert([
+              {
+                id: session.user.id,
+                name: session.user.user_metadata?.name || "",
+                username: session.user.user_metadata?.nickname || "",
+                is_admin: false,
+                first_login: false,
+              },
+            ]);
+
+            if (insertError) {
+              console.error("Falha ao criar perfil que faltava, deslogando:", insertError);
+              await signOut();
+            } else {
+              // Tenta buscar o perfil novamente após a criação bem-sucedida
+              const { data: newProfile, error: newProfileError } = await supabase
+                .from('users_custom')
+                .select('*')
+                .eq('id', session.user.id)
+                .single();
+              
+              if(newProfile && !newProfileError) {
+                const combinedUser: AppUser = { ...session.user, ...newProfile };
+                setUser(combinedUser);
+                setIsFirstLogin(!newProfile.first_login);
+              } else {
+                await signOut();
+              }
+            }
           }
         } catch (e) {
           console.error("Erro crítico no onAuthStateChange, deslogando:", e);
           await signOut();
         } finally {
-          setLoading(false); // Termina de carregar
+          setLoading(false);
         }
       }
     );
 
     return () => {
-      // Limpa o listener quando o componente é desmontado
       authListener.subscription.unsubscribe();
     };
-  }, [navigate, signOut]); // Adiciona navigate e signOut como dependências estáveis
+  }, [navigate, signOut]);
 
   const updateUserProfile = async (updates: Partial<AppUser>) => {
     if (!user) return;
@@ -119,13 +141,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     }
   };
 
-  const value = {
-    user,
-    loading,
-    isFirstLogin,
-    updateUserProfile,
-    signOut,
-  };
+  const value = { user, loading, isFirstLogin, updateUserProfile, signOut };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
