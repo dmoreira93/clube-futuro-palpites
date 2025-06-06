@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -12,11 +12,11 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useToast } from "@/components/ui/use-toast"; // <-- 1. Importação CORRETA
 import { Loader2 } from "lucide-react";
+import { useToast } from "@/components/ui/use-toast"; // <-- 1. MUDANÇA: Importação correta do toast
 
 const Login = () => {
-  const { toast } = useToast(); // <-- 2. Usando o hook do shadcn/ui
+  const { toast } = useToast(); // <-- 2. MUDANÇA: Usando o hook do shadcn/ui
   const [formData, setFormData] = useState({ email: "", password: "" });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -24,6 +24,7 @@ const Login = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
+    // Redireciona o usuário se ele já estiver logado
     if (!authLoading) {
       if (user && isFirstLogin) {
         navigate("/change-password", { replace: true });
@@ -50,13 +51,13 @@ const Login = () => {
       if (signInError) {
         throw signInError;
       }
-      // A navegação agora é tratada pelo useEffect acima, que reage à mudança de estado.
-      
+      // O redirecionamento após o sucesso é tratado pelo useEffect acima
     } catch (error: any) {
+      const errorMessage = "Email ou senha inválidos. Verifique suas credenciais.";
       console.error("Erro ao fazer login no componente:", error);
-      const errorMessage = "Email ou senha inválidos. Verifique suas credenciais e tente novamente.";
       setError(errorMessage);
-      // 3. Chamando a notificação CORRETA do shadcn/ui
+      
+      // 3. MUDANÇA: Chamada da função toast com a sintaxe correta
       toast({
         title: "Erro no Login",
         description: errorMessage,
@@ -68,9 +69,14 @@ const Login = () => {
   };
 
   if (authLoading) {
-    return <div className="flex justify-center items-center h-screen"><Loader2 className="h-8 w-8 animate-spin" /></div>;
+    return (
+      <div className="flex justify-center items-center h-screen">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
   }
 
+  // O JSX abaixo é o do seu layout original, para que a aparência não mude
   return (
     <div className="flex items-center justify-center min-h-screen bg-gray-100">
       <Card className="mx-auto max-w-sm w-full">
@@ -110,7 +116,7 @@ const Login = () => {
                   autoComplete="current-password"
                 />
               </div>
-              {error && <p className="text-red-500 text-sm mt-2">{error}</p>}
+              {error && <p className="text-sm font-medium text-destructive mt-2">{error}</p>}
               <Button type="submit" className="w-full" disabled={loading}>
                 {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Entrar"}
               </Button>
