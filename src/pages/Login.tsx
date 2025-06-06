@@ -1,4 +1,3 @@
-// src/pages/Login.tsx
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -51,14 +50,13 @@ const Login = () => {
       if (signInError) {
         throw signInError;
       }
-      
-      // A navegação agora é tratada pelo useEffect acima, que reage à mudança do estado de 'user'.
+      // A navegação agora é tratada pelo useEffect acima, que reage à mudança de estado.
       
     } catch (error: any) {
       console.error("Erro ao fazer login no componente:", error);
       const errorMessage = "Email ou senha inválidos. Verifique suas credenciais e tente novamente.";
       setError(errorMessage);
-      // 3. Chamando a notificação CORRETA
+      // 3. Chamando a notificação CORRETA do shadcn/ui
       toast({
         title: "Erro no Login",
         description: errorMessage,
