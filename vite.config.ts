@@ -1,16 +1,11 @@
 // vite.config.ts
 import { defineConfig } from "vite";
-import react from "@vitejs/plugin-react-swc"; // Mantido o seu plugin react-swc original
+import react from "@vitejs/plugin-react-swc";
 import path from "path";
-import { componentTagger } from "lovable-tagger";
-import { VitePWA } from 'vite-plugin-pwa'; // <-- Importação do PWA adicionada
+import { VitePWA } from 'vite-plugin-pwa';
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
-  // Adicionada a propriedade 'base' para PWA ou deploy em subdiretório (como GitHub Pages)
-  // Se você for fazer deploy no GitHub Pages, descomente a linha abaixo e use o nome do seu repositório.
-  // base: "/clube-futuro-palpites/",
-
   server: {
     host: "::",
     port: 8080,
@@ -18,16 +13,21 @@ export default defineConfig(({ mode }) => ({
   plugins: [
     react(),
     
-    // Configuração do PWA adicionada conforme solicitado
+    // Configuração do PWA com atualização mais robusta
     VitePWA({
       registerType: 'autoUpdate',
+      // Adicionado para forçar a atualização do Service Worker
+      workbox: {
+        skipWaiting: true,
+        clientsClaim: true,
+      },
       includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg'],
       manifest: {
         name: 'Clube Futuro Palpites',
         short_name: 'Futuro Palpites',
         description: 'Seu bolão de futebol online.',
-        theme_color: '#ffffff', // Cor do tema da barra de status no mobile
-        background_color: '#ffffff', // Cor de fundo da splash screen
+        theme_color: '#ffffff',
+        background_color: '#ffffff',
         display: 'standalone',
         scope: '/',
         start_url: '/',
@@ -42,8 +42,6 @@ export default defineConfig(({ mode }) => ({
             sizes: '512x512',
             type: 'image/png',
           },
-          // (Opcional, mas recomendado) Adicione um ícone "maskable" para uma melhor experiência no Android
-          // O ícone maskable garante que o logo do seu app se adapte a diferentes formatos de ícones.
           {
             src: 'pwa-maskable-512x512.png',
             sizes: '512x512',
@@ -54,8 +52,12 @@ export default defineConfig(({ mode }) => ({
       }
     }),
 
-    mode === 'development' &&
-    componentTagger(),
+    // Seu plugin "lovable-tagger" será adicionado aqui se estiver em modo de desenvolvimento
+    mode === 'development' && (() => {
+        const tagger = require('lovable-tagger/dist/index.cjs');
+        return tagger.componentTagger();
+    })(),
+
   ].filter(Boolean),
   resolve: {
     alias: {
