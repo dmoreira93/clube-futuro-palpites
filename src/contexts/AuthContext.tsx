@@ -43,27 +43,43 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     await supabase.auth.signOut();
   }, []);
 
-  const fetchAndSyncProfile = useCallback(async (sessionUser: User) => {
+    const fetchAndSyncProfile = useCallback(async (sessionUser: User) => {
     try {
       const { data: profile, error } = await supabase
         .from('users_custom')
         .select('*')
         .eq('id', sessionUser.id)
         .single();
-      
-      if (error || !profile) {
-        console.error("Erro ao buscar perfil RLS, deslogando.", error);
-        await signOut();
+
+      // Erro na consulta (que não seja "perfil não encontrado")
+      if (error && error.code !== 'PGRST116') {
+        console.error("Erro ao buscar perfil do usuário:", error);
+        // Mantém o usuário logado com dados básicos e sinaliza um erro
+        setUser(sessionUser);
+        setIsAdmin(false);
+        // Idealmente, você adicionaria um estado de erro para notificar o usuário
         return;
       }
       
+      // Perfil não encontrado (um caso válido para um novo usuário, por exemplo)
+      if (!profile) {
+        console.warn(`Perfil para o usuário ${sessionUser.id} não encontrado na tabela 'users_custom'.`);
+        // Trata como um primeiro login, permitindo que o usuário continue
+        setUser(sessionUser);
+        setIsAdmin(false);
+        setIsFirstLogin(true); // Força a rota de mudança de senha ou completar perfil
+        return;
+      }
+
+      // Caso de sucesso: perfil encontrado
       const combinedUser: AppUser = { ...sessionUser, ...profile };
       setUser(combinedUser);
-      setIsFirstLogin(!profile.first_login);
-      setIsAdmin(profile.is_admin);
-    } catch (e) {
-      console.error("Erro crítico ao buscar perfil, deslogando.", e);
-      await signOut();
+      setIsFirstLogin(profile.first_login === false ? false : true); // Trata null/undefined
+      setIsAdmin(profile.is_admin === true);
+
+    } catch (e: any) {
+      console.error("Erro crítico ao sincronizar perfil:", e);
+      setUser(sessionUser); // Evita deslogar em caso de erro inesperado
     }
   }, [signOut]);
 
