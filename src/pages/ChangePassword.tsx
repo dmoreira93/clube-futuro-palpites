@@ -1,5 +1,3 @@
-// src/pages/ChangePassword.tsx
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
@@ -13,27 +11,22 @@ import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
 
 const ChangePassword = () => {
-  const { user, isAuthenticated, isLoadingAuth, isFirstLogin, updateUserProfile } = useAuth();
+  const { user, isAuthenticated, loading, isFirstLogin, updateUserProfile } = useAuth();
   const navigate = useNavigate();
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [loading, setLoading] = useState(true); // Controla o carregamento inicial da página
-  const [submitting, setSubmitting] = useState(false); // Controla o estado de submissão do formulário
+  const [submitting, setSubmitting] = useState(false);
 
-  // Redireciona se não for o primeiro login ou não estiver autenticado
   useEffect(() => {
-    if (!isLoadingAuth) {
+    if (!loading) {
       if (!isAuthenticated) {
-        navigate('/login'); // Redireciona para login se não estiver autenticado
+        navigate('/login');
       } else if (!isFirstLogin) {
-        // Se já foi o primeiro login e a senha já foi alterada, redireciona para a página principal
-        toast.info("Sua senha já foi definida. Redirecionando para a página principal.");
+        // Se já não é o primeiro login, redireciona para a home.
         navigate('/');
-      } else {
-        setLoading(false); // Terminou de carregar e é o primeiro login
       }
     }
-  }, [isAuthenticated, isLoadingAuth, isFirstLogin, navigate]);
+  }, [isAuthenticated, loading, isFirstLogin, navigate]);
 
   const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -44,7 +37,6 @@ const ChangePassword = () => {
       setSubmitting(false);
       return;
     }
-
     if (password !== confirmPassword) {
       toast.error('As senhas não coincidem.');
       setSubmitting(false);
@@ -53,43 +45,31 @@ const ChangePassword = () => {
 
     try {
       // 1. Atualiza a senha no Supabase Auth
-      const { data, error: updateError } = await supabase.auth.updateUser({ password: password });
+      const { error: updateError } = await supabase.auth.updateUser({ password });
+      if (updateError) throw updateError;
 
-      if (updateError) {
-        console.error("Erro ao atualizar senha:", updateError);
-        // O Supabase pode retornar erros como "Password is too weak" ou "Password has been used recently"
-        toast.error(`Falha ao atualizar senha: ${updateError.message}`);
-        setSubmitting(false);
-        return;
-      }
-
-      // 2. Atualiza a flag `first_login` na tabela `users_custom`
-      await updateUserProfile({ first_login: true }); // Usando a nova função do AuthContext
+      // 2. Atualiza a flag `first_login` para `false` na tabela `users_custom`
+      await updateUserProfile({ first_login: false });
 
       toast.success('Senha alterada com sucesso! Redirecionando...');
-      navigate('/'); // Redireciona para a página inicial ou de palpites
+      navigate('/'); // Redireciona para a página inicial após sucesso
     } catch (err: any) {
-      console.error("Erro inesperado:", err);
-      toast.error(`Ocorreu um erro: ${err.message || 'Tente novamente.'}`);
+      console.error("Erro ao alterar senha:", err);
+      toast.error(`Falha ao atualizar senha: ${err.message}`);
     } finally {
       setSubmitting(false);
     }
   };
 
-  if (loading || isLoadingAuth) {
+  // Se ainda estiver carregando ou se o usuário não for de primeiro login (e o redirect não ocorreu), mostra um loader
+  if (loading || !isFirstLogin) {
     return (
       <Layout>
         <div className="flex justify-center items-center h-screen">
           <Loader2 className="h-8 w-8 animate-spin text-fifa-blue" />
-          <p className="ml-2 text-fifa-blue">Carregando...</p>
         </div>
       </Layout>
     );
-  }
-
-  // Só renderiza o formulário se for realmente o primeiro login
-  if (!isFirstLogin) {
-      return null; // O useEffect já vai redirecionar
   }
 
   return (
@@ -106,37 +86,14 @@ const ChangePassword = () => {
             <form onSubmit={handleChangePassword} className="space-y-4">
               <div>
                 <Label htmlFor="password">Nova Senha</Label>
-                <Input
-                  id="password"
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Mínimo 6 caracteres"
-                  required
-                  disabled={submitting}
-                />
+                <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Mínimo 6 caracteres" required disabled={submitting} />
               </div>
               <div>
                 <Label htmlFor="confirmPassword">Confirme a Nova Senha</Label>
-                <Input
-                  id="confirmPassword"
-                  type="password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  placeholder="Confirme sua senha"
-                  required
-                  disabled={submitting}
-                />
+                <Input id="confirmPassword" type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder="Confirme sua senha" required disabled={submitting}/>
               </div>
               <Button type="submit" className="w-full bg-fifa-blue hover:bg-fifa-blue-dark" disabled={submitting}>
-                {submitting ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Salvando...
-                  </>
-                ) : (
-                  'Salvar Nova Senha'
-                )}
+                {submitting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Salvando...</> : 'Salvar Nova Senha'}
               </Button>
             </form>
           </CardContent>
