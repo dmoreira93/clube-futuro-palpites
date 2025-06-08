@@ -16,7 +16,7 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/components/ui/tabs";
-import { useToast } from "@/components/ui/use-toast"; // <-- 1. MUDANÇA: Importação correta do toast
+import { useToast } from "@/components/ui/use-toast"; // <-- MUDANÇA 1: Importação correta do toast
 import { Label } from "@/components/ui/label";
 import { Loader2, Printer, Save } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -58,11 +58,10 @@ interface FinalPredictionState {
 const OVERALL_PREDICTION_CUTOFF_DATE = parseISO("2025-06-14T18:00:00-03:00");
 
 const Palpites = () => {
-  const { user, signOut } = useAuth(); // <-- 3. MUDANÇA: Pega a função signOut
-  const { toast } = useToast(); // <-- 2. MUDANÇA: Usa o hook do shadcn/ui
+  const { user, signOut } = useAuth(); // <-- MUDANÇA 2: Pega a função signOut
+  const { toast } = useToast(); // <-- MUDANÇA 3: Usa o hook do shadcn/ui
   const navigate = useNavigate();
 
-  // Seus states originais são mantidos...
   const [loading, setLoading] = useState(true);
   const [submittingMatchId, setSubmittingMatchId] = useState<string | null>(null);
   const [allMatches, setAllMatches] = useState<Match[]>([]);
@@ -71,80 +70,82 @@ const Palpites = () => {
   const [dailyPredictions, setDailyPredictions] = useState<{ [matchId: string]: LocalPrediction }>({});
   const [groupPredictions, setGroupPredictions] = useState<{ [groupId: string]: GroupPredictionState }>({});
   const [finalPrediction, setFinalPrediction] = useState<FinalPredictionState>({
-    champion_id: null,
-    vice_champion_id: null,
-    third_place_id: null,
-    fourth_place_id: null,
-    final_home_score: null,
-    final_away_score: null,
+    champion_id: null, vice_champion_id: null, third_place_id: null,
+    fourth_place_id: null, final_home_score: null, final_away_score: null,
   });
 
   const fetchInitialData = useCallback(async () => {
-    if (!user) return; // Se não houver usuário, não faz nada
+    if (!user) return;
     setLoading(true);
     try {
-      // Toda a sua lógica de buscar dados (Promise.all) foi movida para cá
-      const [matchesRes, teamsRes, groupsRes, dailyPredsRes, groupPredsRes, finalPredRes] = await Promise.all([
-          supabase.from("matches").select("*, home_team:home_team_id(*), away_team:away_team_id(*)").order("match_date", { ascending: true }),
-          supabase.from("teams").select("*").order("name", { ascending: true }),
-          supabase.from("groups").select("id, name").order("name", { ascending: true }),
-          supabase.from("match_predictions").select("*").eq("user_id", user.id),
-          supabase.from("group_predictions").select("*").eq("user_id", user.id),
-          supabase.from("final_predictions").select('*').eq("user_id", user.id).single(),
-      ]);
-
-      // Verificação de erros para cada chamada
-      if (matchesRes.error) throw matchesRes.error;
-      if (teamsRes.error) throw teamsRes.error;
-      if (groupsRes.error) throw groupsRes.error;
-      if (dailyPredsRes.error) throw dailyPredsRes.error;
-      if (groupPredsRes.error) throw groupPredsRes.error;
-      if (finalPredRes.error && finalPredRes.error.code !== 'PGRST116') throw finalPredRes.error;
-
-      // Processamento dos dados (mantido do seu original)
-      setAllMatches(matchesRes.data || []);
-      setTeams(teamsRes.data || []);
-      setGroups(groupsRes.data || []);
+      const { data: matchesData, error: matchesError } = await supabase.from('matches').select('*, home_team:home_team_id(*), away_team:away_team_id(*)').order('match_date', { ascending: true });
+      if (matchesError) throw matchesError;
+      setAllMatches(matchesData || []);
       
+      const { data: predictionsData, error: predictionsError } = await supabase.from('match_predictions').select('*').eq('user_id', user.id);
+      if (predictionsError) throw predictionsError;
       const loadedPredictions: { [matchId: string]: LocalPrediction } = {};
-      (dailyPredsRes.data || []).forEach(p => {
-          loadedPredictions[p.match_id] = { match_id: p.match_id, home_score: p.home_score?.toString() ?? '', away_score: p.away_score?.toString() ?? '', prediction_id: p.id };
+      (predictionsData || []).forEach(p => {
+        loadedPredictions[p.match_id] = { match_id: p.match_id, home_score: p.home_score !== null ? p.home_score.toString() : '', away_score: p.away_score !== null ? p.away_score.toString() : '', prediction_id: p.id };
       });
       setDailyPredictions(loadedPredictions);
       
+      const { data: teamsData, error: teamsError } = await supabase.from('teams').select('*').order('name', { ascending: true });
+      if (teamsError) throw teamsError;
+      setTeams(teamsData || []);
+      
+      const { data: groupsData, error: groupsError } = await supabase.from('groups').select('id, name').order('name', { ascending: true });
+      if (groupsError) throw groupsError;
+      setGroups(groupsData || []);
+      
+      const { data: groupPredData, error: groupPredError } = await supabase.from('group_predictions').select('*').eq('user_id', user.id);
+      if (groupPredError) throw groupPredError;
       const loadedGroupPredictions: { [groupId: string]: GroupPredictionState } = {};
-      (groupPredsRes.data || []).forEach(gp => {
-          loadedGroupPredictions[gp.group_id] = { group_id: gp.group_id, predicted_first_team_id: gp.predicted_first_team_id, predicted_second_team_id: gp.predicted_second_team_id, prediction_id: gp.id };
+      (groupPredData || []).forEach(gp => {
+        loadedGroupPredictions[gp.group_id] = { group_id: gp.group_id, predicted_first_team_id: gp.predicted_first_team_id, predicted_second_team_id: gp.predicted_second_team_id, prediction_id: gp.id };
       });
       setGroupPredictions(loadedGroupPredictions);
-
-      if (finalPredRes.data) {
-          setFinalPrediction({ ...finalPredRes.data, prediction_id: finalPredRes.data.id });
-      }
+      
+      const { data: finalPredData, error: finalPredError } = await supabase.from('final_predictions').select('id, champion_id, vice_champion_id, third_place_id, fourth_place_id, final_home_score, final_away_score').eq('user_id', user.id).single();
+      if (finalPredError && finalPredError.code !== 'PGRST116') throw finalPredError;
+      if (finalPredData) setFinalPrediction({ ...finalPredData, prediction_id: finalPredData.id });
 
     } catch (error: any) {
       console.error("Erro ao carregar dados iniciais:", error);
       toast({ title: "Erro ao Carregar Dados", description: error.message, variant: "destructive" });
-      // 4. MUDANÇA: Adicionada lógica de signOut
+      // MUDANÇA 4: Adiciona verificação de erro de autenticação
       if (error?.message?.includes('JWT') || error?.code === 'PGRST301') {
         await signOut();
       }
     } finally {
       setLoading(false);
     }
-  }, [user, signOut, toast]); // 5. MUDANÇA: Adicionadas dependências
+  }, [user, signOut, toast]); // MUDANÇA 5: Adiciona dependências
 
   useEffect(() => {
     fetchInitialData();
   }, [fetchInitialData]);
 
-  // ... (suas funções de handleScoreChange, handleGroupTeamChange, handleFinalPredictionChange)
+  const groupStageMatches = useMemo(() => {
+    return allMatches.filter(match => match.stage === "Fase de Grupos");
+  }, [allMatches]);
 
-  // As 3 funções de salvar agora com o tratamento de erro e toast corretos
+  const handleScoreChange = useCallback((matchId: string, type: 'home' | 'away', value: string) => {
+    setDailyPredictions(prev => ({ ...prev, [matchId]: { ...(prev[matchId] || { match_id: matchId, home_score: '', away_score: '' }), [type === 'home' ? 'home_score' : 'away_score']: value } }));
+  }, []);
+
+  const handleGroupTeamChange = useCallback((groupId: string, type: 'first' | 'second', teamId: string) => {
+    setGroupPredictions(prev => ({ ...prev, [groupId]: { ...(prev[groupId] || { group_id: groupId, predicted_first_team_id: null, predicted_second_team_id: null }), [type === 'first' ? 'predicted_first_team_id' : 'predicted_second_team_id']: teamId || null } }));
+  }, []);
+
+  const handleFinalPredictionChange = useCallback((field: keyof FinalPredictionState, value: string | number | null) => {
+    setFinalPrediction(prev => ({ ...prev, [field]: value }));
+  }, []);
+
   const handleSaveDailyPrediction = async (matchId: string) => {
-    // ... Lógica de validação do seu arquivo original ...
+    // ... (lógica de validação do seu arquivo original) ...
     try {
-      // ... Lógica de upsert do seu arquivo original ...
+      // ... (lógica de upsert do seu arquivo original) ...
       toast({ title: "Sucesso!", description: `Palpite para ${match.home_team?.name} vs ${match.away_team?.name} salvo!`});
     } catch (error: any) {
       toast({ title: "Erro", description: `Erro ao salvar palpite: ${error.message}`, variant: "destructive" });
@@ -157,10 +158,10 @@ const Palpites = () => {
   };
 
   const handleSaveGroupPrediction = useCallback(async (groupId: string) => {
-    // ... Lógica de validação do seu arquivo original ...
+    // ... (lógica de validação do seu arquivo original) ...
     try {
-      // ... Lógica de upsert do seu arquivo original ...
-      toast({ title: "Sucesso!", description: `Palpite do grupo ${groups.find(g => g.id === groupId)?.name || ''} salvo!`});
+      // ... (lógica de upsert do seu arquivo original) ...
+      toast({ title: "Sucesso!", description: `Palpite do grupo ${groups.find(g => g.id === groupId)?.name || ''} salvo!` });
     } catch (error: any) {
       toast({ title: "Erro", description: `Erro ao salvar palpite de grupo: ${error.message}`, variant: "destructive" });
       if (error?.message?.includes('JWT') || error?.code === 'PGRST301') {
@@ -172,9 +173,9 @@ const Palpites = () => {
   }, [user, groupPredictions, groups, toast, signOut]);
 
   const handleSaveFinalPrediction = useCallback(async () => {
-    // ... Lógica de validação do seu arquivo original ...
+    // ... (lógica de validação do seu arquivo original) ...
     try {
-      // ... Lógica de upsert do seu arquivo original ...
+      // ... (lógica de upsert do seu arquivo original) ...
       toast({ title: "Sucesso!", description: "Palpite da final salvo com sucesso!" });
     } catch (error: any) {
       toast({ title: "Erro", description: `Erro ao salvar palpite final: ${error.message}`, variant: "destructive" });
@@ -185,12 +186,12 @@ const Palpites = () => {
       setSubmittingMatchId(null);
     }
   }, [user, finalPrediction, toast, signOut]);
-
-  // ... (Sua função handlePrintReceipt e todo o seu JSX de retorno permanecem os mesmos)
+  
+  // ... (Sua função handlePrintReceipt e todo o seu JSX de retorno permanecem os mesmos) ...
   return (
-      <Layout>
-          {/* ... Todo o seu JSX de 800+ linhas vai aqui ... */}
-      </Layout>
+    <Layout>
+      {/* ... Todo o seu JSX original vai aqui ... */}
+    </Layout>
   );
 };
 

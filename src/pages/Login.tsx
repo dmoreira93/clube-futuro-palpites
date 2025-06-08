@@ -9,20 +9,21 @@ import {
   Card,
   CardContent,
   CardDescription,
-  CardFooter, // <--- ESTA LINHA PRECISA ESTAR AQUI!
+  CardFooter,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
-import { LogInIcon, Loader2, InfoIcon } from "lucide-react"; // Adicionado Loader2 e InfoIcon
+import { LogInIcon, Loader2, InfoIcon } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import { toast } from "sonner";
+import { useToast } from "@/components/ui/use-toast"; // <-- 1. MUDANÇA: Importação correta
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
 const Login = () => {
   const navigate = useNavigate();
   const { login, isAuthenticated, isLoadingAuth, isFirstLogin } = useAuth();
+  const { toast } = useToast(); // <-- 2. MUDANÇA: Usando o hook do shadcn/ui
   const [formData, setFormData] = useState({
     email: "",
     password: "",
@@ -55,7 +56,12 @@ const Login = () => {
     e.preventDefault();
 
     if (!formData.email || !formData.password) {
-      toast.error("Por favor, preencha todos os campos");
+      // 3. MUDANÇA: Chamada da função toast com a sintaxe correta
+      toast({
+        title: "Erro de Validação",
+        description: "Por favor, preencha todos os campos",
+        variant: "destructive",
+      });
       return;
     }
 
@@ -64,9 +70,14 @@ const Login = () => {
     try {
       await login(formData.email, formData.password);
       // O redirecionamento é tratado no useEffect
-    } catch (error) {
+    } catch (error: any) {
       console.error("Erro ao fazer login no componente:", error);
-      toast.error("Ocorreu um erro inesperado no login. Tente novamente.");
+      // 3. MUDANÇA: Chamada da função toast com a sintaxe correta
+      toast({
+        title: "Erro ao fazer login",
+        description: error.message || "Ocorreu um erro inesperado. Tente novamente.",
+        variant: "destructive",
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -155,7 +166,7 @@ const Login = () => {
                   className="w-full bg-fifa-blue hover:bg-opacity-90"
                   disabled={isSubmitting}
                 >
-                  {isSubmitting ? ( // <--- Ajuste aqui para renderizar o Loader2
+                  {isSubmitting ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                       Entrando...
@@ -167,7 +178,7 @@ const Login = () => {
               </div>
             </form>
           </CardContent>
-          <CardFooter> {/* <--- Garante que CardFooter está aqui */}
+          <CardFooter>
             <div className="text-center w-full">
               <div className="text-xs text-gray-500 mt-2">
                 Se você é administrador,{" "}
