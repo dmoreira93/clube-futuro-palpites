@@ -45,7 +45,7 @@ const AdminLogin = () => {
     }
   };
 
-  if (isLoadingAuth || (isAuthenticated && isAdmin)) {
+  if (isLoadingAuth) {
     return (
       <Layout>
         <div className="flex justify-center items-center h-screen">

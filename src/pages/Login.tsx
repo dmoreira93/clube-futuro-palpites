@@ -3,7 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import Layout from "@/components/layout/Layout";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { useToast } from "@/components/ui/use-toast"; // <-- 1. MUDANÇA: Importação correta
+import { useToast } from "@/components/ui/use-toast";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -21,7 +21,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 const Login = () => {
   const navigate = useNavigate();
   const { login, isAuthenticated, isLoadingAuth, isFirstLogin } = useAuth();
-  const { toast } = useToast(); // <-- 2. MUDANÇA: Usando o hook do shadcn/ui
+  const { toast } = useToast();
   const [formData, setFormData] = useState({
     email: "",
     password: "",
@@ -30,7 +30,7 @@ const Login = () => {
 
   useEffect(() => {
     if (!isLoadingAuth && isAuthenticated) {
-      navigate(isFirstLogin ? "/change-password" : "/");
+      navigate(isFirstLogin ? "/change-password" : "/palpites");
     }
   }, [isAuthenticated, isLoadingAuth, isFirstLogin, navigate]);
 
@@ -55,7 +55,6 @@ const Login = () => {
       // O useEffect cuidará do redirecionamento
     } catch (error: any) {
       console.error("Erro ao fazer login no componente:", error);
-      // 3. MUDANÇA: Chamada da função toast com a sintaxe correta
       toast({
         title: "Erro no Login",
         description: error.message || "Email ou senha inválidos. Tente novamente.",
