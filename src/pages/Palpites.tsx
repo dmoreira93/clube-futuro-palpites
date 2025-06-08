@@ -45,7 +45,7 @@ interface FinalPredictionState {
 const OVERALL_PREDICTION_CUTOFF_DATE = parseISO("2025-06-14T18:00:00-03:00");
 
 const Palpites = () => {
-    const { user, signOut } = useAuth();
+    const { user } = useAuth();
     const { toast } = useToast();
     const navigate = useNavigate();
 
@@ -63,10 +63,7 @@ const Palpites = () => {
     });
 
     const fetchInitialData = useCallback(async () => {
-        if (!user) {
-            setLoading(false);
-            return;
-        }
+        if (!user) { setLoading(false); return; }
         setLoading(true);
         setError(null);
         try {
@@ -115,15 +112,12 @@ const Palpites = () => {
     }, [fetchInitialData]);
 
     const groupStageMatches = useMemo(() => allMatches.filter(match => match.stage === "Fase de Grupos"), [allMatches]);
-    
     const handleScoreChange = useCallback((matchId: string, type: 'home' | 'away', value: string) => {
         setDailyPredictions(prev => ({ ...prev, [matchId]: { ...(prev[matchId] || { match_id: matchId, home_score: '', away_score: '' }), [type === 'home' ? 'home_score' : 'away_score']: value } }));
     }, []);
-
     const handleGroupTeamChange = useCallback((groupId: string, type: 'first' | 'second', teamId: string) => {
         setGroupPredictions(prev => ({ ...prev, [groupId]: { ...(prev[groupId] || { group_id: groupId, predicted_first_team_id: null, predicted_second_team_id: null }), [type === 'first' ? 'predicted_first_team_id' : 'predicted_second_team_id']: teamId || null } }));
     }, []);
-
     const handleFinalPredictionChange = useCallback((field: keyof FinalPredictionState, value: string | number | null) => {
         setFinalPrediction(prev => ({ ...prev, [field]: value }));
     }, []);
@@ -131,7 +125,7 @@ const Palpites = () => {
     const handleSaveDailyPrediction = useCallback(async (matchId: string) => {
         if (!user) { toast({ title: "Erro", description: "Você precisa estar logado.", variant: "destructive" }); return; }
         const prediction = dailyPredictions[matchId];
-        // ... (Validação de placar, etc.)
+        if (!prediction || !prediction.home_score || !prediction.away_score) { toast({ title: "Erro", description: "Preencha ambos os placares.", variant: "destructive" }); return; }
         setSubmittingMatchId(matchId);
         try {
             const payload = { match_id: matchId, user_id: user.id, home_score: parseInt(prediction.home_score), away_score: parseInt(prediction.away_score) };
@@ -151,7 +145,7 @@ const Palpites = () => {
     const handleSaveGroupPrediction = useCallback(async (groupId: string) => {
         if (!user) { toast({ title: "Erro", description: "Você precisa estar logado.", variant: "destructive" }); return; }
         const prediction = groupPredictions[groupId];
-        // ... (Validação dos times)
+        if (!prediction || !prediction.predicted_first_team_id || !prediction.predicted_second_team_id) { toast({ title: "Erro", description: "Selecione os dois times.", variant: "destructive" }); return; }
         setSubmittingMatchId(groupId);
         try {
             const payload = { group_id: groupId, user_id: user.id, predicted_first_team_id: prediction.predicted_first_team_id, predicted_second_team_id: prediction.predicted_second_team_id };
@@ -168,51 +162,28 @@ const Palpites = () => {
         }
     }, [user, groupPredictions, groups, toast]);
     
-    // VERSÃO CORRIGIDA
     const handleSaveFinalPrediction = useCallback(async () => {
-        if (!user) {
-            toast({ title: "Erro", description: "Você precisa estar logado.", variant: "destructive" });
-            return;
-        }
+        if (!user) { toast({ title: "Erro", description: "Você precisa estar logado.", variant: "destructive" }); return; }
         if (!finalPrediction.champion_id || !finalPrediction.vice_champion_id || !finalPrediction.third_place_id || !finalPrediction.fourth_place_id || finalPrediction.final_home_score === null || finalPrediction.final_away_score === null) {
-            toast({ title: "Erro de Validação", description: "Por favor, preencha todos os campos do palpite da final.", variant: "destructive" });
-            return;
+            toast({ title: "Erro de Validação", description: "Por favor, preencha todos os campos do palpite da final.", variant: "destructive" }); return;
         }
-
         setSubmittingMatchId('final');
         try {
-            // Objeto a ser enviado, SEM a chave 'prediction_id'
-            const payload = {
-                user_id: user.id,
-                champion_id: finalPrediction.champion_id,
-                vice_champion_id: finalPrediction.vice_champion_id,
-                third_place_id: finalPrediction.third_place_id,
-                fourth_place_id: finalPrediction.fourth_place_id,
-                final_home_score: finalPrediction.final_home_score,
-                final_away_score: finalPrediction.final_away_score,
-            };
-
-            const { data, error } = await supabase
-                .from('final_predictions')
-                .upsert(payload, { onConflict: 'user_id' })
-                .select()
-                .single();
-
+            const payload = { user_id: user.id, champion_id: finalPrediction.champion_id, vice_champion_id: finalPrediction.vice_champion_id, third_place_id: finalPrediction.third_place_id, fourth_place_id: finalPrediction.fourth_place_id, final_home_score: finalPrediction.final_home_score, final_away_score: finalPrediction.final_away_score };
+            const { data, error } = await supabase.from('final_predictions').upsert(payload, { onConflict: 'user_id' }).select().single();
             if (error) throw error;
-
             if (data) {
                 setFinalPrediction(prev => ({ ...prev, prediction_id: data.id }));
                 toast({ title: "Sucesso!", description: "Seu palpite da final foi salvo!" });
             }
         } catch (error: any) {
-            console.error("Erro ao salvar palpite final:", error);
             toast({ title: "Erro ao salvar", description: error.message, variant: "destructive" });
         } finally {
             setSubmittingMatchId(null);
         }
     }, [user, finalPrediction, toast]);
 
-    const handlePrintReceipt = useCallback(() => { /* ... sua lógica de imprimir ... */ }, [user, dailyPredictions, allMatches, teams, groupPredictions, groups, finalPrediction, toast]);
+    const handlePrintReceipt = useCallback(() => { /* ... */ }, [user, dailyPredictions, allMatches, teams, groupPredictions, groups, finalPrediction, toast]);
 
     if (loading) { return <Layout><div className="flex justify-center items-center h-screen"><Loader2 className="h-10 w-10 animate-spin text-fifa-blue" /></div></Layout>; }
     if (!user) { navigate("/login"); return null; }
@@ -220,78 +191,96 @@ const Palpites = () => {
 
     const isGlobalCutoffReached = Date.now() >= OVERALL_PREDICTION_CUTOFF_DATE.getTime();
     const globalCutoffFormatted = format(OVERALL_PREDICTION_CUTOFF_DATE, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR });
-    
+
     return (
         <Layout>
             <div className="container mx-auto p-4 sm:p-6 lg:p-8">
-                {/* A partir daqui, seu JSX original completo */}
                 <h1 className="text-3xl font-bold text-center text-fifa-blue mb-6">Meus Palpites</h1>
-                {isGlobalCutoffReached && (
-                    <Alert variant="destructive" className="mb-6"><AlertTitle>Prazo Encerrado!</AlertTitle><AlertDescription>O prazo para enviar ou modificar palpites encerrou.</AlertDescription></Alert>
-                )}
+                {isGlobalCutoffReached && (<Alert variant="destructive" className="mb-6"><AlertTitle>Prazo Encerrado!</AlertTitle><AlertDescription>O prazo para enviar ou modificar palpites encerrou.</AlertDescription></Alert>)}
                 <Tabs defaultValue="daily" className="w-full">
                     <TabsList className="grid w-full grid-cols-3 mb-6">
                         <TabsTrigger value="daily">Partidas (Fase de Grupos)</TabsTrigger>
                         <TabsTrigger value="groups">Grupos</TabsTrigger>
                         <TabsTrigger value="final">Final</TabsTrigger>
                     </TabsList>
-
+                    
                     <TabsContent value="daily">
-                        {/* Seu JSX para a aba de Partidas */}
+                        <Card>
+                            <CardHeader><CardTitle className="text-xl">Palpites das Partidas (Fase de Grupos)</CardTitle><CardDescription>Preencha seus placares para cada partida e salve individualmente.</CardDescription></CardHeader>
+                            <CardContent className="space-y-4">
+                                {groupStageMatches.length > 0 ? groupStageMatches.map(match => {
+                                    const canPredict = !isGlobalCutoffReached && (parseISO(match.match_date).getTime() > Date.now());
+                                    const prediction = dailyPredictions[match.id] || { home_score: '', away_score: '' };
+                                    return (
+                                        <Card key={match.id} className={`p-4 ${!canPredict ? 'bg-gray-100 opacity-70' : ''}`}>
+                                            <div className="flex justify-between items-center mb-2">
+                                                <p className="font-semibold">{match.home_team?.name} vs {match.away_team?.name}</p>
+                                                <p className="text-sm text-gray-500">{format(parseISO(match.match_date), 'dd/MM HH:mm', { locale: ptBR })}</p>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <Input type="number" min="0" className="w-20 text-center" value={prediction.home_score ?? ''} onChange={e => handleScoreChange(match.id, 'home', e.target.value)} disabled={!canPredict || submittingMatchId === match.id} />
+                                                <span>x</span>
+                                                <Input type="number" min="0" className="w-20 text-center" value={prediction.away_score ?? ''} onChange={e => handleScoreChange(match.id, 'away', e.target.value)} disabled={!canPredict || submittingMatchId === match.id} />
+                                                {canPredict && <Button size="sm" className="ml-auto" onClick={() => handleSaveDailyPrediction(match.id)} disabled={submittingMatchId === match.id}>{submittingMatchId === match.id ? <Loader2 className="animate-spin" /> : (prediction.prediction_id ? 'Atualizar' : 'Salvar')}</Button>}
+                                            </div>
+                                        </Card>
+                                    );
+                                }) : <p className="text-center text-gray-500">Nenhuma partida encontrada.</p>}
+                            </CardContent>
+                        </Card>
                     </TabsContent>
 
                     <TabsContent value="groups">
-                        {/* Seu JSX para a aba de Grupos */}
+                        <Card>
+                             <CardHeader><CardTitle className="text-xl">Palpites dos Grupos</CardTitle><CardDescription>Selecione os classificados de cada grupo. Prazo final: {globalCutoffFormatted}.</CardDescription></CardHeader>
+                             <CardContent className="space-y-6">
+                                 {groups.map(group => {
+                                    const prediction = groupPredictions[group.id] || {};
+                                    return (
+                                        <Card key={group.id} className={`p-4 ${isGlobalCutoffReached ? 'bg-gray-100' : ''}`}>
+                                            <h3 className="text-lg font-semibold mb-3">Grupo {group.name}</h3>
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                <div>
+                                                    <Label>1º Lugar</Label>
+                                                    <Select onValueChange={v => handleGroupTeamChange(group.id, 'first', v)} value={prediction.predicted_first_team_id || ''} disabled={isGlobalCutoffReached || submittingMatchId === group.id}><SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger><SelectContent>{teams.filter(t => t.group_id === group.id).map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}</SelectContent></Select>
+                                                </div>
+                                                <div>
+                                                    <Label>2º Lugar</Label>
+                                                    <Select onValueChange={v => handleGroupTeamChange(group.id, 'second', v)} value={prediction.predicted_second_team_id || ''} disabled={isGlobalCutoffReached || submittingMatchId === group.id}><SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger><SelectContent>{teams.filter(t => t.group_id === group.id).map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}</SelectContent></Select>
+                                                </div>
+                                            </div>
+                                            {!isGlobalCutoffReached && <Button className="mt-4" onClick={() => handleSaveGroupPrediction(group.id)} disabled={submittingMatchId === group.id}>{submittingMatchId === group.id ? <Loader2 className="animate-spin" /> : (prediction.prediction_id ? `Atualizar Grupo ${group.name}` : `Salvar Grupo ${group.name}`)}</Button>}
+                                        </Card>
+                                    );
+                                 })}
+                             </CardContent>
+                         </Card>
                     </TabsContent>
 
                     <TabsContent value="final">
                         <Card>
-                            <CardHeader>
-                                <CardTitle className="text-xl">Palpite da Fase Final</CardTitle>
-                                <CardDescription>Preencha seus palpites para o Campeão, Vice, 3º e 4º lugares, e o placar da final. Prazo final: {globalCutoffFormatted}.</CardDescription>
-                            </CardHeader>
+                            <CardHeader><CardTitle className="text-xl">Palpite da Fase Final</CardTitle><CardDescription>Defina os finalistas e o placar da grande final. Prazo final: {globalCutoffFormatted}.</CardDescription></CardHeader>
                             <CardContent className="space-y-4">
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    {/* Select para Campeão */}
-                                    <div>
-                                        <Label>Campeão</Label>
-                                        <Select onValueChange={v => handleFinalPredictionChange('champion_id', v)} value={finalPrediction.champion_id || ''} disabled={isGlobalCutoffReached}><SelectTrigger><SelectValue placeholder="Selecione..."/></SelectTrigger><SelectContent>{teams.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}</SelectContent></Select>
-                                    </div>
-                                    {/* Select para Vice-Campeão */}
-                                    <div>
-                                        <Label>Vice-Campeão</Label>
-                                        <Select onValueChange={v => handleFinalPredictionChange('vice_champion_id', v)} value={finalPrediction.vice_champion_id || ''} disabled={isGlobalCutoffReached}><SelectTrigger><SelectValue placeholder="Selecione..."/></SelectTrigger><SelectContent>{teams.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}</SelectContent></Select>
-                                    </div>
-                                    {/* Select para 3º Lugar */}
-                                    <div>
-                                        <Label>3º Lugar</Label>
-                                        <Select onValueChange={v => handleFinalPredictionChange('third_place_id', v)} value={finalPrediction.third_place_id || ''} disabled={isGlobalCutoffReached}><SelectTrigger><SelectValue placeholder="Selecione..."/></SelectTrigger><SelectContent>{teams.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}</SelectContent></Select>
-                                    </div>
-                                    {/* Select para 4º Lugar */}
-                                    <div>
-                                        <Label>4º Lugar</Label>
-                                        <Select onValueChange={v => handleFinalPredictionChange('fourth_place_id', v)} value={finalPrediction.fourth_place_id || ''} disabled={isGlobalCutoffReached}><SelectTrigger><SelectValue placeholder="Selecione..."/></SelectTrigger><SelectContent>{teams.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}</SelectContent></Select>
-                                    </div>
+                                    <div><Label>Campeão</Label><Select onValueChange={v => handleFinalPredictionChange('champion_id', v)} value={finalPrediction.champion_id || ''} disabled={isGlobalCutoffReached}><SelectTrigger><SelectValue placeholder="Selecione..."/></SelectTrigger><SelectContent>{teams.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}</SelectContent></Select></div>
+                                    <div><Label>Vice-Campeão</Label><Select onValueChange={v => handleFinalPredictionChange('vice_champion_id', v)} value={finalPrediction.vice_champion_id || ''} disabled={isGlobalCutoffReached}><SelectTrigger><SelectValue placeholder="Selecione..."/></SelectTrigger><SelectContent>{teams.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}</SelectContent></Select></div>
+                                    <div><Label>3º Lugar</Label><Select onValueChange={v => handleFinalPredictionChange('third_place_id', v)} value={finalPrediction.third_place_id || ''} disabled={isGlobalCutoffReached}><SelectTrigger><SelectValue placeholder="Selecione..."/></SelectTrigger><SelectContent>{teams.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}</SelectContent></Select></div>
+                                    <div><Label>4º Lugar</Label><Select onValueChange={v => handleFinalPredictionChange('fourth_place_id', v)} value={finalPrediction.fourth_place_id || ''} disabled={isGlobalCutoffReached}><SelectTrigger><SelectValue placeholder="Selecione..."/></SelectTrigger><SelectContent>{teams.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}</SelectContent></Select></div>
                                 </div>
                                 <div>
                                     <Label>Placar da Final (Campeão x Vice)</Label>
                                     <div className="flex items-center gap-2">
                                         <Input type="number" min="0" className="w-24 text-center" value={finalPrediction.final_home_score ?? ''} onChange={e => handleFinalPredictionChange('final_home_score', e.target.value === '' ? null : parseInt(e.target.value))} disabled={isGlobalCutoffReached} />
-                                        <span>x</span>
+                                        <span className="font-bold">x</span>
                                         <Input type="number" min="0" className="w-24 text-center" value={finalPrediction.final_away_score ?? ''} onChange={e => handleFinalPredictionChange('final_away_score', e.target.value === '' ? null : parseInt(e.target.value))} disabled={isGlobalCutoffReached} />
                                     </div>
                                 </div>
-                                {!isGlobalCutoffReached && <Button onClick={handleSaveFinalPrediction} disabled={submittingMatchId === 'final'}>{submittingMatchId === 'final' ? <Loader2 className="animate-spin mr-2"/> : null} Salvar Palpite Final</Button>}
+                                {!isGlobalCutoffReached && <Button onClick={handleSaveFinalPrediction} disabled={submittingMatchId === 'final'}>{submittingMatchId === 'final' ? <Loader2 className="animate-spin mr-2"/> : null} {finalPrediction.prediction_id ? 'Atualizar Palpite Final' : 'Salvar Palpite Final'}</Button>}
                             </CardContent>
                         </Card>
                     </TabsContent>
                 </Tabs>
-
-                <Card className="mt-6">
-                    <CardContent className="p-6">
-                        <Button className="w-full" onClick={handlePrintReceipt}><Printer className="mr-2 h-4 w-4" />Imprimir Comprovante de Palpites</Button>
-                    </CardContent>
-                </Card>
+                <Card className="mt-6"><CardContent className="p-6"><Button className="w-full" onClick={handlePrintReceipt}><Printer className="mr-2 h-4 w-4" />Imprimir Comprovante de Palpites</Button></CardContent></Card>
             </div>
         </Layout>
     );
