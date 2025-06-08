@@ -1,9 +1,7 @@
-// src/pages/Login.tsx
-
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
-import Layout from "@/components/layout/Layout";
-import { Input } from "@/components/ui/input";
+import { Link, useNavigate } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -13,34 +11,29 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { LogInIcon, Loader2, InfoIcon } from "lucide-react";
-import { Link } from "react-router-dom";
-import { useAuth } from "@/contexts/AuthContext";
-import { useToast } from "@/components/ui/use-toast"; // <-- 1. MUDANÇA: Importação correta
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { useToast } from "@/components/ui/use-toast";
+import Layout from "@/components/layout/Layout"; // Garantindo que a importação do Layout está aqui
 
 const Login = () => {
   const navigate = useNavigate();
+  const { toast } = useToast();
   const { login, isAuthenticated, isLoadingAuth, isFirstLogin } = useAuth();
-  const { toast } = useToast(); // <-- 2. MUDANÇA: Usando o hook do shadcn/ui
   const [formData, setFormData] = useState({
     email: "",
     password: "",
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // O useEffect agora lida com o redirecionamento de forma mais limpa
   useEffect(() => {
-    if (isLoadingAuth) {
-      return;
-    }
-
-    if (isAuthenticated) {
-      if (isFirstLogin) {
-        navigate('/change-password');
-      } else {
-        navigate('/');
-      }
+    if (!isLoadingAuth && isAuthenticated) {
+      // Se não está carregando e está autenticado, decide para onde ir
+      const destination = isFirstLogin ? "/change-password" : "/";
+      navigate(destination, { replace: true });
     }
   }, [isAuthenticated, isLoadingAuth, isFirstLogin, navigate]);
 
@@ -54,28 +47,23 @@ const Login = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
     if (!formData.email || !formData.password) {
-      // 3. MUDANÇA: Chamada da função toast com a sintaxe correta
       toast({
         title: "Erro de Validação",
-        description: "Por favor, preencha todos os campos",
+        description: "Por favor, preencha todos os campos.",
         variant: "destructive",
       });
       return;
     }
-
     setIsSubmitting(true);
-
     try {
       await login(formData.email, formData.password);
-      // O redirecionamento é tratado no useEffect
+      // O redirecionamento é tratado pelo useEffect acima
     } catch (error: any) {
       console.error("Erro ao fazer login no componente:", error);
-      // 3. MUDANÇA: Chamada da função toast com a sintaxe correta
       toast({
         title: "Erro ao Fazer Login",
-        description: "Ocorreu um erro inesperado no login. Tente novamente.",
+        description: error.message || "Ocorreu um erro inesperado. Tente novamente.",
         variant: "destructive",
       });
     } finally {
@@ -83,17 +71,33 @@ const Login = () => {
     }
   };
 
-  // O resto do seu JSX permanece o mesmo do seu arquivo original
+  // Se o estado de autenticação ainda estiver sendo verificado, mostramos um loader de página inteira.
+  if (isLoadingAuth) {
+    return (
+      <Layout>
+        <div className="flex justify-center items-center h-screen">
+          <Loader2 className="h-8 w-8 animate-spin text-fifa-blue" />
+        </div>
+      </Layout>
+    );
+  }
+  
+  // Se o usuário já estiver autenticado, o useEffect irá redirecioná-lo.
+  // Renderizar null evita um "flash" do formulário de login antes do redirecionamento.
+  if (isAuthenticated) {
+    return null;
+  }
+
+  // Se não está carregando e não está autenticado, mostra o formulário de login.
   return (
     <Layout>
-      <div className="max-w-md mx-auto">
+      <div className="max-w-md mx-auto py-12">
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-fifa-blue">Login</h1>
           <p className="text-gray-600 mt-2">
             Entre para acessar seus palpites e ver sua pontuação
           </p>
         </div>
-
         <Card className="shadow-lg">
           <CardHeader>
             <div className="flex justify-center mb-2">
@@ -107,59 +111,22 @@ const Login = () => {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <Alert className="mb-4 bg-yellow-50 border-yellow-300">
-              <InfoIcon className="h-4 w-4 text-yellow-600" />
-              <AlertDescription className="text-yellow-800">
-                <strong>Usuários predefinidos:</strong>
-              </AlertDescription>
-            </Alert>
-
             <form onSubmit={handleSubmit}>
-              <div className="space-y-4">
-                <div className="space-y-2">
+              <div className="grid gap-4">
+                <div className="grid gap-2">
                   <Label htmlFor="email">Email</Label>
-                  <Input
-                    id="email"
-                    name="email"
-                    type="email"
-                    placeholder="Digite seu email"
-                    value={formData.email}
-                    onChange={handleChange}
-                    required
-                  />
+                  <Input id="email" name="email" type="email" placeholder="Digite seu email" value={formData.email} onChange={handleChange} required autoComplete="email" />
                 </div>
-
-                <div className="space-y-2">
+                <div className="grid gap-2">
                   <div className="flex items-center justify-between">
                     <Label htmlFor="password">Senha</Label>
-                    <Link to="/esqueci-senha" className="text-sm text-fifa-blue hover:underline">
-                      Esqueceu a senha?
-                    </Link>
                   </div>
-                  <Input
-                    id="password"
-                    name="password"
-                    type="password"
-                    placeholder="Digite sua senha"
-                    value={formData.password}
-                    onChange={handleChange}
-                    required
-                  />
+                  <Input id="password" name="password" type="password" placeholder="Digite sua senha" value={formData.password} onChange={handleChange} required autoComplete="current-password" />
                 </div>
-
-                <Button
-                  type="submit"
-                  className="w-full bg-fifa-blue hover:bg-opacity-90"
-                  disabled={isSubmitting}
-                >
+                <Button type="submit" className="w-full bg-fifa-blue hover:bg-opacity-90" disabled={isSubmitting}>
                   {isSubmitting ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Entrando...
-                    </>
-                  ) : (
-                    "Entrar"
-                  )}
+                    <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Entrando...</>
+                  ) : ( "Entrar" )}
                 </Button>
               </div>
             </form>
