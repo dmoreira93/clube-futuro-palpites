@@ -11,14 +11,13 @@ import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
 
 const ChangePassword = () => {
-  const { user, isFirstLogin, loading } = useAuth();
+  const { user, isFirstLogin, loading, updateUserProfile, signOut } = useAuth();
   const navigate = useNavigate();
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    // Redireciona se o usuário não precisar mais estar nesta página
     if (!loading && !isFirstLogin) {
       navigate('/');
     }
@@ -26,57 +25,35 @@ const ChangePassword = () => {
 
   const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (password.length < 6) {
-      toast.error('A senha deve ter no mínimo 6 caracteres.');
-      return;
-    }
-    if (password !== confirmPassword) {
-      toast.error('As senhas não coincidem.');
-      return;
-    }
-    if (!user) {
-      toast.error('Sessão não encontrada. Por favor, faça login novamente.');
-      return;
-    }
+    if (password.length < 6) { toast.error('A senha deve ter no mínimo 6 caracteres.'); return; }
+    if (password !== confirmPassword) { toast.error('As senhas não coincidem.'); return; }
+    if (!user) { toast.error('Sessão não encontrada. Por favor, faça login novamente.'); return; }
 
     setSubmitting(true);
-
     try {
-      // ETAPA 1: Atualiza a senha no sistema de autenticação do Supabase
+      // ETAPA 1: Atualizar a senha de autenticação
       const { error: authError } = await supabase.auth.updateUser({ password });
       if (authError) throw authError;
 
-      // ETAPA 2: Atualiza a flag 'first_login' diretamente no banco de dados
-      const { error: profileError } = await supabase
-        .from('users_custom')
-        .update({ first_login: false })
-        .eq('id', user.id);
-      if (profileError) throw profileError;
+      // ETAPA 2: ATUALIZAR A FLAG `first_login` para `true` no banco de dados
+      await updateUserProfile({ first_login: true });
 
-      toast.success('Senha alterada com sucesso! Redirecionando...');
+      toast.success('Senha alterada com sucesso! Por favor, faça login novamente com sua nova senha.');
       
-      // Força a atualização da sessão para que o app reconheça o novo estado
-      await supabase.auth.refreshSession();
-      
-      // Redireciona para a página principal
-      navigate('/');
+      // ETAPA 3: Deslogar para forçar o novo login
+      await signOut();
+      navigate('/login');
 
     } catch (err: any) {
       console.error("Erro no processo de troca de senha:", err);
       toast.error(`Falha ao atualizar: ${err.message}`);
     } finally {
-      // Este bloco agora será alcançado, mesmo em caso de erro
       setSubmitting(false);
     }
   };
 
-  if (loading) {
-    return (
-      <Layout>
-        <div className="flex justify-center items-center h-screen"><Loader2 className="h-8 w-8 animate-spin text-fifa-blue" /></div>
-      </Layout>
-    );
+  if (loading || (!user && !loading)) {
+    return <Layout><div className="flex justify-center items-center h-screen"><Loader2 className="h-8 w-8 animate-spin text-fifa-blue" /></div></Layout>;
   }
 
   return (
@@ -85,9 +62,7 @@ const ChangePassword = () => {
         <Card className="w-full max-w-md p-6 shadow-lg rounded-lg">
           <CardHeader className="text-center">
             <CardTitle className="text-2xl font-bold text-fifa-blue">Defina Sua Nova Senha</CardTitle>
-            <CardDescription className="text-gray-600">
-              Esta é sua primeira vez acessando. Por favor, defina uma nova senha.
-            </CardDescription>
+            <CardDescription className="text-gray-600">Esta é sua primeira vez acessando. Por favor, defina uma nova senha.</CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleChangePassword} className="space-y-4">

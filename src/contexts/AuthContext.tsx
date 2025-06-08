@@ -16,7 +16,7 @@ interface AuthContextType {
   isAuthenticated: boolean;
   isFirstLogin: boolean;
   isAdmin: boolean;
-  login: (email: string, password:string) => Promise<{ success: boolean; error: any | null }>;
+  login: (email: string, password: string) => Promise<{ success: boolean; error: any | null }>;
   signOut: () => Promise<void>;
   updateUserProfile: (updates: Partial<Pick<AppUser, 'first_login'>>) => Promise<void>;
 }
@@ -59,7 +59,9 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       const combinedUser: AppUser = { ...sessionUser, ...profile };
       setUser(combinedUser);
       setIsAdmin(!!profile?.is_admin);
-      setIsFirstLogin(profile?.first_login !== false);
+
+      // LÓGICA CORRIGIDA: É o primeiro login se a flag `first_login` NÃO for `true`.
+      setIsFirstLogin(profile?.first_login !== true);
 
     } catch (e: any) {
       toast.error(`Erro ao buscar perfil: ${e.message}`);
@@ -70,9 +72,8 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   useEffect(() => {
     const { data: authListener } = supabase.auth.onAuthStateChange(
       async (_event, session) => {
-        const sessionUser = session?.user;
-        if (sessionUser) {
-          await fetchAndSyncProfile(sessionUser);
+        if (session?.user) {
+          await fetchAndSyncProfile(session.user);
         } else {
           setUser(null);
           setIsAdmin(false);
@@ -90,30 +91,16 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     return { success: !error, error };
   };
 
-  // VERSÃO CORRIGIDA DA FUNÇÃO
   const updateUserProfile = async (updates: Partial<Pick<AppUser, 'first_login'>>) => {
     if (!user) throw new Error("Usuário não autenticado para atualizar o perfil.");
-    
     try {
-      const { error } = await supabase
-        .from('users_custom')
-        .update(updates)
-        .eq('id', user.id);
-
-      if (error) {
-        // Se o Supabase retornar um erro, jogue-o para ser capturado pela página que o chamou.
-        throw error;
-      }
-
-      // Atualiza o estado local apenas em caso de sucesso
-      if (updates.first_login === false) {
-        setIsFirstLogin(false);
-        setUser(prevUser => prevUser ? { ...prevUser, first_login: false } : null);
+      const { error } = await supabase.from('users_custom').update(updates).eq('id', user.id);
+      if (error) throw error;
+      if (updates.first_login === true) {
+        setIsFirstLogin(false); // Atualiza o estado local para evitar o loop
       }
     } catch (error) {
       console.error("Erro em updateUserProfile:", error);
-      // Re-joga o erro para que a página ChangePassword possa parar o "loading"
-      // e exibir um toast de erro específico.
       throw error;
     }
   };
