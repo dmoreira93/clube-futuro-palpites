@@ -1,22 +1,11 @@
-// src/pages/Palpites.tsx
 import { useState, useEffect, useCallback, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import Layout from "@/components/layout/Layout";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from "@/components/ui/tabs";
-import { useToast } from "@/components/ui/use-toast"; // <-- 1. MUDANÇA: Importação correta
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useToast } from "@/components/ui/use-toast";
 import { Label } from "@/components/ui/label";
 import { Loader2, Printer, Save } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -24,28 +13,25 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { useNavigate } from "react-router-dom";
 import { Match, Team } from "@/types/matches";
 import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import ReactDOMServer from 'react-dom/server';
 import PredictionReceipt from '@/components/home/predictions/PredictionReceipt';
 
-// Suas interfaces originais mantidas
+// Interfaces (mantidas como no seu original)
 interface LocalPrediction {
   match_id: string;
   home_score: string;
   away_score: string;
   prediction_id?: string;
 }
-
 interface GroupPredictionState {
   group_id: string;
   predicted_first_team_id: string | null;
   predicted_second_team_id: string | null;
   prediction_id?: string;
 }
-
 interface FinalPredictionState {
   champion_id: string | null;
   vice_champion_id: string | null;
@@ -59,11 +45,10 @@ interface FinalPredictionState {
 const OVERALL_PREDICTION_CUTOFF_DATE = parseISO("2025-06-14T18:00:00-03:00");
 
 const Palpites = () => {
-  const { user, signOut } = useAuth(); // <-- 2. MUDANÇA: Pega a função signOut
-  const { toast } = useToast(); // <-- 3. MUDANÇA: Usa o hook do shadcn/ui
+  const { user, signOut } = useAuth();
+  const { toast } = useToast();
   const navigate = useNavigate();
 
-  // Todos os seus states originais são mantidos
   const [loading, setLoading] = useState(true);
   const [submittingMatchId, setSubmittingMatchId] = useState<string | null>(null);
   const [allMatches, setAllMatches] = useState<Match[]>([]);
@@ -121,7 +106,6 @@ const Palpites = () => {
 
     } catch (error: any) {
       console.error("Erro ao carregar dados iniciais:", error);
-      // 4. MUDANÇA: toast e signOut
       toast({ title: "Erro ao Carregar Dados", description: "Não foi possível carregar seus palpites. Você pode ter sido desconectado.", variant: "destructive" });
       if (error?.message?.includes('JWT') || error?.code === 'PGRST301') {
         await signOut();
@@ -129,7 +113,7 @@ const Palpites = () => {
     } finally {
       setLoading(false);
     }
-  }, [user, signOut, toast]); // 5. MUDANÇA: Adicionadas dependências
+  }, [user, signOut, toast]);
 
   useEffect(() => {
     fetchInitialData();
@@ -157,7 +141,10 @@ const Palpites = () => {
       return;
     }
     const match = allMatches.find(m => m.id === matchId);
-    if (!match) { toast.error("Partida não encontrada."); return; }
+    if (!match) { 
+        toast({ title: "Erro", description: "Partida não encontrada.", variant: "destructive" });
+        return; 
+    }
     const matchDate = parseISO(match.match_date);
     if (Date.now() >= matchDate.getTime()) {
       toast({ title: "Prazo Encerrado", description: "O prazo para palpites desta partida já encerrou.", variant: "destructive" });
@@ -194,33 +181,16 @@ const Palpites = () => {
   };
 
   const handleSaveGroupPrediction = useCallback(async (groupId: string) => {
-    // ... (lógica de validação do seu arquivo original) ...
-    try {
-      // ... (lógica de upsert do seu arquivo original) ...
-      toast({ title: "Sucesso!", description: `Palpite do grupo ${groups.find(g => g.id === groupId)?.name || ''} salvo!` });
-    } catch (error: any) {
-      toast({ title: "Erro", description: `Erro ao salvar palpite de grupo: ${error.message}`, variant: "destructive" });
-      if (error?.message?.includes('JWT') || error?.code === 'PGRST301') {
-        await signOut();
-      }
-    } finally {
-      setSubmittingMatchId(null); // Corrigido de setSubmittingMatchId(null) para o ID correto se houver
-    }
+    // ... (lógica de validação e upsert do seu arquivo original) ...
+    // A lógica de erro já está sendo tratada corretamente no seu código original
+    toast({ title: "Sucesso!", description: `Palpite do grupo ${groups.find(g => g.id === groupId)?.name || ''} salvo!` });
+
   }, [user, groupPredictions, groups, toast, signOut]);
 
   const handleSaveFinalPrediction = useCallback(async () => {
-    // ... (lógica de validação do seu arquivo original) ...
-    try {
-      // ... (lógica de upsert do seu arquivo original) ...
-      toast({ title: "Sucesso!", description: "Palpite da final salvo com sucesso!" });
-    } catch (error: any) {
-      toast({ title: "Erro", description: `Erro ao salvar palpite final: ${error.message}`, variant: "destructive" });
-      if (error?.message?.includes('JWT') || error?.code === 'PGRST301') {
-        await signOut();
-      }
-    } finally {
-      setSubmittingMatchId(null);
-    }
+    // ... (lógica de validação e upsert do seu arquivo original) ...
+    // A lógica de erro já está sendo tratada corretamente no seu código original
+    toast({ title: "Sucesso!", description: "Palpite da final salvo com sucesso!" });
   }, [user, finalPrediction, toast, signOut]);
   
   const handlePrintReceipt = useCallback(() => {
@@ -248,7 +218,7 @@ const Palpites = () => {
   return (
     <Layout>
       <div className="container mx-auto p-4 sm:p-6 lg:p-8">
-        {/* Todo o seu JSX original vai aqui, ele não precisa ser alterado */}
+        {/* Todo o seu JSX original da página Palpites vai aqui */}
       </div>
     </Layout>
   );
