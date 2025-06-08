@@ -13,14 +13,15 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       workbox: {
-        // Força o novo service worker a assumir o controle imediatamente
+        // Força o novo service worker a ativar imediatamente, sem esperar.
         skipWaiting: true,
+        // Garante que o novo SW controle todas as abas abertas do site.
         clientsClaim: true,
-        // Remove caches de versões antigas durante a ativação
+        // Remove caches de versões antigas durante a ativação do novo SW.
         cleanupOutdatedCaches: true,
-        // Define explicitamente quais arquivos devem ser pré-cacheados
+        // Define explicitamente quais arquivos devem ser pré-cacheados.
         globPatterns: ['**/*.{js,css,html,ico,png,svg,wasm,webmanifest}'],
-        // Aumenta o limite de tamanho do arquivo para 5MB para evitar erros de build
+        // Aumenta o limite de tamanho do arquivo para 5MB para evitar erros de build.
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024, 
       },
       manifest: {
