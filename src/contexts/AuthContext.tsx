@@ -1,9 +1,7 @@
-// src/contexts/AuthContext.tsx
-
 import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { User } from '@supabase/supabase-js';
-import { toast } from 'sonner';
+import { useNavigate } from 'react-router-dom';
 
 export type AppUser = User & {
   username?: string;
@@ -13,16 +11,12 @@ export type AppUser = User & {
   total_points?: number;
 };
 
-// 1. ADICIONAR a propriedade 'isAuthenticated'
 interface AuthContextType {
   user: AppUser | null;
   loading: boolean;
-  isAuthenticated: boolean; // <-- ADICIONADO AQUI
   isFirstLogin: boolean;
-  isAdmin: boolean;
-  login: (email: string, password: string) => Promise<boolean>;
-  updateUserProfile: (updates: Partial<AppUser>) => Promise<void>;
   signOut: () => Promise<void>;
+  updateUserProfile: (updates: Partial<Pick<AppUser, 'first_login'>>) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -43,36 +37,10 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [user, setUser] = useState<AppUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [isFirstLogin, setIsFirstLogin] = useState(false);
-  const [isAdmin, setIsAdmin] = useState(false);
-
-  // 2. CRIAR A VARIÁVEL 'isAuthenticated' baseada no estado do usuário
-  const isAuthenticated = !!user; // Converte o objeto 'user' (ou null) para um booleano
-
-  const login = useCallback(async (email: string, password: string) => {
-    try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-
-      if (error) {
-        if (error.message.includes('Invalid login credentials')) {
-          toast.error('Email ou senha inválidos.');
-        } else {
-          toast.error(`Erro no login: ${error.message}`);
-        }
-        return false;
-      }
-      return true;
-    } catch (err: any) {
-      console.error("Erro inesperado no login:", err);
-      toast.error("Ocorreu um erro inesperado. Tente novamente.");
-      return false;
-    }
-  }, []);
 
   const signOut = useCallback(async () => {
     await supabase.auth.signOut();
+    // O listener onAuthStateChange irá lidar com a atualização do estado para null.
   }, []);
   
   const fetchAndSyncProfile = useCallback(async (sessionUser: User) => {
@@ -83,6 +51,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         .eq('id', sessionUser.id)
         .single();
 
+      // Se o perfil não for encontrado ou der erro (ex: RLS), desloga o usuário para evitar estado quebrado.
       if (error || !profile) {
         console.error("Perfil não encontrado ou erro de RLS. Deslogando.", error);
         await supabase.auth.signOut();
@@ -91,8 +60,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       
       const combinedUser: AppUser = { ...sessionUser, ...profile };
       setUser(combinedUser);
-      setIsFirstLogin(profile.first_login === false);
-      setIsAdmin(profile.is_admin === true);
+      setIsFirstLogin(!profile.first_login);
 
     } catch (e) {
       console.error("Erro crítico ao buscar perfil. Deslogando.", e);
@@ -101,13 +69,15 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   }, []);
 
   useEffect(() => {
+    // 1. Verifica a sessão inicial para remover a tela de loading rapidamente
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) {
-        fetchAndSyncProfile(session.user);
+      if (!session) {
+        setLoading(false);
       }
-      setLoading(false);
+      // Se houver sessão, o onAuthStateChange abaixo vai cuidar de buscar o perfil.
     });
 
+    // 2. Escuta por todas as mudanças de autenticação (login, logout, refresh de token)
     const { data: authListener } = supabase.auth.onAuthStateChange(
       async (_event, session) => {
         if (session) {
@@ -115,17 +85,18 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         } else {
           setUser(null);
           setIsFirstLogin(false);
-          setIsAdmin(false);
         }
+        // Apenas para o carregamento inicial, depois as transições são mais rápidas
+        if (loading) setLoading(false);
       }
     );
 
     return () => {
       authListener.subscription.unsubscribe();
     };
-  }, [fetchAndSyncProfile]);
+  }, [loading, fetchAndSyncProfile]);
 
-  const updateUserProfile = async (updates: Partial<AppUser>) => {
+  const updateUserProfile = async (updates: Partial<Pick<AppUser, 'first_login'>>) => {
     if (!user) return;
     try {
       const { data, error } = await supabase
@@ -146,8 +117,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     }
   };
 
-  // 3. ADICIONAR 'isAuthenticated' ao objeto de valor
-  const value = { user, loading, isAuthenticated, isFirstLogin, isAdmin, login, updateUserProfile, signOut };
+  const value = { user, loading, isFirstLogin, signOut, updateUserProfile };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
