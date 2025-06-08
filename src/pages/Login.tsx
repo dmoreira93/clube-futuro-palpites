@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import Layout from "@/components/layout/Layout";
-import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/components/ui/use-toast";
 import { Button } from "@/components/ui/button";
@@ -30,6 +29,7 @@ const Login = () => {
 
   useEffect(() => {
     if (!isLoadingAuth && isAuthenticated) {
+      console.log("LOG: Redirecionando usuário. É o primeiro login?", isFirstLogin);
       navigate(isFirstLogin ? "/change-password" : "/palpites");
     }
   }, [isAuthenticated, isLoadingAuth, isFirstLogin, navigate]);
@@ -49,12 +49,21 @@ const Login = () => {
       return;
     }
     setIsSubmitting(true);
+    console.log(`LOG 1: Tentando login com o email: ${formData.email}`);
     try {
       const { success, error } = await login(formData.email, formData.password);
-      if (!success) throw error;
+      
+      console.log(`LOG 2: A função de login retornou. Sucesso: ${success}, Erro:`, error);
+
+      if (!success) {
+        throw error || new Error("Ocorreu um erro desconhecido durante o login.");
+      }
+
+      console.log("LOG 3: Login bem-sucedido. Aguardando redirecionamento do useEffect.");
       // O useEffect cuidará do redirecionamento
+
     } catch (error: any) {
-      console.error("Erro ao fazer login no componente:", error);
+      console.error("LOG 4: Erro capturado no handleSubmit:", error);
       toast({
         title: "Erro no Login",
         description: error.message || "Email ou senha inválidos. Tente novamente.",
@@ -65,7 +74,7 @@ const Login = () => {
     }
   };
 
-  if (isLoadingAuth || (isAuthenticated && !isFirstLogin)) {
+  if (isLoadingAuth) {
     return (
       <Layout>
         <div className="flex justify-center items-center h-screen">
