@@ -1,154 +1,83 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 import Layout from "@/components/layout/Layout";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Label } from "@/components/ui/label";
-import { ShieldAlert, Lock } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import { useToast } from "@/components/ui/use-toast";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { ShieldAlert, Lock, Loader2 } from "lucide-react";
 
 const AdminLogin = () => {
   const navigate = useNavigate();
-  // Altere 'adminLogin' para 'login' aqui
-  const { login, isAdmin } = useAuth(); 
-  const [formData, setFormData] = useState({
-    // Altere 'username' para 'email' para corresponder à função de login
-    email: "", 
-    password: "",
-  });
+  const { login, isAdmin, isAuthenticated, isLoadingAuth } = useAuth();
+  const { toast } = useToast();
+  const [formData, setFormData] = useState({ email: "", password: "" });
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [loginError, setLoginError] = useState("");
 
-  // If already logged in as admin, redirect to admin panel
-  if (isAdmin) {
-    return <Navigate to="/admin" />;
-  }
+  useEffect(() => {
+    if (!isLoadingAuth && isAuthenticated && isAdmin) {
+      navigate('/admin');
+    }
+  }, [isAuthenticated, isLoadingAuth, isAdmin, navigate]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
+    setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoginError("");
-
-    // Verifique 'email' em vez de 'username'
-    if (!formData.email || !formData.password) { 
-      setLoginError("Por favor, preencha todos os campos");
-      return;
-    }
-
     setIsSubmitting(true);
-    // Chame a função 'login' com 'formData.email'
-    const success = await login(formData.email, formData.password); 
-    setIsSubmitting(false);
-
-    if (success) {
-      navigate("/admin");
+    try {
+      const { success, error } = await login(formData.email, formData.password);
+      if (!success) throw error;
+      // O useEffect cuidará do redirecionamento
+    } catch (error: any) {
+      console.error("Erro no login de admin:", error);
+      toast({
+        title: "Falha na Autenticação",
+        description: "Credenciais de administrador inválidas.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
+  if (isLoadingAuth || (isAuthenticated && isAdmin)) {
+    return (
+      <Layout>
+        <div className="flex justify-center items-center h-screen">
+          <Loader2 className="h-8 w-8 animate-spin" />
+        </div>
+      </Layout>
+    );
+  }
+
   return (
     <Layout>
-      <div className="max-w-md mx-auto">
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-fifa-blue">Área Restrita</h1>
-          <p className="text-gray-600 mt-2">
-            Acesso exclusivo para administradores
-          </p>
-        </div>
-
-        <Card className="shadow-lg border-fifa-blue">
-          <CardHeader>
-            <div className="flex justify-center mb-2">
-              <div className="bg-fifa-blue rounded-full p-3">
-                <ShieldAlert className="h-6 w-6 text-white" />
-              </div>
-            </div>
-            <CardTitle className="text-center">Administração</CardTitle>
-            <CardDescription className="text-center">
-              Entre com suas credenciais de administrador
-            </CardDescription>
+      <div className="max-w-md mx-auto py-12">
+        <Card className="shadow-lg">
+          <CardHeader className="text-center">
+            <CardTitle className="text-2xl">Área Restrita</CardTitle>
+            <CardDescription>Acesso exclusivo para administradores.</CardDescription>
           </CardHeader>
           <CardContent>
-            <form onSubmit={handleSubmit}>
-              {loginError && (
-                <Alert className="mb-4 bg-destructive/10 border-destructive">
-                  <AlertDescription className="text-destructive">
-                    {loginError}
-                  </AlertDescription>
-                </Alert>
-              )}
-
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  {/* Altere htmlFor e name para 'email' */}
-                  <Label htmlFor="email">E-mail</Label> 
-                  <Input
-                    id="email" // Altere id para 'email'
-                    name="email" // Altere name para 'email'
-                    type="email" // Mude o tipo para 'email'
-                    placeholder="E-mail de administrador" // Altere placeholder
-                    value={formData.email} // Mude para formData.email
-                    onChange={handleChange}
-                    required
-                  />
+            <form onSubmit={handleSubmit} className="grid gap-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="email">Email de Admin</Label>
+                  <Input id="email" name="email" type="email" value={formData.email} onChange={handleChange} required />
                 </div>
-
-                <div className="space-y-2">
+                <div className="grid gap-2">
                   <Label htmlFor="password">Senha</Label>
-                  <Input
-                    id="password"
-                    name="password"
-                    type="password"
-                    placeholder="Senha de administrador"
-                    value={formData.password}
-                    onChange={handleChange}
-                    required
-                  />
+                  <Input id="password" name="password" type="password" value={formData.password} onChange={handleChange} required />
                 </div>
-
-                <Button
-                  type="submit"
-                  className="w-full bg-fifa-blue hover:bg-opacity-90"
-                  disabled={isSubmitting}
-                >
-                  {isSubmitting ? (
-                    <span className="flex items-center">
-                      <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                      </svg>
-                      Autenticando...
-                    </span>
-                  ) : (
-                    <span className="flex items-center">
-                      <Lock className="h-4 w-4 mr-2" />
-                      Acessar Painel
-                    </span>
-                  )}
+                <Button type="submit" className="w-full" disabled={isSubmitting}>
+                  {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Acessar Painel"}
                 </Button>
-              </div>
             </form>
           </CardContent>
-          <CardFooter className="flex justify-center">
-            <div className="text-center text-sm text-gray-500">
-              Acesso restrito para administradores autorizados.
-            </div>
-          </CardFooter>
         </Card>
       </div>
     </Layout>
