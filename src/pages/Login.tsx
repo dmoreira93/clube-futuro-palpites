@@ -15,18 +15,17 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { LogInIcon, Loader2, InfoIcon } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { useToast } from "@/components/ui/use-toast"; // <-- 1. MUDANÇA: Importação correta
+import { useToast } from "@/components/ui/use-toast"; // <-- 1. Importação correta do toast
 
 const Login = () => {
   const navigate = useNavigate();
-  const { toast } = useToast(); // <-- 2. MUDANÇA: Usando o hook do shadcn/ui
+  const { toast } = useToast(); // <-- 2. Usando o hook do shadcn/ui
   const { login, isAuthenticated, isLoadingAuth, isFirstLogin } = useAuth();
   const [formData, setFormData] = useState({
     email: "",
     password: "",
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [loginError, setLoginError] = useState("");
 
   useEffect(() => {
     if (isLoadingAuth) {
@@ -51,31 +50,26 @@ const Login = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoginError("");
-
     if (!formData.email || !formData.password) {
-      setLoginError("Por favor, preencha todos os campos");
-      // Opcional: Adicionar um toast aqui também, se desejar.
+      toast({
+        title: "Erro de Validação",
+        description: "Por favor, preencha todos os campos.",
+        variant: "destructive"
+      });
       return;
     }
-
     setIsSubmitting(true);
     try {
-      // No seu AuthContext, a função 'login' já tem o signInWithPassword
       const success = await login(formData.email, formData.password);
       if (!success) {
-        // O erro já deve ser tratado dentro da função login, mas como fallback
         throw new Error("Email ou senha inválidos.");
       }
-      // O redirecionamento é tratado no useEffect
     } catch (error: any) {
       console.error("Erro ao fazer login no componente:", error);
-      const errorMessage = error.message || "Ocorreu um erro inesperado no login. Tente novamente.";
-      setLoginError(errorMessage);
-       // 3. MUDANÇA: Chamada da função toast com a sintaxe correta
+      // 3. Chamada da função toast com a sintaxe correta
       toast({
-        title: "Erro ao fazer login",
-        description: errorMessage,
+        title: "Erro ao Fazer Login",
+        description: error.message || "Ocorreu um erro inesperado. Tente novamente.",
         variant: "destructive",
       });
     } finally {
@@ -98,7 +92,6 @@ const Login = () => {
     return null;
   }
   
-  // Mantido o seu JSX original para o layout
   return (
     <Layout>
       <div className="max-w-md mx-auto">
@@ -108,7 +101,6 @@ const Login = () => {
             Entre para acessar seus palpites e ver sua pontuação
           </p>
         </div>
-
         <Card className="shadow-lg">
           <CardHeader>
             <div className="flex justify-center mb-2">
@@ -128,53 +120,22 @@ const Login = () => {
                 <strong>Usuários predefinidos:</strong>
               </AlertDescription>
             </Alert>
-
             <form onSubmit={handleSubmit}>
               <div className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="email">Email</Label>
-                  <Input
-                    id="email"
-                    name="email"
-                    type="email"
-                    placeholder="Digite seu email"
-                    value={formData.email}
-                    onChange={handleChange}
-                    required
-                  />
+                  <Input id="email" name="email" type="email" placeholder="Digite seu email" value={formData.email} onChange={handleChange} required />
                 </div>
-
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
                     <Label htmlFor="password">Senha</Label>
-                    <Link to="/esqueci-senha" className="text-sm text-fifa-blue hover:underline">
-                      Esqueceu a senha?
-                    </Link>
                   </div>
-                  <Input
-                    id="password"
-                    name="password"
-                    type="password"
-                    placeholder="Digite sua senha"
-                    value={formData.password}
-                    onChange={handleChange}
-                    required
-                  />
+                  <Input id="password" name="password" type="password" placeholder="Digite sua senha" value={formData.password} onChange={handleChange} required />
                 </div>
-                 {loginError && <p className="text-sm font-medium text-destructive mt-2">{loginError}</p>}
-                <Button
-                  type="submit"
-                  className="w-full bg-fifa-blue hover:bg-opacity-90"
-                  disabled={isSubmitting}
-                >
+                <Button type="submit" className="w-full bg-fifa-blue hover:bg-opacity-90" disabled={isSubmitting}>
                   {isSubmitting ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Entrando...
-                    </>
-                  ) : (
-                    "Entrar"
-                  )}
+                    <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Entrando...</>
+                  ) : ( "Entrar" )}
                 </Button>
               </div>
             </form>
