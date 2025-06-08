@@ -17,8 +17,8 @@ interface AuthContextType {
   isFirstLogin: boolean;
   isAdmin: boolean;
   login: (email: string, password: string) => Promise<{ success: boolean; error: any | null }>;
-  updateUserProfile: (updates: Partial<Pick<AppUser, 'first_login'>>) => Promise<void>;
   signOut: () => Promise<void>;
+  updateUserProfile: (updates: Partial<Pick<AppUser, 'first_login'>>) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -44,7 +44,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
   const signOut = useCallback(async () => {
     await supabase.auth.signOut();
-    setUser(null); // Limpa o estado local imediatamente
+    // O onAuthStateChange cuidará de limpar o estado.
   }, []);
 
   const fetchAndSyncProfile = useCallback(async (sessionUser: User) => {
@@ -56,23 +56,25 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         .single();
 
       if (error && error.code !== 'PGRST116') {
-        console.error("Erro RLS/DB ao buscar perfil:", error);
-        toast.error("Não foi possível carregar seu perfil. Verifique as permissões (RLS).");
-        await signOut(); // Desloga se não conseguir ler o perfil
+        console.error("Erro ao buscar perfil do usuário (RLS?):", error);
+        toast.error("Não foi possível carregar seu perfil. Deslogando por segurança.");
+        await signOut();
         return;
       }
-
+      
       if (!profile) {
-        console.warn(`Perfil não encontrado para o usuário: ${sessionUser.id}. Tratando como primeiro login.`);
-        setUser(sessionUser);
+        console.warn(`Perfil não encontrado para o usuário: ${sessionUser.id}.`);
+        setUser(sessionUser); // Loga com os dados básicos
         setIsAdmin(false);
-        setIsFirstLogin(true);
+        setIsFirstLogin(true); // Força a rota de "change-password"
         return;
       }
 
       const combinedUser: AppUser = { ...sessionUser, ...profile };
       setUser(combinedUser);
-      setIsFirstLogin(profile.first_login !== true); // `first_login` false ou null significa que precisa trocar a senha.
+      // A flag `first_login` deve ser `false` no DB para indicar que já foi feito.
+      // Se for `true` ou não existir, consideramos que é o primeiro login.
+      setIsFirstLogin(profile.first_login !== false); 
       setIsAdmin(!!profile.is_admin);
     } catch (e: any) {
       console.error("Erro crítico ao buscar perfil:", e);
@@ -82,16 +84,19 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   }, [signOut]);
 
   useEffect(() => {
+    // Esta é a forma mais eficiente e segura de ouvir o estado de autenticação.
+    // Ela dispara na carga inicial e sempre que o login/logout acontece.
     const { data: authListener } = supabase.auth.onAuthStateChange(
       async (_event, session) => {
-        if (session?.user) {
-          await fetchAndSyncProfile(session.user);
+        const sessionUser = session?.user;
+        if (sessionUser) {
+          await fetchAndSyncProfile(sessionUser);
         } else {
           setUser(null);
           setIsAdmin(false);
           setIsFirstLogin(false);
         }
-        setLoading(false);
+        setLoading(false); // Marca o carregamento como concluído APÓS a verificação
       }
     );
 
@@ -112,9 +117,8 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     if (!user) return;
     try {
       await supabase.from('users_custom').update(updates).eq('id', user.id);
-      // Atualiza o estado local para refletir a mudança imediatamente
       if (updates.first_login === true) {
-          setIsFirstLogin(false);
+        setIsFirstLogin(false);
       }
     } catch(error) {
         console.error("Erro ao atualizar perfil:", error);
