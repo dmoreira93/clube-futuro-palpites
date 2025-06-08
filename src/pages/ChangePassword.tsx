@@ -11,63 +11,70 @@ import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
 
 const ChangePassword = () => {
-  const { user, isAuthenticated, loading, isFirstLogin, updateUserProfile } = useAuth();
+  const { user, isFirstLogin, loading } = useAuth();
   const navigate = useNavigate();
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    if (!loading) {
-      if (!isAuthenticated) {
-        navigate('/login');
-      } else if (!isFirstLogin) {
-        // Se já não é o primeiro login, redireciona para a home.
-        navigate('/');
-      }
+    // Redireciona se o usuário não precisar mais estar nesta página
+    if (!loading && !isFirstLogin) {
+      navigate('/');
     }
-  }, [isAuthenticated, loading, isFirstLogin, navigate]);
+  }, [loading, isFirstLogin, navigate]);
 
   const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSubmitting(true);
-
+    
     if (password.length < 6) {
       toast.error('A senha deve ter no mínimo 6 caracteres.');
-      setSubmitting(false);
       return;
     }
     if (password !== confirmPassword) {
       toast.error('As senhas não coincidem.');
-      setSubmitting(false);
+      return;
+    }
+    if (!user) {
+      toast.error('Sessão não encontrada. Por favor, faça login novamente.');
       return;
     }
 
-    try {
-      // 1. Atualiza a senha no Supabase Auth
-      const { error: updateError } = await supabase.auth.updateUser({ password });
-      if (updateError) throw updateError;
+    setSubmitting(true);
 
-      // 2. Atualiza a flag `first_login` para `false` na tabela `users_custom`
-      await updateUserProfile({ first_login: false });
+    try {
+      // ETAPA 1: Atualiza a senha no sistema de autenticação do Supabase
+      const { error: authError } = await supabase.auth.updateUser({ password });
+      if (authError) throw authError;
+
+      // ETAPA 2: Atualiza a flag 'first_login' diretamente no banco de dados
+      const { error: profileError } = await supabase
+        .from('users_custom')
+        .update({ first_login: false })
+        .eq('id', user.id);
+      if (profileError) throw profileError;
 
       toast.success('Senha alterada com sucesso! Redirecionando...');
-      navigate('/'); // Redireciona para a página inicial após sucesso
+      
+      // Força a atualização da sessão para que o app reconheça o novo estado
+      await supabase.auth.refreshSession();
+      
+      // Redireciona para a página principal
+      navigate('/');
+
     } catch (err: any) {
-      console.error("Erro ao alterar senha:", err);
-      toast.error(`Falha ao atualizar senha: ${err.message}`);
+      console.error("Erro no processo de troca de senha:", err);
+      toast.error(`Falha ao atualizar: ${err.message}`);
     } finally {
+      // Este bloco agora será alcançado, mesmo em caso de erro
       setSubmitting(false);
     }
   };
 
-  // Se ainda estiver carregando ou se o usuário não for de primeiro login (e o redirect não ocorreu), mostra um loader
-  if (loading || !isFirstLogin) {
+  if (loading) {
     return (
       <Layout>
-        <div className="flex justify-center items-center h-screen">
-          <Loader2 className="h-8 w-8 animate-spin text-fifa-blue" />
-        </div>
+        <div className="flex justify-center items-center h-screen"><Loader2 className="h-8 w-8 animate-spin text-fifa-blue" /></div>
       </Layout>
     );
   }
