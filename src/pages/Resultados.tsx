@@ -1,117 +1,180 @@
-// src/pages/Resultados.tsx
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/components/ui/use-toast";
 import Layout from "@/components/layout/Layout";
 import { MatchCard } from "@/components/results/MatchCard";
-import { MatchFilter } from "@/components/results/MatchFilter";
 import { ResultForm } from "@/components/results/ResultForm";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/contexts/AuthContext"; // <-- MUDANÇA: Importa o useAuth
+import { useAuth } from "@/contexts/AuthContext";
 import { Match as MatchType, Team } from "@/types/matches";
-import { User as UserCustom } from "@/utils/pointsCalculator/types";
-import { Loader2, AlertTriangle, ListChecks, Trophy, Users as UsersIcon, EyeOff, Eye } from "lucide-react";
+import { Loader2, AlertTriangle, Trophy, Users as UsersIcon } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
-// ... (Suas interfaces permanecem as mesmas)
-type FetchedMatch = MatchType & { /* ... */ };
-interface GroupResult { /* ... */ };
-interface FinalResult { /* ... */ };
-interface UserGroupPrediction { /* ... */ };
-interface UserFinalPrediction { /* ... */ };
+// Interfaces para os dados que vamos buscar
+type FetchedMatch = MatchType & {
+  home_team: Team | null;
+  away_team: Team | null;
+};
+
+interface GroupResult {
+  group_id: string;
+  group_name: string;
+  first_place_team: Team | null;
+  second_place_team: Team | null;
+}
+
+interface FinalResult {
+  champion: Team | null;
+  runner_up: Team | null;
+  third_place: Team | null;
+  fourth_place: Team | null;
+  final_home_score: number | null;
+  final_away_score: number | null;
+}
 
 const Resultados = () => {
-  const { isAdmin, signOut } = useAuth(); // <-- MUDANÇA: Pega a função signOut
+  const { isAdmin } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  // ... (Seus states permanecem os mesmos)
-  const [filter, setFilter] = useState("all");
-  const [selectedMatch, setSelectedMatch] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState("matches");
-  const [showPredictions, setShowPredictions] = useState(false);
+  const [selectedMatch, setSelectedMatch] = useState<FetchedMatch | null>(null);
 
-  const predictionDisplayCutoffDate = parseISO("2025-06-14T18:00:00-03:00");
-
-  useEffect(() => {
-    setShowPredictions(new Date() > predictionDisplayCutoffDate);
-  }, [predictionDisplayCutoffDate]);
-
-  // Função de tratamento de erro reutilizável
-  const handleQueryError = (error: unknown, title: string) => {
-    const err = error as any;
-    console.error(`${title}:`, err);
-    toast({ title, description: err.message, variant: "destructive" });
-    // <-- MUDANÇA: Lógica de signOut adicionada
-    if (err?.message?.includes('JWT') || err?.code === 'PGRST301') {
-      signOut();
-    }
-  };
-
-  const { data: matches = [], isLoading: isLoadingMatches, error: errorMatches } = useQuery<FetchedMatch[]>({
+  const { data: matches = [], isLoading: isLoadingMatches, error: matchesError } = useQuery<FetchedMatch[]>({
     queryKey: ['matchesResults'],
     queryFn: async () => {
-      const { data, error: queryError } = await supabase
+      const { data, error } = await supabase
         .from('matches')
-        .select(`id, match_date, is_finished, stage, home_score, away_score, home_team_id, away_team_id, home_team:home_team_id(id, name, flag_url, group:group_id(name)), away_team:away_team_id(id, name, flag_url, group:group_id(name))`)
-        .not('home_team_id', 'is', null)
-        .not('away_team_id', 'is', null)
+        .select(`*, home_team:home_team_id(*), away_team:away_team_id(*)`)
         .order('match_date', { ascending: true });
-      if (queryError) throw queryError;
-      return (data as FetchedMatch[]) || [];
+      if (error) throw error;
+      return data as FetchedMatch[];
     },
-    onError: (error) => handleQueryError(error, "Erro ao carregar partidas"),
   });
-  
-  // ... (Suas outras chamadas useQuery permanecem as mesmas, mas adicionamos a propriedade onError)
 
-  const { data: groupResultsData = [], isLoading: isLoadingGroupResults, error: errorGroupResults } = useQuery<GroupResult[]>({
+  const { data: groupResultsData = [], isLoading: isLoadingGroupResults } = useQuery<GroupResult[]>({
     queryKey: ['groupResultsData'],
-    queryFn: async () => { /* ... lógica de fetch ... */ },
-    enabled: activeTab === 'groups',
-    onError: (error) => handleQueryError(error, "Erro ao carregar resultados de grupos"),
+    queryFn: async () => {
+      const { data, error } = await supabase.from('groups_results').select(`
+        group_id,
+        groups (name),
+        first_place_team:first_place_team_id (id, name, flag_url),
+        second_place_team:second_place_team_id (id, name, flag_url)
+      `);
+      if (error) throw error;
+      return (data || []).map(item => ({
+        group_id: item.group_id,
+        group_name: (item.groups as { name: string })?.name || 'Grupo Desconhecido',
+        first_place_team: item.first_place_team,
+        second_place_team: item.second_place_team,
+      })) as GroupResult[];
+    },
   });
 
-  const { data: finalResultData, isLoading: isLoadingFinalResult, error: errorFinalResult } = useQuery<FinalResult | null>({
+  const { data: finalResultData, isLoading: isLoadingFinalResult } = useQuery<FinalResult | null>({
     queryKey: ['finalResultData'],
-    queryFn: async () => { /* ... lógica de fetch ... */ },
-    enabled: activeTab === 'final',
-    onError: (error) => handleQueryError(error, "Erro ao carregar resultado final"),
+    queryFn: async () => {
+      const { data, error } = await supabase.from('tournament_results').select(`
+        champion:champion_id (id, name, flag_url),
+        runner_up:runner_up_id (id, name, flag_url),
+        third_place:third_place_id (id, name, flag_url),
+        fourth_place:fourth_place_id (id, name, flag_url),
+        final_home_score,
+        final_away_score
+      `).single();
+      if (error && error.code !== 'PGRST116') throw error;
+      return data as FinalResult | null;
+    },
   });
 
-  const { data: allUsers = [], isLoading: isLoadingUsers } = useQuery<UserCustom[]>({
-    queryKey: ['allUsersForPredictions'],
-    queryFn: async () => { /* ... lógica de fetch ... */ },
-    enabled: showPredictions && (activeTab === 'groups' || activeTab === 'final'),
-    onError: (error) => handleQueryError(error, "Erro ao carregar usuários"),
-  });
+  const handleSelectMatch = (matchId: string) => {
+    if (!isAdmin) return;
+    const match = matches.find(m => m.id === matchId);
+    setSelectedMatch(match || null);
+  };
   
-  const { data: groupPredictions = [], isLoading: isLoadingGroupPredictions } = useQuery<UserGroupPrediction[]>({
-    queryKey: ['userGroupPredictions'],
-    queryFn: async () => { /* ... lógica de fetch ... */ },
-    enabled: showPredictions && activeTab === 'groups',
-    onError: (error) => handleQueryError(error, "Erro ao carregar palpites de grupos"),
-  });
+  const handleFormComplete = () => {
+    toast({ title: "Sucesso!", description: "O resultado foi salvo e os pontos serão reprocessados." });
+    setSelectedMatch(null);
+    queryClient.invalidateQueries({ queryKey: ['matchesResults'] });
+    queryClient.invalidateQueries({ queryKey: ['participantsRanking'] }); // Invalida o ranking para recarregar
+  };
 
-  const { data: finalPredictions = [], isLoading: isLoadingFinalPredictions } = useQuery<UserFinalPrediction[]>({
-    queryKey: ['userFinalPredictions'],
-    queryFn: async () => { /* ... lógica de fetch ... */ },
-    enabled: showPredictions && activeTab === 'final',
-    onError: (error) => handleQueryError(error, "Erro ao carregar palpites finais"),
-  });
-  
-  // O resto do seu arquivo (useEffect para toasts, handleSelectMatch, handleFormComplete, filteredMatches, etc.)
-  // e todo o seu JSX de renderização permanecem exatamente os mesmos.
+  const finishedMatches = useMemo(() => matches.filter(m => m.is_finished), [matches]);
+  const upcomingMatches = useMemo(() => matches.filter(m => !m.is_finished), [matches]);
 
-  // ...
   return (
     <Layout>
-      {/* ... todo o seu JSX permanece aqui ... */}
+      <div className="container mx-auto p-4 max-w-6xl">
+        <h1 className="text-3xl font-bold text-center text-fifa-blue mb-8">Resultados e Próximos Jogos</h1>
+
+        {isAdmin && selectedMatch && (
+          <div className="mb-8">
+            <ResultForm match={selectedMatch} onComplete={handleFormComplete} />
+          </div>
+        )}
+
+        <Tabs defaultValue="finished">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="finished">Resultados</TabsTrigger>
+            <TabsTrigger value="upcoming">Próximos Jogos</TabsTrigger>
+          </TabsList>
+          
+          <TabsContent value="finished">
+            {isLoadingMatches ? <Loader2 className="mx-auto mt-8 h-8 w-8 animate-spin"/> :
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-6">
+                {finishedMatches.map(match => <MatchCard key={match.id} match={match} selected={selectedMatch?.id === match.id} onClick={isAdmin ? handleSelectMatch : undefined}/>)}
+              </div>
+            }
+          </TabsContent>
+          <TabsContent value="upcoming">
+            {isLoadingMatches ? <Loader2 className="mx-auto mt-8 h-8 w-8 animate-spin"/> :
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-6">
+                {upcomingMatches.map(match => <MatchCard key={match.id} match={match} selected={selectedMatch?.id === match.id} onClick={isAdmin ? handleSelectMatch : undefined}/>)}
+              </div>
+            }
+          </TabsContent>
+        </Tabs>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mt-12">
+            <Card>
+                <CardHeader><CardTitle className="flex items-center gap-2"><Trophy className="text-yellow-500"/> Classificação Final</CardTitle></CardHeader>
+                <CardContent>
+                    {isLoadingFinalResult ? <Loader2 className="h-6 w-6 animate-spin"/> :
+                        finalResultData ? (
+                            <ul className="space-y-2">
+                                <li><strong>Campeão:</strong> {finalResultData.champion?.name || 'A definir'}</li>
+                                <li><strong>Vice:</strong> {finalResultData.runner_up?.name || 'A definir'}</li>
+                                <li><strong>3º Lugar:</strong> {finalResultData.third_place?.name || 'A definir'}</li>
+                                <li><strong>4º Lugar:</strong> {finalResultData.fourth_place?.name || 'A definir'}</li>
+                                {finalResultData.final_home_score !== null && <li><strong>Placar da Final:</strong> {finalResultData.final_home_score} x {finalResultData.final_away_score}</li>}
+                            </ul>
+                        ) : <p>Resultados finais ainda não definidos.</p>
+                    }
+                </CardContent>
+            </Card>
+            <Card>
+                <CardHeader><CardTitle><UsersIcon/> Classificação dos Grupos</CardTitle></CardHeader>
+                <CardContent>
+                    {isLoadingGroupResults ? <Loader2 className="h-6 w-6 animate-spin"/> :
+                        groupResultsData.length > 0 ? (
+                            <div className="space-y-4">
+                                {groupResultsData.map(result => (
+                                    <div key={result.group_id}>
+                                        <h4 className="font-bold">{result.group_name}</h4>
+                                        <p className="text-sm">1º: {result.first_place_team?.name || 'A definir'}</p>
+                                        <p className="text-sm">2º: {result.second_place_team?.name || 'A definir'}</p>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : <p>Resultados dos grupos ainda não definidos.</p>
+                    }
+                </CardContent>
+            </Card>
+        </div>
+      </div>
     </Layout>
   );
 };
