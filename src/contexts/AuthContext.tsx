@@ -15,7 +15,8 @@ interface AuthContextType {
   loading: boolean;
   isAuthenticated: boolean;
   isFirstLogin: boolean;
-  login: (email: string, password: string) => Promise<{ success: boolean; error: any | null }>;
+  isAdmin: boolean;
+  login: (email: string, password:string) => Promise<{ success: boolean; error: any | null }>;
   signOut: () => Promise<void>;
   updateUserProfile: (updates: Partial<Pick<AppUser, 'first_login'>>) => Promise<void>;
 }
@@ -53,24 +54,15 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         .eq('id', sessionUser.id)
         .single();
 
-      if (error && error.code !== 'PGRST116') {
-        console.error("Erro ao buscar perfil do usuário (RLS?):", error);
-        toast.error("Não foi possível carregar seu perfil. Deslogando por segurança.");
-        await signOut();
-        return;
-      }
-
+      if (error && error.code !== 'PGRST116') throw error;
+      
       const combinedUser: AppUser = { ...sessionUser, ...profile };
       setUser(combinedUser);
       setIsAdmin(!!profile?.is_admin);
-
-      // LÓGICA CORRIGIDA: `first_login` no banco é `false` se o usuário JÁ fez o primeiro login.
-      // Se for `true`, `undefined` ou `null`, então é o primeiro login.
       setIsFirstLogin(profile?.first_login !== false);
 
     } catch (e: any) {
-      console.error("Erro crítico ao buscar perfil:", e);
-      toast.error("Erro crítico ao carregar dados do usuário.");
+      toast.error(`Erro ao buscar perfil: ${e.message}`);
       await signOut();
     }
   }, [signOut]);
@@ -89,35 +81,44 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         setLoading(false);
       }
     );
-    return () => {
-      authListener.subscription.unsubscribe();
-    };
+    return () => { authListener.subscription.unsubscribe(); };
   }, [fetchAndSyncProfile]);
-
+  
   const login = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) {
-        toast.error(error.message || "Email ou senha inválidos.");
-    }
+    if (error) toast.error(error.message || "Email ou senha inválidos.");
     return { success: !error, error };
   };
 
+  // VERSÃO CORRIGIDA DA FUNÇÃO
   const updateUserProfile = async (updates: Partial<Pick<AppUser, 'first_login'>>) => {
-    if (!user) return;
+    if (!user) throw new Error("Usuário não autenticado para atualizar o perfil.");
+    
     try {
-      await supabase.from('users_custom').update(updates).eq('id', user.id);
-      // Atualiza o estado local para refletir a mudança imediatamente
+      const { error } = await supabase
+        .from('users_custom')
+        .update(updates)
+        .eq('id', user.id);
+
+      if (error) {
+        // Se o Supabase retornar um erro, jogue-o para ser capturado pela página que o chamou.
+        throw error;
+      }
+
+      // Atualiza o estado local apenas em caso de sucesso
       if (updates.first_login === false) {
         setIsFirstLogin(false);
         setUser(prevUser => prevUser ? { ...prevUser, first_login: false } : null);
       }
     } catch (error) {
-        console.error("Erro ao atualizar perfil:", error);
-        toast.error("Não foi possível atualizar seu perfil.");
+      console.error("Erro em updateUserProfile:", error);
+      // Re-joga o erro para que a página ChangePassword possa parar o "loading"
+      // e exibir um toast de erro específico.
+      throw error;
     }
   };
 
-  const value = { user, loading, isAuthenticated, isFirstLogin, login, signOut, updateUserProfile };
+  const value = { user, loading, isAuthenticated, isFirstLogin, isAdmin, login, signOut, updateUserProfile };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
