@@ -20,9 +20,9 @@ const getPrizeText = (
   if (isCurrentUserAI || realUserRank === -1 || totalRealUsers === 0) {
     return "";
   }
-  if (realUserRank === 0) return "60%";
-  if (realUserRank === 1 && totalRealUsers > 1) return "25%";
-  if (realUserRank === 2 && totalRealUsers > 2) return "15%";
+  if (realUserRank === 0) return "R$ 165,00";
+  if (realUserRank === 1 && totalRealUsers > 1) return "R$  68,75";
+  if (realUserRank === 2 && totalRealUsers > 2) return "R$  41,25";
   if (totalRealUsers > 1 && realUserRank === totalRealUsers - 1) return "Paga um café da manhã";
   return "";
 };
