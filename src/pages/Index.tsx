@@ -56,9 +56,7 @@ const Index = () => {
       <div className="container mx-auto px-4 py-8">
         <h1 className="text-2xl md:text-3xl font-bold text-center text-fifa-blue mb-8">Bem-vindo ao Clube Futuro Palpites!</h1>
 
-        {/* Layout dos Cards de Estatísticas com Lógica Responsiva */}
         <div className="grid grid-cols-2 md:grid-cols-3 gap-4 md:gap-6 mb-8">
-            {/* Card "Total de Usuários" - Aparece apenas em telas de desktop (md ou maior) */}
             <div className="hidden md:block">
               <StatsCard
                 title="Total de Usuários"
@@ -67,8 +65,6 @@ const Index = () => {
                 description="Participantes registrados no bolão"
               />
             </div>
-
-            {/* Estes dois cards aparecem em todas as telas, mas o grid se ajusta */}
             <StatsCard
               title="Partidas da Fase de Grupos"
               value={`${stats.matchesPlayed} / ${stats.totalMatches}`}
@@ -83,16 +79,21 @@ const Index = () => {
             />
         </div>
 
-        {/* Layout principal da página com duas colunas no desktop */}
+        {/* BOTÃO RESTAURADO AQUI */}
+        <div className="text-center mb-8">
+          <Link to="/palpites-do-dia">
+            <Button className="bg-fifa-green hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition-colors duration-300">
+              Ver Palpites dos Jogos do Dia
+            </Button>
+          </Link>
+        </div>
+
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2">
             <RankingTable />
           </div>
           <div className="lg:col-span-1 flex flex-col gap-8">
-            {/* O componente NextMatches foi movido para cá para o layout de 2 colunas no desktop */}
             <NextMatches />
-            
-            {/* Card de Regras Rápidas - Aparece apenas no desktop */}
             <div className="hidden lg:block">
               <Card className="shadow-lg">
                 <CardHeader>
