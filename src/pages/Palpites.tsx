@@ -199,7 +199,7 @@ const Palpites = () => {
                 {isGlobalCutoffReached && (<Alert variant="destructive" className="mb-6"><AlertTitle>Prazo Encerrado!</AlertTitle><AlertDescription>O prazo para enviar ou modificar palpites encerrou.</AlertDescription></Alert>)}
                 <Tabs defaultValue="daily" className="w-full">
                     <TabsList className="grid w-full grid-cols-3 mb-6">
-                        <TabsTrigger value="daily">Partidas (Fase de Grupos)</TabsTrigger>
+                        <TabsTrigger value="daily">Partidas</TabsTrigger>
                         <TabsTrigger value="groups">Grupos</TabsTrigger>
                         <TabsTrigger value="final">Final</TabsTrigger>
                     </TabsList>

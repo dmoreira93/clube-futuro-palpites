@@ -1,28 +1,38 @@
-// src/components/layout/BottomNavbar.tsx
-import { Home, Trophy, ListChecks } from 'lucide-react';
+import { Home, Trophy, ListChecks, LogIn, Pencil } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
-
-const navItems = [
-  { href: '/', label: 'Início', icon: Home },
-  { href: '/palpites', label: 'Palpites', icon: ListChecks },
-  { href: '/ranking', label: 'Ranking', icon: Trophy },
-];
+import { useAuth } from '@/contexts/AuthContext';
 
 export const BottomNavbar = () => {
+  const { isAuthenticated } = useAuth();
+
+  // Itens do menu para visitantes NÃO LOGADOS
+  const navItemsPublic = [
+    { href: '/', label: 'Início', icon: Home },
+    { href: '/login', label: 'Login', icon: LogIn },
+    { href: '/ranking', label: 'Ranking', icon: Trophy },
+    { href: '/resultados', label: 'Resultados', icon: ListChecks },
+  ];
+
+  // Itens do menu para usuários LOGADOS
+  const navItemsAuthenticated = [
+    { href: '/', label: 'Início', icon: Home },
+    { href: '/palpites', label: 'Palpites', icon: Pencil },
+    { href: '/resultados', label: 'Resultados', icon: ListChecks },
+  ];
+
+  const items = isAuthenticated ? navItemsAuthenticated : navItemsPublic;
+
   return (
-    // Esconde em telas médias ou maiores (md:hidden)
     <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg z-50">
       <div className="flex justify-around h-16">
-        {navItems.map((item) => (
+        {items.map((item) => (
           <NavLink
             key={item.href}
             to={item.href}
-            end // 'end' garante que a rota "/" não fique ativa para outras rotas
+            end={item.href === '/'}
             className={({ isActive }) =>
               `flex flex-col items-center justify-center w-full text-xs transition-colors duration-200 ${
-                isActive
-                  ? 'text-fifa-blue' // Cor para o item ativo
-                  : 'text-gray-500 hover:text-fifa-blue' // Cor para itens inativos
+                isActive ? 'text-fifa-blue' : 'text-gray-500 hover:text-fifa-blue'
               }`
             }
           >
