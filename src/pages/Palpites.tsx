@@ -19,7 +19,7 @@ import { ptBR } from "date-fns/locale";
 import ReactDOMServer from 'react-dom/server';
 import PredictionReceipt from '@/components/home/predictions/PredictionReceipt';
 
-// Interfaces (mantidas como no seu original)
+// Interfaces
 interface LocalPrediction {
   match_id: string;
   home_score: string;
@@ -49,6 +49,7 @@ const Palpites = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
 
+  // States
   const [loading, setLoading] = useState(true);
   const [submittingMatchId, setSubmittingMatchId] = useState<string | null>(null);
   const [allMatches, setAllMatches] = useState<Match[]>([]);
@@ -105,20 +106,26 @@ const Palpites = () => {
       if (finalPredData) setFinalPrediction({ ...finalPredData, prediction_id: finalPredData.id });
 
     } catch (error: any) {
-      console.error("Erro ao carregar dados iniciais:", error);
-      toast({ title: "Erro ao Carregar Dados", description: "Não foi possível carregar seus palpites. Você pode ter sido desconectado.", variant: "destructive" });
-      if (error?.message?.includes('JWT') || error?.code === 'PGRST301') {
-        await signOut();
-      }
+      // --- MUDANÇA CRÍTICA AQUI ---
+      // Apenas mostramos o erro, sem deslogar o usuário.
+      console.error("ERRO DETALHADO AO CARREGAR DADOS DOS PALPITES:", error);
+      toast({
+        title: "Erro Crítico ao Carregar a Página",
+        description: `Não foi possível buscar os dados. Erro: ${error.message}`,
+        variant: "destructive",
+        duration: 10000,
+      });
     } finally {
       setLoading(false);
     }
-  }, [user, signOut, toast]);
+  }, [user, toast]); // Removido signOut da dependência
 
   useEffect(() => {
     fetchInitialData();
   }, [fetchInitialData]);
 
+  // ... O RESTANTE DO SEU ARQUIVO (handleScoreChange, handleSave, etc.) PERMANECE IGUAL ...
+  // ...
   const groupStageMatches = useMemo(() => {
     return allMatches.filter(match => match.stage === "Fase de Grupos");
   }, [allMatches]);
@@ -181,20 +188,18 @@ const Palpites = () => {
   };
 
   const handleSaveGroupPrediction = useCallback(async (groupId: string) => {
-    // ... (lógica de validação e upsert do seu arquivo original) ...
-    // A lógica de erro já está sendo tratada corretamente no seu código original
+    // ...
     toast({ title: "Sucesso!", description: `Palpite do grupo ${groups.find(g => g.id === groupId)?.name || ''} salvo!` });
 
   }, [user, groupPredictions, groups, toast, signOut]);
 
   const handleSaveFinalPrediction = useCallback(async () => {
-    // ... (lógica de validação e upsert do seu arquivo original) ...
-    // A lógica de erro já está sendo tratada corretamente no seu código original
+    // ...
     toast({ title: "Sucesso!", description: "Palpite da final salvo com sucesso!" });
   }, [user, finalPrediction, toast, signOut]);
   
   const handlePrintReceipt = useCallback(() => {
-    // ... (Sua lógica de impressão original)
+    // ...
   }, [user, dailyPredictions, allMatches, teams, groupPredictions, groups, finalPrediction, toast]);
 
   if (loading) {
@@ -214,11 +219,11 @@ const Palpites = () => {
 
   const isGlobalCutoffReached = Date.now() >= OVERALL_PREDICTION_CUTOFF_DATE.getTime();
   const globalCutoffFormatted = format(OVERALL_PREDICTION_CUTOFF_DATE, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR });
-
+  
   return (
     <Layout>
       <div className="container mx-auto p-4 sm:p-6 lg:p-8">
-        {/* Todo o seu JSX original da página Palpites vai aqui */}
+        {/* Seu JSX para a página de palpites */}
       </div>
     </Layout>
   );
