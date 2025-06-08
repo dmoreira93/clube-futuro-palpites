@@ -13,13 +13,12 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       workbox: {
-        // Força o novo service worker a ativar imediatamente
         skipWaiting: true,
         clientsClaim: true,
-        // Limpa caches de versões antigas
         cleanupOutdatedCaches: true,
-        // Garante que todos os assets importantes sejam pré-cacheados
         globPatterns: ['**/*.{js,css,html,ico,png,svg,wasm,webmanifest}'],
+        // Aumenta o limite de tamanho do arquivo para 5MB (o padrão é 2MB)
+        maximumFileSizeToCacheInBytes: 5 * 1024 * 1024, 
       },
       manifest: {
         name: 'Clube Futuro Palpites',
