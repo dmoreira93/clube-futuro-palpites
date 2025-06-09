@@ -1,4 +1,3 @@
-// src/pages/Index.tsx
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import Layout from "@/components/layout/Layout";
@@ -19,14 +18,29 @@ const Index = () => {
   });
   const [loadingStats, setLoadingStats] = useState(true);
 
+  // useEffect modificado com console.log para depuração
   useEffect(() => {
     const fetchStats = async () => {
       try {
+        console.log("1. Iniciando busca de estatísticas...");
+
+        console.log("A. Buscando contagem de usuários...");
         const { count: userCount } = await supabase.from('users_custom').select('*', { count: 'exact', head: true }).eq('is_admin', false);
+        console.log("...busca de usuários finalizada. Contagem:", userCount);
+
+        console.log("B. Buscando contagem de partidas finalizadas...");
         const { count: finishedGroupStageMatchCount } = await supabase.from('matches').select('*', { count: 'exact', head: true }).eq('is_finished', true).eq('stage', 'Fase de Grupos');
-        const { count: totalGroupStageMatchCount } = await supabase.from('matches').select('*', { count: 'exact', head: true }).eq('stage', 'Fase de Grupos');
+        console.log("...busca de partidas finalizadas. Contagem:", finishedGroupStageMatchCount);
         
+        console.log("C. Buscando contagem total de partidas...");
+        const { count: totalGroupStageMatchCount } = await supabase.from('matches').select('*', { count: 'exact', head: true }).eq('stage', 'Fase de Grupos');
+        console.log("...busca total de partidas finalizada. Contagem:", totalGroupStageMatchCount);
+
+        console.log("D. Buscando próxima partida...");
         const { data: nextMatchData } = await supabase.from('matches').select(`match_date, home_team:home_team_id(name), away_team:away_team_id(name)`).gte('match_date', new Date().toISOString()).order('match_date', { ascending: true }).limit(1).maybeSingle();
+        console.log("...busca da próxima partida finalizada. Dados:", nextMatchData);
+        
+        console.log("2. Todas as buscas foram concluídas. Atualizando o estado.");
         
         let nextMatchInfo = { date: "N/A", teams: "Aguardando definição" };
         if (nextMatchData) {
@@ -43,8 +57,9 @@ const Index = () => {
           nextMatch: nextMatchInfo,
         });
       } catch (error: any) {
-        console.error("Erro ao buscar estatísticas:", error.message);
+        console.error("ERRO FATAL ao buscar estatísticas:", error.message);
       } finally {
+        console.log("3. Bloco FINALLY executado. Finalizando o loading.");
         setLoadingStats(false);
       }
     };
