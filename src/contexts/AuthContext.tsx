@@ -36,6 +36,7 @@ interface AuthProviderProps {
 }
 
 export const AuthProvider = ({ children }: AuthProviderProps) => {
+  console.log("1. AuthProvider MONTADO"); // <-- LOG 1
   const [user, setUser] = useState<AppUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [isFirstLogin, setIsFirstLogin] = useState(false);
@@ -59,8 +60,6 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       const combinedUser: AppUser = { ...sessionUser, ...profile };
       setUser(combinedUser);
       setIsAdmin(!!profile?.is_admin);
-
-      // LÓGICA CORRIGIDA: É o primeiro login se a flag `first_login` NÃO for `true`.
       setIsFirstLogin(profile?.first_login !== true);
 
     } catch (e: any) {
@@ -69,11 +68,12 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     }
   }, [signOut]);
 
-  // HOOK useEffect MODIFICADO COM try...finally
   useEffect(() => {
+    console.log("2. useEffect EXECUTADO"); // <-- LOG 2
     const { data: authListener } = supabase.auth.onAuthStateChange(
       async (_event, session) => {
-        try { // <-- Início do bloco TRY
+        console.log("3. onAuthStateChange DISPARADO", { _event, session }); // <-- LOG 3
+        try {
           if (session?.user) {
             await fetchAndSyncProfile(session.user);
           } else {
@@ -81,13 +81,16 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
             setIsAdmin(false);
             setIsFirstLogin(false);
           }
-        } finally { // <-- Início do bloco FINALLY
-          // Esta linha agora será executada sempre, garantindo que a tela não fique branca.
+        } finally {
+          console.log("4. Bloco finally EXECUTADO - Setando loading para false"); // <-- LOG 4
           setLoading(false);
         }
       }
     );
-    return () => { authListener.subscription.unsubscribe(); };
+    return () => {
+      console.log("5. AuthProvider DESMONTADO - Limpando listener"); // <-- LOG 5
+      authListener.subscription.unsubscribe(); 
+    };
   }, [fetchAndSyncProfile]);
   
   const login = async (email: string, password: string) => {
@@ -112,7 +115,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
   const value = { user, loading, isAuthenticated, isFirstLogin, isAdmin, login, signOut, updateUserProfile };
 
-  // Renderize os children APENAS quando o loading for `false`.
+  console.log("6. AuthProvider RENDERIZANDO. Loading:", loading); // <-- LOG 6
   return (
     <AuthContext.Provider value={value}>
       {!loading && children}
