@@ -42,16 +42,20 @@ export const ResultForm = ({ match, onComplete }: ResultFormProps) => {
         .eq('id', match.id);
 
       if (updateError) throw updateError;
-      toast({ title: "Resultado salvo!", description: "Agora calculando os pontos dos usuários..." });
+      
+      toast({ title: "Resultado salvo!", description: "Calculando os pontos dos usuários..." });
 
-      // Etapa 2: Chamar a função do Supabase para calcular os pontos de todos os usuários para esta partida
+      // ETAPA 2 (A MAIS IMPORTANTE): Chamar a função do Supabase que calcula e salva os pontos
       const { error: rpcError } = await supabase.rpc('update_user_points_for_match', {
         match_id_param: match.id
       });
       
-      if (rpcError) throw rpcError;
+      if (rpcError) {
+        // Se a função RPC falhar, lança um erro detalhado
+        throw new Error(`Falha ao calcular pontos: ${rpcError.message}`);
+      }
 
-      // Sucesso!
+      // Se tudo deu certo, chama a função onComplete
       onComplete();
 
     } catch (error: any) {
@@ -92,7 +96,7 @@ export const ResultForm = ({ match, onComplete }: ResultFormProps) => {
               {isProcessing ? (<><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Processando...</>) : (match.is_finished ? "Atualizar Resultado e Reprocessar Pontos" : "Registrar Resultado e Calcular Pontos")}
             </Button>
           </div>
-          {match.is_finished && (<p className="text-xs text-center text-orange-600 mt-2">Atenção: Atualizar um resultado já finalizado irá reprocessar todas as pontuações.</p>)}
+           {match.is_finished && (<p className="text-xs text-center text-orange-600 mt-2">Atenção: Atualizar um resultado já finalizado irá reprocessar todas as pontuações relacionadas a esta partida.</p>)}
         </div>
       </CardContent>
     </Card>
