@@ -106,7 +106,7 @@ const Palpites = () => {
             setLoading(false);
         }
     }, [user, toast]);
-
+    
     useEffect(() => {
         fetchInitialData();
     }, [fetchInitialData]);
@@ -189,11 +189,10 @@ const Palpites = () => {
         }
     }, [user, finalPrediction, toast]);
     
-    // VERSÃO CORRIGIDA
     const handlePrintReceipt = useCallback(() => {
         if (!user) {
-          toast({ title: "Erro", description: "Você precisa estar logado para gerar o comprovante.", variant: "destructive" });
-          return;
+            toast({ title: "Erro", description: "Você precisa estar logado para gerar o comprovante.", variant: "destructive" });
+            return;
         }
       
         const userMatchPredictionsForReceipt = Object.values(dailyPredictions)
@@ -213,18 +212,27 @@ const Palpites = () => {
             return { group_name: group.name, predicted_first_team: firstTeam, predicted_second_team: secondTeam };
           }).filter((p): p is NonNullable<typeof p> => p !== null);
       
-        const getTeamById = (id: string | null) => teams.find(t => t.id === id);
-        const finalPredictionReceipt = finalPrediction.champion_id ? {
-            champion: getTeamById(finalPrediction.champion_id),
-            vice_champion: getTeamById(finalPrediction.vice_champion_id),
-            third_place: getTeamById(finalPrediction.third_place_id),
-            fourth_place: getTeamById(finalPrediction.fourth_place_id),
-            final_home_score: finalPrediction.final_home_score,
-            final_away_score: finalPrediction.final_away_score,
-        } : null;
+        const getTeamById = (id: string | null): Team | undefined => teams.find(t => t.id === id);
+        let finalPredictionReceipt = null;
+        if (finalPrediction.champion_id) {
+            const champ = getTeamById(finalPrediction.champion_id);
+            const vice = getTeamById(finalPrediction.vice_champion_id);
+            const third = getTeamById(finalPrediction.third_place_id);
+            const fourth = getTeamById(finalPrediction.fourth_place_id);
+            if(champ && vice && third && fourth) {
+                finalPredictionReceipt = {
+                    champion: champ,
+                    vice_champion: vice,
+                    third_place: third,
+                    fourth_place: fourth,
+                    final_home_score: finalPrediction.final_home_score,
+                    final_away_score: finalPrediction.final_away_score,
+                };
+            }
+        }
         
         if (userMatchPredictionsForReceipt.length === 0 && userGroupPredictionsForReceipt.length === 0 && !finalPredictionReceipt) {
-            toast({ title: "Nenhum Palpite", description: "Você precisa preencher ao menos um palpite para gerar o comprovante.", variant: "default" });
+            toast({ title: "Nenhum Palpite", description: "Você precisa preencher ao menos um palpite completo para gerar o comprovante.", variant: "default" });
             return;
         }
     
@@ -270,7 +278,7 @@ const Palpites = () => {
                         <TabsTrigger value="groups">Grupos</TabsTrigger>
                         <TabsTrigger value="final">Final</TabsTrigger>
                     </TabsList>
-
+                    
                     <TabsContent value="daily">
                         <Card>
                             <CardHeader><CardTitle className="text-xl">Palpites das Partidas (Fase de Grupos)</CardTitle><CardDescription>Preencha os placares e salve individualmente.</CardDescription></CardHeader>
