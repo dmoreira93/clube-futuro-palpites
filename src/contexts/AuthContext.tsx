@@ -1,3 +1,5 @@
+// src/contexts/AuthContext.tsx
+
 import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { User } from '@supabase/supabase-js';
@@ -46,7 +48,6 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     await supabase.auth.signOut();
   }, []);
 
-  // VERSÃO CORRIGIDA: Função com responsabilidade única de buscar dados ou lançar erro.
   const fetchAndSyncProfile = useCallback(async (sessionUser: User) => {
     const { data: profile, error } = await supabase
       .from('users_custom')
@@ -55,16 +56,18 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       .single();
 
     if (error && error.code !== 'PGRST116') {
-      throw error; // Lança o erro para o useEffect tratar.
+      throw error;
     }
     
-    const combinedUser: AppUser = { ...sessionUser, ...profile };
+    // CORREÇÃO FINAL APLICADA AQUI: Invertida a ordem do spread
+    const combinedUser: AppUser = { ...profile, ...sessionUser };
     setUser(combinedUser);
+
+    // O resto da lógica usa o 'profile' diretamente, o que está correto
     setIsAdmin(!!profile?.is_admin);
     setIsFirstLogin(profile?.first_login !== true);
   }, []);
 
-  // VERSÃO CORRIGIDA: useEffect orquestra o fluxo e trata os erros e o estado de loading.
   useEffect(() => {
     const { data: authListener } = supabase.auth.onAuthStateChange(
       async (_event, session) => {
@@ -101,7 +104,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       const { error } = await supabase.from('users_custom').update(updates).eq('id', user.id);
       if (error) throw error;
       if (updates.first_login === true) {
-        setIsFirstLogin(false); // Atualiza o estado local para evitar o loop
+        setIsFirstLogin(false);
       }
     } catch (error) {
       console.error("Erro em updateUserProfile:", error);
@@ -113,7 +116,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
   return (
     <AuthContext.Provider value={value}>
-      {!loading && children}
+      {children}
     </AuthContext.Provider>
   );
 };

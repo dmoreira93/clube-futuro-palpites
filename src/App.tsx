@@ -1,45 +1,57 @@
-// Arquivo App.tsx - Teste do Passo 4
-import { BrowserRouter, Routes, Route } from "react-router-dom";
-import { AuthProvider, useAuth } from "@/contexts/AuthContext";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query"; // Importado
-import { TooltipProvider } from "@/components/ui/tooltip"; // Importado
+// src/App.tsx
 
-// O QueryClient é criado aqui
+import { Toaster } from "@/components/ui/toaster";
+import { Toaster as Sonner } from "@/components/ui/sonner";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
+
+import { AuthProvider } from "@/contexts/AuthContext";
+
+// Importe suas páginas
+import Index from "@/pages/Index";
+import NotFound from "@/pages/NotFound";
+import Criterios from "@/pages/Criterios";
+import Resultados from "@/pages/Resultados";
+import Palpites from "@/pages/Palpites";
+import Cadastro from "@/pages/Cadastro";
+import Login from "@/pages/Login";
+import Admin from "@/pages/Admin";
+import AdminLogin from "@/pages/AdminLogin";
+import UserPredictions from "@/pages/UserPredictions";
+import DailyMatchesAndPredictions from "@/pages/DailyMatchesAndPredictions";
+import ChangePassword from "@/pages/ChangePassword";
+import RankingPage from "@/pages/Ranking";
+
 const queryClient = new QueryClient();
 
-// O componente de teste continua o mesmo
-const PaginaDeTesteAuth = () => {
-  const { user, loading, isAuthenticated } = useAuth();
-
-  if (loading) {
-    return <div>Carregando Autenticação...</div>;
-  }
-
-  return (
-    <div style={{ padding: '2rem', fontSize: '1.2rem', color: 'black', backgroundColor: 'white', whiteSpace: 'pre-wrap' }}>
-      <h1>Teste do AuthProvider com outros Providers</h1>
-      <p>Autenticação Carregada: {loading ? 'Não' : 'Sim'}</p>
-      <p>Usuário Autenticado: {isAuthenticated ? 'Sim' : 'Sim'}</p>
-      <p>Email do Usuário: {user?.email || 'Nenhum usuário logado'}</p>
-    </div>
-  );
-};
-
-const App = () => {
-  return (
-    // Adicionamos os providers de volta
-    <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <BrowserRouter>
-          <AuthProvider>
-            <Routes>
-              <Route path="/" element={<PaginaDeTesteAuth />} />
-            </Routes>
-          </AuthProvider>
-        </BrowserRouter>
-      </TooltipProvider>
-    </QueryClientProvider>
-  );
-};
+const App = () => (
+  <QueryClientProvider client={queryClient}>
+    <TooltipProvider>
+      <BrowserRouter>
+        <AuthProvider>
+          <Toaster />
+          <Sonner />
+          
+          <Routes>
+            <Route path="/" element={<Index />} />
+            <Route path="/criterios" element={<Criterios />} />
+            <Route path="/resultados" element={<Resultados />} />
+            <Route path="/ranking" element={<RankingPage />} />
+            <Route path="/palpites" element={<Palpites />} />
+            <Route path="/palpites-usuarios" element={<UserPredictions />} />
+            <Route path="/palpites-do-dia" element={<DailyMatchesAndPredictions />} />
+            <Route path="/cadastro" element={<Cadastro />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/admin" element={<Admin />} />
+            <Route path="/admin-login" element={<AdminLogin />} />
+            <Route path="/change-password" element={<ChangePassword />} />
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </AuthProvider>
+      </BrowserRouter>
+    </TooltipProvider>
+  </QueryClientProvider>
+);
 
 export default App;
