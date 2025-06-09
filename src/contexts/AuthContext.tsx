@@ -36,7 +36,6 @@ interface AuthProviderProps {
 }
 
 export const AuthProvider = ({ children }: AuthProviderProps) => {
-  console.log("1. AuthProvider MONTADO"); // <-- LOG 1
   const [user, setUser] = useState<AppUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [isFirstLogin, setIsFirstLogin] = useState(false);
@@ -47,48 +46,45 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     await supabase.auth.signOut();
   }, []);
 
+  // VERSÃO CORRIGIDA: Função com responsabilidade única de buscar dados ou lançar erro.
   const fetchAndSyncProfile = useCallback(async (sessionUser: User) => {
-    try {
-      const { data: profile, error } = await supabase
-        .from('users_custom')
-        .select('*')
-        .eq('id', sessionUser.id)
-        .single();
+    const { data: profile, error } = await supabase
+      .from('users_custom')
+      .select('*')
+      .eq('id', sessionUser.id)
+      .single();
 
-      if (error && error.code !== 'PGRST116') throw error;
-      
-      const combinedUser: AppUser = { ...sessionUser, ...profile };
-      setUser(combinedUser);
-      setIsAdmin(!!profile?.is_admin);
-      setIsFirstLogin(profile?.first_login !== true);
-
-    } catch (e: any) {
-      toast.error(`Erro ao buscar perfil: ${e.message}`);
-      await signOut();
+    if (error && error.code !== 'PGRST116') {
+      throw error; // Lança o erro para o useEffect tratar.
     }
-  }, [signOut]);
+    
+    const combinedUser: AppUser = { ...sessionUser, ...profile };
+    setUser(combinedUser);
+    setIsAdmin(!!profile?.is_admin);
+    setIsFirstLogin(profile?.first_login !== true);
+  }, []);
 
+  // VERSÃO CORRIGIDA: useEffect orquestra o fluxo e trata os erros e o estado de loading.
   useEffect(() => {
-    console.log("2. useEffect EXECUTADO"); // <-- LOG 2
     const { data: authListener } = supabase.auth.onAuthStateChange(
       async (_event, session) => {
-        console.log("3. onAuthStateChange DISPARADO", { _event, session }); // <-- LOG 3
         try {
           if (session?.user) {
             await fetchAndSyncProfile(session.user);
           } else {
             setUser(null);
-            setIsAdmin(false);
-            setIsFirstLogin(false);
           }
+        } catch (error: any) {
+          toast.error(`Falha ao carregar o perfil: ${error.message}`);
+          await supabase.auth.signOut();
+          setUser(null);
         } finally {
-          console.log("4. Bloco finally EXECUTADO - Setando loading para false"); // <-- LOG 4
           setLoading(false);
         }
       }
     );
+
     return () => {
-      console.log("5. AuthProvider DESMONTADO - Limpando listener"); // <-- LOG 5
       authListener.subscription.unsubscribe(); 
     };
   }, [fetchAndSyncProfile]);
@@ -115,7 +111,6 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
   const value = { user, loading, isAuthenticated, isFirstLogin, isAdmin, login, signOut, updateUserProfile };
 
-  console.log("6. AuthProvider RENDERIZANDO. Loading:", loading); // <-- LOG 6
   return (
     <AuthContext.Provider value={value}>
       {!loading && children}
