@@ -59,31 +59,34 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       throw error;
     }
     
-    // CORREÇÃO FINAL APLICADA AQUI: Invertida a ordem do spread
     const combinedUser: AppUser = { ...profile, ...sessionUser };
     setUser(combinedUser);
 
-    // O resto da lógica usa o 'profile' diretamente, o que está correto
     setIsAdmin(!!profile?.is_admin);
     setIsFirstLogin(profile?.first_login !== true);
   }, []);
 
+  // VERSÃO FINAL CORRIGIDA SEGUINDO A DOCUMENTAÇÃO
   useEffect(() => {
     const { data: authListener } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
-        try {
-          if (session?.user) {
-            await fetchAndSyncProfile(session.user);
-          } else {
+      (event, session) => {
+        // O callback agora é SÍNCRONO.
+        // A lógica async é disparada em um setTimeout para evitar o deadlock.
+        setTimeout(async () => {
+          try {
+            if (session?.user) {
+              await fetchAndSyncProfile(session.user);
+            } else {
+              setUser(null);
+            }
+          } catch (error: any) {
+            toast.error(`Falha ao carregar o perfil: ${error.message}`);
+            await supabase.auth.signOut();
             setUser(null);
+          } finally {
+            setLoading(false);
           }
-        } catch (error: any) {
-          toast.error(`Falha ao carregar o perfil: ${error.message}`);
-          await supabase.auth.signOut();
-          setUser(null);
-        } finally {
-          setLoading(false);
-        }
+        }, 0);
       }
     );
 
