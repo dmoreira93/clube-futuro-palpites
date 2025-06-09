@@ -107,5 +107,10 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
   const value = { user, loading, isAuthenticated, isFirstLogin, isAdmin, login, signOut, updateUserProfile };
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  // Renderize os children APENAS quando o loading for `false`.
+  return (
+    <AuthContext.Provider value={value}>
+      {!loading && children}
+    </AuthContext.Provider>
+  );
 };
