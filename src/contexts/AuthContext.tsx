@@ -69,17 +69,22 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     }
   }, [signOut]);
 
+  // HOOK useEffect MODIFICADO COM try...finally
   useEffect(() => {
     const { data: authListener } = supabase.auth.onAuthStateChange(
       async (_event, session) => {
-        if (session?.user) {
-          await fetchAndSyncProfile(session.user);
-        } else {
-          setUser(null);
-          setIsAdmin(false);
-          setIsFirstLogin(false);
+        try { // <-- Início do bloco TRY
+          if (session?.user) {
+            await fetchAndSyncProfile(session.user);
+          } else {
+            setUser(null);
+            setIsAdmin(false);
+            setIsFirstLogin(false);
+          }
+        } finally { // <-- Início do bloco FINALLY
+          // Esta linha agora será executada sempre, garantindo que a tela não fique branca.
+          setLoading(false);
         }
-        setLoading(false);
       }
     );
     return () => { authListener.subscription.unsubscribe(); };
