@@ -1,6 +1,6 @@
 // src/components/layout/Layout.tsx
 import React from 'react';
-// import Navbar from './Navbar'; // A importação pode ser comentada também
+import Navbar from './Navbar';
 import Footer from './Footer';
 import { Toaster } from "@/components/ui/toaster"
 import { BottomNavbar } from './BottomNavbar';
@@ -12,8 +12,8 @@ interface LayoutProps {
 const Layout: React.FC<LayoutProps> = ({ children }) => {
   return (
     <div className="flex flex-col min-h-screen">
-      {/* <Navbar /> */} {/* <-- Navbar PRINCIPAL COMENTADA */}
-
+      <Navbar />
+      {/* Adiciona padding-bottom para o conteúdo não ficar atrás da navbar no mobile */}
       <main className="flex-grow container mx-auto p-4 pb-20 md:pb-4">
         {children}
       </main>
