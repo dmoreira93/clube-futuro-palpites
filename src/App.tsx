@@ -4,7 +4,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
 import Layout from "./components/layout/Layout"; // Importa o Layout
 
-// Importações de Páginas
+// Importações de todas as suas páginas
 import Index from "./pages/Index";
 import Login from "./pages/Login";
 import Cadastro from "./pages/Cadastro";
@@ -24,10 +24,9 @@ function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
-        {/* O Layout agora envolve TODAS as rotas, evitando duplicação */}
+        {/* O Layout DEVE estar aqui, envolvendo TODAS as rotas */}
         <Layout>
           <Routes>
-            {/* Rotas Públicas */}
             <Route path="/" element={<Index />} />
             <Route path="/login" element={<Login />} />
             <Route path="/cadastro" element={<Cadastro />} />
@@ -36,17 +35,11 @@ function App() {
             <Route path="/criterios" element={<Criterios />} />
             <Route path="/palpites-usuarios" element={<UserPredictions />} />
             <Route path="/palpites-do-dia" element={<DailyMatchesAndPredictions />} />
-            
-            {/* Rotas Protegidas (Exigem Login) */}
             <Route path="/palpites" element={<Palpites />} />
             <Route path="/simulador" element={<Simulador />} />
             <Route path="/change-password" element={<ChangePassword />} />
-
-            {/* Rotas de Admin */}
             <Route path="/admin-login" element={<AdminLogin />} />
             <Route path="/admin" element={<Admin />} />
-
-            {/* Rota Not Found */}
             <Route path="*" element={<NotFound />} />
           </Routes>
         </Layout>
