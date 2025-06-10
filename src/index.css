@@ -106,28 +106,36 @@
 }
 /* src/index.css */
 
+/* ... (seu CSS existente) ... */
+
 @media print {
-  /* Esconde tudo por padrão na impressão */
+  /* Esconde tudo que não for para impressão por padrão */
   body * {
     visibility: hidden;
   }
   
-  /* Mostra apenas a área do chaveamento e seu conteúdo */
-  #printable-bracket, #printable-bracket * {
+  /* Garante que elementos com a classe .print-hidden sejam removidos */
+  .print-hidden {
+    display: none !important;
+  }
+  
+  /* Mostra apenas a área de simulação e seu conteúdo */
+  #printable-simulation, #printable-simulation * {
     visibility: visible;
   }
   
-  /* Ajusta o layout para ocupar a página inteira */
-  #printable-bracket {
+  /* Ajusta o layout da área de impressão */
+  #printable-simulation {
     position: absolute;
     left: 0;
     top: 0;
     width: 100%;
+    padding: 1rem;
   }
 
-  /* Esconde botões e outros elementos não necessários na impressão */
-  .print-hidden {
-    display: none !important;
+  /* Força a quebra de página após as tabelas de grupo */
+  #simulation-group-tables {
+    page-break-after: always;
   }
 }
 }
