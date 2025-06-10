@@ -5,19 +5,16 @@ import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import {
   Volleyball as SoccerBallIcon,
-  Trophy as TrophyIcon,
-  User as UserIcon,
   Shield as ShieldIcon,
   LogOut,
-  Loader2, // <-- Opcional, para um feedback visual de carregamento
-  Calculator, // Importe o ícone da calculadora
+  Loader2,
+  Calculator,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 
 const Navbar = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
-  // ADAPTAÇÃO 1: Obter o estado 'loading' do contexto.
   const { isAuthenticated, isAdmin, user, signOut, loading } = useAuth();
   const navigate = useNavigate();
 
@@ -26,10 +23,7 @@ const Navbar = () => {
     navigate("/");
   };
 
-  // Função para renderizar o conteúdo da navbar para evitar repetição de código
   const renderNavContent = () => {
-    // ADAPTAÇÃO 2: Trava de segurança. Se o contexto ainda está carregando,
-    // não renderizamos nada (ou um spinner) para evitar erros.
     if (loading) {
       return <Loader2 className="h-5 w-5 animate-spin" />;
     }
@@ -56,7 +50,6 @@ const Navbar = () => {
 
     return (
       <div className="flex items-center space-x-2">
-        {/* Acesso seguro com 'user?.name' é mantido como boa prática */}
         <span className="text-sm">Olá, {user?.name || user?.email}</span>
         <Button
           variant="outline"
@@ -128,18 +121,24 @@ const Navbar = () => {
             >
               Resultados
             </Link>
-            <Link
-              to="/palpites"
-              className="hover:text-fifa-gold transition-colors"
-            >
-              Meus Palpites
-            </Link>
-            <Link
-              to="/simulador"
-              className="hover:text-fifa-gold transition-colors"
-            >
-              Simulador
-            </Link>
+            
+            {/* CORREÇÃO: Adicionada verificação de autenticação */}
+            {isAuthenticated && (
+              <>
+                <Link
+                  to="/palpites"
+                  className="hover:text-fifa-gold transition-colors"
+                >
+                  Meus Palpites
+                </Link>
+                <Link
+                  to="/simulador"
+                  className="hover:text-fifa-gold transition-colors"
+                >
+                  Simulador
+                </Link>
+              </>
+            )}
 
             {isAdmin && (
               <Link
@@ -151,7 +150,6 @@ const Navbar = () => {
               </Link>
             )}
 
-            {/* O conteúdo dinâmico do desktop agora usa a função renderNavContent */}
             <div className="flex items-center space-x-2">
               {renderNavContent()}
             </div>
@@ -176,20 +174,26 @@ const Navbar = () => {
               >
                 Resultados
               </Link>
-              <Link
-                to="/palpites"
-                className="block py-2 px-4 hover:bg-fifa-green rounded transition-colors"
-                onClick={() => setIsMenuOpen(false)}
-              >
-                Meus Palpites
-              </Link>
-              <Link
-                to="/simulador"
-                className="block py-2 px-4 hover:bg-fifa-green rounded transition-colors"
-                onClick={() => setIsMenuOpen(false)}
-              >
-                Simulador
-              </Link>
+
+              {/* CORREÇÃO: Adicionada verificação de autenticação para o menu mobile */}
+              {isAuthenticated && (
+                <>
+                  <Link
+                    to="/palpites"
+                    className="block py-2 px-4 hover:bg-fifa-green rounded transition-colors"
+                    onClick={() => setIsMenuOpen(false)}
+                  >
+                    Meus Palpites
+                  </Link>
+                  <Link
+                    to="/simulador"
+                    className="block py-2 px-4 hover:bg-fifa-green rounded transition-colors"
+                    onClick={() => setIsMenuOpen(false)}
+                  >
+                    Simulador
+                  </Link>
+                </>
+              )}
 
               {isAdmin && (
                 <Link
@@ -202,9 +206,7 @@ const Navbar = () => {
                 </Link>
               )}
 
-              {/* O conteúdo dinâmico do mobile é renderizado de forma semelhante */}
               <div className="border-t border-white/20 mt-4 pt-4">
-                {/* Lógica para mobile um pouco diferente para se adequar ao layout */}
                 {loading && (
                   <div className="flex justify-center">
                     <Loader2 className="h-5 w-5 animate-spin" />
