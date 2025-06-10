@@ -1,11 +1,11 @@
 // src/pages/Simulador.tsx
 
-import { useState, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, PlayCircle } from 'lucide-react';
+import { Loader2, PlayCircle, Printer } from 'lucide-react';
 import { toast } from 'sonner';
 import { calculateGroupStandings, SimulatedGroup, SimulatedTeamStats } from '@/lib/simulationEngine';
 import SimulatedGroupTables from '@/components/simulation/SimulatedGroupTables';
@@ -26,7 +26,6 @@ const Simulador = () => {
   const [knockoutSelections, setKnockoutSelections] = useState<{ [matchId: string]: string }>({});
 
   const handleSimulation = async () => {
-    // ... (esta função não precisa de mudanças)
     if (!user) {
       toast.error('Você precisa estar logado para simular seus palpites.');
       return;
@@ -84,12 +83,47 @@ const Simulador = () => {
       setIsLoading(false);
     }
   };
+  
+  const handleAdoptGroupPrediction = async (groupId: string, teamId: string, position: 1 | 2) => {
+    if (!user) return toast.error('Você precisa estar logado.');
+    
+    const toastId = toast.loading('Salvando palpite do grupo...');
+    setIsAdopting(true);
+    
+    const fieldToUpdate = position === 1 ? 'predicted_first_team_id' : 'predicted_second_team_id';
+    
+    try {
+      const { data: existing } = await supabase.from('group_predictions').select('id, predicted_first_team_id, predicted_second_team_id').eq('user_id', user.id).eq('group_id', groupId).maybeSingle();
+      
+      const payload: any = { user_id: user.id, group_id: groupId };
+      
+      if (existing) {
+        payload.id = existing.id;
+        payload.predicted_first_team_id = position === 1 ? teamId : existing.predicted_first_team_id;
+        payload.predicted_second_team_id = position === 2 ? teamId : existing.predicted_second_team_id;
+      } else {
+        payload[fieldToUpdate] = teamId;
+      }
 
+      const { error } = await supabase.from('group_predictions').upsert(payload);
+      if (error) throw error;
+      
+      toast.success(`Palpite para ${position}º do grupo salvo!`, { id: toastId });
+    } catch (error: any) {
+      toast.error(`Erro ao salvar: ${error.message}`, { id: toastId });
+    } finally {
+      setIsAdopting(false);
+    }
+  };
+  
   const handleKnockoutSelection = useCallback((matchId: string, teamId: string | null) => {
     setKnockoutSelections(prev => {
       const newState = { ...prev };
-      if (teamId) newState[matchId] = teamId;
-      else delete newState[matchId];
+      if (teamId) {
+        newState[matchId] = teamId;
+      } else {
+        delete newState[matchId];
+      }
       
       const cascadeClearMap: { [key: string]: string[] } = {
         'qf-1': ['sf-1', 'final', 'third_place'], 'qf-2': ['sf-1', 'final', 'third_place'],
@@ -104,43 +138,6 @@ const Simulador = () => {
       return newState;
     });
   }, []);
-
-  // --- FUNÇÕES DE "ADOTAR" CORRIGIDAS ---
-  
-  const handleAdoptGroupPrediction = async (groupId: string, teamId: string, position: 1 | 2) => {
-    if (!user) return toast.error('Você precisa estar logado.');
-    
-    const toastId = toast.loading('Salvando palpite do grupo...');
-    setIsAdopting(true);
-    
-    const fieldToUpdate = position === 1 ? 'predicted_first_team_id' : 'predicted_second_team_id';
-    
-    try {
-      const { data: existing } = await supabase.from('group_predictions').select('id, predicted_first_team_id, predicted_second_team_id').eq('user_id', user.id).eq('group_id', groupId).maybeSingle();
-      
-      const payload: any = { 
-        user_id: user.id, 
-        group_id: groupId,
-      };
-      
-      if (existing) {
-        payload.id = existing.id;
-        payload.predicted_first_team_id = position === 1 ? teamId : existing.predicted_first_team_id;
-        payload.predicted_second_team_id = position === 2 ? teamId : existing.predicted_second_team_id;
-      } else {
-        payload[fieldToUpdate] = teamId;
-      }
-
-      const { error } = await supabase.from('group_predictions').upsert(payload, { onConflict: 'user_id, group_id' });
-      if (error) throw error;
-      
-      toast.success(`Palpite para ${position}º do grupo salvo!`, { id: toastId });
-    } catch (error: any) {
-      toast.error(`Erro ao salvar: ${error.message}`, { id: toastId });
-    } finally {
-      setIsAdopting(false);
-    }
-  };
 
   const handleAdoptFinalPrediction = async (role: 'champion' | 'runner_up' | 'third_place' | 'fourth_place', teamId: string | undefined) => {
     if (!user) return toast.error('Você precisa estar logado.');
@@ -162,10 +159,10 @@ const Simulador = () => {
       
       const payload: any = { user_id: user.id, [column]: teamId };
       if (existing) {
-        payload.id = existing.id; // Garante que a linha existente será atualizada
+        payload.id = existing.id;
       }
 
-      const { error } = await supabase.from('final_predictions').upsert(payload).select().single();
+      const { error } = await supabase.from('final_predictions').upsert(payload);
       if (error) throw error;
       
       toast.success(`Palpite de ${role.replace('_', ' ')} salvo!`, { id: toastId });
@@ -175,7 +172,6 @@ const Simulador = () => {
       setIsAdopting(false);
     }
   };
-
 
   return (
     <div className="container mx-auto p-4 md:p-6 lg:p-8 space-y-8">
