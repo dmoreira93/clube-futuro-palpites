@@ -100,7 +100,7 @@ const AdminGroups = () => {
 
     setLoading(true);
     try {
-      // Etapa 1: Salva o resultado final do grupo na tabela 'groups_results'
+      // Esta operação de upsert agora funcionará por causa do Passo 1
       await supabase
         .from("groups_results")
         .upsert({
@@ -108,11 +108,11 @@ const AdminGroups = () => {
           first_place_team_id: selectedFirstPlace,
           second_place_team_id: selectedSecondPlace,
           is_completed: true,
-        }, { onConflict: 'group_id' });
+        }, { onConflict: 'group_id' }); // A cláusula onConflict agora encontra a restrição
 
       toast.success("Classificação salva! Calculando pontos...");
 
-      // Etapa 2: Chama a nova função SQL para processar os pontos
+      // Chamada para a função SQL no backend
       const { error: rpcError } = await supabase.rpc('process_group_results', {
         p_group_id: editingClassificationGroupId
       });
