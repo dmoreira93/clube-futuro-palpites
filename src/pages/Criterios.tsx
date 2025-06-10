@@ -1,11 +1,9 @@
 // src/pages/Criterios.tsx
 
-// A importação do Layout foi REMOVIDA
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Trophy as TrophyIcon, Users as UsersIcon, Volleyball as SoccerBallIcon } from "lucide-react";
 
 const Criterios = () => {
-  // A tag <Layout> foi removida daqui
   return (
     <div className="max-w-4xl mx-auto p-4">
       <div className="text-center mb-8">
@@ -35,13 +33,25 @@ const Criterios = () => {
                   <p className="text-sm text-gray-600">Você acerta o **PLACAR** exato da partida.</p>
                 </div>
               </div>
+
+              {/* AJUSTE: Regra de 7 pontos para o empate */}
+              <div className="flex items-center p-3 bg-purple-50 rounded-lg border-l-4 border-purple-500">
+                <div className="bg-purple-500 text-white rounded-full w-8 h-8 flex items-center justify-center font-bold mr-4">7</div>
+                <div>
+                  <h3 className="font-semibold">Acertar Empate (sem o placar exato)</h3>
+                  <p className="text-sm text-gray-600">Você acerta que a partida terminaria empatada, mas não acerta o placar exato.</p>
+                </div>
+              </div>
+              
+              {/* AJUSTE: Regra de 5 pontos apenas para o vencedor */}
               <div className="flex items-center p-3 bg-blue-50 rounded-lg border-l-4 border-blue-500">
                 <div className="bg-blue-500 text-white rounded-full w-8 h-8 flex items-center justify-center font-bold mr-4">5</div>
                 <div>
-                  <h3 className="font-semibold">Vencedor Correto ou Empate</h3>
-                  <p className="text-sm text-gray-600">Você acerta o time vencedor ou que a partida terminaria empatada (sem acertar o placar).</p>
+                  <h3 className="font-semibold">Acertar Vencedor (sem o placar exato)</h3>
+                  <p className="text-sm text-gray-600">Você acerta o time vencedor da partida, mas não acerta o placar exato.</p>
                 </div>
               </div>
+              
               <div className="flex items-center p-3 bg-yellow-50 rounded-lg border-l-4 border-yellow-500">
                 <div className="bg-yellow-500 text-white rounded-full w-8 h-8 flex items-center justify-center font-bold mr-4">3</div>
                 <div>
@@ -62,29 +72,29 @@ const Criterios = () => {
             </CardTitle>
           </CardHeader>
           <CardContent className="p-6">
-             <div className="space-y-4">
-                <div className="flex items-center p-3 bg-green-50 rounded-lg border-l-4 border-green-500">
-                    <div className="bg-green-500 text-white rounded-full w-8 h-8 flex items-center justify-center font-bold mr-4">10</div>
-                    <div>
-                        <h3 className="font-semibold">Classificação Exata</h3>
-                        <p className="text-sm text-gray-600">Acerta o 1º e o 2º colocado na ordem exata.</p>
-                    </div>
-                </div>
-                <div className="flex items-center p-3 bg-blue-50 rounded-lg border-l-4 border-blue-500">
-                    <div className="bg-blue-500 text-white rounded-full w-8 h-8 flex items-center justify-center font-bold mr-4">5</div>
-                    <div>
-                        <h3 className="font-semibold">Apenas Um Classificado</h3>
-                        <p className="text-sm text-gray-600">Acerta apenas o 1º ou apenas o 2º colocado na sua posição correta.</p>
-                    </div>
-                </div>
-                <div className="flex items-center p-3 bg-yellow-50 rounded-lg border-l-4 border-yellow-500">
-                    <div className="bg-yellow-500 text-white rounded-full w-8 h-8 flex items-center justify-center font-bold mr-4">4</div>
-                    <div>
-                        <h3 className="font-semibold">Classificados Invertidos</h3>
-                        <p className="text-sm text-gray-600">Acerta os dois times que se classificaram, mas em posições invertidas.</p>
-                    </div>
-                </div>
-             </div>
+              <div className="space-y-4">
+                  <div className="flex items-center p-3 bg-green-50 rounded-lg border-l-4 border-green-500">
+                      <div className="bg-green-500 text-white rounded-full w-8 h-8 flex items-center justify-center font-bold mr-4">10</div>
+                      <div>
+                          <h3 className="font-semibold">Classificação Exata</h3>
+                          <p className="text-sm text-gray-600">Acerta o 1º e o 2º colocado na ordem exata.</p>
+                      </div>
+                  </div>
+                  <div className="flex items-center p-3 bg-blue-50 rounded-lg border-l-4 border-blue-500">
+                      <div className="bg-blue-500 text-white rounded-full w-8 h-8 flex items-center justify-center font-bold mr-4">5</div>
+                      <div>
+                          <h3 className="font-semibold">Apenas Um Classificado</h3>
+                          <p className="text-sm text-gray-600">Acerta apenas o 1º ou apenas o 2º colocado na sua posição correta.</p>
+                      </div>
+                  </div>
+                  <div className="flex items-center p-3 bg-yellow-50 rounded-lg border-l-4 border-yellow-500">
+                      <div className="bg-yellow-500 text-white rounded-full w-8 h-8 flex items-center justify-center font-bold mr-4">4</div>
+                      <div>
+                          <h3 className="font-semibold">Classificados Invertidos</h3>
+                          <p className="text-sm text-gray-600">Acerta os dois times que se classificaram, mas em posições invertidas.</p>
+                      </div>
+                  </div>
+               </div>
           </CardContent>
         </Card>
 
