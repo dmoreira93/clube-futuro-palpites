@@ -53,14 +53,14 @@ const Simulador = () => {
         home_team_id: p.matches.home_team_id,
         away_team_id: p.matches.away_team_id,
       }));
-      
+
       const results = calculateGroupStandings(formattedPredictions, teamsData as Team[] || [], groupsData || []);
       setSimulatedResults(results);
       setAllTeams(results.flatMap(g => g.standings));
 
       const r16Selections: { [key: string]: string } = {};
       const getTeam = (groupName: string, position: number) => results.find(g => g.groupName === groupName)?.standings[position - 1];
-      
+
       const r16matches = [
         { id: 'r16-1', winner: getTeam('A', 1) }, { id: 'r16-2', winner: getTeam('C', 1) },
         { id: 'r16-3', winner: getTeam('E', 1) }, { id: 'r16-4', winner: getTeam('G', 1) },
@@ -72,7 +72,7 @@ const Simulador = () => {
         if (match.winner) r16Selections[match.id] = match.winner.teamId;
       });
       setKnockoutSelections(r16Selections);
-      
+
       toast.success("Simulação concluída!");
 
     } catch (error: any) {
@@ -88,13 +88,13 @@ const Simulador = () => {
       const newState = { ...prev };
       if (teamId) newState[matchId] = teamId;
       else delete newState[matchId];
-      
+
       const cascadeClearMap: { [key: string]: string[] } = {
         'qf-1': ['sf-1', 'final', 'third_place'], 'qf-2': ['sf-1', 'final', 'third_place'],
         'qf-3': ['sf-2', 'final', 'third_place'], 'qf-4': ['sf-2', 'final', 'third_place'],
         'sf-1': ['final', 'third_place'], 'sf-2': ['final', 'third_place'],
       };
-      
+
       const downstreamMatchesToClear = cascadeClearMap[matchId as keyof typeof cascadeClearMap];
       if (downstreamMatchesToClear) {
         downstreamMatchesToClear.forEach(idToClear => { delete newState[idToClear]; });
@@ -104,38 +104,62 @@ const Simulador = () => {
   }, []);
 
   // --- FUNÇÕES DE "ADOTAR" COM A LÓGICA DE UPSERT CORRIGIDA ---
-  
+
   const handleAdoptGroupPrediction = async (groupId: string, teamId: string, position: 1 | 2) => {
-    if (!user) return toast.error('Você precisa estar logado.');
+    if (!user) {
+      toast.error('Você precisa estar logado.');
+      return;
+    }
     const toastId = toast.loading('Salvando palpite do grupo...');
-    
-    const fieldToUpdate = position === 1 ? 'predicted_first_team_id' : 'predicted_second_team_id';
-    
+
     try {
-      const { error } = await supabase
+      // 1. Buscar o palpite existente para este usuário e grupo
+      const { data: existingPrediction, error: fetchError } = await supabase
         .from('group_predictions')
-        .upsert({
-          user_id: user.id,
-          group_id: groupId,
-          [fieldToUpdate]: teamId,
-        }, {
-          // CORREÇÃO: Especifica as colunas de conflito para o upsert
+        .select('predicted_first_team_id, predicted_second_team_id')
+        .eq('user_id', user.id)
+        .eq('group_id', groupId)
+        .single();
+
+      if (fetchError && fetchError.code !== 'PGRST116') { // PGRST116 significa "nenhuma linha encontrada"
+        throw fetchError;
+      }
+
+      // 2. Preparar o payload do upsert
+      const payload = {
+        user_id: user.id,
+        group_id: groupId,
+        predicted_first_team_id: existingPrediction?.predicted_first_team_id || null,
+        predicted_second_team_id: existingPrediction?.predicted_second_team_id || null,
+      };
+
+      // Atualizar o campo específico
+      if (position === 1) {
+        payload.predicted_first_team_id = teamId;
+      } else {
+        payload.predicted_second_team_id = teamId;
+      }
+
+      // 3. Executar o upsert
+      const { error: upsertError } = await supabase
+        .from('group_predictions')
+        .upsert(payload, {
           onConflict: 'user_id, group_id',
         });
 
-      if (error) throw error;
+      if (upsertError) throw upsertError;
       toast.success(`Palpite para ${position}º do grupo salvo!`, { id: toastId });
     } catch (error: any) {
       toast.error(`Erro ao salvar: ${error.message}`, { id: toastId });
     }
   };
-  
+
   const handleAdoptFinalPrediction = async (role: 'champion' | 'runner_up' | 'third_place' | 'fourth_place', teamId: string | undefined) => {
     if (!user) return toast.error('Você precisa estar logado.');
     if (!teamId) return toast.error('Time inválido para salvar.');
 
     const toastId = toast.loading(`Salvando palpite de ${role.replace('_', ' ')}...`);
-    
+
     const columnMap = {
       champion: 'champion_id', runner_up: 'runner_up_id',
       third_place: 'third_place_id', fourth_place: 'fourth_place_id',
@@ -143,16 +167,37 @@ const Simulador = () => {
     const column = columnMap[role];
 
     try {
+      // 1. Buscar o palpite final existente para este usuário
+      const { data: existingPrediction, error: fetchError } = await supabase
+        .from('final_predictions')
+        .select('champion_id, runner_up_id, third_place_id, fourth_place_id, final_home_score, final_away_score')
+        .eq('user_id', user.id)
+        .single();
+
+      if (fetchError && fetchError.code !== 'PGRST116') { // PGRST116 significa "nenhuma linha encontrada"
+        throw fetchError;
+      }
+
+      // 2. Preparar o payload do upsert
+      const payload = {
+        user_id: user.id,
+        champion_id: existingPrediction?.champion_id || null,
+        runner_up_id: existingPrediction?.runner_up_id || null,
+        third_place_id: existingPrediction?.third_place_id || null,
+        fourth_place_id: existingPrediction?.fourth_place_id || null,
+        final_home_score: existingPrediction?.final_home_score || null, // Preservar placar da final
+        final_away_score: existingPrediction?.final_away_score || null, // Preservar placar da final
+      };
+
+      // Atualizar o campo específico
+      payload[column as keyof typeof payload] = teamId;
+
       const { error } = await supabase
         .from('final_predictions')
-        .upsert({
-          user_id: user.id,
-          [column]: teamId,
-        }, {
-          // CORREÇÃO: Especifica a coluna de conflito para o upsert
+        .upsert(payload, {
           onConflict: 'user_id',
         });
-      
+
       if (error) throw error;
       toast.success(`Palpite de ${role.replace('_', ' ')} salvo!`, { id: toastId });
     } catch (error: any) {
@@ -177,7 +222,7 @@ const Simulador = () => {
           </Button>
         </CardContent>
       </Card>
-      
+
       {simulatedResults && (
         <div className="space-y-8">
             <div className="text-center print-hidden">
