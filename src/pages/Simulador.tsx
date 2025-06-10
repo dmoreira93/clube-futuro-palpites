@@ -148,8 +148,10 @@ const Simulador = () => {
         });
 
       if (upsertError) throw upsertError;
+      console.log(`Chamando toast.success para grupo ${groupId}`); // Adicionei esta linha
       toast.success(`Palpite para ${position}º do grupo salvo!`, { id: toastId });
     } catch (error: any) {
+      console.error(`Chamando toast.error para grupo ${groupId}:`, error); // Adicionei esta linha
       toast.error(`Erro ao salvar: ${error.message}`, { id: toastId });
     }
   };
@@ -199,8 +201,10 @@ const Simulador = () => {
         });
 
       if (error) throw error;
+      console.log(`Chamando toast.success para final: ${role}`); // Adicionei esta linha
       toast.success(`Palpite de ${role.replace('_', ' ')} salvo!`, { id: toastId });
     } catch (error: any) {
+      console.error(`Chamando toast.error para final:`, error); // Adicionei esta linha
       toast.error(`Erro ao salvar palpite final: ${error.message}`, { id: toastId });
     }
   };
