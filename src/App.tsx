@@ -24,9 +24,10 @@ function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
-        {/* O Layout DEVE estar aqui, envolvendo TODAS as rotas */}
+        {/* O Layout agora envolve TODAS as rotas, evitando duplicação */}
         <Layout>
           <Routes>
+            {/* O conteúdo principal de cada rota é renderizado aqui dentro */}
             <Route path="/" element={<Index />} />
             <Route path="/login" element={<Login />} />
             <Route path="/cadastro" element={<Cadastro />} />
