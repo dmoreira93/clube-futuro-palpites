@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Save } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
-// Tipos
+// --- PROPS PARA OS COMPONENTES ---
 interface KnockoutBracketProps {
   simulatedGroups: SimulatedGroup[];
   knockoutSelections: { [matchId: string]: string };
@@ -32,7 +32,8 @@ interface StaticMatchupProps {
   winnerId?: string;
 }
 
-// Componentes auxiliares
+// --- COMPONENTES AUXILIARES (DEFINIDOS FORA DO RENDER) ---
+
 const InteractiveMatchup: React.FC<InteractiveMatchupProps> = ({ matchId, title, team1, team2, selectedValue, onSelectionChange }) => {
   const canSelect = team1 && team2;
   return (
@@ -61,7 +62,8 @@ const StaticMatchup: React.FC<StaticMatchupProps> = ({ team1, team2, title, winn
   </div>
 );
 
-// Componente Principal
+// --- COMPONENTE PRINCIPAL ---
+
 const KnockoutBracket: React.FC<KnockoutBracketProps> = ({
   simulatedGroups,
   knockoutSelections,
@@ -69,17 +71,16 @@ const KnockoutBracket: React.FC<KnockoutBracketProps> = ({
   onAdoptFinalPrediction,
   allTeams,
 }) => {
+  // Funções de busca
   const getTeam = (groupName: string, position: number): SimulatedTeamStats | undefined => simulatedGroups.find(g => g.groupName === groupName)?.standings[position - 1];
   const findTeamById = (teamId?: string): SimulatedTeamStats | undefined => teamId ? allTeams.find(t => t.teamId === teamId) : undefined;
   
-  // CORREÇÃO: A lógica para pegar os perdedores foi simplificada e corrigida.
-  const getMatchParticipants = (dependsOn: [string, string]) => [findTeamById(knockoutSelections[dependsOn[0]]), findTeamById(knockoutSelections[dependsOn[1]])];
-  const getLoser = (matchTeams: (SimulatedTeamStats | undefined)[], winnerId?: string) => {
-    const [team1, team2] = matchTeams;
+  const getLoser = (team1?: SimulatedTeamStats, team2?: SimulatedTeamStats, winnerId?: string) => {
     if (!team1 || !team2 || !winnerId) return undefined;
     return winnerId === team1.teamId ? team2 : team1;
   };
 
+  // Estrutura das Oitavas (estático)
   const r16 = [
     { id: 'r16-1', title: 'Oitavas 1', team1: getTeam('A', 1), team2: getTeam('B', 2) },
     { id: 'r16-2', title: 'Oitavas 2', team1: getTeam('C', 1), team2: getTeam('D', 2) },
@@ -91,18 +92,30 @@ const KnockoutBracket: React.FC<KnockoutBracketProps> = ({
     { id: 'r16-8', title: 'Oitavas 8', team1: getTeam('H', 1), team2: getTeam('G', 2) },
   ];
 
-  const sf1_participants = getMatchParticipants(['qf-1', 'qf-2']);
-  const sf2_participants = getMatchParticipants(['qf-3', 'qf-4']);
-  const final_participants = getMatchParticipants(['sf-1', 'sf-2']);
-  const third_place_participants = [getLoser(sf1_participants, knockoutSelections['sf-1']), getLoser(sf2_participants, knockoutSelections['sf-2'])];
+  // Cálculo dos participantes de cada fase
+  const qf1_teams = [findTeamById(knockoutSelections['r16-1']), findTeamById(knockoutSelections['r16-2'])];
+  const qf2_teams = [findTeamById(knockoutSelections['r16-3']), findTeamById(knockoutSelections['r16-4'])];
+  const qf3_teams = [findTeamById(knockoutSelections['r16-5']), findTeamById(knockoutSelections['r16-6'])];
+  const qf4_teams = [findTeamById(knockoutSelections['r16-7']), findTeamById(knockoutSelections['r16-8'])];
+
+  const sf1_teams = [findTeamById(knockoutSelections['qf-1']), findTeamById(knockoutSelections['qf-2'])];
+  const sf2_teams = [findTeamById(knockoutSelections['qf-3']), findTeamById(knockoutSelections['qf-4'])];
+
+  const final_teams = [findTeamById(knockoutSelections['sf-1']), findTeamById(knockoutSelections['sf-2'])];
+
+  // **LÓGICA CORRIGIDA E SIMPLIFICADA PARA A DISPUTA DE 3º LUGAR**
+  const third_place_teams = [
+    getLoser(sf1_teams[0], sf1_teams[1], knockoutSelections['sf-1']),
+    getLoser(sf2_teams[0], sf2_teams[1], knockoutSelections['sf-2'])
+  ];
 
   const champion = findTeamById(knockoutSelections['final']);
-  const runnerUp = getLoser(final_participants, knockoutSelections['final']);
+  const runnerUp = getLoser(final_teams[0], final_teams[1], knockoutSelections['final']);
   const thirdPlace = findTeamById(knockoutSelections['third_place']);
-  const fourthPlace = getLoser(third_place_participants, knockoutSelections['third_place']);
+  const fourthPlace = getLoser(third_place_teams[0], third_place_teams[1], knockoutSelections['third_place']);
 
   return (
-    <Card>
+    <Card id="knockout-bracket-card"> {/* Renomeado para não conflitar com a impressão */}
       <CardHeader className="flex flex-row items-center justify-between print-hidden">
         <CardTitle className="text-2xl md:text-3xl font-bold text-fifa-blue">Chaveamento do Mata-Mata</CardTitle>
       </CardHeader>
@@ -113,20 +126,20 @@ const KnockoutBracket: React.FC<KnockoutBracketProps> = ({
         </div>
         <div className="space-y-[6.5rem]">
           <h3 className="font-bold text-lg text-center">Quartas de Final</h3>
-          <InteractiveMatchup matchId='qf-1' title='Quartas 1' team1={findTeamById(knockoutSelections['r16-1'])} team2={findTeamById(knockoutSelections['r16-2'])} selectedValue={knockoutSelections['qf-1']} onSelectionChange={onSelectionChange} />
-          <InteractiveMatchup matchId='qf-2' title='Quartas 2' team1={findTeamById(knockoutSelections['r16-3'])} team2={findTeamById(knockoutSelections['r16-4'])} selectedValue={knockoutSelections['qf-2']} onSelectionChange={onSelectionChange} />
-          <InteractiveMatchup matchId='qf-3' title='Quartas 3' team1={findTeamById(knockoutSelections['r16-5'])} team2={findTeamById(knockoutSelections['r16-6'])} selectedValue={knockoutSelections['qf-3']} onSelectionChange={onSelectionChange} />
-          <InteractiveMatchup matchId='qf-4' title='Quartas 4' team1={findTeamById(knockoutSelections['r16-7'])} team2={findTeamById(knockoutSelections['r16-8'])} selectedValue={knockoutSelections['qf-4']} onSelectionChange={onSelectionChange} />
+          <InteractiveMatchup matchId='qf-1' title='Quartas 1' team1={qf1_teams[0]} team2={qf1_teams[1]} selectedValue={knockoutSelections['qf-1']} onSelectionChange={onSelectionChange} />
+          <InteractiveMatchup matchId='qf-2' title='Quartas 2' team1={qf2_teams[0]} team2={qf2_teams[1]} selectedValue={knockoutSelections['qf-2']} onSelectionChange={onSelectionChange} />
+          <InteractiveMatchup matchId='qf-3' title='Quartas 3' team1={qf3_teams[0]} team2={qf3_teams[1]} selectedValue={knockoutSelections['qf-3']} onSelectionChange={onSelectionChange} />
+          <InteractiveMatchup matchId='qf-4' title='Quartas 4' team1={qf4_teams[0]} team2={qf4_teams[1]} selectedValue={knockoutSelections['qf-4']} onSelectionChange={onSelectionChange} />
         </div>
         <div className="space-y-[15.5rem]">
            <h3 className="font-bold text-lg text-center">Semifinais</h3>
-           <InteractiveMatchup matchId='sf-1' title='Semi 1' team1={sf1_participants[0]} team2={sf1_participants[1]} selectedValue={knockoutSelections['sf-1']} onSelectionChange={onSelectionChange} />
-           <InteractiveMatchup matchId='sf-2' title='Semi 2' team1={sf2_participants[0]} team2={sf2_participants[1]} selectedValue={knockoutSelections['sf-2']} onSelectionChange={onSelectionChange} />
+           <InteractiveMatchup matchId='sf-1' title='Semi 1' team1={sf1_teams[0]} team2={sf1_teams[1]} selectedValue={knockoutSelections['sf-1']} onSelectionChange={onSelectionChange} />
+           <InteractiveMatchup matchId='sf-2' title='Semi 2' team1={sf2_teams[0]} team2={sf2_teams[1]} selectedValue={knockoutSelections['sf-2']} onSelectionChange={onSelectionChange} />
         </div>
         <div className="space-y-8">
           <h3 className="font-bold text-lg text-center">Finais</h3>
           <div className="md:mt-[18rem]">
-            <InteractiveMatchup matchId='final' title='Final' team1={final_participants[0]} team2={final_participants[1]} selectedValue={knockoutSelections['final']} onSelectionChange={onSelectionChange} />
+            <InteractiveMatchup matchId='final' title='Final' team1={final_teams[0]} team2={final_teams[1]} selectedValue={knockoutSelections['final']} onSelectionChange={onSelectionChange} />
             {champion && runnerUp && (
               <div className="mt-2 space-y-1 text-center print-hidden">
                   <Button size="sm" className="w-full bg-green-600" onClick={() => onAdoptFinalPrediction('champion', champion.teamId)}>Adotar {champion.teamName} como Campeão</Button>
@@ -135,10 +148,10 @@ const KnockoutBracket: React.FC<KnockoutBracketProps> = ({
             )}
           </div>
           <div className="md:mt-[10rem]">
-            <InteractiveMatchup matchId='third_place' title='Disputa 3º Lugar' team1={third_place_participants[0]} team2={third_place_participants[1]} selectedValue={knockoutSelections['third_place']} onSelectionChange={onSelectionChange} />
+            <InteractiveMatchup matchId='third_place' title='Disputa 3º Lugar' team1={third_place_teams[0]} team2={third_place_teams[1]} selectedValue={knockoutSelections['third_place']} onSelectionChange={onSelectionChange} />
              {thirdPlace && fourthPlace && (
                 <div className="mt-2 space-y-1 text-center print-hidden">
-                    <Button size="sm" className="w-full bg-yellow-600" onClick={() => onAdoptFinalPrediction('third_place', thirdPlace.teamId)}>Adotar {thirdPlace.teamName} como 3º Lugar</Button>
+                    <Button size="sm" className="w-full bg-yellow-600" onClick={() => onAdoptFinalPrediction('third_place', thirdPlace.teamId)}>Adotar {thirdPlace.teamName} como 3º</Button>
                 </div>
              )}
           </div>
