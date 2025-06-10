@@ -12,11 +12,10 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { toast } from "sonner"; // Usando sonner para toasts
-import { Edit, Loader2 } from "lucide-react"; // Adicionado Loader2
+import { toast } from "sonner";
+import { Edit, Loader2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
-import { calculateGroupClassificationPoints } from "@/lib/scoring"; // Importe a função de pontuação de grupos
 
 // --- Interfaces para tipos das tabelas ---
 interface Group {
@@ -31,21 +30,11 @@ interface Team {
   group_id?: string | null;
 }
 
-// Interface para o resultado real da classificação de grupo (tabela `groups_results`)
 interface GroupResult {
   group_id: string;
-  first_place_team_id: string | null; // Pode ser null antes de preencher
-  second_place_team_id: string | null; // Pode ser null antes de preencher
+  first_place_team_id: string | null;
+  second_place_team_id: string | null;
   is_completed: boolean;
-}
-
-// Interface para os palpites de grupo dos usuários
-interface UserGroupPrediction {
-  id: string; // ID do palpite
-  user_id: string;
-  group_id: string;
-  predicted_first_team_id: string | null;
-  predicted_second_team_id: string | null;
 }
 
 const AdminGroups = () => {
@@ -64,30 +53,26 @@ const AdminGroups = () => {
   const fetchData = async () => {
     setLoading(true);
     try {
-      // Fetch Groups
       const { data: groupsData, error: groupsError } = await supabase
-        .from("groups") // Especificar o tipo aqui não é necessário se já inferido ou pode usar .from<Group>
+        .from("groups")
         .select("*")
         .order("name", { ascending: true });
       if (groupsError) throw groupsError;
       setGroups(groupsData as Group[] || []);
 
-      // Fetch Teams with their group_id
       const { data: teamsData, error: teamsError } = await supabase
-        .from("teams") // Similarmente .from<Team>
+        .from("teams")
         .select("id, name, flag_url, group_id")
         .order("name", { ascending: true });
       if (teamsError) throw teamsError;
       setTeams(teamsData as Team[] || []);
 
-      // Fetch existing Group Results
       const { data: groupResultsData, error: groupResultsError } = await supabase
-        .from("groups_results") // Similarmente .from<GroupResult>
+        .from("groups_results")
         .select("group_id, first_place_team_id, second_place_team_id, is_completed");
       if (groupResultsError) throw groupResultsError;
       setGroupResults(groupResultsData as GroupResult[] || []);
 
-      // Não exibir toast de sucesso aqui para não poluir, apenas em ações do usuário
     } catch (error: any) {
       console.error("Erro ao carregar dados de grupos:", error.message);
       toast.error("Erro ao carregar dados de grupos: " + error.message);
@@ -116,79 +101,32 @@ const AdminGroups = () => {
 
     setLoading(true);
     try {
-      // 1. Inserir ou atualizar o resultado do grupo
-      const existingResult = groupResults.find(res => res.group_id === editingClassificationGroupId);
-
-      let upsertError: any;
-      if (existingResult) {
-        const { error } = await supabase
-          .from("groups_results")
-          .update({
-            first_place_team_id: selectedFirstPlace,
-            second_place_team_id: selectedSecondPlace,
-            is_completed: true, // Marcar como concluído ao salvar
-            updated_at: new Date().toISOString(),
-          })
-          .eq("group_id", editingClassificationGroupId);
-        upsertError = error;
-      } else {
-        const { error } = await supabase
-          .from("groups_results")
-          .insert({
-            group_id: editingClassificationGroupId,
-            first_place_team_id: selectedFirstPlace,
-            second_place_team_id: selectedSecondPlace,
-            is_completed: true, // Marcar como concluído ao salvar
-          });
-        upsertError = error;
-      }
+      // Etapa 1: Salva o resultado final do grupo na tabela 'groups_results'
+      const { error: upsertError } = await supabase
+        .from("groups_results")
+        .upsert({
+          group_id: editingClassificationGroupId,
+          first_place_team_id: selectedFirstPlace,
+          second_place_team_id: selectedSecondPlace,
+          is_completed: true,
+        }, { onConflict: 'group_id' });
 
       if (upsertError) throw upsertError;
-      toast.success("Classificação do grupo salva no banco!");
+      toast.success("Classificação do grupo salva! Iniciando cálculo de pontos...");
 
-      // 2. Acionar o cálculo de pontos para todos os palpites de grupo
-      const { data: groupPredictionsData, error: predictionsError } = await supabase
-        .from("group_predictions")
-        .select("id, user_id, group_id, predicted_first_team_id, predicted_second_team_id") // CORRIGIDO: Adicionado 'id'
-        .eq("group_id", editingClassificationGroupId); // Filtrar para o grupo atual
+      // Etapa 2: Chama a nova função SQL para processar os pontos de forma segura no backend
+      const { error: rpcError } = await supabase.rpc('process_group_results', {
+        p_group_id: editingClassificationGroupId
+      });
 
-      if (predictionsError) throw predictionsError;
+      if (rpcError) throw rpcError;
+
+      toast.success(`Pontos para o Grupo ${groups.find(g => g.id === editingClassificationGroupId)?.name || ''} foram processados!`);
       
-      const userGroupPredictions = groupPredictionsData as UserGroupPrediction[] || [];
-
-      if (userGroupPredictions.length === 0) {
-        toast.info("Nenhum palpite de usuário encontrado para este grupo.");
-      } else {
-        toast.info(`Processando ${userGroupPredictions.length} palpites para o Grupo ${groups.find(g => g.id === editingClassificationGroupId)?.name || ''}...`);
-        
-        for (const prediction of userGroupPredictions) {
-          // Verifica se todos os IDs necessários são strings válidas
-          const safeUserId = typeof prediction.user_id === 'string' ? prediction.user_id : null;
-          const safePredictionId = typeof prediction.id === 'string' ? prediction.id : null; // ID do palpite
-          const safeGroupId = typeof prediction.group_id === 'string' ? prediction.group_id : null;
-          
-          if (!safeUserId || !safePredictionId || !safeGroupId) {
-              console.warn('Skipping prediction due to missing user_id, prediction.id, or group_id', prediction);
-              continue;
-          }
-
-          await calculateGroupClassificationPoints(
-            safeUserId,
-            safePredictionId,                  // CORRIGIDO: Passar o ID do palpite
-            safeGroupId,                     // CORRIGIDO: Passar o ID do grupo
-            prediction.predicted_first_team_id,  // CORRIGIDO: Nome correto do campo
-            prediction.predicted_second_team_id, // CORRIGIDO: Nome correto do campo
-            selectedFirstPlace,
-            selectedSecondPlace
-          );
-        }
-        toast.success("Pontos dos palpites de grupo calculados e atualizados!");
-      }
-
       setEditingClassificationGroupId(null);
-      await fetchData(); // Recarrega os dados para atualizar o estado
+      await fetchData(); // Recarrega os dados para atualizar a interface
     } catch (error: any) {
-      console.error("Erro ao processar classificação do grupo:", error.message, error.details);
+      console.error("Erro ao processar classificação do grupo:", error.message);
       toast.error("Erro ao salvar/pontuar: " + error.message);
     } finally {
       setLoading(false);
@@ -214,7 +152,7 @@ const AdminGroups = () => {
 
       <section>
         <h2 className="text-2xl font-semibold mb-4 text-fifa-blue">Grupos</h2>
-        {loading && groups.length === 0 && <p>Carregando grupos...</p>} {/* Mostra loading inicial se não houver grupos */}
+        {loading && groups.length === 0 && <p>Carregando grupos...</p>}
         <Table>
           <TableHeader>
             <TableRow>

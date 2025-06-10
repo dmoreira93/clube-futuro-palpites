@@ -14,43 +14,31 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { toast } from "sonner";
 import { Loader2, CheckCircle } from "lucide-react";
-import { calculateTournamentFinalPoints } from "@/lib/scoring";
-import { Badge } from "@/components/ui/badge"; // IMPORTAR BADGE
+// A importação abaixo foi removida, pois não é mais necessária:
+// import { calculateTournamentFinalPoints } from "@/lib/scoring"; 
 
 interface Team {
   id: string;
   name: string;
 }
 
-interface TournamentResultDbRow { // Para dados do DB
+interface TournamentResultDbRow {
   id?: string;
   champion_id: string | null;
-  runner_up_id: string | null; // Nome da coluna no DB
+  runner_up_id: string | null;
   third_place_id: string | null;
   fourth_place_id: string | null;
   final_home_score: number | null;
   final_away_score: number | null;
   is_completed: boolean;
-  created_at?: string | null; // Opcional, pode ser gerenciado pelo DB
-  updated_at?: string | null; // Opcional
+  created_at?: string | null;
+  updated_at?: string | null;
 }
-
-interface UserFinalPredictionDbRow { // Para dados do DB
-    id: string;
-    user_id: string;
-    champion_id: string | null;
-    vice_champion_id: string | null; // Nome da coluna no DB (ajuste se for runner_up_id)
-    third_place_id: string | null;
-    fourth_place_id: string | null;
-    final_home_score: number | null;
-    final_away_score: number | null;
-}
-
 
 const AdminTournamentResults = () => {
   const [teams, setTeams] = useState<Team[]>([]);
   const [champion, setChampion] = useState<string | null>(null);
-  const [runnerUp, setRunnerUp] = useState<string | null>(null); // Estado para o vice-campeão
+  const [runnerUp, setRunnerUp] = useState<string | null>(null);
   const [thirdPlace, setThirdPlace] = useState<string | null>(null);
   const [fourthPlace, setFourthPlace] = useState<string | null>(null);
   const [finalHomeScore, setFinalHomeScore] = useState<string>("");
@@ -82,25 +70,20 @@ const AdminTournamentResults = () => {
       if (resultsError && resultsError.code !== 'PGRST116') { 
         console.error("Erro ao buscar resultados do torneio (SELECT):", resultsError);
         toast.error(`Erro ao buscar resultados: ${resultsError.message}`);
-        // Não lançar o erro aqui permite que a página carregue mesmo com falha no select inicial
       }
 
       if (resultsData) {
         const typedResultsData = resultsData as TournamentResultDbRow;
         setTournamentResultId(typedResultsData.id || null);
         setChampion(typedResultsData.champion_id);
-        setRunnerUp(typedResultsData.runner_up_id); // Assumindo que a coluna é runner_up_id
+        setRunnerUp(typedResultsData.runner_up_id);
         setThirdPlace(typedResultsData.third_place_id);
         setFourthPlace(typedResultsData.fourth_place_id);
         setFinalHomeScore(typedResultsData.final_home_score?.toString() || "");
         setFinalAwayScore(typedResultsData.final_away_score?.toString() || "");
         setIsResultsCompleted(typedResultsData.is_completed);
-        if (typedResultsData.is_completed) {
-            toast.info("Os resultados finais do torneio já foram processados.");
-        }
       } else {
         setIsResultsCompleted(false);
-         // Limpar estados se não houver resultados
         setTournamentResultId(null);
         setChampion(null);
         setRunnerUp(null);
@@ -110,7 +93,6 @@ const AdminTournamentResults = () => {
         setFinalAwayScore("");
       }
     } catch (error: any) {
-      // Este catch pegaria erros lançados por throw teamsError ou throw resultsError
       console.error("Erro ao carregar dados para AdminTournamentResults:", error.message);
       toast.error("Falha ao carregar dados iniciais: " + error.message);
     } finally {
@@ -118,20 +100,19 @@ const AdminTournamentResults = () => {
     }
   };
 
+  // ***** FUNÇÃO ATUALIZADA *****
   const processTournamentResultsAndCalculatePoints = async () => {
+    // Validações iniciais (se todos os campos estão preenchidos, etc.)
     if (!champion || !runnerUp || !thirdPlace || !fourthPlace || finalHomeScore.trim() === "" || finalAwayScore.trim() === "") {
       toast.error("Por favor, preencha todos os campos dos resultados finais.");
       return;
     }
-
     const homeScoreNum = parseInt(finalHomeScore, 10);
     const awayScoreNum = parseInt(finalAwayScore, 10);
-
     if (isNaN(homeScoreNum) || isNaN(awayScoreNum) || homeScoreNum < 0 || awayScoreNum < 0) {
       toast.error("Por favor, insira placares válidos (números não negativos).");
       return;
     }
-
     const finalPositions = [champion, runnerUp, thirdPlace, fourthPlace].filter(id => id !== null);
     if (new Set(finalPositions).size !== finalPositions.length || finalPositions.length !== 4) {
         toast.error("Os times do Campeão, Vice, Terceiro e Quarto lugar devem ser distintos e todos preenchidos.");
@@ -140,105 +121,36 @@ const AdminTournamentResults = () => {
     
     setIsProcessingPoints(true);
     try {
-      let currentTournamentResultId = tournamentResultId;
-      // ATENÇÃO: Se sua tabela tournament_results usa 'vice_champion_id', mude 'runner_up_id' abaixo
-      const resultPayload: Omit<TournamentResultDbRow, "id" | "created_at"> = {
+      // Etapa 1: Salva o resultado final no banco de dados
+      const resultPayload = {
         champion_id: champion,
-        runner_up_id: runnerUp, // Usar runner_up_id se for o nome da coluna no DB
+        runner_up_id: runnerUp,
         third_place_id: thirdPlace,
         fourth_place_id: fourthPlace,
         final_home_score: homeScoreNum,
         final_away_score: awayScoreNum,
         is_completed: true,
-        updated_at: new Date().toISOString(),
       };
 
-      if (currentTournamentResultId) {
-        const { error: updateError } = await supabase
-          .from("tournament_results")
-          .update(resultPayload)
-          .eq("id", currentTournamentResultId);
-        if (updateError) throw updateError;
-      } else {
-        const { data: insertData, error: insertError } = await supabase
-          .from("tournament_results")
-          .insert({ ...resultPayload, created_at: new Date().toISOString() })
-          .select('id')
-          .single();
-        if (insertError) throw insertError;
+      const { error: upsertError } = await supabase
+        .from("tournament_results")
+        .upsert(resultPayload, { onConflict: 'id' }); // Usando 'id' como constraint de conflito ou ajuste conforme sua PK
 
-        if (insertData && insertData.id) {
-            currentTournamentResultId = insertData.id;
-            setTournamentResultId(insertData.id);
-        } else {
-            throw new Error("Falha ao obter ID do resultado do torneio inserido.");
-        }
-      }
-      toast.success("Resultados finais do torneio salvos no banco!");
+      if (upsertError) throw upsertError;
 
-      // ATENÇÃO: Se sua tabela final_predictions usa 'runner_up_id', mude 'vice_champion_id' abaixo
-      const { data: userFinalPredictionsData, error: predictionsError } = await supabase
-        .from("final_predictions")
-        .select("id, user_id, champion_id, vice_champion_id, third_place_id, fourth_place_id, final_home_score, final_away_score");
-      
-      if (predictionsError) {
-        console.error("Erro ao buscar palpites finais dos usuários:", predictionsError);
-        toast.error(`Erro ao buscar palpites finais: ${predictionsError.message}`);
-        setIsProcessingPoints(false); // Parar o processamento se não conseguir buscar palpites
-        return;
-      }
-      
-      const userFinalPredictions = userFinalPredictionsData as UserFinalPredictionDbRow[] || [];
+      toast.success("Resultados finais salvos! Iniciando cálculo de pontos...");
 
-      if (userFinalPredictions.length === 0) {
-        toast.info("Nenhum palpite final de usuário encontrado para processar.");
-        setIsResultsCompleted(true);
-        setIsProcessingPoints(false);
-        return;
-      }
-      
-      toast.info(`Processando ${userFinalPredictions.length} palpites finais...`);
+      // Etapa 2: Chama a nova função SQL para processar os pontos de todos os palpites
+      const { error: rpcError } = await supabase.rpc('process_final_results');
 
-      for (const prediction of userFinalPredictions) {
-        console.log('AdminTournamentResults - Processando palpite final para user:', prediction.user_id, 'ID do palpite:', prediction.id);
-        console.log('AdminTournamentResults - Dados do palpite:', prediction);
-        console.log('AdminTournamentResults - Dados reais:', { champion, runnerUp, thirdPlace, fourthPlace, homeScoreNum, awayScoreNum });
-
-
-        // Garantir que os IDs passados para calculateTournamentFinalPoints sejam strings ou null
-        const safeUserId = typeof prediction.user_id === 'string' ? prediction.user_id : null;
-        const safePredictionId = typeof prediction.id === 'string' ? prediction.id : null;
-        const safeTournamentResultId = typeof currentTournamentResultId === 'string' ? currentTournamentResultId : null;
-
-        if (!safeUserId || !safePredictionId) {
-            console.warn('Skipping prediction due to missing user_id or prediction.id', prediction);
-            continue;
-        }
-        
-        await calculateTournamentFinalPoints(
-          safeUserId,
-          safePredictionId,
-          safeTournamentResultId,
-          prediction.champion_id,
-          prediction.vice_champion_id, // Ajuste se a coluna for runner_up_id
-          prediction.third_place_id,
-          prediction.fourth_place_id,
-          prediction.final_home_score,
-          prediction.final_away_score,
-          champion, // ID string do estado
-          runnerUp,   // ID string do estado
-          thirdPlace, // ID string do estado
-          fourthPlace,  // ID string do estado
-          homeScoreNum,
-          awayScoreNum
-        );
-      }
+      if (rpcError) throw rpcError;
 
       toast.success("Pontos dos palpites finais calculados e atualizados com sucesso!");
-      setIsResultsCompleted(true); // Marcar como completo
-      // await fetchTeamsAndResults(); // Recarregar dados para refletir o estado 'is_completed'
+      setIsResultsCompleted(true);
+      await fetchTeamsAndResults(); // Recarrega os dados para refletir o estado final
+
     } catch (error: any) {
-      console.error("Erro ao processar resultados finais ou calcular pontos:", error.message, error.details, error.hint);
+      console.error("Erro ao processar resultados finais ou calcular pontos:", error.message);
       toast.error(`Erro ao salvar/pontuar: ${error.message}`);
     } finally {
       setIsProcessingPoints(false);
