@@ -11,13 +11,13 @@ import {
 } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
 import { Edit, Loader2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 
-// --- Interfaces para tipos das tabelas ---
+// --- Interfaces ---
 interface Group {
   id: string;
   name: string;
@@ -74,7 +74,6 @@ const AdminGroups = () => {
       setGroupResults(groupResultsData as GroupResult[] || []);
 
     } catch (error: any) {
-      console.error("Erro ao carregar dados de grupos:", error.message);
       toast.error("Erro ao carregar dados de grupos: " + error.message);
     } finally {
       setLoading(false);
@@ -102,7 +101,7 @@ const AdminGroups = () => {
     setLoading(true);
     try {
       // Etapa 1: Salva o resultado final do grupo na tabela 'groups_results'
-      const { error: upsertError } = await supabase
+      await supabase
         .from("groups_results")
         .upsert({
           group_id: editingClassificationGroupId,
@@ -111,22 +110,20 @@ const AdminGroups = () => {
           is_completed: true,
         }, { onConflict: 'group_id' });
 
-      if (upsertError) throw upsertError;
-      toast.success("Classificação do grupo salva! Iniciando cálculo de pontos...");
+      toast.success("Classificação salva! Calculando pontos...");
 
-      // Etapa 2: Chama a nova função SQL para processar os pontos de forma segura no backend
+      // Etapa 2: Chama a nova função SQL para processar os pontos
       const { error: rpcError } = await supabase.rpc('process_group_results', {
         p_group_id: editingClassificationGroupId
       });
 
       if (rpcError) throw rpcError;
 
-      toast.success(`Pontos para o Grupo ${groups.find(g => g.id === editingClassificationGroupId)?.name || ''} foram processados!`);
+      toast.success(`Pontos do Grupo processados!`);
       
       setEditingClassificationGroupId(null);
-      await fetchData(); // Recarrega os dados para atualizar a interface
+      await fetchData();
     } catch (error: any) {
-      console.error("Erro ao processar classificação do grupo:", error.message);
       toast.error("Erro ao salvar/pontuar: " + error.message);
     } finally {
       setLoading(false);
@@ -144,20 +141,14 @@ const AdminGroups = () => {
 
   return (
     <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle>Gerenciar Classificação de Grupos</CardTitle>
-        </CardHeader>
-      </Card>
-
+      <Card><CardHeader><CardTitle>Gerenciar Classificação de Grupos</CardTitle></CardHeader></Card>
       <section>
         <h2 className="text-2xl font-semibold mb-4 text-fifa-blue">Grupos</h2>
-        {loading && groups.length === 0 && <p>Carregando grupos...</p>}
         <Table>
           <TableHeader>
             <TableRow>
               <TableHead>Grupo</TableHead>
-              <TableHead>Times no Grupo</TableHead>
+              <TableHead>Times</TableHead>
               <TableHead>1º Lugar</TableHead>
               <TableHead>2º Lugar</TableHead>
               <TableHead className="text-center">Status</TableHead>
@@ -176,59 +167,28 @@ const AdminGroups = () => {
                   <TableCell>
                     {teamsInGroup.length > 0 ? (
                       <div className="flex flex-wrap gap-1">
-                        {teamsInGroup.map(team => (
-                          <Badge key={team.id} variant="outline">{team.name}</Badge>
-                        ))}
+                        {teamsInGroup.map(team => (<Badge key={team.id} variant="outline">{team.name}</Badge>))}
                       </div>
-                    ) : "Nenhum time atribuído"}
+                    ) : "Nenhum time"}
                   </TableCell>
                   <TableCell>
                     {isEditing ? (
-                      <Select
-                        onValueChange={setSelectedFirstPlace}
-                        value={selectedFirstPlace || ""}
-                        disabled={loading}
-                      >
-                        <SelectTrigger className="w-[180px]">
-                          <SelectValue placeholder="Selecione 1º Lugar" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {teamsInGroup.map((team) => (
-                            <SelectItem key={team.id} value={team.id}>
-                              {team.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
+                      <Select onValueChange={setSelectedFirstPlace} value={selectedFirstPlace || ""} disabled={loading}>
+                        <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                        <SelectContent>{teamsInGroup.map((team) => (<SelectItem key={team.id} value={team.id}>{team.name}</SelectItem>))}</SelectContent>
                       </Select>
-                    ) : (
-                      getTeamNameById(currentGroupResult?.first_place_team_id)
-                    )}
+                    ) : (getTeamNameById(currentGroupResult?.first_place_team_id))}
                   </TableCell>
                   <TableCell>
                     {isEditing ? (
-                      <Select
-                        onValueChange={setSelectedSecondPlace}
-                        value={selectedSecondPlace || ""}
-                        disabled={loading}
-                      >
-                        <SelectTrigger className="w-[180px]">
-                          <SelectValue placeholder="Selecione 2º Lugar" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {teamsInGroup.map((team) => (
-                            <SelectItem key={team.id} value={team.id}>
-                              {team.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
+                      <Select onValueChange={setSelectedSecondPlace} value={selectedSecondPlace || ""} disabled={loading}>
+                        <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                        <SelectContent>{teamsInGroup.map((team) => (<SelectItem key={team.id} value={team.id}>{team.name}</SelectItem>))}</SelectContent>
                       </Select>
-                    ) : (
-                      getTeamNameById(currentGroupResult?.second_place_team_id)
-                    )}
+                    ) : (getTeamNameById(currentGroupResult?.second_place_team_id))}
                   </TableCell>
                   <TableCell className="text-center">
-                    <Badge variant={currentGroupResult?.is_completed ? "default" : "secondary"} 
-                           className={currentGroupResult?.is_completed ? "bg-green-500 text-white" : "bg-yellow-400 text-black"}>
+                    <Badge variant={currentGroupResult?.is_completed ? "default" : "secondary"} className={currentGroupResult?.is_completed ? "bg-green-500 text-white" : "bg-yellow-400 text-black"}>
                       {currentGroupResult?.is_completed ? "Finalizado" : "Pendente"}
                     </Badge>
                   </TableCell>
@@ -237,20 +197,14 @@ const AdminGroups = () => {
                       <div className="flex gap-2 justify-end">
                         <Button onClick={processGroupClassificationAndCalculatePoints} disabled={loading} className="bg-fifa-blue">
                           {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                          {loading ? "Processando..." : "Salvar e Pontuar"}
+                          Salvar e Pontuar
                         </Button>
-                        <Button variant="outline" onClick={() => setEditingClassificationGroupId(null)} disabled={loading}>
-                          Cancelar
-                        </Button>
+                        <Button variant="outline" onClick={() => setEditingClassificationGroupId(null)} disabled={loading}>Cancelar</Button>
                       </div>
                     ) : (
-                      <Button 
-                        onClick={() => handleEditClassificationClick(group.id)} 
-                        disabled={loading || (currentGroupResult?.is_completed && !isEditing)}
-                        variant="outline"
-                      >
+                      <Button onClick={() => handleEditClassificationClick(group.id)} disabled={loading || (currentGroupResult?.is_completed && !isEditing)} variant="outline">
                         <Edit className="mr-2 h-4 w-4" />
-                        {currentGroupResult?.is_completed ? "Editar" : "Inserir Classificação"}
+                        {currentGroupResult?.is_completed ? "Corrigir" : "Inserir"}
                       </Button>
                     )}
                   </TableCell>
@@ -259,9 +213,6 @@ const AdminGroups = () => {
             })}
           </TableBody>
         </Table>
-        {groups.length === 0 && !loading && (
-            <div className="text-center py-4">Nenhum grupo encontrado.</div>
-        )}
       </section>
     </div>
   );
