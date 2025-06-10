@@ -35,8 +35,8 @@ interface StaticMatchupProps {
 const Matchup: React.FC<MatchupProps> = ({ title, team1, team2, selectedValue, onSelect }) => {
   const canSelect = team1 && team2;
   return (
-    <div className="border p-2 rounded-md bg-gray-50 dark:bg-gray-800/50 text-sm h-[68px] flex flex-col justify-center print:h-auto print:text-[10px] print:p-1">
-      <p className="font-bold text-gray-600 dark:text-gray-300 mb-1 print:text-[11px] print:mb-0.5">{title}</p>
+    <div className="border p-2 rounded-md bg-gray-50 dark:bg-gray-800/50 text-sm h-[68px] flex flex-col justify-center print:h-auto print:text-[10px] print:p-1 print:border-gray-400">
+      <p className="font-bold text-gray-600 dark:text-gray-300 mb-1 print:text-[11px] print:font-semibold print:mb-0.5">{title}</p>
       <Select onValueChange={onSelect} value={selectedValue || ""} disabled={!canSelect}>
         <SelectTrigger className="w-full h-8 text-xs print:h-6 print:text-[10px]"><SelectValue placeholder="Aguardando..." /></SelectTrigger>
         {canSelect && (
@@ -51,8 +51,8 @@ const Matchup: React.FC<MatchupProps> = ({ title, team1, team2, selectedValue, o
 };
 
 const StaticMatchup: React.FC<StaticMatchupProps> = ({ title, team1, team2, winnerId }) => (
-    <div className="border p-2 rounded-md bg-gray-100 dark:bg-gray-800 text-sm h-[68px] flex flex-col justify-center print:h-auto print:text-[10px] print:p-1">
-      <p className="font-bold text-gray-600 dark:text-gray-300 mb-1 print:text-[11px] print:mb-0.5">{title}</p>
+    <div className="border p-2 rounded-md bg-gray-100 dark:bg-gray-800 text-sm h-[68px] flex flex-col justify-center print:h-auto print:text-[10px] print:p-1 print:border-gray-400">
+      <p className="font-bold text-gray-600 dark:text-gray-300 mb-1 print:text-[10px] print:font-semibold print:mb-0.5">{title}</p>
       <div className="space-y-1">
         <p className={winnerId === team1?.teamId ? 'font-bold text-green-600' : 'text-gray-500'}>{team1?.teamName || 'A definir'}</p>
         <p className={winnerId === team2?.teamId ? 'font-bold text-green-600' : 'text-gray-500'}>{team2?.teamName || 'A definir'}</p>
@@ -125,6 +125,7 @@ const KnockoutBracket: React.FC<KnockoutBracketProps> = ({
            <h3 className="font-bold text-lg text-center print:text-sm">Semifinais</h3>
            {Object.entries(sf_teams).map(([id, teams]) => <Matchup key={id} matchId={id} title={`Semi ${id.slice(-1)}`} team1={teams[0]} team2={teams[1]} selectedValue={knockoutSelections[id]} onSelect={(val) => onSelectionChange(id, val)} />)}
         </div>
+        {/* CORREÇÃO DE LAYOUT: Adicionado flexbox para alinhar a coluna final verticalmente */}
         <div className="flex flex-col justify-around">
           <h3 className="font-bold text-lg text-center print:text-sm">Finais</h3>
           <div>

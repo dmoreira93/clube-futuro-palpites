@@ -13,31 +13,41 @@ interface Props {
 
 const SimulatedGroupTables = ({ simulatedGroups, onAdoptPrediction }: Props) => {
   return (
+    // Classes de impressão para layout em 2 colunas
     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 print:grid-cols-2">
       {simulatedGroups.map((group) => (
-        <Card key={group.groupId} className="print:shadow-none print:border">
+        <Card key={group.groupId} className="print:shadow-none print:border print:break-inside-avoid">
           <CardHeader className="print:p-2">
-            <CardTitle className="text-xl print:text-base">Grupo {group.groupName}</CardTitle>
+            <CardTitle className="text-xl print:text-sm print:font-semibold">Grupo {group.groupName}</CardTitle>
           </CardHeader>
           <CardContent className="print:p-1">
-            <Table className="print:text-xs">
+            {/* Fontes e paddings reduzidos para impressão */}
+            <Table className="print:text-[10px]">
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-1/2 print:p-1">Time</TableHead>
-                  <TableHead className="print:p-1">P</TableHead>
-                  <TableHead className="print:p-1">SG</TableHead>
+                  <TableHead className="print:p-1 text-center">P</TableHead>
+                  <TableHead className="print:p-1 text-center">J</TableHead>
+                  <TableHead className="print:p-1 text-center">V</TableHead>
+                  <TableHead className="print:p-1 text-center">E</TableHead>
+                  <TableHead className="print:p-1 text-center">D</TableHead>
+                  <TableHead className="print:p-1 text-center">SG</TableHead>
                   <TableHead className="text-right print:hidden">Ação</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {group.standings.map((team, index) => (
                   <TableRow key={team.teamId} className={index < 2 ? 'bg-green-100 dark:bg-green-900/30' : ''}>
-                    <TableCell className="font-medium print:p-1">
+                    <TableCell className="font-medium print:p-1 print:font-normal">
                       <span className="mr-2">{index + 1}º</span>
                       {team.teamName}
                     </TableCell>
-                    <TableCell className="font-bold print:p-1">{team.points}</TableCell>
-                    <TableCell className="print:p-1">{team.goalDifference}</TableCell>
+                    <TableCell className="font-bold print:p-1 text-center">{team.points}</TableCell>
+                    <TableCell className="print:p-1 text-center">{team.gamesPlayed}</TableCell>
+                    <TableCell className="print:p-1 text-center">{team.wins}</TableCell>
+                    <TableCell className="print:p-1 text-center">{team.draws}</TableCell>
+                    <TableCell className="print:p-1 text-center">{team.losses}</TableCell>
+                    <TableCell className="print:p-1 text-center">{team.goalDifference}</TableCell>
                     <TableCell className="text-right print:hidden">
                       {index < 2 && (
                         <Button
