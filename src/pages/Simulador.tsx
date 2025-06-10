@@ -1,6 +1,6 @@
 // src/pages/Simulador.tsx
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -44,6 +44,7 @@ const Simulador = () => {
       if (pError || tError || gError) throw pError || tError || gError;
       if (!predictionsQueryData || predictionsQueryData.length === 0) {
         toast.info("Você ainda não fez palpites para os jogos da fase de grupos.");
+        setIsLoading(false);
         return;
       }
 
@@ -84,20 +85,46 @@ const Simulador = () => {
   };
 
   const handleAdoptGroupPrediction = async (groupId: string, teamId: string, position: 1 | 2) => {
-    // Esta função permanece igual
-  };
+    if (!user) return toast.error('Você precisa estar logado.');
+    
+    const toastId = toast.loading('Salvando palpite do grupo...');
+    setIsAdopting(true);
+    
+    const fieldToUpdate = position === 1 ? 'predicted_first_team_id' : 'predicted_second_team_id';
+    
+    try {
+      const { data: existing } = await supabase.from('group_predictions').select('id, predicted_first_team_id, predicted_second_team_id').eq('user_id', user.id).eq('group_id', groupId).single();
+      
+      const payload = { 
+        user_id: user.id, 
+        group_id: groupId,
+        predicted_first_team_id: existing?.predicted_first_team_id || null,
+        predicted_second_team_id: existing?.predicted_second_team_id || null,
+        [fieldToUpdate]: teamId 
+      };
 
-  const handleKnockoutSelection = (matchId: string, teamId: string | null) => {
+      const { error } = await supabase.from('group_predictions').upsert(payload, { onConflict: 'user_id, group_id' });
+      if (error) throw error;
+      
+      toast.success(`Palpite para ${position}º do grupo salvo!`, { id: toastId });
+    } catch (error: any) {
+      toast.error(`Erro ao salvar: ${error.message}`, { id: toastId });
+    } finally {
+      setIsAdopting(false);
+    }
+  };
+  
+  // **FUNÇÃO CORRIGIDA E ENCAPSULADA COM `useCallback`**
+  const handleKnockoutSelection = useCallback((matchId: string, teamId: string | null) => {
     setKnockoutSelections(prev => {
       const newState = { ...prev };
-
+  
       if (teamId) {
         newState[matchId] = teamId;
       } else {
         delete newState[matchId];
       }
-
-      // **LÓGICA CORRIGIDA: Mapa de dependências para limpar seleções futuras**
+  
       const cascadeClearMap: { [key: string]: string[] } = {
         'qf-1': ['sf-1', 'final', 'third_place'],
         'qf-2': ['sf-1', 'final', 'third_place'],
@@ -105,22 +132,49 @@ const Simulador = () => {
         'qf-4': ['sf-2', 'final', 'third_place'],
         'sf-1': ['final', 'third_place'],
         'sf-2': ['final', 'third_place'],
+        'final': ['third_place'] // Se a final mudar, a disputa de 3o também muda
       };
       
       const downstreamMatchesToClear = cascadeClearMap[matchId as keyof typeof cascadeClearMap];
-
+  
       if (downstreamMatchesToClear) {
         downstreamMatchesToClear.forEach(idToClear => {
           delete newState[idToClear];
         });
       }
-
+  
       return newState;
     });
-  };
+  }, []); // O array de dependências vazio é seguro aqui por causa da forma funcional do `setKnockoutSelections`
 
-  const handleAdoptFinalPrediction = async (role: 'champion' | 'runner_up' | 'third_place' | 'fourth_place', teamId: string) => {
-    // Esta função permanece igual
+
+  const handleAdoptFinalPrediction = async (role: 'champion' | 'runner_up' | 'third_place', teamId: string | undefined) => {
+    if (!user) return toast.error('Você precisa estar logado.');
+    if (!teamId) return toast.error('Time inválido para salvar.');
+
+    const toastId = toast.loading(`Salvando ${role}...`);
+    setIsAdopting(true);
+    
+    const columnMap = {
+      champion: 'champion_id',
+      runner_up: 'runner_up_id',
+      third_place: 'third_place_id',
+    };
+    const column = columnMap[role];
+
+    try {
+      const { data: existing } = await supabase.from('final_predictions').select('*').eq('user_id', user.id).single();
+      const payload = existing ? { ...existing, [column]: teamId } : { user_id: user.id, [column]: teamId };
+      
+      const { error } = await supabase.from('final_predictions').upsert(payload, { onConflict: 'user_id' });
+      if (error) throw error;
+      
+      toast.success(`Palpite de ${role.replace('_', ' ')} salvo!`, { id: toastId });
+    } catch (error: any) {
+      toast.error(`Erro ao salvar palpite final: ${error.message}`, { id: toastId });
+    } finally {
+      setIsAdopting(false);
+    }
   };
 
   return (
