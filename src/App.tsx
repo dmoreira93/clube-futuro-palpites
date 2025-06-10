@@ -1,56 +1,57 @@
 // src/App.tsx
 
-import { BrowserRouter as Router, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
+import Layout from "./components/layout/Layout"; // Importa o Layout
 
 // Importações de Páginas
 import Index from "./pages/Index";
 import Login from "./pages/Login";
 import Cadastro from "./pages/Cadastro";
 import Palpites from "./pages/Palpites";
-import Ranking from "./pages/Ranking";
+import RankingPage from "./pages/Ranking";
 import Resultados from "./pages/Resultados";
 import Criterios from "./pages/Criterios";
 import Admin from "./pages/Admin";
 import AdminLogin from "./pages/AdminLogin";
 import NotFound from "./pages/NotFound";
-import Layout from "./components/layout/Layout";
 import ChangePassword from "./pages/ChangePassword";
 import UserPredictions from "./pages/UserPredictions";
-import Simulador from "./pages/Simulador"; // <-- NOVA IMPORTAÇÃO
+import DailyMatchesAndPredictions from "./pages/DailyMatchesAndPredictions";
+import Simulador from "./pages/Simulador";
 
 function App() {
   return (
-    <Router>
-      <AuthProvider>
-        <Routes>
-          {/* Rotas Públicas */}
-          <Route path="/" element={<Layout><Index /></Layout>} />
-          <Route path="/login" element={<Layout><Login /></Layout>} />
-          <Route path="/cadastro" element={<Layout><Cadastro /></Layout>} />
-          <Route path="/ranking" element={<Layout><Ranking /></Layout>} />
-          <Route path="/resultados" element={<Layout><Resultados /></Layout>} />
-          <Route path="/criterios" element={<Layout><Criterios /></Layout>} />
-          
-          {/* Rota de Palpites (requer login) */}
-          <Route path="/palpites" element={<Layout><Palpites /></Layout>} />
-          <Route path="/palpites/:userId" element={<Layout><UserPredictions /></Layout>} />
+    <AuthProvider>
+      <BrowserRouter>
+        {/* O Layout agora envolve TODAS as rotas, evitando duplicação */}
+        <Layout>
+          <Routes>
+            {/* Rotas Públicas */}
+            <Route path="/" element={<Index />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/cadastro" element={<Cadastro />} />
+            <Route path="/ranking" element={<RankingPage />} />
+            <Route path="/resultados" element={<Resultados />} />
+            <Route path="/criterios" element={<Criterios />} />
+            <Route path="/palpites-usuarios" element={<UserPredictions />} />
+            <Route path="/palpites-do-dia" element={<DailyMatchesAndPredictions />} />
+            
+            {/* Rotas Protegidas (Exigem Login) */}
+            <Route path="/palpites" element={<Palpites />} />
+            <Route path="/simulador" element={<Simulador />} />
+            <Route path="/change-password" element={<ChangePassword />} />
 
-          {/* Rota do Simulador (requer login) */}
-          <Route path="/simulador" element={<Layout><Simulador /></Layout>} /> {/* <-- NOVA ROTA */}
+            {/* Rotas de Admin */}
+            <Route path="/admin-login" element={<AdminLogin />} />
+            <Route path="/admin" element={<Admin />} />
 
-          {/* Rota de troca de senha (requer login) */}
-          <Route path="/change-password" element={<Layout><ChangePassword /></Layout>} />
-
-          {/* Rotas de Admin */}
-          <Route path="/admin-login" element={<Layout><AdminLogin /></Layout>} />
-          <Route path="/admin" element={<Layout><Admin /></Layout>} />
-
-          {/* Rota Not Found */}
-          <Route path="*" element={<Layout><NotFound /></Layout>} />
-        </Routes>
-      </AuthProvider>
-    </Router>
+            {/* Rota Not Found */}
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </Layout>
+      </BrowserRouter>
+    </AuthProvider>
   );
 }
 
