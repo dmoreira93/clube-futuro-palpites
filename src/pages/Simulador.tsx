@@ -124,59 +124,39 @@ const Simulador = () => {
         }, { onConflict: 'user_id, group_id' });
 
       if (error) throw error;
-      console.log(`Chamando toast.success para grupo ${groupId}`);
       toast.success("Palpites do grupo salvos com sucesso!", { id: toastId });
     } catch (error: any) {
-      console.error(`Chamando toast.error para grupo ${groupId}:`, error);
       toast.error(`Erro ao salvar: ${error.message}`, { id: toastId });
     }
   };
 
-  const handleAdoptFinalPrediction = async (role: 'champion' | 'runner_up' | 'third_place' | 'fourth_place', teamId: string | undefined) => {
-    if (!user) return toast.error('Você precisa estar logado.');
-    if (!teamId) return toast.error('Time inválido para salvar.');
+  const handleAdoptFinalPredictions = async (championId: string, runnerUpId: string, thirdPlaceId: string, fourthPlaceId: string, finalHomeScore: number, finalAwayScore: number) => {
+    if (!user) {
+      toast.error('Você precisa estar logado.');
+      return;
+    }
 
-    const toastId = toast.loading(`Salvando palpite de ${role.replace('_', ' ')}...`);
-
-    const columnMap = {
-      champion: 'champion_id', runner_up: 'runner_up_id',
-      third_place: 'third_place_id', fourth_place: 'fourth_place_id',
-    };
-    const column = columnMap[role];
+    const toastId = toast.loading('Salvando palpites finais...');
 
     try {
-      const { data: existingPrediction, error: fetchError } = await supabase
-        .from('final_predictions')
-        .select('champion_id, runner_up_id, third_place_id, fourth_place_id, final_home_score, final_away_score')
-        .eq('user_id', user.id)
-        .single();
-
-      if (fetchError && fetchError.code !== 'PGRST116') throw fetchError;
-
-      const payload = {
-        user_id: user.id,
-        champion_id: existingPrediction?.champion_id || null,
-        runner_up_id: existingPrediction?.runner_up_id || null,
-        third_place_id: existingPrediction?.third_place_id || null,
-        fourth_place_id: existingPrediction?.fourth_place_id || null,
-        final_home_score: existingPrediction?.final_home_score || null,
-        final_away_score: existingPrediction?.final_away_score || null,
-      };
-
-      payload[column as keyof typeof payload] = teamId;
-
       const { error } = await supabase
         .from('final_predictions')
-        .upsert(payload, {
+        .upsert({
+          user_id: user.id,
+          champion_id: championId,
+          runner_up_id: runnerUpId,
+          third_place_id: thirdPlaceId,
+          fourth_place_id: fourthPlaceId,
+          final_home_score: finalHomeScore,
+          final_away_score: finalAwayScore,
+        }, {
           onConflict: 'user_id',
         });
 
       if (error) throw error;
-      console.log(`Chamando toast.success para final: ${role}`);
-      toast.success(`Palpite de ${role.replace('_', ' ')} salvo!`, { id: toastId });
+      toast.success('Palpites finais salvos com sucesso!', { id: toastId });
     } catch (error: any) {
-      console.error(`Chamando toast.error para final:`, error);
-      toast.error(`Erro ao salvar palpite final: ${error.message}`, { id: toastId });
+      toast.error(`Erro ao salvar palpites finais: ${error.message}`, { id: toastId });
     }
   };
 
@@ -215,7 +195,7 @@ const Simulador = () => {
                         simulatedGroups={simulatedResults}
                         knockoutSelections={knockoutSelections}
                         onSelectionChange={handleKnockoutSelection}
-                        onAdoptFinalPrediction={handleAdoptFinalPrediction}
+                        onAdoptAllFinalPredictions={handleAdoptFinalPredictions}
                         allTeams={allTeams}
                     />
                 </div>
