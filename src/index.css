@@ -106,3 +106,29 @@
 .gold-border {
   border-color: #C39E6D;
 }
+/* src/index.css */
+
+@media print {
+  /* Esconde tudo por padrão na impressão */
+  body * {
+    visibility: hidden;
+  }
+  
+  /* Mostra apenas a área do chaveamento e seu conteúdo */
+  #printable-bracket, #printable-bracket * {
+    visibility: visible;
+  }
+  
+  /* Ajusta o layout para ocupar a página inteira */
+  #printable-bracket {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+  }
+
+  /* Esconde botões e outros elementos não necessários na impressão */
+  .print-hidden {
+    display: none !important;
+  }
+}

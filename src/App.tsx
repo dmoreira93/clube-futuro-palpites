@@ -1,57 +1,57 @@
 // src/App.tsx
 
-import { Toaster } from "@/components/ui/toaster";
-import { Toaster as Sonner } from "@/components/ui/sonner";
-import { TooltipProvider } from "@/components/ui/tooltip";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter as Router, Route, Routes } from "react-router-dom";
+import { AuthProvider } from "./contexts/AuthContext";
 
-import { AuthProvider } from "@/contexts/AuthContext";
+// Importações de Páginas
+import Index from "./pages/Index";
+import Login from "./pages/Login";
+import Cadastro from "./pages/Cadastro";
+import Palpites from "./pages/Palpites";
+import Ranking from "./pages/Ranking";
+import Resultados from "./pages/Resultados";
+import Criterios from "./pages/Criterios";
+import Admin from "./pages/Admin";
+import AdminLogin from "./pages/AdminLogin";
+import NotFound from "./pages/NotFound";
+import Layout from "./components/layout/Layout";
+import ChangePassword from "./pages/ChangePassword";
+import UserPredictions from "./pages/UserPredictions";
+import Simulador from "./pages/Simulador"; // <-- NOVA IMPORTAÇÃO
 
-// Importe suas páginas
-import Index from "@/pages/Index";
-import NotFound from "@/pages/NotFound";
-import Criterios from "@/pages/Criterios";
-import Resultados from "@/pages/Resultados";
-import Palpites from "@/pages/Palpites";
-import Cadastro from "@/pages/Cadastro";
-import Login from "@/pages/Login";
-import Admin from "@/pages/Admin";
-import AdminLogin from "@/pages/AdminLogin";
-import UserPredictions from "@/pages/UserPredictions";
-import DailyMatchesAndPredictions from "@/pages/DailyMatchesAndPredictions";
-import ChangePassword from "@/pages/ChangePassword";
-import RankingPage from "@/pages/Ranking";
-
-const queryClient = new QueryClient();
-
-const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <BrowserRouter>
-        <AuthProvider>
-          <Toaster />
-          <Sonner />
+function App() {
+  return (
+    <Router>
+      <AuthProvider>
+        <Routes>
+          {/* Rotas Públicas */}
+          <Route path="/" element={<Layout><Index /></Layout>} />
+          <Route path="/login" element={<Layout><Login /></Layout>} />
+          <Route path="/cadastro" element={<Layout><Cadastro /></Layout>} />
+          <Route path="/ranking" element={<Layout><Ranking /></Layout>} />
+          <Route path="/resultados" element={<Layout><Resultados /></Layout>} />
+          <Route path="/criterios" element={<Layout><Criterios /></Layout>} />
           
-          <Routes>
-            <Route path="/" element={<Index />} />
-            <Route path="/criterios" element={<Criterios />} />
-            <Route path="/resultados" element={<Resultados />} />
-            <Route path="/ranking" element={<RankingPage />} />
-            <Route path="/palpites" element={<Palpites />} />
-            <Route path="/palpites-usuarios" element={<UserPredictions />} />
-            <Route path="/palpites-do-dia" element={<DailyMatchesAndPredictions />} />
-            <Route path="/cadastro" element={<Cadastro />} />
-            <Route path="/login" element={<Login />} />
-            <Route path="/admin" element={<Admin />} />
-            <Route path="/admin-login" element={<AdminLogin />} />
-            <Route path="/change-password" element={<ChangePassword />} />
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </AuthProvider>
-      </BrowserRouter>
-    </TooltipProvider>
-  </QueryClientProvider>
-);
+          {/* Rota de Palpites (requer login) */}
+          <Route path="/palpites" element={<Layout><Palpites /></Layout>} />
+          <Route path="/palpites/:userId" element={<Layout><UserPredictions /></Layout>} />
+
+          {/* Rota do Simulador (requer login) */}
+          <Route path="/simulador" element={<Layout><Simulador /></Layout>} /> {/* <-- NOVA ROTA */}
+
+          {/* Rota de troca de senha (requer login) */}
+          <Route path="/change-password" element={<Layout><ChangePassword /></Layout>} />
+
+          {/* Rotas de Admin */}
+          <Route path="/admin-login" element={<Layout><AdminLogin /></Layout>} />
+          <Route path="/admin" element={<Layout><Admin /></Layout>} />
+
+          {/* Rota Not Found */}
+          <Route path="*" element={<Layout><NotFound /></Layout>} />
+        </Routes>
+      </AuthProvider>
+    </Router>
+  );
+}
 
 export default App;

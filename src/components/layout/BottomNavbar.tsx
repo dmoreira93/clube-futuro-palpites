@@ -1,46 +1,58 @@
-import { Home, Trophy, ListChecks, LogIn, Pencil } from 'lucide-react';
-import { NavLink } from 'react-router-dom';
-import { useAuth } from '@/contexts/AuthContext';
+// src/components/layout/BottomNavbar.tsx
 
-export const BottomNavbar = () => {
-  const { isAuthenticated } = useAuth();
+import { NavLink } from "react-router-dom";
+import { Home, Trophy, ListChecks, BarChart2, Calculator, Medal } from "lucide-react"; // <-- Adicionado o ícone Calculator
+import { useAuth } from "@/contexts/AuthContext";
 
-  // Itens do menu para visitantes NÃO LOGADOS
-  const navItemsPublic = [
-    { href: '/', label: 'Início', icon: Home },
-    { href: '/login', label: 'Login', icon: LogIn },
-    { href: '/ranking', label: 'Ranking', icon: Trophy },
-    { href: '/resultados', label: 'Resultados', icon: ListChecks },
-  ];
+const BottomNavbar = () => {
+  const { user } = useAuth();
 
-  // Itens do menu para usuários LOGADOS
-  const navItemsAuthenticated = [
-    { href: '/', label: 'Início', icon: Home },
-    { href: '/palpites', label: 'Palpites', icon: Pencil },
-    { href: '/resultados', label: 'Resultados', icon: ListChecks },
-  ];
-
-  const items = isAuthenticated ? navItemsAuthenticated : navItemsPublic;
+  if (!user) {
+    return null; // Não mostra o menu se o usuário não estiver logado
+  }
 
   return (
-    <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg z-50">
-      <div className="flex justify-around h-16">
-        {items.map((item) => (
-          <NavLink
-            key={item.href}
-            to={item.href}
-            end={item.href === '/'}
-            className={({ isActive }) =>
-              `flex flex-col items-center justify-center w-full text-xs transition-colors duration-200 ${
-                isActive ? 'text-fifa-blue' : 'text-gray-500 hover:text-fifa-blue'
-              }`
-            }
-          >
-            <item.icon className="h-6 w-6 mb-1" />
-            <span>{item.label}</span>
-          </NavLink>
-        ))}
-      </div>
+    <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 flex justify-around py-2 md:hidden z-50 shadow-t-lg">
+      <NavLink 
+        to="/" 
+        className={({ isActive }) => `flex flex-col items-center text-xs ${isActive ? 'text-fifa-blue' : 'text-gray-500'}`}
+      >
+        <Home className="h-6 w-6" />
+        <span>Início</span>
+      </NavLink>
+      <NavLink 
+        to="/palpites" 
+        className={({ isActive }) => `flex flex-col items-center text-xs ${isActive ? 'text-fifa-blue' : 'text-gray-500'}`}
+      >
+        <ListChecks className="h-6 w-6" />
+        <span>Palpites</span>
+      </NavLink>
+      
+      {/* NOVO LINK PARA O SIMULADOR */}
+      <NavLink 
+        to="/simulador" 
+        className={({ isActive }) => `flex flex-col items-center text-xs ${isActive ? 'text-fifa-blue' : 'text-gray-500'}`}
+      >
+        <Calculator className="h-6 w-6" />
+        <span>Simulador</span>
+      </NavLink>
+
+      <NavLink 
+        to="/ranking" 
+        className={({ isActive }) => `flex flex-col items-center text-xs ${isActive ? 'text-fifa-blue' : 'text-gray-500'}`}
+      >
+        <Trophy className="h-6 w-6" />
+        <span>Ranking</span>
+      </NavLink>
+      <NavLink 
+        to="/resultados" 
+        className={({ isActive }) => `flex flex-col items-center text-xs ${isActive ? 'text-fifa-blue' : 'text-gray-500'}`}
+      >
+        <Medal className="h-6 w-6" />
+        <span>Resultados</span>
+      </NavLink>
     </nav>
   );
 };
+
+export default BottomNavbar;
