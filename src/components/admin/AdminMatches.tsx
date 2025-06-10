@@ -12,13 +12,9 @@ interface Match {
   home_score: number | null;
   away_score: number | null;
   match_date: string;
-  stage: string;
-  stadium: string | null;
   is_finished: boolean;
-  home_team: { id: string; name: string } | null;
-  away_team: { id: string; name: string } | null;
-  home_team_name?: string;
-  away_team_name?: string;
+  home_team: { name: string } | null;
+  away_team: { name: string } | null;
 }
 
 const AdminMatches = () => {
@@ -37,17 +33,11 @@ const AdminMatches = () => {
     try {
       const { data, error } = await supabase
         .from("matches")
-        .select(`id, home_score, away_score, match_date, stage, stadium, is_finished, home_team:home_team_id (id, name), away_team:away_team_id (id, name)`)
+        .select(`*, home_team:home_team_id(name), away_team:away_team_id(name)`)
         .order("match_date", { ascending: true });
 
       if (error) throw error;
-      
-      const formattedMatches: Match[] = (data || []).map((match: any) => ({
-        ...match,
-        home_team_name: match.home_team?.name ?? "A definir",
-        away_team_name: match.away_team?.name ?? "A definir",
-      }));
-      setMatches(formattedMatches);
+      setMatches(data || []);
     } catch (e: any) {
         toast.error("Erro ao carregar partidas.");
     } finally {
@@ -72,7 +62,7 @@ const AdminMatches = () => {
 
     setLoading(true);
     try {
-      // 1. Atualizar o resultado da partida
+      // 1. Atualiza o resultado da partida
       const { error: updateError } = await supabase
         .from("matches")
         .update({ home_score: realHomeScore, away_score: realAwayScore, is_finished: true })
@@ -81,7 +71,7 @@ const AdminMatches = () => {
       
       toast.success("Resultado salvo! Calculando pontos...");
 
-      // 2. Chamar a função SQL para processar os pontos
+      // 2. Chama a função SQL para processar os pontos
       const { error: rpcError } = await supabase.rpc('update_user_points_for_match', {
         match_id_param: matchId
       });
@@ -103,7 +93,7 @@ const AdminMatches = () => {
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {matches.map((match) => (
           <div key={match.id} className={`border rounded-xl p-4 shadow-sm bg-white ${editingMatchId === match.id ? 'ring-2 ring-fifa-blue' : ''}`}>
-            <p className="font-semibold text-lg">{match.home_team_name} vs {match.away_team_name}</p>
+            <p className="font-semibold text-lg">{match.home_team?.name ?? 'A definir'} vs {match.away_team?.name ?? 'A definir'}</p>
             <p className="text-sm text-gray-500">{new Date(match.match_date).toLocaleString('pt-BR')}</p>
             {editingMatchId === match.id ? (
               <div className="mt-4 space-y-3">
