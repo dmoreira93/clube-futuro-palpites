@@ -29,38 +29,24 @@ const Simulador = () => {
       toast.error('Você precisa estar logado para simular seus palpites.');
       return;
     }
-    
     setIsLoading(true);
     setSimulatedResults(null);
-    const toastId = toast.loading("Buscando seus palpites...");
-
     try {
-      // Passo 1: Buscar palpites do usuário
-      const { data: predictionsQueryData, error: pError } = await supabase
-        .from('match_predictions')
-        .select('home_score, away_score, matches!inner(home_team_id, away_team_id)')
-        .eq('user_id', user.id);
-
-      if (pError) throw new Error(`Erro ao buscar palpites: ${pError.message}`);
-      if (!predictionsQueryData || predictionsQueryData.length === 0) {
-        toast.info("Você ainda não fez palpites para os jogos da fase de grupos.", { id: toastId });
-        setIsLoading(false);
-        return;
-      }
-      
-      toast.loading("Buscando dados dos times e grupos...", { id: toastId });
-
-      // Passo 2: Buscar times e grupos
-      const [{ data: teamsData, error: tError }, { data: groupsData, error: gError }] = await Promise.all([
+      const [{ data: predictionsQueryData, error: pError }, { data: teamsData, error: tError }, { data: groupsData, error: gError }] = await Promise.all([
+        supabase.from('match_predictions')
+          .select('home_score, away_score, matches!inner(home_team_id, away_team_id)')
+          .eq('user_id', user.id),
         supabase.from('teams').select('id, name, group_id'),
         supabase.from('groups').select('id, name')
       ]);
 
-      if (tError || gError) throw new Error(`Erro ao buscar dados do torneio: ${tError?.message || gError?.message}`);
+      if (pError || tError || gError) throw pError || tError || gError;
+      if (!predictionsQueryData || predictionsQueryData.length === 0) {
+        toast.info("Você ainda não fez palpites para os jogos da fase de grupos.");
+        setIsLoading(false);
+        return;
+      }
 
-      toast.loading("Calculando classificações...", { id: toastId });
-
-      // Passo 3: Calcular a simulação
       const formattedPredictions = predictionsQueryData.map(p => ({
         home_score: p.home_score,
         away_score: p.away_score,
@@ -87,31 +73,96 @@ const Simulador = () => {
       });
       setKnockoutSelections(r16Selections);
       
-      toast.success("Simulação concluída!", { id: toastId });
+      toast.success("Simulação concluída!");
 
     } catch (error: any) {
       console.error("Erro na simulação:", error);
-      toast.error(error.message, { id: toastId });
+      toast.error("Ocorreu um erro ao realizar a simulação: " + error.message);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleAdoptGroupPrediction = async (groupId: string, teamId: string, position: 1 | 2) => {
-    // ... (esta função está correta, não precisa de alteração)
-  };
-  
   const handleKnockoutSelection = useCallback((matchId: string, teamId: string | null) => {
-    // ... (esta função está correta, não precisa de alteração)
+    setKnockoutSelections(prev => {
+      const newState = { ...prev };
+      if (teamId) newState[matchId] = teamId;
+      else delete newState[matchId];
+      
+      const cascadeClearMap: { [key: string]: string[] } = {
+        'qf-1': ['sf-1', 'final', 'third_place'], 'qf-2': ['sf-1', 'final', 'third_place'],
+        'qf-3': ['sf-2', 'final', 'third_place'], 'qf-4': ['sf-2', 'final', 'third_place'],
+        'sf-1': ['final', 'third_place'], 'sf-2': ['final', 'third_place'],
+      };
+      
+      const downstreamMatchesToClear = cascadeClearMap[matchId as keyof typeof cascadeClearMap];
+      if (downstreamMatchesToClear) {
+        downstreamMatchesToClear.forEach(idToClear => { delete newState[idToClear]; });
+      }
+      return newState;
+    });
   }, []);
 
+  // --- FUNÇÕES DE "ADOTAR" COM A LÓGICA DE UPSERT CORRIGIDA ---
+  
+  const handleAdoptGroupPrediction = async (groupId: string, teamId: string, position: 1 | 2) => {
+    if (!user) return toast.error('Você precisa estar logado.');
+    const toastId = toast.loading('Salvando palpite do grupo...');
+    
+    const fieldToUpdate = position === 1 ? 'predicted_first_team_id' : 'predicted_second_team_id';
+    
+    try {
+      const { error } = await supabase
+        .from('group_predictions')
+        .upsert({
+          user_id: user.id,
+          group_id: groupId,
+          [fieldToUpdate]: teamId,
+        }, {
+          // CORREÇÃO: Especifica as colunas de conflito para o upsert
+          onConflict: 'user_id, group_id',
+        });
+
+      if (error) throw error;
+      toast.success(`Palpite para ${position}º do grupo salvo!`, { id: toastId });
+    } catch (error: any) {
+      toast.error(`Erro ao salvar: ${error.message}`, { id: toastId });
+    }
+  };
+  
   const handleAdoptFinalPrediction = async (role: 'champion' | 'runner_up' | 'third_place' | 'fourth_place', teamId: string | undefined) => {
-    // ... (esta função está correta, não precisa de alteração)
+    if (!user) return toast.error('Você precisa estar logado.');
+    if (!teamId) return toast.error('Time inválido para salvar.');
+
+    const toastId = toast.loading(`Salvando palpite de ${role.replace('_', ' ')}...`);
+    
+    const columnMap = {
+      champion: 'champion_id', runner_up: 'runner_up_id',
+      third_place: 'third_place_id', fourth_place: 'fourth_place_id',
+    };
+    const column = columnMap[role];
+
+    try {
+      const { error } = await supabase
+        .from('final_predictions')
+        .upsert({
+          user_id: user.id,
+          [column]: teamId,
+        }, {
+          // CORREÇÃO: Especifica a coluna de conflito para o upsert
+          onConflict: 'user_id',
+        });
+      
+      if (error) throw error;
+      toast.success(`Palpite de ${role.replace('_', ' ')} salvo!`, { id: toastId });
+    } catch (error: any) {
+      toast.error(`Erro ao salvar palpite final: ${error.message}`, { id: toastId });
+    }
   };
 
   return (
     <div className="container mx-auto p-4 md:p-6 lg:p-8 space-y-8">
-      {/* O JSX permanece o mesmo */}
+      {/* O JSX do componente permanece o mesmo */}
       <Card className="text-center print-hidden">
         <CardHeader>
           <CardTitle className="text-2xl md:text-3xl font-bold text-fifa-blue">Simulador de Bolão</CardTitle>
@@ -129,27 +180,27 @@ const Simulador = () => {
       
       {simulatedResults && (
         <div className="space-y-8">
-          <div className="text-center print-hidden">
-            <Button variant="outline" onClick={() => window.print()}>
-              <Printer className="mr-2 h-4 w-4" /> Imprimir Simulação
-            </Button>
-          </div>
-          <div id="printable-simulation">
-            <div id="simulation-group-tables">
-              <h2 className="text-2xl font-bold text-center mb-4 hidden print:block">Classificação da Fase de Grupos</h2>
-              <SimulatedGroupTables simulatedGroups={simulatedResults} onAdoptPrediction={handleAdoptGroupPrediction} />
+            <div className="text-center print-hidden">
+                <Button variant="outline" onClick={() => window.print()}>
+                    <Printer className="mr-2 h-4 w-4" /> Imprimir Simulação
+                </Button>
             </div>
-            <div id="simulation-knockout-bracket" className="mt-8">
-              <h2 className="text-2xl font-bold text-center mt-8 mb-4 hidden print:block">Chaveamento Mata-Mata</h2>
-              <KnockoutBracket
-                simulatedGroups={simulatedResults}
-                knockoutSelections={knockoutSelections}
-                onSelectionChange={handleKnockoutSelection}
-                onAdoptFinalPrediction={handleAdoptFinalPrediction}
-                allTeams={allTeams}
-              />
+            <div id="printable-simulation">
+                <div id="simulation-group-tables">
+                    <h2 className="text-2xl font-bold text-center mb-4 hidden print:block">Classificação da Fase de Grupos</h2>
+                    <SimulatedGroupTables simulatedGroups={simulatedResults} onAdoptPrediction={handleAdoptGroupPrediction} />
+                </div>
+                <div id="simulation-knockout-bracket" className="mt-8">
+                    <h2 className="text-2xl font-bold text-center mt-8 mb-4 hidden print:block">Chaveamento Mata-Mata</h2>
+                    <KnockoutBracket
+                        simulatedGroups={simulatedResults}
+                        knockoutSelections={knockoutSelections}
+                        onSelectionChange={handleKnockoutSelection}
+                        onAdoptFinalPrediction={handleAdoptFinalPrediction}
+                        allTeams={allTeams}
+                    />
+                </div>
             </div>
-          </div>
         </div>
       )}
     </div>
