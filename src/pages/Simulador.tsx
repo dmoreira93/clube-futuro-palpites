@@ -1,5 +1,3 @@
-// src/pages/Simulador.tsx
-
 import React, { useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -103,115 +101,67 @@ const Simulador = () => {
     });
   }, []);
 
-  // --- FUNÇÕES DE "ADOTAR" COM A LÓGICA DE UPSERT CORRIGIDA ---
-
-  const handleAdoptGroupPrediction = async (groupId: string, teamId: string, position: 1 | 2) => {
+  const handleAdoptGroupPrediction = async (groupId: string, firstTeamId: string, secondTeamId: string) => {
     if (!user) {
       toast.error('Você precisa estar logado.');
       return;
     }
-    const toastId = toast.loading('Salvando palpite do grupo...');
 
+    if (firstTeamId === secondTeamId) {
+      toast.error("Você não pode escolher o mesmo time como 1º e 2º lugar.");
+      return;
+    }
+
+    const toastId = toast.loading('Salvando palpites do grupo...');
     try {
-      // 1. Buscar o palpite existente para este usuário e grupo
-      const { data: existingPrediction, error: fetchError } = await supabase
+      const { error } = await supabase
         .from('group_predictions')
-        .select('predicted_first_team_id, predicted_second_team_id')
-        .eq('user_id', user.id)
-        .eq('group_id', groupId)
-        .single();
+        .upsert({
+          user_id: user.id,
+          group_id: groupId,
+          predicted_first_team_id: firstTeamId,
+          predicted_second_team_id: secondTeamId,
+        }, { onConflict: 'user_id, group_id' });
 
-      if (fetchError && fetchError.code !== 'PGRST116') { // PGRST116 significa "nenhuma linha encontrada"
-        throw fetchError;
-      }
-
-      // 2. Preparar o payload do upsert
-      const payload = {
-        user_id: user.id,
-        group_id: groupId,
-        predicted_first_team_id: existingPrediction?.predicted_first_team_id || null,
-        predicted_second_team_id: existingPrediction?.predicted_second_team_id || null,
-      };
-
-      // Atualizar o campo específico
-      if (position === 1) {
-        payload.predicted_first_team_id = teamId;
-      } else {
-        payload.predicted_second_team_id = teamId;
-      }
-
-      // 3. Executar o upsert
-      const { error: upsertError } = await supabase
-        .from('group_predictions')
-        .upsert(payload, {
-          onConflict: 'user_id, group_id',
-        });
-
-      if (upsertError) throw upsertError;
-      console.log(`Chamando toast.success para grupo ${groupId}`); // Adicionei esta linha
-      toast.success(`Palpite para ${position}º do grupo salvo!`, { id: toastId });
+      if (error) throw error;
+      toast.success("Palpites do grupo salvos com sucesso!", { id: toastId });
     } catch (error: any) {
-      console.error(`Chamando toast.error para grupo ${groupId}:`, error); // Adicionei esta linha
       toast.error(`Erro ao salvar: ${error.message}`, { id: toastId });
     }
   };
 
-  const handleAdoptFinalPrediction = async (role: 'champion' | 'runner_up' | 'third_place' | 'fourth_place', teamId: string | undefined) => {
-    if (!user) return toast.error('Você precisa estar logado.');
-    if (!teamId) return toast.error('Time inválido para salvar.');
+  const handleAdoptFinalPredictions = async (championId: string, runnerUpId: string, thirdPlaceId: string, fourthPlaceId: string, finalHomeScore: number, finalAwayScore: number) => {
+    if (!user) {
+      toast.error('Você precisa estar logado.');
+      return;
+    }
 
-    const toastId = toast.loading(`Salvando palpite de ${role.replace('_', ' ')}...`);
-
-    const columnMap = {
-      champion: 'champion_id', runner_up: 'runner_up_id',
-      third_place: 'third_place_id', fourth_place: 'fourth_place_id',
-    };
-    const column = columnMap[role];
+    const toastId = toast.loading('Salvando palpites finais...');
 
     try {
-      // 1. Buscar o palpite final existente para este usuário
-      const { data: existingPrediction, error: fetchError } = await supabase
-        .from('final_predictions')
-        .select('champion_id, runner_up_id, third_place_id, fourth_place_id, final_home_score, final_away_score')
-        .eq('user_id', user.id)
-        .single();
-
-      if (fetchError && fetchError.code !== 'PGRST116') { // PGRST116 significa "nenhuma linha encontrada"
-        throw fetchError;
-      }
-
-      // 2. Preparar o payload do upsert
-      const payload = {
-        user_id: user.id,
-        champion_id: existingPrediction?.champion_id || null,
-        runner_up_id: existingPrediction?.runner_up_id || null,
-        third_place_id: existingPrediction?.third_place_id || null,
-        fourth_place_id: existingPrediction?.fourth_place_id || null,
-        final_home_score: existingPrediction?.final_home_score || null, // Preservar placar da final
-        final_away_score: existingPrediction?.final_away_score || null, // Preservar placar da final
-      };
-
-      // Atualizar o campo específico
-      payload[column as keyof typeof payload] = teamId;
-
       const { error } = await supabase
         .from('final_predictions')
-        .upsert(payload, {
+        .upsert({
+          user_id: user.id,
+          champion_id: championId,
+          runner_up_id: runnerUpId,
+          third_place_id: thirdPlaceId,
+          fourth_place_id: fourthPlaceId,
+          final_home_score: finalHomeScore,
+          final_away_score: finalAwayScore,
+        }, {
           onConflict: 'user_id',
         });
 
       if (error) throw error;
-      console.log(`Chamando toast.success para final: ${role}`); // Adicionei esta linha
-      toast.success(`Palpite de ${role.replace('_', ' ')} salvo!`, { id: toastId });
+      toast.success('Palpites finais salvos com sucesso!', { id: toastId });
     } catch (error: any) {
-      console.error(`Chamando toast.error para final:`, error); // Adicionei esta linha
-      toast.error(`Erro ao salvar palpite final: ${error.message}`, { id: toastId });
+      toast.error(`Erro ao salvar palpites finais: ${error.message}`, { id: toastId });
     }
   };
 
   return (
     <div className="container mx-auto p-4 md:p-6 lg:p-8 space-y-8">
-      {/* O JSX do componente permanece o mesmo */}
       <Card className="text-center print-hidden">
         <CardHeader>
           <CardTitle className="text-2xl md:text-3xl font-bold text-fifa-blue">Simulador de Bolão</CardTitle>
@@ -245,7 +195,7 @@ const Simulador = () => {
                         simulatedGroups={simulatedResults}
                         knockoutSelections={knockoutSelections}
                         onSelectionChange={handleKnockoutSelection}
-                        onAdoptFinalPrediction={handleAdoptFinalPrediction}
+                        onAdoptAllFinalPredictions={handleAdoptFinalPredictions}
                         allTeams={allTeams}
                     />
                 </div>
