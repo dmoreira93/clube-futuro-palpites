@@ -1,8 +1,10 @@
+// src/pages/ChangePassword.tsx
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
-import Layout from '@/components/layout/Layout';
+// A importação do Layout foi REMOVIDA
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -31,16 +33,13 @@ const ChangePassword = () => {
 
     setSubmitting(true);
     try {
-      // ETAPA 1: Atualizar a senha de autenticação
       const { error: authError } = await supabase.auth.updateUser({ password });
       if (authError) throw authError;
-
-      // ETAPA 2: ATUALIZAR A FLAG `first_login` para `true` no banco de dados
+      
       await updateUserProfile({ first_login: true });
 
       toast.success('Senha alterada com sucesso! Por favor, faça login novamente com sua nova senha.');
       
-      // ETAPA 3: Deslogar para forçar o novo login
       await signOut();
       navigate('/login');
 
@@ -53,35 +52,39 @@ const ChangePassword = () => {
   };
 
   if (loading || (!user && !loading)) {
-    return <Layout><div className="flex justify-center items-center h-screen"><Loader2 className="h-8 w-8 animate-spin text-fifa-blue" /></div></Layout>;
+    // O <Layout> foi removido daqui
+    return (
+      <div className="flex justify-center items-center h-screen">
+        <Loader2 className="h-8 w-8 animate-spin text-fifa-blue" />
+      </div>
+    );
   }
 
+  // O <Layout> foi removido daqui
   return (
-    <Layout>
-      <div className="flex items-center justify-center min-h-screen bg-gray-100">
-        <Card className="w-full max-w-md p-6 shadow-lg rounded-lg">
-          <CardHeader className="text-center">
-            <CardTitle className="text-2xl font-bold text-fifa-blue">Defina Sua Nova Senha</CardTitle>
-            <CardDescription className="text-gray-600">Esta é sua primeira vez acessando. Por favor, defina uma nova senha.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleChangePassword} className="space-y-4">
-              <div>
-                <Label htmlFor="password">Nova Senha</Label>
-                <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Mínimo 6 caracteres" required disabled={submitting} />
-              </div>
-              <div>
-                <Label htmlFor="confirmPassword">Confirme a Nova Senha</Label>
-                <Input id="confirmPassword" type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder="Confirme sua senha" required disabled={submitting}/>
-              </div>
-              <Button type="submit" className="w-full bg-fifa-blue hover:bg-fifa-blue-dark" disabled={submitting}>
-                {submitting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Salvando...</> : 'Salvar Nova Senha'}
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
-      </div>
-    </Layout>
+    <div className="flex items-center justify-center min-h-screen bg-gray-100">
+      <Card className="w-full max-w-md p-6 shadow-lg rounded-lg">
+        <CardHeader className="text-center">
+          <CardTitle className="text-2xl font-bold text-fifa-blue">Defina Sua Nova Senha</CardTitle>
+          <CardDescription className="text-gray-600">Esta é sua primeira vez acessando. Por favor, defina uma nova senha.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleChangePassword} className="space-y-4">
+            <div>
+              <Label htmlFor="password">Nova Senha</Label>
+              <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Mínimo 6 caracteres" required disabled={submitting} />
+            </div>
+            <div>
+              <Label htmlFor="confirmPassword">Confirme a Nova Senha</Label>
+              <Input id="confirmPassword" type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder="Confirme sua senha" required disabled={submitting}/>
+            </div>
+            <Button type="submit" className="w-full bg-fifa-blue hover:bg-fifa-blue-dark" disabled={submitting}>
+              {submitting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Salvando...</> : 'Salvar Nova Senha'}
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
+    </div>
   );
 };
 

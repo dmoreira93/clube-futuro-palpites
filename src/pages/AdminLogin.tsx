@@ -1,13 +1,15 @@
+// src/pages/AdminLogin.tsx
+
 import { useState, useEffect } from "react";
-import { Navigate, useNavigate } from "react-router-dom";
-import Layout from "@/components/layout/Layout";
+import { useNavigate } from "react-router-dom";
+// A importação do Layout foi REMOVIDA daqui
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/components/ui/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ShieldAlert, Lock, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 
 const AdminLogin = () => {
   const navigate = useNavigate();
@@ -31,7 +33,12 @@ const AdminLogin = () => {
     setIsSubmitting(true);
     try {
       const { success, error } = await login(formData.email, formData.password);
-      if (!success) throw error;
+      if (!success) {
+        // Apenas lança o erro se não for um erro específico de "não é admin"
+        if (error?.message !== 'User is not an administrator') {
+          throw error;
+        }
+      }
       // O useEffect cuidará do redirecionamento
     } catch (error: any) {
       console.error("Erro no login de admin:", error);
@@ -46,41 +53,39 @@ const AdminLogin = () => {
   };
 
   if (isLoadingAuth) {
+    // O <Layout> foi removido daqui
     return (
-      <Layout>
-        <div className="flex justify-center items-center h-screen">
-          <Loader2 className="h-8 w-8 animate-spin" />
-        </div>
-      </Layout>
+      <div className="flex justify-center items-center h-screen">
+        <Loader2 className="h-8 w-8 animate-spin text-fifa-blue" />
+      </div>
     );
   }
 
+  // O <Layout> foi removido daqui
   return (
-    <Layout>
-      <div className="max-w-md mx-auto py-12">
-        <Card className="shadow-lg">
-          <CardHeader className="text-center">
-            <CardTitle className="text-2xl">Área Restrita</CardTitle>
-            <CardDescription>Acesso exclusivo para administradores.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleSubmit} className="grid gap-4">
-                <div className="grid gap-2">
-                  <Label htmlFor="email">Email de Admin</Label>
-                  <Input id="email" name="email" type="email" value={formData.email} onChange={handleChange} required />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="password">Senha</Label>
-                  <Input id="password" name="password" type="password" value={formData.password} onChange={handleChange} required />
-                </div>
-                <Button type="submit" className="w-full" disabled={isSubmitting}>
-                  {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Acessar Painel"}
-                </Button>
-            </form>
-          </CardContent>
-        </Card>
-      </div>
-    </Layout>
+    <div className="max-w-md mx-auto py-12">
+      <Card className="shadow-lg">
+        <CardHeader className="text-center">
+          <CardTitle className="text-2xl">Área Restrita</CardTitle>
+          <CardDescription>Acesso exclusivo para administradores.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSubmit} className="grid gap-4">
+              <div className="grid gap-2">
+                <Label htmlFor="email">Email de Admin</Label>
+                <Input id="email" name="email" type="email" value={formData.email} onChange={handleChange} required />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="password">Senha</Label>
+                <Input id="password" name="password" type="password" value={formData.password} onChange={handleChange} required />
+              </div>
+              <Button type="submit" className="w-full" disabled={isSubmitting}>
+                {isSubmitting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Acessando...</> : "Acessar Painel"}
+              </Button>
+          </form>
+        </CardContent>
+      </Card>
+    </div>
   );
 };
 

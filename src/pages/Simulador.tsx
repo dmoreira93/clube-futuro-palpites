@@ -22,18 +22,10 @@ const Simulador = () => {
       toast.error('Você precisa estar logado para simular seus palpites.');
       return;
     }
-
     setIsLoading(true);
     setSimulatedResults(null);
-
     try {
-      // 1. Buscar todos os dados necessários em paralelo
-      const [
-        { data: predictionsQueryData, error: pError },
-        { data: teamsData, error: tError },
-        { data: groupsData, error: gError }
-      ] = await Promise.all([
-        // Consulta corrigida para buscar os IDs dos times através da tabela 'matches'
+      const [{ data: predictionsQueryData, error: pError }, { data: teamsData, error: tError }, { data: groupsData, error: gError }] = await Promise.all([
         supabase.from('match_predictions')
           .select('home_score, away_score, matches!inner(home_team_id, away_team_id)')
           .eq('user_id', user.id),
@@ -50,7 +42,6 @@ const Simulador = () => {
         return;
       }
 
-      // 2. Formatar os dados dos palpites para o formato que a nossa função de cálculo espera
       const formattedPredictions = predictionsQueryData.map(p => ({
         home_score: p.home_score,
         away_score: p.away_score,
@@ -58,7 +49,6 @@ const Simulador = () => {
         away_team_id: p.matches.away_team_id,
       }));
       
-      // 3. Chamar a lógica de cálculo com os dados já formatados
       const results = calculateGroupStandings(formattedPredictions, teamsData || [], groupsData || []);
       setSimulatedResults(results);
       
@@ -101,6 +91,7 @@ const Simulador = () => {
     }
   };
 
+  // A tag <Layout> foi removida daqui
   return (
     <div className="container mx-auto p-4 md:p-6 lg:p-8 space-y-8">
       <Card className="text-center">
