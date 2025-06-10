@@ -58,7 +58,7 @@ const Palpites = () => {
     const [dailyPredictions, setDailyPredictions] = useState<{ [matchId: string]: LocalPrediction }>({});
     const [groupPredictions, setGroupPredictions] = useState<{ [groupId: string]: GroupPredictionState }>({});
     const [finalPrediction, setFinalPrediction] = useState<FinalPredictionState>({
-        champion_id: null, vice_champion_id: null, third_place_id: null, fourth_place_id: null,
+        champion_id: null, runner_up_id: null, third_place_id: null, fourth_place_id: null,
         final_home_score: null, final_away_score: null,
     });
 
@@ -175,7 +175,7 @@ const Palpites = () => {
         if (new Set(finalTeams).size !== 4) { toast({ title: "Erro", description: "Os times do 1º, 2º, 3º e 4º lugar devem ser diferentes.", variant: "destructive"}); return; }
         setSubmittingMatchId('final');
         try {
-            const payload = { user_id: user.id, champion_id: finalPrediction.champion_id, vice_champion_id: finalPrediction.vice_champion_id, third_place_id: finalPrediction.third_place_id, fourth_place_id: finalPrediction.fourth_place_id, final_home_score: finalPrediction.final_home_score, final_away_score: finalPrediction.final_away_score };
+            const payload = { user_id: user.id, champion_id: finalPrediction.champion_id, runner_up_id: finalPrediction.runner_up_id, third_place_id: finalPrediction.third_place_id, fourth_place_id: finalPrediction.fourth_place_id, final_home_score: finalPrediction.final_home_score, final_away_score: finalPrediction.final_away_score };
             const { data, error } = await supabase.from('final_predictions').upsert(payload, { onConflict: 'user_id' }).select().single();
             if (error) throw error;
             if (data) {
@@ -338,7 +338,7 @@ const Palpites = () => {
                             <CardContent className="space-y-4">
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div><Label>Campeão</Label><Select onValueChange={v => handleFinalPredictionChange('champion_id', v)} value={finalPrediction.champion_id || ''} disabled={isGlobalCutoffReached}><SelectTrigger><SelectValue placeholder="Selecione..."/></SelectTrigger><SelectContent>{teams.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}</SelectContent></Select></div>
-                                    <div><Label>Vice-Campeão</Label><Select onValueChange={v => handleFinalPredictionChange('vice_champion_id', v)} value={finalPrediction.vice_champion_id || ''} disabled={isGlobalCutoffReached}><SelectTrigger><SelectValue placeholder="Selecione..."/></SelectTrigger><SelectContent>{teams.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}</SelectContent></Select></div>
+                                    <div><Label>Vice-Campeão</Label><Select onValueChange={v => handleFinalPredictionChange('runner_up_id', v)} value={finalPrediction.runner_up_id || ''} disabled={isGlobalCutoffReached}><SelectTrigger><SelectValue placeholder="Selecione..."/></SelectTrigger><SelectContent>{teams.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}</SelectContent></Select></div>
                                     <div><Label>3º Lugar</Label><Select onValueChange={v => handleFinalPredictionChange('third_place_id', v)} value={finalPrediction.third_place_id || ''} disabled={isGlobalCutoffReached}><SelectTrigger><SelectValue placeholder="Selecione..."/></SelectTrigger><SelectContent>{teams.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}</SelectContent></Select></div>
                                     <div><Label>4º Lugar</Label><Select onValueChange={v => handleFinalPredictionChange('fourth_place_id', v)} value={finalPrediction.fourth_place_id || ''} disabled={isGlobalCutoffReached}><SelectTrigger><SelectValue placeholder="Selecione..."/></SelectTrigger><SelectContent>{teams.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}</SelectContent></Select></div>
                                 </div>
