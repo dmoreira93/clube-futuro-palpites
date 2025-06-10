@@ -3,7 +3,8 @@ import React from 'react';
 import Navbar from './Navbar';
 import Footer from './Footer';
 import { Toaster } from "@/components/ui/toaster"
-import { BottomNavbar } from './BottomNavbar';
+// Linha correta
+import BottomNavbar from './BottomNavbar';
 
 interface LayoutProps {
   children: React.ReactNode;
