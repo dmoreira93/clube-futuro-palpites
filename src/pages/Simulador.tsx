@@ -9,7 +9,7 @@ import { Loader2, PlayCircle, Save } from 'lucide-react';
 import { toast } from 'sonner';
 import { calculateGroupStandings, SimulatedGroup } from '@/lib/simulationEngine';
 import SimulatedGroupTables from '@/components/simulation/SimulatedGroupTables';
-import KnockoutBracket from '@/components/simulation/KnockoutBracket'; // <-- Nova importação
+import KnockoutBracket from '@/components/simulation/KnockoutBracket';
 
 const Simulador = () => {
   const { user } = useAuth();
@@ -22,23 +22,50 @@ const Simulador = () => {
       toast.error('Você precisa estar logado para simular seus palpites.');
       return;
     }
+
     setIsLoading(true);
     setSimulatedResults(null);
+
     try {
-      const [{ data: predictionsData, error: pError }, { data: teamsData, error: tError }, { data: groupsData, error: gError }] = await Promise.all([
-        supabase.from('match_predictions').select('*, home_team_id:matches(home_team_id), away_team_id:matches(away_team_id)').eq('user_id', user.id),
+      // 1. Buscar todos os dados necessários em paralelo
+      const [
+        { data: predictionsQueryData, error: pError },
+        { data: teamsData, error: tError },
+        { data: groupsData, error: gError }
+      ] = await Promise.all([
+        // Consulta corrigida para buscar os IDs dos times através da tabela 'matches'
+        supabase.from('match_predictions')
+          .select('home_score, away_score, matches!inner(home_team_id, away_team_id)')
+          .eq('user_id', user.id),
         supabase.from('teams').select('*'),
         supabase.from('groups').select('*')
       ]);
-      if (pError || tError || gError) throw pError || tError || gError;
-      if (!predictionsData || predictionsData.length === 0) {
+
+      if (pError || tError || gError) {
+        throw pError || tError || gError;
+      }
+      
+      if (!predictionsQueryData || predictionsQueryData.length === 0) {
         toast.info("Você ainda não fez palpites para os jogos da fase de grupos.");
         return;
       }
-      const results = calculateGroupStandings(predictionsData, teamsData, groupsData);
+
+      // 2. Formatar os dados dos palpites para o formato que a nossa função de cálculo espera
+      const formattedPredictions = predictionsQueryData.map(p => ({
+        home_score: p.home_score,
+        away_score: p.away_score,
+        home_team_id: p.matches.home_team_id,
+        away_team_id: p.matches.away_team_id,
+      }));
+      
+      // 3. Chamar a lógica de cálculo com os dados já formatados
+      const results = calculateGroupStandings(formattedPredictions, teamsData || [], groupsData || []);
       setSimulatedResults(results);
+      
       toast.success("Simulação concluída!");
+
     } catch (error: any) {
+      console.error("Erro na simulação:", error);
       toast.error("Ocorreu um erro ao realizar a simulação: " + error.message);
     } finally {
       setIsLoading(false);
@@ -56,7 +83,6 @@ const Simulador = () => {
         predicted_second_team_id: group.standings[1].teamId,
       }));
       
-      // Busca os palpites de grupo existentes para usar o 'id' no upsert e evitar duplicatas
       const { data: existingGroupPredictions } = await supabase.from('group_predictions').select('id, group_id').eq('user_id', user.id);
       
       const finalPayload = upsertPayload.map(payload => {
