@@ -82,37 +82,12 @@ const Simulador = () => {
       setIsLoading(false);
     }
   };
-  
-  const handleAdoptGroupPrediction = async (groupId: string, teamId: string, position: 1 | 2) => {
-    if (!user) return toast.error('Você precisa estar logado.');
-    const toastId = toast.loading('Salvando palpite do grupo...');
-    
-    const fieldToUpdate = position === 1 ? 'predicted_first_team_id' : 'predicted_second_team_id';
-    
-    try {
-      const { error } = await supabase
-        .from('group_predictions')
-        .upsert({
-          user_id: user.id,
-          group_id: groupId,
-          [fieldToUpdate]: teamId,
-        }, { onConflict: 'user_id, group_id' });
 
-      if (error) throw error;
-      toast.success(`Palpite para ${position}º do grupo salvo!`, { id: toastId });
-    } catch (error: any) {
-      toast.error(`Erro ao salvar: ${error.message}`, { id: toastId });
-    }
-  };
-  
   const handleKnockoutSelection = useCallback((matchId: string, teamId: string | null) => {
     setKnockoutSelections(prev => {
       const newState = { ...prev };
-      if (teamId) {
-        newState[matchId] = teamId;
-      } else {
-        delete newState[matchId];
-      }
+      if (teamId) newState[matchId] = teamId;
+      else delete newState[matchId];
       
       const cascadeClearMap: { [key: string]: string[] } = {
         'qf-1': ['sf-1', 'final', 'third_place'], 'qf-2': ['sf-1', 'final', 'third_place'],
@@ -128,6 +103,38 @@ const Simulador = () => {
     });
   }, []);
 
+  // --- FUNÇÕES DE "ADOTAR" CORRIGIDAS ---
+
+  const handleAdoptGroupPrediction = async (groupId: string, teamId: string, position: 1 | 2) => {
+    if (!user) return toast.error('Você precisa estar logado.');
+    const toastId = toast.loading('Salvando palpite do grupo...');
+    
+    const fieldToUpdate = position === 1 ? 'predicted_first_team_id' : 'predicted_second_team_id';
+    
+    try {
+      const { data: existing } = await supabase
+        .from('group_predictions')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('group_id', groupId)
+        .maybeSingle();
+
+      const payload = {
+        ...(existing || {}),
+        user_id: user.id,
+        group_id: groupId,
+        [fieldToUpdate]: teamId,
+      };
+
+      const { error } = await supabase.from('group_predictions').upsert(payload);
+
+      if (error) throw error;
+      toast.success(`Palpite para ${position}º do grupo salvo!`, { id: toastId });
+    } catch (error: any) {
+      toast.error(`Erro ao salvar: ${error.message}`, { id: toastId });
+    }
+  };
+  
   const handleAdoptFinalPrediction = async (role: 'champion' | 'runner_up' | 'third_place' | 'fourth_place', teamId: string | undefined) => {
     if (!user) return toast.error('Você precisa estar logado.');
     if (!teamId) return toast.error('Time inválido para salvar.');
@@ -141,20 +148,31 @@ const Simulador = () => {
     const column = columnMap[role];
 
     try {
-      const { error } = await supabase
+      const { data: existing } = await supabase
         .from('final_predictions')
-        .upsert({ user_id: user.id, [column]: teamId }, { onConflict: 'user_id' });
+        .select('*')
+        .eq('user_id', user.id)
+        .maybeSingle();
 
+      const payload = {
+        ...(existing || {}),
+        user_id: user.id,
+        [column]: teamId,
+      };
+
+      const { error } = await supabase.from('final_predictions').upsert(payload);
+      
       if (error) throw error;
       toast.success(`Palpite de ${role.replace('_', ' ')} salvo!`, { id: toastId });
     } catch (error: any) {
       toast.error(`Erro ao salvar palpite final: ${error.message}`, { id: toastId });
     }
   };
-
+  
   return (
     <div className="container mx-auto p-4 md:p-6 lg:p-8 space-y-8">
-        <Card className="text-center print-hidden">
+      {/* ... (o resto do JSX permanece igual) ... */}
+       <Card className="text-center print-hidden">
             <CardHeader>
                 <CardTitle className="text-2xl md:text-3xl font-bold text-fifa-blue">Simulador de Bolão</CardTitle>
                 <CardDescription>
@@ -183,7 +201,7 @@ const Simulador = () => {
                         <SimulatedGroupTables simulatedGroups={simulatedResults} onAdoptPrediction={handleAdoptGroupPrediction} />
                     </div>
                     <div id="simulation-knockout-bracket" className="mt-8">
-                        <h2 className="text-2xl font-bold text-center mb-4 hidden print:block">Chaveamento Mata-Mata</h2>
+                        <h2 className="text-2xl font-bold text-center mt-8 mb-4 hidden print:block">Chaveamento Mata-Mata</h2>
                         <KnockoutBracket
                             simulatedGroups={simulatedResults}
                             knockoutSelections={knockoutSelections}
