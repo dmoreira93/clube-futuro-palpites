@@ -6,7 +6,6 @@ import { Button } from '@/components/ui/button';
 import { SimulatedGroup } from '@/lib/simulationEngine';
 import { Save } from 'lucide-react';
 
-// A interface de Props foi atualizada para receber a função de callback
 interface Props {
   simulatedGroups: SimulatedGroup[];
   onAdoptPrediction: (groupId: string, teamId: string, position: 1 | 2) => void;
@@ -14,34 +13,32 @@ interface Props {
 
 const SimulatedGroupTables = ({ simulatedGroups, onAdoptPrediction }: Props) => {
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 print:grid-cols-2">
       {simulatedGroups.map((group) => (
-        <Card key={group.groupId}>
-          <CardHeader>
-            <CardTitle className="text-xl">Grupo {group.groupName}</CardTitle>
+        <Card key={group.groupId} className="print:shadow-none print:border">
+          <CardHeader className="print:p-2">
+            <CardTitle className="text-xl print:text-base">Grupo {group.groupName}</CardTitle>
           </CardHeader>
-          <CardContent>
-            <Table>
+          <CardContent className="print:p-1">
+            <Table className="print:text-xs">
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-1/2">Time</TableHead>
-                  <TableHead>P</TableHead>
-                  <TableHead>SG</TableHead>
-                  {/* Adicionamos uma coluna para as ações */}
-                  <TableHead className="text-right">Ação</TableHead>
+                  <TableHead className="w-1/2 print:p-1">Time</TableHead>
+                  <TableHead className="print:p-1">P</TableHead>
+                  <TableHead className="print:p-1">SG</TableHead>
+                  <TableHead className="text-right print:hidden">Ação</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {group.standings.map((team, index) => (
                   <TableRow key={team.teamId} className={index < 2 ? 'bg-green-100 dark:bg-green-900/30' : ''}>
-                    <TableCell className="font-medium">
+                    <TableCell className="font-medium print:p-1">
                       <span className="mr-2">{index + 1}º</span>
                       {team.teamName}
                     </TableCell>
-                    <TableCell className="font-bold">{team.points}</TableCell>
-                    <TableCell>{team.goalDifference}</TableCell>
-                    <TableCell className="text-right">
-                      {/* Renderiza o botão apenas para os dois primeiros colocados */}
+                    <TableCell className="font-bold print:p-1">{team.points}</TableCell>
+                    <TableCell className="print:p-1">{team.goalDifference}</TableCell>
+                    <TableCell className="text-right print:hidden">
                       {index < 2 && (
                         <Button
                           size="sm"

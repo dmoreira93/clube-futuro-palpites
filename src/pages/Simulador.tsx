@@ -20,7 +20,6 @@ interface Team {
 const Simulador = () => {
   const { user } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
-  const [isAdopting, setIsAdopting] = useState(false);
   const [simulatedResults, setSimulatedResults] = useState<SimulatedGroup[] | null>(null);
   const [allTeams, setAllTeams] = useState<SimulatedTeamStats[]>([]);
   const [knockoutSelections, setKnockoutSelections] = useState<{ [matchId: string]: string }>({});
@@ -86,33 +85,23 @@ const Simulador = () => {
   
   const handleAdoptGroupPrediction = async (groupId: string, teamId: string, position: 1 | 2) => {
     if (!user) return toast.error('Você precisa estar logado.');
-    
     const toastId = toast.loading('Salvando palpite do grupo...');
-    setIsAdopting(true);
     
     const fieldToUpdate = position === 1 ? 'predicted_first_team_id' : 'predicted_second_team_id';
     
     try {
-      const { data: existing } = await supabase.from('group_predictions').select('id, predicted_first_team_id, predicted_second_team_id').eq('user_id', user.id).eq('group_id', groupId).maybeSingle();
-      
-      const payload: any = { user_id: user.id, group_id: groupId };
-      
-      if (existing) {
-        payload.id = existing.id;
-        payload.predicted_first_team_id = position === 1 ? teamId : existing.predicted_first_team_id;
-        payload.predicted_second_team_id = position === 2 ? teamId : existing.predicted_second_team_id;
-      } else {
-        payload[fieldToUpdate] = teamId;
-      }
+      const { error } = await supabase
+        .from('group_predictions')
+        .upsert({
+          user_id: user.id,
+          group_id: groupId,
+          [fieldToUpdate]: teamId,
+        }, { onConflict: 'user_id, group_id' });
 
-      const { error } = await supabase.from('group_predictions').upsert(payload);
       if (error) throw error;
-      
       toast.success(`Palpite para ${position}º do grupo salvo!`, { id: toastId });
     } catch (error: any) {
       toast.error(`Erro ao salvar: ${error.message}`, { id: toastId });
-    } finally {
-      setIsAdopting(false);
     }
   };
   
@@ -144,32 +133,22 @@ const Simulador = () => {
     if (!teamId) return toast.error('Time inválido para salvar.');
 
     const toastId = toast.loading(`Salvando palpite de ${role.replace('_', ' ')}...`);
-    setIsAdopting(true);
     
     const columnMap = {
-      champion: 'champion_id',
-      runner_up: 'runner_up_id',
-      third_place: 'third_place_id',
-      fourth_place: 'fourth_place_id',
+      champion: 'champion_id', runner_up: 'runner_up_id',
+      third_place: 'third_place_id', fourth_place: 'fourth_place_id',
     };
     const column = columnMap[role];
 
     try {
-      const { data: existing } = await supabase.from('final_predictions').select('id').eq('user_id', user.id).maybeSingle();
-      
-      const payload: any = { user_id: user.id, [column]: teamId };
-      if (existing) {
-        payload.id = existing.id;
-      }
+      const { error } = await supabase
+        .from('final_predictions')
+        .upsert({ user_id: user.id, [column]: teamId }, { onConflict: 'user_id' });
 
-      const { error } = await supabase.from('final_predictions').upsert(payload);
       if (error) throw error;
-      
       toast.success(`Palpite de ${role.replace('_', ' ')} salvo!`, { id: toastId });
     } catch (error: any) {
       toast.error(`Erro ao salvar palpite final: ${error.message}`, { id: toastId });
-    } finally {
-      setIsAdopting(false);
     }
   };
 
@@ -191,20 +170,20 @@ const Simulador = () => {
         </Card>
         
         {simulatedResults && (
-            <>
+            <div className="space-y-8">
                 <div className="text-center print-hidden">
                     <Button variant="outline" onClick={() => window.print()}>
                         <Printer className="mr-2 h-4 w-4" /> Imprimir Simulação
                     </Button>
                 </div>
 
-                <div id="printable-simulation" className="space-y-8">
+                <div id="printable-simulation">
                     <div id="simulation-group-tables">
                         <h2 className="text-2xl font-bold text-center mb-4 hidden print:block">Classificação da Fase de Grupos</h2>
                         <SimulatedGroupTables simulatedGroups={simulatedResults} onAdoptPrediction={handleAdoptGroupPrediction} />
                     </div>
-                    <div id="simulation-knockout-bracket">
-                        <h2 className="text-2xl font-bold text-center mt-8 mb-4 hidden print:block">Chaveamento Mata-Mata</h2>
+                    <div id="simulation-knockout-bracket" className="mt-8">
+                        <h2 className="text-2xl font-bold text-center mb-4 hidden print:block">Chaveamento Mata-Mata</h2>
                         <KnockoutBracket
                             simulatedGroups={simulatedResults}
                             knockoutSelections={knockoutSelections}
@@ -214,7 +193,7 @@ const Simulador = () => {
                         />
                     </div>
                 </div>
-            </>
+            </div>
         )}
     </div>
   );

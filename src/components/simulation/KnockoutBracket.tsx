@@ -35,10 +35,10 @@ interface StaticMatchupProps {
 const Matchup: React.FC<MatchupProps> = ({ title, team1, team2, selectedValue, onSelect }) => {
   const canSelect = team1 && team2;
   return (
-    <div className="border p-2 rounded-md bg-gray-50 dark:bg-gray-800/50 text-sm h-[68px] flex flex-col justify-center">
-      <p className="font-bold text-gray-600 dark:text-gray-300 mb-1">{title}</p>
+    <div className="border p-2 rounded-md bg-gray-50 dark:bg-gray-800/50 text-sm h-[68px] flex flex-col justify-center print:h-auto print:text-[10px] print:p-1">
+      <p className="font-bold text-gray-600 dark:text-gray-300 mb-1 print:text-[11px] print:mb-0.5">{title}</p>
       <Select onValueChange={onSelect} value={selectedValue || ""} disabled={!canSelect}>
-        <SelectTrigger className="w-full h-8 text-xs"><SelectValue placeholder="Aguardando..." /></SelectTrigger>
+        <SelectTrigger className="w-full h-8 text-xs print:h-6 print:text-[10px]"><SelectValue placeholder="Aguardando..." /></SelectTrigger>
         {canSelect && (
           <SelectContent>
             <SelectItem value={team1.teamId}>{team1.teamName}</SelectItem>
@@ -51,15 +51,14 @@ const Matchup: React.FC<MatchupProps> = ({ title, team1, team2, selectedValue, o
 };
 
 const StaticMatchup: React.FC<StaticMatchupProps> = ({ title, team1, team2, winnerId }) => (
-    <div className="border p-2 rounded-md bg-gray-100 dark:bg-gray-800 text-sm h-[68px] flex flex-col justify-center">
-      <p className="font-bold text-gray-600 dark:text-gray-300 mb-1">{title}</p>
+    <div className="border p-2 rounded-md bg-gray-100 dark:bg-gray-800 text-sm h-[68px] flex flex-col justify-center print:h-auto print:text-[10px] print:p-1">
+      <p className="font-bold text-gray-600 dark:text-gray-300 mb-1 print:text-[11px] print:mb-0.5">{title}</p>
       <div className="space-y-1">
         <p className={winnerId === team1?.teamId ? 'font-bold text-green-600' : 'text-gray-500'}>{team1?.teamName || 'A definir'}</p>
         <p className={winnerId === team2?.teamId ? 'font-bold text-green-600' : 'text-gray-500'}>{team2?.teamName || 'A definir'}</p>
       </div>
     </div>
 );
-
 
 // --- Componente Principal ---
 const KnockoutBracket: React.FC<KnockoutBracketProps> = ({
@@ -78,14 +77,10 @@ const KnockoutBracket: React.FC<KnockoutBracketProps> = ({
   };
 
   const r16 = React.useMemo(() => [
-    { id: 'r16-1', title: 'Oitavas 1', team1: getTeam('A', 1), team2: getTeam('B', 2) },
-    { id: 'r16-2', title: 'Oitavas 2', team1: getTeam('C', 1), team2: getTeam('D', 2) },
-    { id: 'r16-3', title: 'Oitavas 3', team1: getTeam('E', 1), team2: getTeam('F', 2) },
-    { id: 'r16-4', title: 'Oitavas 4', team1: getTeam('G', 1), team2: getTeam('H', 2) },
-    { id: 'r16-5', title: 'Oitavas 5', team1: getTeam('B', 1), team2: getTeam('A', 2) },
-    { id: 'r16-6', title: 'Oitavas 6', team1: getTeam('D', 1), team2: getTeam('C', 2) },
-    { id: 'r16-7', title: 'Oitavas 7', team1: getTeam('F', 1), team2: getTeam('E', 2) },
-    { id: 'r16-8', title: 'Oitavas 8', team1: getTeam('H', 1), team2: getTeam('G', 2) },
+    { id: 'r16-1', title: 'Oitavas 1', team1: getTeam('A', 1), team2: getTeam('B', 2) }, { id: 'r16-2', title: 'Oitavas 2', team1: getTeam('C', 1), team2: getTeam('D', 2) },
+    { id: 'r16-3', title: 'Oitavas 3', team1: getTeam('E', 1), team2: getTeam('F', 2) }, { id: 'r16-4', title: 'Oitavas 4', team1: getTeam('G', 1), team2: getTeam('H', 2) },
+    { id: 'r16-5', title: 'Oitavas 5', team1: getTeam('B', 1), team2: getTeam('A', 2) }, { id: 'r16-6', title: 'Oitavas 6', team1: getTeam('D', 1), team2: getTeam('C', 2) },
+    { id: 'r16-7', title: 'Oitavas 7', team1: getTeam('F', 1), team2: getTeam('E', 2) }, { id: 'r16-8', title: 'Oitavas 8', team1: getTeam('H', 1), team2: getTeam('G', 2) },
   ], [simulatedGroups]);
 
   const qf_teams = React.useMemo(() => ({
@@ -113,26 +108,26 @@ const KnockoutBracket: React.FC<KnockoutBracketProps> = ({
   const fourthPlace = getLoser(third_place_teams[0], third_place_teams[1], knockoutSelections['third_place']);
 
   return (
-    <Card id="knockout-bracket-card">
+    <Card id="knockout-bracket-card" className="print:border-none print:shadow-none">
       <CardHeader className="flex flex-row items-center justify-between print-hidden">
         <CardTitle className="text-2xl md:text-3xl font-bold text-fifa-blue">Chaveamento do Mata-Mata</CardTitle>
       </CardHeader>
-      <CardContent className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <div className="space-y-4">
-          <h3 className="font-bold text-lg text-center">Oitavas de Final</h3>
+      <CardContent className="grid grid-cols-1 md:grid-cols-4 gap-4 print:gap-2">
+        <div className="space-y-4 print:space-y-2">
+          <h3 className="font-bold text-lg text-center print:text-sm">Oitavas</h3>
           {r16.map(match => <StaticMatchup key={match.id} {...match} winnerId={knockoutSelections[match.id]} />)}
         </div>
-        <div className="space-y-[6.5rem]">
-          <h3 className="font-bold text-lg text-center">Quartas de Final</h3>
+        <div className="space-y-[6.5rem] print:space-y-[5.2rem] flex flex-col justify-around">
+          <h3 className="font-bold text-lg text-center print:text-sm">Quartas</h3>
           {Object.entries(qf_teams).map(([id, teams]) => <Matchup key={id} matchId={id} title={`Quartas ${id.slice(-1)}`} team1={teams[0]} team2={teams[1]} selectedValue={knockoutSelections[id]} onSelect={(val) => onSelectionChange(id, val)} />)}
         </div>
-        <div className="space-y-[15.5rem]">
-           <h3 className="font-bold text-lg text-center">Semifinais</h3>
+        <div className="space-y-[15.5rem] print:space-y-[13rem] flex flex-col justify-around">
+           <h3 className="font-bold text-lg text-center print:text-sm">Semifinais</h3>
            {Object.entries(sf_teams).map(([id, teams]) => <Matchup key={id} matchId={id} title={`Semi ${id.slice(-1)}`} team1={teams[0]} team2={teams[1]} selectedValue={knockoutSelections[id]} onSelect={(val) => onSelectionChange(id, val)} />)}
         </div>
-        <div className="space-y-8">
-          <h3 className="font-bold text-lg text-center">Finais</h3>
-          <div className="md:mt-[18rem]">
+        <div className="flex flex-col justify-around">
+          <h3 className="font-bold text-lg text-center print:text-sm">Finais</h3>
+          <div>
             <Matchup matchId='final' title='Final' team1={final_teams[0]} team2={final_teams[1]} selectedValue={knockoutSelections['final']} onSelect={(val) => onSelectionChange('final', val)} />
             {champion && runnerUp && (
               <div className="mt-2 space-y-1 text-center print-hidden">
@@ -141,7 +136,7 @@ const KnockoutBracket: React.FC<KnockoutBracketProps> = ({
               </div>
             )}
           </div>
-          <div className="md:mt-[10rem]">
+          <div>
             <Matchup matchId='third_place' title='Disputa 3º Lugar' team1={third_place_teams[0]} team2={third_place_teams[1]} selectedValue={knockoutSelections['third_place']} onSelect={(val) => onSelectionChange('third_place', val)} />
              {thirdPlace && fourthPlace && (
                 <div className="mt-2 space-y-1 text-center print-hidden">
