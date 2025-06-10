@@ -10,7 +10,7 @@ interface Props {
   simulatedGroups: SimulatedGroup[];
   knockoutSelections: { [matchId: string]: string };
   onSelectionChange: (matchId: string, teamId: string) => void;
-  onAdoptFinalPrediction: (role: 'champion' | 'runner_up' | 'third_place' | 'fourth_place', teamId: string) => void;
+  onAdoptFinalPrediction: (role: 'champion' | 'runner_up' | 'third_place', teamId: string | undefined) => void;
   allTeams: SimulatedTeamStats[];
 }
 
@@ -30,6 +30,7 @@ const KnockoutBracket = ({
     return allTeams.find(t => t.teamId === teamId);
   };
 
+  // Estrutura do Chaveamento
   const r16 = [
     { id: 'r16-1', title: 'Oitavas 1', team1: getTeam('A', 1), team2: getTeam('B', 2) },
     { id: 'r16-2', title: 'Oitavas 2', team1: getTeam('C', 1), team2: getTeam('D', 2) },
@@ -41,39 +42,60 @@ const KnockoutBracket = ({
     { id: 'r16-8', title: 'Oitavas 8', team1: getTeam('H', 1), team2: getTeam('G', 2) },
   ];
 
-  const qf = [
-    { id: 'qf-1', title: 'Quartas 1', team1: findTeamById(knockoutSelections['r16-1']), team2: findTeamById(knockoutSelections['r16-2']) },
-    { id: 'qf-2', title: 'Quartas 2', team1: findTeamById(knockoutSelections['r16-3']), team2: findTeamById(knockoutSelections['r16-4']) },
-    { id: 'qf-3', title: 'Quartas 3', team1: findTeamById(knockoutSelections['r16-5']), team2: findTeamById(knockoutSelections['r16-6']) },
-    { id: 'qf-4', title: 'Quartas 4', team1: findTeamById(knockoutSelections['r16-7']), team2: findTeamById(knockoutSelections['r16-8']) },
-  ];
+  const qf_sf_final_structure = {
+    qf: [
+      { id: 'qf-1', title: 'Quartas 1', dependsOn: ['r16-1', 'r16-2'] },
+      { id: 'qf-2', title: 'Quartas 2', dependsOn: ['r16-3', 'r16-4'] },
+      { id: 'qf-3', title: 'Quartas 3', dependsOn: ['r16-5', 'r16-6'] },
+      { id: 'qf-4', title: 'Quartas 4', dependsOn: ['r16-7', 'r16-8'] },
+    ],
+    sf: [
+      { id: 'sf-1', title: 'Semi 1', dependsOn: ['qf-1', 'qf-2'] },
+      { id: 'sf-2', title: 'Semi 2', dependsOn: ['qf-3', 'qf-4'] },
+    ],
+    final: { id: 'final', title: 'Final', dependsOn: ['sf-1', 'sf-2'] },
+    third_place: { id: 'third_place', title: 'Disputa 3º Lugar', dependsOn: ['sf-1', 'sf-2'] },
+  };
 
-  const sf = [
-    { id: 'sf-1', title: 'Semi 1', team1: findTeamById(knockoutSelections['qf-1']), team2: findTeamById(knockoutSelections['qf-2']) },
-    { id: 'sf-2', title: 'Semi 2', team1: findTeamById(knockoutSelections['qf-3']), team2: findTeamById(knockoutSelections['qf-4']) },
-  ];
-  
-  const finalWinner = findTeamById(knockoutSelections['sf-1']);
-  const finalLoser = findTeamById(knockoutSelections['sf-2']);
-
-  // Componente para confrontos com Dropdown (Quartas em diante)
-  const InteractiveMatchup = ({ matchId, team1, team2, title }: { matchId: string, team1?: SimulatedTeamStats, team2?: SimulatedTeamStats, title: string }) => {
+  // Componente para confrontos com Dropdown
+  const InteractiveMatchup = ({ matchId, title, dependsOn }: { matchId: string, title: string, dependsOn: [string, string] }) => {
+    const team1 = findTeamById(knockoutSelections[dependsOn[0]]);
+    const team2 = findTeamById(knockoutSelections[dependsOn[1]]);
     const canSelect = team1 && team2;
+
+    const getLoser = (matchDependsOn: [string, string], winnerId: string | undefined): SimulatedTeamStats | undefined => {
+      const t1 = findTeamById(knockoutSelections[matchDependsOn[0]]);
+      const t2 = findTeamById(knockoutSelections[matchDependsOn[1]]);
+      if (!t1 || !t2 || !winnerId) return undefined;
+      return winnerId === t1.teamId ? t2 : t1;
+    }
+    
+    // Lógica específica para a disputa de 3º lugar
+    const isThirdPlaceMatch = matchId === 'third_place';
+    const sf1_winner = knockoutSelections['sf-1'];
+    const sf2_winner = knockoutSelections['sf-2'];
+
+    const thirdPlaceTeam1 = isThirdPlaceMatch ? getLoser(['qf-1', 'qf-2'], sf1_winner) : team1;
+    const thirdPlaceTeam2 = isThirdPlaceMatch ? getLoser(['qf-3', 'qf-4'], sf2_winner) : team2;
+
+    const finalTeam1 = isThirdPlaceMatch ? thirdPlaceTeam1 : team1;
+    const finalTeam2 = isThirdPlaceMatch ? thirdPlaceTeam2 : team2;
+
     return (
       <div className="border p-2 rounded-md bg-gray-50 dark:bg-gray-800/50 text-sm h-[68px] flex flex-col justify-center">
         <p className="font-bold text-gray-600 dark:text-gray-300 mb-1">{title}</p>
         <Select
           onValueChange={(value) => onSelectionChange(matchId, value)}
           value={knockoutSelections[matchId] || ""}
-          disabled={!canSelect}
+          disabled={!finalTeam1 || !finalTeam2}
         >
           <SelectTrigger className="w-full h-8 text-xs">
             <SelectValue placeholder="Aguardando..." />
           </SelectTrigger>
-          {canSelect && (
+          {(finalTeam1 && finalTeam2) && (
             <SelectContent>
-              <SelectItem value={team1.teamId}>{team1.teamName}</SelectItem>
-              <SelectItem value={team2.teamId}>{team2.teamName}</SelectItem>
+              <SelectItem value={finalTeam1.teamId}>{finalTeam1.teamName}</SelectItem>
+              <SelectItem value={finalTeam2.teamId}>{finalTeam2.teamName}</SelectItem>
             </SelectContent>
           )}
         </Select>
@@ -83,55 +105,57 @@ const KnockoutBracket = ({
 
   // Componente para confrontos estáticos (Oitavas)
   const StaticMatchup = ({ team1, team2, title, winnerId }: { team1?: SimulatedTeamStats, team2?: SimulatedTeamStats, title: string, winnerId?: string }) => (
-    <div className="border p-2 rounded-md mb-2 bg-gray-50 dark:bg-gray-800/50 text-sm h-[68px] flex flex-col justify-center">
+    <div className="border p-2 rounded-md bg-gray-100 dark:bg-gray-800 text-sm h-[68px] flex flex-col justify-center">
       <p className="font-bold text-gray-600 dark:text-gray-300 mb-1">{title}</p>
       <div className="space-y-1">
-        <p className={winnerId === team1?.teamId ? 'font-bold text-green-600' : ''}>{team1?.teamName || 'A definir'}</p>
-        <p className={winnerId === team2?.teamId ? 'font-bold text-green-600' : ''}>{team2?.teamName || 'A definir'}</p>
+        <p className={winnerId === team1?.teamId ? 'font-bold text-green-600' : 'text-gray-500'}>{team1?.teamName || 'A definir'}</p>
+        <p className={winnerId === team2?.teamId ? 'font-bold text-green-600' : 'text-gray-500'}>{team2?.teamName || 'A definir'}</p>
       </div>
     </div>
   );
 
+  const champion = findTeamById(knockoutSelections['final']);
+  const runnerUp = getLoser(qf_sf_final_structure.final.dependsOn, knockoutSelections['final']);
+  const thirdPlace = findTeamById(knockoutSelections['third_place']);
+
   return (
     <Card id="printable-bracket">
-      <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle className="text-2xl md:text-3xl font-bold text-fifa-blue">Chaveamento do Mata-Mata</CardTitle>
-        <Button variant="outline" onClick={() => window.print()} className="print-hidden">
-          <Printer className="mr-2 h-4 w-4" /> Imprimir
-        </Button>
-      </CardHeader>
+      <CardHeader> ... </CardHeader>
       <CardContent className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        {/* Oitavas - Estático */}
+        {/* Oitavas */}
         <div className="space-y-4">
           <h3 className="font-bold text-lg text-center">Oitavas de Final</h3>
           {r16.map(match => <StaticMatchup key={match.id} {...match} winnerId={knockoutSelections[match.id]} />)}
         </div>
-        {/* Quartas - Interativo */}
+        {/* Quartas */}
         <div className="space-y-[6.5rem]">
           <h3 className="font-bold text-lg text-center">Quartas de Final</h3>
-          {qf.map(match => <InteractiveMatchup key={match.id} {...match} />)}
+          {qf_sf_final_structure.qf.map(match => <InteractiveMatchup key={match.id} {...match} />)}
         </div>
-        {/* Semis - Interativo */}
+        {/* Semis */}
         <div className="space-y-[15.5rem]">
-           <h3 className="font-bold text-lg text-center">Semifinais</h3>
-           {sf.map(match => <InteractiveMatchup key={match.id} {...match} />)}
+          <h3 className="font-bold text-lg text-center">Semifinais</h3>
+          {qf_sf_final_structure.sf.map(match => <InteractiveMatchup key={match.id} {...match} />)}
         </div>
-        {/* Finais - Interativo */}
-        <div className="space-y-4">
+        {/* Finais */}
+        <div className="space-y-8">
           <h3 className="font-bold text-lg text-center">Final</h3>
           <div className="md:mt-[18rem]">
-            {finalWinner && finalLoser ? (
-              <div className="border p-4 rounded-md bg-yellow-50 dark:bg-yellow-900/30 text-center">
-                <p className="font-bold">FINAL</p>
-                <p className='text-lg font-bold text-green-600'>{finalWinner.teamName}</p>
-                <p className="text-sm">vs</p>
-                <p className='text-lg font-bold text-orange-600'>{finalLoser.teamName}</p>
-                <div className="mt-2 space-y-1">
-                  <Button size="sm" className="w-full bg-green-600" onClick={() => onAdoptFinalPrediction('champion', finalWinner.teamId)}>Adotar Campeão</Button>
-                  <Button size="sm" className="w-full bg-orange-600" onClick={() => onAdoptFinalPrediction('runner_up', finalLoser.teamId)}>Adotar Vice</Button>
-                </div>
+            <InteractiveMatchup {...qf_sf_final_structure.final} />
+            {champion && runnerUp && (
+              <div className="mt-2 space-y-1 text-center">
+                  <Button size="sm" className="w-full bg-green-600" onClick={() => onAdoptFinalPrediction('champion', champion.teamId)}>Adotar {champion.teamName} como Campeão</Button>
+                  <Button size="sm" className="w-full bg-orange-600" onClick={() => onAdoptFinalPrediction('runner_up', runnerUp.teamId)}>Adotar {runnerUp.teamName} como Vice</Button>
               </div>
-            ) : <div className="text-center text-xs text-gray-500 pt-16">Aguardando semis...</div>}
+            )}
+          </div>
+          <div className="md:mt-[10rem]">
+            <InteractiveMatchup {...qf_sf_final_structure.third_place} />
+             {thirdPlace && (
+                <div className="mt-2 space-y-1 text-center">
+                    <Button size="sm" className="w-full bg-yellow-600" onClick={() => onAdoptFinalPrediction('third_place', thirdPlace.teamId)}>Adotar {thirdPlace.teamName} como 3º</Button>
+                </div>
+             )}
           </div>
         </div>
       </CardContent>

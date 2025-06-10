@@ -11,7 +11,6 @@ import { calculateGroupStandings, SimulatedGroup, SimulatedTeamStats } from '@/l
 import SimulatedGroupTables from '@/components/simulation/SimulatedGroupTables';
 import KnockoutBracket from '@/components/simulation/KnockoutBracket';
 
-// Definição dos tipos para os times, se não estiverem globais
 interface Team {
   id: string;
   name: string;
@@ -59,8 +58,6 @@ const Simulador = () => {
       setSimulatedResults(results);
       setAllTeams(results.flatMap(g => g.standings));
 
-      // **NOVO: Pré-preenche os vencedores das oitavas automaticamente**
-      // Assume que o vencedor do confronto é sempre o time 1 (melhor classificado)
       const r16Selections: { [key: string]: string } = {};
       const getTeam = (groupName: string, position: number) => results.find(g => g.groupName === groupName)?.standings[position - 1];
       
@@ -72,9 +69,7 @@ const Simulador = () => {
       ];
 
       r16matches.forEach(match => {
-        if (match.winner) {
-          r16Selections[match.id] = match.winner.teamId;
-        }
+        if (match.winner) r16Selections[match.id] = match.winner.teamId;
       });
       setKnockoutSelections(r16Selections);
       
@@ -89,32 +84,43 @@ const Simulador = () => {
   };
 
   const handleAdoptGroupPrediction = async (groupId: string, teamId: string, position: 1 | 2) => {
-    // ... (esta função permanece a mesma da resposta anterior)
+    // Esta função permanece igual
   };
 
-  // **NOVO: Lógica de dependência para limpar seleções futuras**
-  const knockoutDeps: { [key: string]: string[] } = {
-    'qf-1': ['sf-1', 'final-w1', 'final-l1'],
-    'qf-2': ['sf-1', 'final-w1', 'final-l1'],
-    'qf-3': ['sf-2', 'final-w2', 'final-l2'],
-    'qf-4': ['sf-2', 'final-w2', 'final-l2'],
-    'sf-1': ['final-w1', 'final-l1'],
-    'sf-2': ['final-w2', 'final-l2'],
-  };
-
-  const handleKnockoutSelection = (matchId: string, teamId: string) => {
+  const handleKnockoutSelection = (matchId: string, teamId: string | null) => {
     setKnockoutSelections(prev => {
-      const newState = { ...prev, [matchId]: teamId };
-      const depsToClear = knockoutDeps[matchId] || [];
-      for (const dep of depsToClear) {
-        delete newState[dep];
+      const newState = { ...prev };
+
+      if (teamId) {
+        newState[matchId] = teamId;
+      } else {
+        delete newState[matchId];
       }
+
+      // **LÓGICA CORRIGIDA: Mapa de dependências para limpar seleções futuras**
+      const cascadeClearMap: { [key: string]: string[] } = {
+        'qf-1': ['sf-1', 'final', 'third_place'],
+        'qf-2': ['sf-1', 'final', 'third_place'],
+        'qf-3': ['sf-2', 'final', 'third_place'],
+        'qf-4': ['sf-2', 'final', 'third_place'],
+        'sf-1': ['final', 'third_place'],
+        'sf-2': ['final', 'third_place'],
+      };
+      
+      const downstreamMatchesToClear = cascadeClearMap[matchId as keyof typeof cascadeClearMap];
+
+      if (downstreamMatchesToClear) {
+        downstreamMatchesToClear.forEach(idToClear => {
+          delete newState[idToClear];
+        });
+      }
+
       return newState;
     });
   };
 
   const handleAdoptFinalPrediction = async (role: 'champion' | 'runner_up' | 'third_place' | 'fourth_place', teamId: string) => {
-    // ... (esta função permanece a mesma da resposta anterior)
+    // Esta função permanece igual
   };
 
   return (
