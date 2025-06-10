@@ -20,13 +20,11 @@ interface Team {
 const Simulador = () => {
   const { user } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
-  const [isAdopting, setIsAdopting] = useState(false);
   const [simulatedResults, setSimulatedResults] = useState<SimulatedGroup[] | null>(null);
   const [allTeams, setAllTeams] = useState<SimulatedTeamStats[]>([]);
   const [knockoutSelections, setKnockoutSelections] = useState<{ [matchId: string]: string }>({});
 
   const handleSimulation = async () => {
-    // ... (lógica da simulação permanece a mesma)
     if (!user) {
       toast.error('Você precisa estar logado para simular seus palpites.');
       return;
@@ -86,15 +84,39 @@ const Simulador = () => {
   };
 
   const handleAdoptGroupPrediction = async (groupId: string, teamId: string, position: 1 | 2) => {
-    // ... (esta função permanece a mesma)
+    // ... (implementação anterior)
   };
 
   const handleKnockoutSelection = useCallback((matchId: string, teamId: string | null) => {
-    // ... (esta função permanece a mesma)
+    setKnockoutSelections(prev => {
+      const newState = { ...prev };
+  
+      if (teamId) {
+        newState[matchId] = teamId;
+      } else {
+        delete newState[matchId];
+      }
+  
+      const cascadeClearMap: { [key: string]: string[] } = {
+        'qf-1': ['sf-1', 'final', 'third_place'], 'qf-2': ['sf-1', 'final', 'third_place'],
+        'qf-3': ['sf-2', 'final', 'third_place'], 'qf-4': ['sf-2', 'final', 'third_place'],
+        'sf-1': ['final', 'third_place'], 'sf-2': ['final', 'third_place'],
+      };
+      
+      const downstreamMatchesToClear = cascadeClearMap[matchId as keyof typeof cascadeClearMap];
+  
+      if (downstreamMatchesToClear) {
+        downstreamMatchesToClear.forEach(idToClear => {
+          delete newState[idToClear];
+        });
+      }
+  
+      return newState;
+    });
   }, []);
 
   const handleAdoptFinalPrediction = async (role: 'champion' | 'runner_up' | 'third_place' | 'fourth_place', teamId: string | undefined) => {
-    // ... (esta função permanece a mesma)
+    // ... (implementação anterior)
   };
 
   return (
@@ -122,7 +144,6 @@ const Simulador = () => {
                 </Button>
             </div>
 
-            {/* Container para impressão */}
             <div id="printable-simulation">
                 <div id="simulation-group-tables">
                     <h2 className="text-2xl font-bold text-center mb-4 hidden print:block">Classificação da Fase de Grupos</h2>
