@@ -32,7 +32,7 @@ const Simulador = () => {
     }
     setIsLoading(true);
     setSimulatedResults(null);
-    setKnockoutSelections({}); // Limpa seleções anteriores
+    setKnockoutSelections({}); // Limpa seleções anteriores ao simular novamente
     try {
       const [{ data: predictionsQueryData, error: pError }, { data: teamsData, error: tError }, { data: groupsData, error: gError }] = await Promise.all([
         supabase.from('match_predictions')
@@ -59,11 +59,7 @@ const Simulador = () => {
       const results = calculateGroupStandings(formattedPredictions, teamsData as Team[] || [], groupsData || []);
       setSimulatedResults(results);
       setAllTeams(results.flatMap(g => g.standings));
-
-      // --- LÓGICA REMOVIDA ---
-      // A lógica que pré-selecionava os vencedores das oitavas foi removida daqui.
-      // Agora o usuário fará a seleção diretamente na interface.
-
+      
       toast.success("Simulação concluída! Agora defina os vencedores do mata-mata.");
 
     } catch (error: any) {
