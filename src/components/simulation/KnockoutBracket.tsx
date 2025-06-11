@@ -68,6 +68,8 @@ const KnockoutBracket: React.FC<KnockoutBracketProps> = ({
     return winnerId === team1.teamId ? team2 : team1;
   };
 
+  // --- (Início) LÓGICA DE CONFRONTO ATUALIZADA ---
+  // A lógica permanece a mesma, mas agora os componentes serão interativos
   const r16 = React.useMemo(() => ([
     { id: 'r16-1', team1: getTeam('A', 1), team2: getTeam('B', 2) }, { id: 'r16-2', team1: getTeam('C', 1), team2: getTeam('D', 2) },
     { id: 'r16-3', team1: getTeam('E', 1), team2: getTeam('F', 2) }, { id: 'r16-4', team1: getTeam('G', 1), team2: getTeam('H', 2) },
@@ -91,6 +93,7 @@ const KnockoutBracket: React.FC<KnockoutBracketProps> = ({
   const runnerUp = getLoser(final_teams[0], final_teams[1], knockoutSelections['final']);
   const thirdPlace = findTeamById(knockoutSelections['third_place']);
   const fourthPlace = getLoser(third_place_teams[0], third_place_teams[1], knockoutSelections['third_place']);
+  // --- (Fim) LÓGICA DE CONFRONTO ATUALIZADA ---
 
   const handleAdoptClick = () => {
     const homeScoreNum = parseInt(finalHomeScore, 10);
@@ -115,6 +118,7 @@ const KnockoutBracket: React.FC<KnockoutBracketProps> = ({
       
       <CardContent className="space-y-6">
         <div className="flex justify-between space-x-2 md:space-x-4 print:space-x-2 overflow-x-auto pb-4">
+            {/* --- (Início) COLUNAS ATUALIZADAS PARA SEREM INTERATIVAS --- */}
             <div className="flex flex-col w-1/4 min-w-[150px] space-y-2">
               <h3 className="font-bold text-lg text-center print:text-xs">Oitavas</h3>
               {r16.map(match => <Matchup key={match.id} {...match} title={`Oitavas ${match.id.slice(-1)}`} selectedValue={knockoutSelections[match.id]} onSelect={onSelectionChange} />)}
@@ -135,6 +139,7 @@ const KnockoutBracket: React.FC<KnockoutBracketProps> = ({
               <Matchup matchId='final' title='Final' team1={final_teams[0]} team2={final_teams[1]} selectedValue={knockoutSelections['final']} onSelect={onSelectionChange} />
               <Matchup matchId='third_place' title='Disputa 3º Lugar' team1={third_place_teams[0]} team2={third_place_teams[1]} selectedValue={knockoutSelections['third_place']} onSelect={onSelectionChange} />
             </div>
+            {/* --- (Fim) COLUNAS ATUALIZADAS --- */}
         </div>
 
         {champion && runnerUp && thirdPlace && fourthPlace && (
