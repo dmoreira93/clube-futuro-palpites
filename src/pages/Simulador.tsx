@@ -22,7 +22,6 @@ const Simulador = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [simulatedResults, setSimulatedResults] = useState<SimulatedGroup[] | null>(null);
   const [allTeams, setAllTeams] = useState<SimulatedTeamStats[]>([]);
-  // O estado agora começa vazio, para ser preenchido pelo usuário
   const [knockoutSelections, setKnockoutSelections] = useState<{ [matchId: string]: string }>({});
 
   const handleSimulation = async () => {
@@ -60,10 +59,6 @@ const Simulador = () => {
       setSimulatedResults(results);
       setAllTeams(results.flatMap(g => g.standings));
 
-      // --- LÓGICA REMOVIDA ---
-      // A lógica que pré-selecionava os vencedores das oitavas foi removida daqui.
-      // Agora o usuário fará a seleção diretamente na interface.
-
       toast.success("Simulação concluída! Agora defina os vencedores do mata-mata.");
 
     } catch (error: any) {
@@ -80,22 +75,12 @@ const Simulador = () => {
       if (teamId) newState[matchId] = teamId;
       else delete newState[matchId];
 
-      // Limpa as seleções futuras quando uma anterior é alterada
       const cascadeClearMap: { [key: string]: string[] } = {
-        'r16-1': ['qf-1', 'sf-1', 'final', 'third_place'],
-        'r16-2': ['qf-1', 'sf-1', 'final', 'third_place'],
-        'r16-3': ['qf-2', 'sf-1', 'final', 'third_place'],
-        'r16-4': ['qf-2', 'sf-1', 'final', 'third_place'],
-        'r16-5': ['qf-3', 'sf-2', 'final', 'third_place'],
-        'r16-6': ['qf-3', 'sf-2', 'final', 'third_place'],
-        'r16-7': ['qf-4', 'sf-2', 'final', 'third_place'],
-        'r16-8': ['qf-4', 'sf-2', 'final', 'third_place'],
-        'qf-1': ['sf-1', 'final', 'third_place'],
-        'qf-2': ['sf-1', 'final', 'third_place'],
-        'qf-3': ['sf-2', 'final', 'third_place'],
-        'qf-4': ['sf-2', 'final', 'third_place'],
-        'sf-1': ['final', 'third_place'],
-        'sf-2': ['final', 'third_place'],
+        'qf-1': ['sf-1', 'final', 'third_place'], 'qf-2': ['sf-1', 'final', 'third_place'],
+        'qf-3': ['sf-2', 'final', 'third_place'], 'qf-4': ['sf-2', 'final', 'third_place'],
+        'sf-1': ['final', 'third_place'], 'sf-2': ['final', 'third_place'],
+        'final': [], 
+        'third_place': []
       };
 
       const downstreamMatchesToClear = cascadeClearMap[matchId as keyof typeof cascadeClearMap];
@@ -105,7 +90,7 @@ const Simulador = () => {
       return newState;
     });
   }, []);
-  
+
   const handleAdoptGroupPrediction = async (groupId: string, firstTeamId: string, secondTeamId: string) => {
     if (!user) {
       toast.error('Você precisa estar logado.');
@@ -135,6 +120,7 @@ const Simulador = () => {
     }
   };
 
+  // --- (Início) FUNÇÃO ATUALIZADA ---
   const handleAdoptFinalPredictions = async (
     championId: string, 
     runnerUpId: string, 
@@ -151,6 +137,7 @@ const Simulador = () => {
     const toastId = toast.loading('Salvando palpites finais...');
 
     try {
+      // O nome da coluna no Supabase é 'runner_up_id', não 'vice_champion_id'
       const { error } = await supabase
         .from('final_predictions')
         .upsert({
@@ -171,6 +158,7 @@ const Simulador = () => {
       toast.error(`Erro ao salvar palpites finais: ${error.message}`, { id: toastId });
     }
   };
+  // --- (Fim) FUNÇÃO ATUALIZADA ---
 
   return (
     <div className="container mx-auto p-4 md:p-6 lg:p-8 space-y-8">
