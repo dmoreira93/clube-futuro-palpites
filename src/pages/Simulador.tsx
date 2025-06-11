@@ -1,5 +1,3 @@
-// src/pages/Simulador.tsx
-
 import React, { useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -31,7 +29,6 @@ const Simulador = () => {
     }
     setIsLoading(true);
     setSimulatedResults(null);
-    setKnockoutSelections({}); // Limpa seleções anteriores
     try {
       const [{ data: predictionsQueryData, error: pError }, { data: teamsData, error: tError }, { data: groupsData, error: gError }] = await Promise.all([
         supabase.from('match_predictions')
@@ -59,7 +56,22 @@ const Simulador = () => {
       setSimulatedResults(results);
       setAllTeams(results.flatMap(g => g.standings));
 
-      toast.success("Simulação concluída! Agora defina os vencedores do mata-mata.");
+      const r16Selections: { [key: string]: string } = {};
+      const getTeam = (groupName: string, position: number) => results.find(g => g.groupName === groupName)?.standings[position - 1];
+
+      const r16matches = [
+        { id: 'r16-1', winner: getTeam('A', 1) }, { id: 'r16-2', winner: getTeam('C', 1) },
+        { id: 'r16-3', winner: getTeam('E', 1) }, { id: 'r16-4', winner: getTeam('G', 1) },
+        { id: 'r16-5', winner: getTeam('B', 1) }, { id: 'r16-6', winner: getTeam('D', 1) },
+        { id: 'r16-7', winner: getTeam('F', 1) }, { id: 'r16-8', winner: getTeam('H', 1) },
+      ];
+
+      r16matches.forEach(match => {
+        if (match.winner) r16Selections[match.id] = match.winner.teamId;
+      });
+      setKnockoutSelections(r16Selections);
+
+      toast.success("Simulação concluída!");
 
     } catch (error: any) {
       console.error("Erro na simulação:", error);
@@ -79,8 +91,6 @@ const Simulador = () => {
         'qf-1': ['sf-1', 'final', 'third_place'], 'qf-2': ['sf-1', 'final', 'third_place'],
         'qf-3': ['sf-2', 'final', 'third_place'], 'qf-4': ['sf-2', 'final', 'third_place'],
         'sf-1': ['final', 'third_place'], 'sf-2': ['final', 'third_place'],
-        'final': [], 
-        'third_place': []
       };
 
       const downstreamMatchesToClear = cascadeClearMap[matchId as keyof typeof cascadeClearMap];
@@ -120,15 +130,7 @@ const Simulador = () => {
     }
   };
 
-  // --- (Início) FUNÇÃO ATUALIZADA ---
-  const handleAdoptFinalPredictions = async (
-    championId: string, 
-    runnerUpId: string, 
-    thirdPlaceId: string, 
-    fourthPlaceId: string,
-    finalHomeScore: number,
-    finalAwayScore: number
-    ) => {
+  const handleAdoptFinalPredictions = async (championId: string, runnerUpId: string, thirdPlaceId: string, fourthPlaceId: string, finalHomeScore: number, finalAwayScore: number) => {
     if (!user) {
       toast.error('Você precisa estar logado.');
       return;
@@ -137,7 +139,6 @@ const Simulador = () => {
     const toastId = toast.loading('Salvando palpites finais...');
 
     try {
-      // O nome da coluna no Supabase é 'runner_up_id', não 'vice_champion_id'
       const { error } = await supabase
         .from('final_predictions')
         .upsert({
@@ -158,7 +159,6 @@ const Simulador = () => {
       toast.error(`Erro ao salvar palpites finais: ${error.message}`, { id: toastId });
     }
   };
-  // --- (Fim) FUNÇÃO ATUALIZADA ---
 
   return (
     <div className="container mx-auto p-4 md:p-6 lg:p-8 space-y-8">
