@@ -1,3 +1,4 @@
+// src/components/home/predictions/PredictionReceipt.tsx - VERSÃO CORRIGIDA
 import React from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -19,7 +20,7 @@ interface ReceiptGroupPredictionItem {
 
 interface ReceiptFinalPredictionItem {
   champion: Team;
-  vice_champion: Team;
+  runner_up: Team; // Corrigido para corresponder à sua interface
   third_place: Team;
   fourth_place: Team;
   final_home_score: number | null;
@@ -65,7 +66,8 @@ const PredictionReceipt = ({ user, predictions, groupPredictions, finalPredictio
             predictions.map((p) => (
               <div key={p.match.id} style={{ marginBottom: '8px', paddingLeft: '10px' }}>
                 <p style={{ fontSize: '12px', color: '#666' }}>{format(new Date(p.match.match_date), "dd/MM/yyyy HH:mm", { locale: ptBR })} - {p.match.stage}</p>
-                <p>{p.match.home_team?.name} <strong>{p.home_score_prediction}</strong> x <strong>{p.away_score_prediction}</strong> {p.match.away_team?.name}</p>
+                {/* LINHA CORRIGIDA ABAIXO */}
+                <p>{p.match.home_team?.name || 'Time da Casa'} <strong>{p.home_score_prediction}</strong> x <strong>{p.away_score_prediction}</strong> {p.match.away_team?.name || 'Time Visitante'}</p>
               </div>
             ))
           )}
@@ -89,7 +91,8 @@ const PredictionReceipt = ({ user, predictions, groupPredictions, finalPredictio
           {finalPrediction && finalPrediction.champion ? (
             <div style={{ paddingLeft: '10px' }}>
               <p><strong>Campeão:</strong> {finalPrediction.champion.name}</p>
-              <p><strong>Vice-Campeão:</strong> {finalPrediction.vice_champion.name}</p>
+              {/* CORRIGIDO AQUI: de vice_champion para runner_up */}
+              <p><strong>Vice-Campeão:</strong> {finalPrediction.runner_up.name}</p>
               <p><strong>3º Lugar:</strong> {finalPrediction.third_place.name}</p>
               <p><strong>4º Lugar:</strong> {finalPrediction.fourth_place.name}</p>
               {finalPrediction.final_home_score !== null && <p><strong>Placar da Final:</strong> {finalPrediction.final_home_score} x {finalPrediction.final_away_score}</p>}
