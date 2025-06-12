@@ -192,6 +192,9 @@ const Palpites = () => {
     // src/pages/Palpites.tsx - VERSÃO CORRIGIDA
 
 // ...
+// src/pages/Palpites.tsx - VERSÃO COM AJUSTES DE ORDENAÇÃO
+
+// ... (todo o código do início do arquivo permanece o mesmo)
 
     const handlePrintReceipt = useCallback(() => {
         if (!user) return;
@@ -201,7 +204,10 @@ const Palpites = () => {
             const match = allMatches.find(m => m.id === p.match_id);
             if (!match || p.home_score.trim() === "" || p.away_score.trim() === "") return null;
             return { match, home_score_prediction: parseInt(p.home_score, 10), away_score_prediction: parseInt(p.away_score, 10) };
-          }).filter(Boolean as any);
+          })
+          .filter(Boolean as any)
+         // --- NOVA LINHA: Ordena as partidas por data ---
+        .sort((a, b) => new Date(a.match.match_date).getTime() - new Date(b.match.match_date).getTime());
       
         const userGroupPredictionsForReceipt = Object.values(groupPredictions)
           .map(gp => {
@@ -211,7 +217,10 @@ const Palpites = () => {
             const secondTeam = teams.find(t => t.id === gp.predicted_second_team_id);
             if (!group || !firstTeam || !secondTeam) return null;
             return { group_name: group.name, predicted_first_team: firstTeam, predicted_second_team: secondTeam };
-          }).filter(Boolean as any);
+          })
+        .filter(Boolean as any)
+        // --- NOVA LINHA: Ordena os grupos pelo nome ---
+        .sort((a, b) => a.group_name.localeCompare(b.group_name));
       
         const getTeamById = (id: string | null): Team | undefined => teams.find(t => t.id === id);
         let finalPredictionReceipt = null;
@@ -250,7 +259,6 @@ const Palpites = () => {
       
         const printWindow = window.open('', '_blank');
         if (printWindow) {
-          // A linha abaixo foi alterada para injetar o estilo corretivo
           printWindow.document.write(`<!DOCTYPE html><html><head><title>Comprovante de Palpites</title><style>body { font-family: Arial, sans-serif; margin: 20px; } @media print { body * { visibility: visible !important; } }</style></head><body>${receiptHtml}</body></html>`);
           printWindow.document.close();
           setTimeout(() => {
@@ -261,6 +269,8 @@ const Palpites = () => {
             toast({ title: "Erro de Pop-up", description: "Não foi possível abrir a janela de impressão. Por favor, desabilite o bloqueador de pop-ups.", variant: "destructive"});
         }
     }, [user, dailyPredictions, allMatches, teams, groupPredictions, groups, finalPrediction, toast]);
+
+// ... (o restante do arquivo permanece igual)
 
     if (loading) { return <div className="flex justify-center items-center h-screen"><Loader2 className="h-10 w-10 animate-spin text-fifa-blue" /></div>; }
     if (!user) { navigate("/login"); return null; }
