@@ -189,73 +189,78 @@ const Palpites = () => {
         }
     }, [user, finalPrediction, toast]);
     
-    const handlePrintReceipt = useCallback(() => {
-        if (!user) return;
-        
-        const userMatchPredictionsForReceipt = Object.values(dailyPredictions)
-          .map(p => {
-            const match = allMatches.find(m => m.id === p.match_id);
-            if (!match || p.home_score.trim() === "" || p.away_score.trim() === "") return null;
-            return { match, home_score_prediction: parseInt(p.home_score, 10), away_score_prediction: parseInt(p.away_score, 10) };
-          }).filter(Boolean as any);
-      
-        const userGroupPredictionsForReceipt = Object.values(groupPredictions)
-          .map(gp => {
-            if (!gp.predicted_first_team_id || !gp.predicted_second_team_id) return null;
-            const group = groups.find(g => g.id === gp.group_id);
-            const firstTeam = teams.find(t => t.id === gp.predicted_first_team_id);
-            const secondTeam = teams.find(t => t.id === gp.predicted_second_team_id);
-            if (!group || !firstTeam || !secondTeam) return null;
-            return { group_name: group.name, predicted_first_team: firstTeam, predicted_second_team: secondTeam };
-          }).filter(Boolean as any);
-      
-        const getTeamById = (id: string | null): Team | undefined => teams.find(t => t.id === id);
-        let finalPredictionReceipt = null;
-        if (finalPrediction.champion_id && finalPrediction.runner_up_id && finalPrediction.third_place_id && finalPrediction.fourth_place_id) {
-            const champ = getTeamById(finalPrediction.champion_id);
-            const runnerUp = getTeamById(finalPrediction.runner_up_id);
-            const third = getTeamById(finalPrediction.third_place_id);
-            const fourth = getTeamById(finalPrediction.fourth_place_id);
-            if(champ && runnerUp && third && fourth) {
-                finalPredictionReceipt = {
-                    champion: champ,
-                    runner_up: runnerUp,
-                    third_place: third,
-                    fourth_place: fourth,
-                    final_home_score: finalPrediction.final_home_score,
-                    final_away_score: finalPrediction.final_away_score,
-                };
-            }
-        }
-        
-        if (userMatchPredictionsForReceipt.length === 0 && userGroupPredictionsForReceipt.length === 0 && !finalPredictionReceipt) {
-            toast({ title: "Nenhum Palpite", description: "Você precisa preencher ao menos um palpite completo para gerar o comprovante.", variant: "default" });
-            return;
-        }
-    
-        const dateGenerated = new Date();
-        const receiptHtml = ReactDOMServer.renderToString(
-          <PredictionReceipt
-            user={user}
-            predictions={userMatchPredictionsForReceipt as any}
-            groupPredictions={userGroupPredictionsForReceipt as any}
-            finalPrediction={finalPredictionReceipt as any}
-            dateGenerated={dateGenerated}
-          />
-        );
-      
-        const printWindow = window.open('', '_blank');
-        if (printWindow) {
-          printWindow.document.write(`<!DOCTYPE html><html><head><title>Comprovante de Palpites</title><style>body { font-family: Arial, sans-serif; margin: 20px; } @media print { body { margin: 0; } }</style></head><body>${receiptHtml}</body></html>`);
-          printWindow.document.close();
-          setTimeout(() => {
-            printWindow.focus();
-            printWindow.print();
-          }, 500);
-        } else {
-            toast({ title: "Erro de Pop-up", description: "Não foi possível abrir a janela de impressão. Por favor, desabilite o bloqueador de pop-ups.", variant: "destructive"});
-        }
-    }, [user, dailyPredictions, allMatches, teams, groupPredictions, groups, finalPrediction, toast]);
+    // src/pages/Palpites.tsx - VERSÃO CORRIGIDA
+
+// ...
+
+    const handlePrintReceipt = useCallback(() => {
+        if (!user) return;
+        
+        const userMatchPredictionsForReceipt = Object.values(dailyPredictions)
+          .map(p => {
+            const match = allMatches.find(m => m.id === p.match_id);
+            if (!match || p.home_score.trim() === "" || p.away_score.trim() === "") return null;
+            return { match, home_score_prediction: parseInt(p.home_score, 10), away_score_prediction: parseInt(p.away_score, 10) };
+          }).filter(Boolean as any);
+      
+        const userGroupPredictionsForReceipt = Object.values(groupPredictions)
+          .map(gp => {
+            if (!gp.predicted_first_team_id || !gp.predicted_second_team_id) return null;
+            const group = groups.find(g => g.id === gp.group_id);
+            const firstTeam = teams.find(t => t.id === gp.predicted_first_team_id);
+            const secondTeam = teams.find(t => t.id === gp.predicted_second_team_id);
+            if (!group || !firstTeam || !secondTeam) return null;
+            return { group_name: group.name, predicted_first_team: firstTeam, predicted_second_team: secondTeam };
+          }).filter(Boolean as any);
+      
+        const getTeamById = (id: string | null): Team | undefined => teams.find(t => t.id === id);
+        let finalPredictionReceipt = null;
+        if (finalPrediction.champion_id && finalPrediction.runner_up_id && finalPrediction.third_place_id && finalPrediction.fourth_place_id) {
+            const champ = getTeamById(finalPrediction.champion_id);
+            const runnerUp = getTeamById(finalPrediction.runner_up_id);
+            const third = getTeamById(finalPrediction.third_place_id);
+            const fourth = getTeamById(finalPrediction.fourth_place_id);
+            if(champ && runnerUp && third && fourth) {
+                finalPredictionReceipt = {
+                    champion: champ,
+                    runner_up: runnerUp,
+                    third_place: third,
+                    fourth_place: fourth,
+                    final_home_score: finalPrediction.final_home_score,
+                    final_away_score: finalPrediction.final_away_score,
+                };
+            }
+        }
+        
+        if (userMatchPredictionsForReceipt.length === 0 && userGroupPredictionsForReceipt.length === 0 && !finalPredictionReceipt) {
+            toast({ title: "Nenhum Palpite", description: "Você precisa preencher ao menos um palpite completo para gerar o comprovante.", variant: "default" });
+            return;
+        }
+    
+        const dateGenerated = new Date();
+        const receiptHtml = ReactDOMServer.renderToString(
+          <PredictionReceipt
+            user={user}
+            predictions={userMatchPredictionsForReceipt as any}
+            groupPredictions={userGroupPredictionsForReceipt as any}
+            finalPrediction={finalPredictionReceipt as any}
+            dateGenerated={dateGenerated}
+          />
+        );
+      
+        const printWindow = window.open('', '_blank');
+        if (printWindow) {
+          // A linha abaixo foi alterada para injetar o estilo corretivo
+          printWindow.document.write(`<!DOCTYPE html><html><head><title>Comprovante de Palpites</title><style>body { font-family: Arial, sans-serif; margin: 20px; } @media print { body * { visibility: visible !important; } }</style></head><body>${receiptHtml}</body></html>`);
+          printWindow.document.close();
+          setTimeout(() => {
+            printWindow.focus();
+            printWindow.print();
+          }, 500);
+        } else {
+            toast({ title: "Erro de Pop-up", description: "Não foi possível abrir a janela de impressão. Por favor, desabilite o bloqueador de pop-ups.", variant: "destructive"});
+        }
+    }, [user, dailyPredictions, allMatches, teams, groupPredictions, groups, finalPrediction, toast]);
 
     if (loading) { return <div className="flex justify-center items-center h-screen"><Loader2 className="h-10 w-10 animate-spin text-fifa-blue" /></div>; }
     if (!user) { navigate("/login"); return null; }
