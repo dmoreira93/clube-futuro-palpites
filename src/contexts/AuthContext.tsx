@@ -1,4 +1,4 @@
-// src/contexts/AuthContext.tsx - VERSÃO FINAL REFORÇADA
+// src/contexts/AuthContext.tsx
 
 import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
@@ -22,7 +22,7 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<{ success: boolean; error: any | null }>;
   signOut: () => Promise<void>;
   updateUserProfile: (updates: Partial<Pick<AppUser, 'first_login'>>) => Promise<void>;
-  fetchAndSyncProfile: (sessionUser: User) => Promise<AppUser | null>; // Alterado para retornar o perfil
+  fetchAndSyncProfile: (sessionUser: User) => Promise<AppUser | null>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -42,15 +42,14 @@ interface AuthProviderProps {
 export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [user, setUser] = useState<AppUser | null>(null);
   const [loading, setLoading] = useState(true);
-  const [isFirstLogin, setIsFirstLogin] = useState(false);
-  const [isAdmin, setIsAdmin] = useState(false);
+
   const isAuthenticated = !!user;
+  const isFirstLogin = user?.first_login ?? false;
+  const isAdmin = user?.is_admin ?? false;
 
   const signOut = useCallback(async () => {
     await supabase.auth.signOut();
     setUser(null);
-    setIsAdmin(false);
-    setIsFirstLogin(false);
   }, []);
 
   const fetchAndSyncProfile = useCallback(async (sessionUser: User): Promise<AppUser | null> => {
@@ -60,25 +59,33 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         .select('*')
         .eq('id', sessionUser.id)
         .single();
-
-      if (error && error.code !== 'PGRST116') throw error;
+      
+      // **MELHORIA PRINCIPAL**: Se a busca falhar por um token inválido, deslogue o usuário.
+      if (error && error.code !== 'PGRST116') {
+          // PGRST301 é um erro comum de JWT inválido
+          if (error.message.includes('JWT') || error.code === 'PGRST301') {
+            toast.error("Sua sessão expirou. Por favor, faça login novamente.");
+            await signOut();
+            return null;
+          }
+          throw error;
+      }
       
       const combinedUser: AppUser = { ...sessionUser, ...profile };
       setUser(combinedUser);
-      setIsAdmin(!!profile?.is_admin);
-      setIsFirstLogin(profile?.first_login === false);
-      return combinedUser; // Retorna o usuário combinado
+      return combinedUser;
 
     } catch (error) {
       console.error("Erro ao buscar perfil:", error);
       toast.error("Não foi possível carregar os dados do seu perfil.");
-      await signOut();
+      await signOut(); // Força o logout em caso de erro.
       return null;
     }
   }, [signOut]);
 
   useEffect(() => {
-    const checkUser = async () => {
+    const initializeAuth = async () => {
+      setLoading(true);
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) {
         await fetchAndSyncProfile(session.user);
@@ -86,19 +93,17 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       setLoading(false);
     };
 
-    checkUser();
+    initializeAuth();
 
     const { data: authListener } = supabase.auth.onAuthStateChange(
       async (event, session) => {
+        setLoading(true);
         if (event === 'SIGNED_IN' && session?.user) {
-          setLoading(true);
           await fetchAndSyncProfile(session.user);
-          setLoading(false);
         } else if (event === 'SIGNED_OUT') {
           setUser(null);
-          setIsAdmin(false);
-          setIsFirstLogin(false);
         }
+        setLoading(false);
       }
     );
 
@@ -109,24 +114,20 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   
   const login = async (email: string, password: string) => {
     setLoading(true);
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-    
-    if (error) {
-      toast.error(error.message || "Email ou senha inválidos.");
-      setLoading(false);
-      return { success: false, error };
-    } 
-    
-    if (data.user) {
-      // --- LÓGICA REFORÇADA ---
-      // Após o login, busca o perfil para ter certeza do status de admin
-      // antes de qualquer redirecionamento.
-      const profile = await fetchAndSyncProfile(data.user);
-      // Atualiza o estado de admin localmente com base no perfil recém-buscado
-      setIsAdmin(!!profile?.is_admin); 
+    // **MELHORIA**: Envolvemos o processo em try/finally para garantir que o loading termine.
+    try {
+        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+        if (error) {
+            toast.error(error.message || "Email ou senha inválidos.");
+            return { success: false, error };
+        } 
+        if (data.user) {
+            await fetchAndSyncProfile(data.user);
+        }
+        return { success: true, error: null };
+    } finally {
+        setLoading(false);
     }
-    setLoading(false);
-    return { success: true, error: null };
   };
 
   const updateUserProfile = async (updates: Partial<Pick<AppUser, 'first_login'>>) => {
@@ -138,7 +139,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         .eq('id', user.id);
 
       if (error) throw error;
-      await fetchAndSyncProfile(user); // Re-sincroniza o perfil para pegar o estado mais recente
+      await fetchAndSyncProfile(user);
 
     } catch (error) {
       console.error("Erro em updateUserProfile:", error);

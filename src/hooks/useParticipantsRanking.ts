@@ -1,10 +1,9 @@
-// src/hooks/useParticipantsRanking.ts - VERSÃO ATUALIZADA
+// src/hooks/useParticipantsRanking.ts
 
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 
-// Seus tipos de dados permanecem os mesmos
 type UserData = {
     id: string;
     name: string;
@@ -13,7 +12,7 @@ type UserData = {
     total_points: number | null;
     is_admin: boolean;
     created_at: string;
-    pool_id?: string | null; // Garante que a propriedade pool_id esteja no tipo
+    pool_id?: string | null;
 };
 
 export type Participant = {
@@ -28,15 +27,14 @@ export type Participant = {
   createdAt: string;
 };
 
-
 const useParticipantsRanking = () => {
-  const { user, signOut } = useAuth(); // Pegamos o usuário logado do contexto
+  const { user, signOut } = useAuth();
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // **MELHORIA**: useCallback agora depende apenas do pool_id do usuário.
   const fetchRanking = useCallback(async () => {
-    // Se não houver usuário ou o usuário não tiver um pool_id, não busca dados.
     if (!user?.pool_id) {
       setLoading(false);
       setParticipants([]);
@@ -46,18 +44,15 @@ const useParticipantsRanking = () => {
     try {
       setLoading(true);
       setError(null);
-
-      // 1. Buscar todos os usuários DO MESMO BOLÃO e seus dados principais
+      
+      // A lógica interna permanece a mesma
       const { data: usersData, error: usersError } = await supabase
         .from('users_custom')
         .select('id, name, username, avatar_url, is_admin, total_points, created_at')
-        .eq('pool_id', user.pool_id); // <-- FILTRO ESSENCIAL ADICIONADO AQUI
+        .eq('pool_id', user.pool_id);
 
       if (usersError) throw usersError;
-
-      // O restante da sua lógica para calcular estatísticas e ordenar o ranking continua igual
-      // pois ela já opera sobre a lista de usuários filtrada.
-
+      
       const nonAdminUsers = (usersData as UserData[]).filter(u => !u.is_admin);
       const userIds = nonAdminUsers.map(u => u.id);
 
@@ -66,19 +61,12 @@ const useParticipantsRanking = () => {
         setLoading(false);
         return;
       }
-
-      const { data: pointsData, error: pointsError } = await supabase
-        .from('user_points')
-        .select('user_id, points_type')
-        .in('user_id', userIds);
       
+      const { data: pointsData, error: pointsError } = await supabase.from('user_points').select('user_id, points_type').in('user_id', userIds);
       if (pointsError) throw pointsError;
       
       const userStats: { [userId: string]: { exactScores: number, correctWinners: number, totalPredictions: number } } = {};
-
-      userIds.forEach(id => {
-        userStats[id] = { exactScores: 0, correctWinners: 0, totalPredictions: 0 };
-      });
+      userIds.forEach(id => { userStats[id] = { exactScores: 0, correctWinners: 0, totalPredictions: 0 }; });
 
       (pointsData || []).forEach(point => {
         const stats = userStats[point.user_id];
@@ -92,31 +80,28 @@ const useParticipantsRanking = () => {
           }
         }
       });
-
-      const finalRanking: Participant[] = nonAdminUsers
-        .map((user) => {
-          const stats = userStats[user.id] || { exactScores: 0, correctWinners: 0, totalPredictions: 0 };
-          const accuracy = stats.totalPredictions > 0 ? ((stats.exactScores / stats.totalPredictions) * 100).toFixed(0) : "0";
-          return {
-            id: user.id,
-            name: user.name,
-            username: user.username,
-            avatar_url: user.avatar_url,
-            points: user.total_points || 0,
-            exactScores: stats.exactScores,
-            correctWinners: stats.correctWinners,
-            accuracy: `${accuracy}%`,
-            createdAt: user.created_at,
-          };
-        });
-
-      finalRanking.sort((a, b) => {
+      
+      const finalRanking: Participant[] = nonAdminUsers.map((user) => {
+        const stats = userStats[user.id] || { exactScores: 0, correctWinners: 0, totalPredictions: 0 };
+        const accuracy = stats.totalPredictions > 0 ? ((stats.exactScores / stats.totalPredictions) * 100).toFixed(0) : "0";
+        return {
+          id: user.id,
+          name: user.name,
+          username: user.username,
+          avatar_url: user.avatar_url,
+          points: user.total_points || 0,
+          exactScores: stats.exactScores,
+          correctWinners: stats.correctWinners,
+          accuracy: `${accuracy}%`,
+          createdAt: user.created_at,
+        };
+      }).sort((a, b) => {
         if (b.points !== a.points) return b.points - a.points;
         if (b.exactScores !== a.exactScores) return b.exactScores - a.exactScores;
         if (b.correctWinners !== a.correctWinners) return b.correctWinners - a.correctWinners;
         return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
       });
-
+      
       setParticipants(finalRanking);
       
     } catch (error: any) {
@@ -128,7 +113,7 @@ const useParticipantsRanking = () => {
     } finally {
       setLoading(false);
     }
-  }, [user, signOut]); // A função agora depende do objeto 'user' para pegar o pool_id
+  }, [user?.pool_id, signOut]); // **MELHORIA**: A dependência agora é mais específica.
 
   useEffect(() => {
     fetchRanking();
