@@ -1,8 +1,8 @@
-// src/components/PwaUpdateNotification.tsx - VERSÃO COM IMPORTAÇÃO ALTERNATIVA
+// src/components/PwaUpdateNotification.tsx - VERSÃO CORRIGIDA
 
 import { useEffect } from 'react';
-// --- ALTERAÇÃO AQUI: Mudamos o caminho da importação ---
-import { useRegisterSW } from 'vite-plugin-pwa/virtual'; 
+// --- CORREÇÃO: Voltamos para a importação padrão do React ---
+import { useRegisterSW } from 'vite-plugin-pwa/react'; 
 import { toast } from 'sonner';
 import { Button } from './ui/button';
 import { Rocket } from 'lucide-react';
