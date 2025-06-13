@@ -1,4 +1,4 @@
-// src/pages/CreatePool.tsx - VERSÃO ATUALIZADA COM PUNIÇÃO
+// src/pages/CreatePool.tsx - VERSÃO CORRIGIDA
 
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/components/ui/use-toast';
 import { Loader2 } from 'lucide-react';
-import { Checkbox } from '@/components/ui/checkbox'; // Importa o Checkbox
+import { Checkbox } from '@/components/ui/checkbox';
 
 const CreatePoolPage = () => {
   const { user, fetchAndSyncProfile } = useAuth();
@@ -18,24 +18,27 @@ const CreatePoolPage = () => {
   const [prize1st, setPrize1st] = useState('60');
   const [prize2nd, setPrize2nd] = useState('25');
   const [prize3rd, setPrize3rd] = useState('15');
-  
-  // --- NOVOS ESTADOS PARA A PUNIÇÃO ---
   const [enablePunishment, setEnablePunishment] = useState(false);
   const [punishmentDescription, setPunishmentDescription] = useState('Paga um café da manhã para o campeão!');
-
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
 
   const handleCreatePool = async () => {
-    // ... validação de nome e prêmios ...
-    if (!poolName.trim()) { /* ... */ return; }
+    if (!poolName.trim()) {
+      toast({ title: 'Erro', description: 'Por favor, dê um nome ao seu bolão.', variant: 'destructive' });
+      return;
+    }
+
     const p1 = parseFloat(prize1st) || 0;
     const p2 = parseFloat(prize2nd) || 0;
     const p3 = parseFloat(prize3rd) || 0;
-    if (p1 + p2 + p3 !== 100) { /* ... */ return; }
+
+    if (p1 + p2 + p3 !== 100) {
+      toast({ title: 'Erro de Validação', description: 'A soma das porcentagens dos prêmios deve ser exatamente 100%.', variant: 'destructive' });
+      return;
+    }
     
-    // Validação da punição
     if (enablePunishment && !punishmentDescription.trim()) {
       toast({ title: 'Erro de Validação', description: 'Por favor, descreva a punição do último colocado.', variant: 'destructive' });
       return;
@@ -49,7 +52,6 @@ const CreatePoolPage = () => {
         prize_1st: p1,
         prize_2nd: p2,
         prize_3rd: p3,
-        // --- NOVOS PARÂMETROS ENVIADOS ---
         enable_punishment_param: enablePunishment,
         punishment_desc_param: enablePunishment ? punishmentDescription.trim() : null
       });
@@ -84,8 +86,7 @@ const CreatePoolPage = () => {
           
           <div>
             <Label>Distribuição dos Prêmios (%)</Label>
-            {/* ... campos de prêmios ... */}
-             <div className="grid grid-cols-3 gap-2 mt-2">
+            <div className="grid grid-cols-3 gap-2 mt-2">
               <div><Label htmlFor="prize-1st" className="text-xs text-muted-foreground">1º Lugar</Label><Input id="prize-1st" type="number" value={prize1st} onChange={(e) => setPrize1st(e.target.value)} /></div>
               <div><Label htmlFor="prize-2nd" className="text-xs text-muted-foreground">2º Lugar</Label><Input id="prize-2nd" type="number" value={prize2nd} onChange={(e) => setPrize2nd(e.target.value)} /></div>
               <div><Label htmlFor="prize-3rd" className="text-xs text-muted-foreground">3º Lugar</Label><Input id="prize-3rd" type="number" value={prize3rd} onChange={(e) => setPrize3rd(e.target.value)} /></div>
@@ -93,7 +94,6 @@ const CreatePoolPage = () => {
             <p className="text-xs text-muted-foreground mt-1">A soma deve ser 100.</p>
           </div>
 
-          {/* --- NOVA SEÇÃO DE PUNIÇÃO --- */}
           <div className="space-y-4">
             <div className="flex items-center space-x-2">
               <Checkbox id="enable-punishment" checked={enablePunishment} onCheckedChange={(checked) => setEnablePunishment(checked as boolean)} />
@@ -113,13 +113,13 @@ const CreatePoolPage = () => {
               </div>
             )}
           </div>
-          {/* --- FIM DA SEÇÃO DE PUNIÇÃO --- */}
 
           <Button onClick={handleCreatePool} disabled={loading} className="w-full">
             {loading ? <Loader2 className="animate-spin" /> : 'Criar Bolão'}
           </Button>
         </CardContent>
-      </card>
+        {/* --- CORREÇÃO APLICADA AQUI --- */}
+      </Card>
     </div>
   );
 };
