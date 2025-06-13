@@ -85,7 +85,7 @@ const HomePage = () => {
             hover:bg-slate-700
             border-2 border-slate-700
             shadow-md hover:shadow-lg
-            transform transition-transform duration-300
+            transform transition-all duration-300 ease-in-out
             hover:scale-105
             "
             >
