@@ -1,8 +1,7 @@
-// src/pages/Login.tsx
+// src/pages/Login.tsx - VERSÃO ATUALIZADA
 
 import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
-// A importação do Layout foi REMOVIDA
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/components/ui/use-toast";
 import { Button } from "@/components/ui/button";
@@ -31,7 +30,8 @@ const Login = () => {
 
   useEffect(() => {
     if (!isLoadingAuth && isAuthenticated) {
-      navigate(isFirstLogin ? "/change-password" : "/palpites");
+      // Redireciona para o dashboard após o login
+      navigate(isFirstLogin ? "/change-password" : "/dashboard");
     }
   }, [isAuthenticated, isLoadingAuth, isFirstLogin, navigate]);
 
@@ -55,6 +55,7 @@ const Login = () => {
       if (!success) {
         throw error || new Error("Ocorreu um erro desconhecido durante o login.");
       }
+      // O useEffect cuidará do redirecionamento
     } catch (error: any) {
       toast({
         title: "Erro no Login",
@@ -67,7 +68,6 @@ const Login = () => {
   };
 
   if (isLoadingAuth) {
-    // Layout removido da tela de carregamento
     return (
       <div className="flex justify-center items-center h-screen">
         <Loader2 className="h-8 w-8 animate-spin text-fifa-blue" />
@@ -75,7 +75,6 @@ const Login = () => {
     );
   }
 
-  // Layout removido do retorno principal
   return (
     <div className="max-w-md mx-auto py-12">
       <div className="text-center mb-8">

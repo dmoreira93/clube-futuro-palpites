@@ -1,11 +1,12 @@
-// src/App.tsx
+// src/App.tsx - VERSÃO ATUALIZADA
 
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
-import Layout from "./components/layout/Layout"; 
+import Layout from "./components/layout/Layout";
 
-// Importações de todas as suas páginas
-import Index from "./pages/Index";
+// Importações das páginas
+import HomePage from "./pages/HomePage";
+import Dashboard from "./pages/Index"; // O antigo Index agora é o Dashboard
 import Login from "./pages/Login";
 import Cadastro from "./pages/Cadastro";
 import Palpites from "./pages/Palpites";
@@ -19,10 +20,9 @@ import ChangePassword from "./pages/ChangePassword";
 import UserPredictions from "./pages/UserPredictions";
 import DailyMatchesAndPredictions from "./pages/DailyMatchesAndPredictions";
 import Simulador from "./pages/Simulador";
-// --- NOVAS IMPORTAÇÕES ---
 import JoinPoolPage from "./pages/JoinPool"; 
 import CreatePoolPage from "./pages/CreatePool";
-import ProtectedRoute from "./components/auth/ProtectedRoute"; // Criaremos este a seguir
+import ProtectedRoute from "./components/auth/ProtectedRoute";
 
 function App() {
   return (
@@ -30,17 +30,20 @@ function App() {
       <BrowserRouter>
         <Layout>
           <Routes>
-            {/* Rotas Públicas */}
+            {/* Rota Pública Principal */}
+            <Route path="/" element={<HomePage />} />
+
+            {/* Outras Rotas Públicas */}
             <Route path="/login" element={<Login />} />
             <Route path="/cadastro" element={<Cadastro />} />
-            <Route path="/cadastro/:inviteCode" element={<Cadastro />} /> {/* Rota com código */}
+            <Route path="/cadastro/:inviteCode" element={<Cadastro />} />
+            <Route path="/criterios" element={<Criterios />} />
             <Route path="*" element={<NotFound />} />
             
-            {/* Rotas Protegidas */}
-            <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
+            {/* Rotas Protegidas (requerem login e pertencimento a um bolão) */}
+            <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
             <Route path="/ranking" element={<ProtectedRoute><RankingPage /></ProtectedRoute>} />
             <Route path="/resultados" element={<ProtectedRoute><Resultados /></ProtectedRoute>} />
-            <Route path="/criterios" element={<ProtectedRoute><Criterios /></ProtectedRoute>} />
             <Route path="/palpites-usuarios" element={<ProtectedRoute><UserPredictions /></ProtectedRoute>} />
             <Route path="/palpites-do-dia" element={<ProtectedRoute><DailyMatchesAndPredictions /></ProtectedRoute>} />
             <Route path="/palpites" element={<ProtectedRoute><Palpites /></ProtectedRoute>} />
