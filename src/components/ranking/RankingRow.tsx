@@ -1,61 +1,53 @@
-// src/components/ranking/RankingRow.tsx - VERSÃO COM CÁLCULO AUTOMÁTICO DE PRÊMIOS
+// src/components/ranking/RankingRow.tsx - VERSÃO ATUALIZADA
 
 import React from 'react';
 import { TableRow, TableCell } from "@/components/ui/table";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Participant } from "@/hooks/useParticipantsRanking";
 import { isAIParticipant } from '@/lib/utils';
+import { Pool } from '@/types/matches'; // Supondo que você tenha esse tipo
 
 interface RankingRowProps {
   participant: Participant;
   index: number;
   realUserRank: number;
   totalRealParticipants: number;
+  poolSettings: Pool | null; // <-- NOVO: Recebe as configs do bolão
 }
 
-// --- FUNÇÃO getPrizeText ATUALIZADA ---
 const getPrizeText = (
   isCurrentUserAI: boolean,
   realUserRank: number,
-  totalRealUsers: number
+  totalRealUsers: number,
+  pool: Pool | null // <-- NOVO: Recebe as configs do bolão
 ): string => {
-  // Retorna string vazia para IAs, ranks inválidos ou se não houver usuários.
-  if (isCurrentUserAI || realUserRank === -1 || totalRealUsers === 0) {
+  if (isCurrentUserAI || realUserRank < 0 || totalRealUsers === 0 || !pool) {
     return "";
   }
+  
+  // Calcula o prêmio apenas se houver uma taxa de entrada (lógica futura)
+  // Por enquanto, vamos focar em exibir o percentual
+  // const totalPrizePool = totalRealUsers * (pool.entry_fee || 25); // Exemplo
+  // const formatCurrency = (value: number) => value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
-  // 1. Calcula o total do prêmio acumulado.
-  const totalPrizePool = totalRealUsers * 25;
-
-  // 2. Helper para formatar o valor em Reais (BRL).
-  const formatCurrency = (value: number) => {
-    return value.toLocaleString('pt-BR', {
-      style: 'currency',
-      currency: 'BRL',
-    });
-  };
-
-  // 3. Verifica e retorna os prêmios para os 3 primeiros colocados.
   if (realUserRank === 0) {
-    // 60% para o primeiro lugar
-    return formatCurrency(totalPrizePool * 0.60);
+    return `${pool.prize_percent_1st}% do Prêmio`;
   }
   if (realUserRank === 1 && totalRealUsers > 1) {
-    // 25% para o segundo lugar
-    return formatCurrency(totalPrizePool * 0.25);
+    return `${pool.prize_percent_2nd}% do Prêmio`;
   }
   if (realUserRank === 2 && totalRealUsers > 2) {
-    // 15% para o terceiro lugar
-    return formatCurrency(totalPrizePool * 0.15);
+    return `${pool.prize_percent_3rd}% do Prêmio`;
   }
 
-  // 4. Mantém a regra do "café da manhã" para o último colocado,
-  //    desde que não seja um dos 3 primeiros (em bolões com 3 ou menos pessoas).
-  if (totalRealUsers > 3 && realUserRank === totalRealUsers - 1) {
-    return "Paga um café da manhã";
+  // Lógica da punição
+  if (pool.enable_punishment && totalRealUsers > 1 && realUserRank === totalRealUsers - 1) {
+    // Garante que a punição não sobrescreva o prêmio se houver 2 ou 3 participantes
+    if (totalRealUsers > 3 || (totalRealUsers > 1 && realUserRank > 0) && (totalRealUsers > 2 && realUserRank > 1)) {
+       return pool.punishment_description || "Punição não descrita";
+    }
   }
 
-  // Se não se encaixar em nenhuma regra, não há prêmio.
   return "";
 };
 
@@ -64,9 +56,11 @@ const RankingRow = ({
   index,
   realUserRank,
   totalRealParticipants,
+  poolSettings, // <-- NOVO
 }: RankingRowProps) => {
   const isCurrentUserAI = isAIParticipant(participant);
-  const prizeText = getPrizeText(isCurrentUserAI, realUserRank, totalRealParticipants);
+  // --- ATUALIZADO: Passa as configs para a função ---
+  const prizeText = getPrizeText(isCurrentUserAI, realUserRank, totalRealParticipants, poolSettings);
   const isTopRealUser = !isCurrentUserAI && realUserRank !== -1 && realUserRank < 3;
 
   return (
@@ -86,9 +80,9 @@ const RankingRow = ({
       </TableCell>
       <TableCell className="text-right">{participant.points}</TableCell>
       
-      <TableCell className="hidden md:table-cell text-right">{participant.matches}</TableCell>
-      <TableCell className="hidden md:table-cell text-right">{participant.accuracy}</TableCell>
-      <TableCell className="hidden md:table-cell text-right font-semibold">{prizeText}</TableCell>
+      <TableCell className="hidden md:table-cell text-right">{participant.exactScores}</TableCell>
+      <TableCell className="hidden md:table-cell text-right">{participant.correctWinners}</TableCell>
+      <TableCell className="hidden md:table-cell text-right font-semibold text-sm">{prizeText}</TableCell>
     </TableRow>
   );
 };
