@@ -1,4 +1,4 @@
-// src/contexts/AuthContext.tsx - VERSÃO REVISADA
+// src/contexts/AuthContext.tsx - VERSÃO FINAL REFORÇADA
 
 import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
@@ -22,7 +22,7 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<{ success: boolean; error: any | null }>;
   signOut: () => Promise<void>;
   updateUserProfile: (updates: Partial<Pick<AppUser, 'first_login'>>) => Promise<void>;
-  fetchAndSyncProfile: (sessionUser: User) => Promise<void>;
+  fetchAndSyncProfile: (sessionUser: User) => Promise<AppUser | null>; // Alterado para retornar o perfil
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -48,10 +48,12 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
   const signOut = useCallback(async () => {
     await supabase.auth.signOut();
-    setUser(null); // Limpa o usuário do estado imediatamente
+    setUser(null);
+    setIsAdmin(false);
+    setIsFirstLogin(false);
   }, []);
 
-  const fetchAndSyncProfile = useCallback(async (sessionUser: User) => {
+  const fetchAndSyncProfile = useCallback(async (sessionUser: User): Promise<AppUser | null> => {
     try {
       const { data: profile, error } = await supabase
         .from('users_custom')
@@ -59,28 +61,24 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         .eq('id', sessionUser.id)
         .single();
 
-      if (error && error.code !== 'PGRST116') { // PGRST116 = a linha pode não existir
-        throw error;
-      }
+      if (error && error.code !== 'PGRST116') throw error;
       
       const combinedUser: AppUser = { ...sessionUser, ...profile };
       setUser(combinedUser);
       setIsAdmin(!!profile?.is_admin);
-      
-      // Lógica de "primeiro login" corrigida e simplificada:
-      // O usuário está em "primeiro login" se o campo no banco for `false` ou nulo.
       setIsFirstLogin(profile?.first_login === false);
+      return combinedUser; // Retorna o usuário combinado
 
     } catch (error) {
       console.error("Erro ao buscar perfil:", error);
       toast.error("Não foi possível carregar os dados do seu perfil.");
-      await signOut(); // Desloga o usuário se não conseguir carregar o perfil
+      await signOut();
+      return null;
     }
   }, [signOut]);
 
   useEffect(() => {
-    // Busca a sessão inicial para evitar a tela de login piscando
-    const getInitialSession = async () => {
+    const checkUser = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) {
         await fetchAndSyncProfile(session.user);
@@ -88,13 +86,14 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       setLoading(false);
     };
 
-    getInitialSession();
+    checkUser();
 
-    // Ouve por mudanças de estado (LOGIN, LOGOUT)
     const { data: authListener } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         if (event === 'SIGNED_IN' && session?.user) {
+          setLoading(true);
           await fetchAndSyncProfile(session.user);
+          setLoading(false);
         } else if (event === 'SIGNED_OUT') {
           setUser(null);
           setIsAdmin(false);
@@ -109,34 +108,37 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   }, [fetchAndSyncProfile]);
   
   const login = async (email: string, password: string) => {
+    setLoading(true);
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     
     if (error) {
       toast.error(error.message || "Email ou senha inválidos.");
-    } else if (data.user) {
-      // Após o login bem-sucedido, busca o perfil para atualizar o estado
-      await fetchAndSyncProfile(data.user);
+      setLoading(false);
+      return { success: false, error };
+    } 
+    
+    if (data.user) {
+      // --- LÓGICA REFORÇADA ---
+      // Após o login, busca o perfil para ter certeza do status de admin
+      // antes de qualquer redirecionamento.
+      const profile = await fetchAndSyncProfile(data.user);
+      // Atualiza o estado de admin localmente com base no perfil recém-buscado
+      setIsAdmin(!!profile?.is_admin); 
     }
-
-    return { success: !error, error };
+    setLoading(false);
+    return { success: true, error: null };
   };
 
   const updateUserProfile = async (updates: Partial<Pick<AppUser, 'first_login'>>) => {
     if (!user) throw new Error("Usuário não autenticado para atualizar o perfil.");
     try {
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from('users_custom')
         .update(updates)
-        .eq('id', user.id)
-        .select()
-        .single();
+        .eq('id', user.id);
 
       if (error) throw error;
-      
-      if(data) {
-        // Força a atualização do estado local com os dados do banco
-        await fetchAndSyncProfile(user);
-      }
+      await fetchAndSyncProfile(user); // Re-sincroniza o perfil para pegar o estado mais recente
 
     } catch (error) {
       console.error("Erro em updateUserProfile:", error);
