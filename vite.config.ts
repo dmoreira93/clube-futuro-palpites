@@ -1,49 +1,56 @@
-import { defineConfig } from "vite";
-import react from "@vitejs/plugin-react-swc";
-import path from "path";
-import { VitePWA } from 'vite-plugin-pwa';
+// vite.config.ts - VERSÃO ATUALIZADA
 
+import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
+import path from "path"
+import { VitePWA } from 'vite-plugin-pwa'
+
+// https://vitejs.dev/config/
 export default defineConfig({
-  server: {
-    host: "::",
-    port: 8080,
-  },
   plugins: [
-    react(),
+    react(), 
     VitePWA({
       registerType: 'autoUpdate',
+      // --- BLOCO ADICIONADO AQUI ---
       workbox: {
-        // Força o novo service worker a ativar imediatamente, sem esperar.
+        // Força o novo service worker a se ativar assim que for baixado.
         skipWaiting: true,
-        // Garante que o novo SW controle todas as abas abertas do site.
+        // Faz o service worker recém-ativado tomar o controle da página imediatamente.
         clientsClaim: true,
-        // Remove caches de versões antigas durante a ativação do novo SW.
-        cleanupOutdatedCaches: true,
-        // Define explicitamente quais arquivos devem ser pré-cacheados.
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,wasm,webmanifest}'],
-        // Aumenta o limite de tamanho do arquivo para 5MB para evitar erros de build.
-        maximumFileSizeToCacheInBytes: 5 * 1024 * 1024, 
+        // Corrige o warning do build, especificando quais arquivos devem ser cacheados.
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,webmanifest}']
       },
+      // --- FIM DO BLOCO ADICIONADO ---
+      includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg'],
       manifest: {
         name: 'Clube Futuro Palpites',
-        short_name: 'Futuro Palpites',
-        description: 'Seu bolão de futebol online.',
-        theme_color: '#ffffff',
-        background_color: '#ffffff',
-        display: 'standalone',
-        scope: '/',
-        start_url: '/',
+        short_name: 'Palpites',
+        description: 'Bolão da Copa do Mundo de Clubes 2025',
+        theme_color: '#0F1A4D',
         icons: [
-          { src: 'pwa-192x192.png', sizes: '192x192', type: 'image/png' },
-          { src: 'pwa-512x512.png', sizes: '512x512', type: 'image/png' },
-          { src: 'pwa-maskable-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' }
+          {
+            src: 'pwa-192x192.png',
+            sizes: '192x192',
+            type: 'image/png'
+          },
+          {
+            src: 'pwa-512x512.png',
+            sizes: '512x512',
+            type: 'image/png'
+          },
+          {
+            src: 'pwa-512x512.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'any maskable'
+          }
         ]
       }
-    }),
+    })
   ],
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
     },
   },
-});
+})
