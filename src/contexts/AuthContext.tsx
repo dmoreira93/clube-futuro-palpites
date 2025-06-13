@@ -1,4 +1,4 @@
-// src/contexts/AuthContext.tsx
+// src/contexts/AuthContext.tsx - VERSÃO CORRIGIDA
 
 import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
@@ -43,9 +43,14 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [user, setUser] = useState<AppUser | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // --- LÓGICA CORRIGIDA AQUI ---
+  // isAuthenticated, isFirstLogin, e isAdmin agora são derivados diretamente do estado 'user'.
+  // Isso é mais seguro e evita problemas de sincronia.
   const isAuthenticated = !!user;
-  const isFirstLogin = user?.first_login ?? false;
+  // 'isFirstLogin' é verdadeiro se a coluna 'first_login' no banco for 'false'.
+  const isFirstLogin = user ? user.first_login === false : false;
   const isAdmin = user?.is_admin ?? false;
+  // --- FIM DA CORREÇÃO ---
 
   const signOut = useCallback(async () => {
     await supabase.auth.signOut();
@@ -84,11 +89,16 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   useEffect(() => {
     const initializeAuth = async () => {
       setLoading(true);
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) {
-        await fetchAndSyncProfile(session.user);
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user) {
+          await fetchAndSyncProfile(session.user);
+        }
+      } catch (e) {
+        console.error("Falha na inicialização do Auth", e);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     };
 
     initializeAuth();

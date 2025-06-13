@@ -1,7 +1,6 @@
-// src/components/layout/Navbar.tsx - VERSÃO ATUALIZADA
+// src/components/layout/Navbar.tsx
 
 import { useState } from "react";
-// --- 1. Importar useLocation ---
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import {
@@ -9,7 +8,6 @@ import {
   Shield as ShieldIcon,
   LogOut,
   Loader2,
-  Calculator,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -17,7 +15,6 @@ const Navbar = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const { isAuthenticated, isAdmin, user, signOut, loading } = useAuth();
   const navigate = useNavigate();
-  // --- 2. Obter a localização atual ---
   const location = useLocation();
   const isHomePage = location.pathname === '/';
 
@@ -27,16 +24,17 @@ const Navbar = () => {
   };
 
   const renderNavContent = () => {
-    if (loading) {
+    // **CORREÇÃO AQUI**
+    // Mostra o loading apenas se o usuário ESTIVER autenticado mas os dados ainda não carregaram.
+    // Isso evita o spinner infinito para usuários deslogados.
+    if (loading && isAuthenticated) {
       return <Loader2 className="h-5 w-5 animate-spin" />;
     }
 
     if (!isAuthenticated) {
-      // --- 3. Condição para esconder os botões na homepage ---
       if (isHomePage) {
-        return null; // Não renderiza nada na home
+        return null; 
       }
-
       return (
         <>
           <Link to="/cadastro">
@@ -72,8 +70,6 @@ const Navbar = () => {
     );
   };
   
-  // ... O restante do seu componente Navbar continua igual
-  // (a lógica do menu mobile já se beneficiará dessa alteração)
   return (
     <nav className="bg-fifa-blue text-white shadow-lg">
       <div className="container mx-auto px-4">
@@ -85,7 +81,6 @@ const Navbar = () => {
             </span>
           </Link>
 
-          {/* Botão do menu mobile */}
           <div className="md:hidden">
             <button
               onClick={() => setIsMenuOpen(!isMenuOpen)}
@@ -117,7 +112,6 @@ const Navbar = () => {
             </button>
           </div>
 
-          {/* Navegação Desktop */}
           <div className="hidden md:flex items-center space-x-4">
             <Link
               to="/criterios"
@@ -167,7 +161,6 @@ const Navbar = () => {
           </div>
         </div>
 
-        {/* Navegação Mobile */}
         {isMenuOpen && (
           <div className="md:hidden pb-4">
             <div className="flex flex-col space-y-3">
@@ -219,7 +212,9 @@ const Navbar = () => {
               )}
 
               <div className="border-t border-white/20 mt-4 pt-4">
-                {renderNavContent()}
+                <div className="flex flex-col items-start space-y-2">
+                  {renderNavContent()}
+                </div>
               </div>
             </div>
           </div>
