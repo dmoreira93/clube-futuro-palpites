@@ -1,20 +1,18 @@
-// src/contexts/AuthContext.tsx - VERSÃO ATUALIZADA
+// src/contexts/AuthContext.tsx - VERSÃO CORRIGIDA
 
 import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { User } from '@supabase/supabase-js';
 import { toast } from 'sonner';
 
-// --- ATUALIZADO: Adicionado pool_id ao tipo do usuário ---
 export type AppUser = User & {
   username?: string;
   name?: string;
   is_admin?: boolean;
   first_login?: boolean;
-  pool_id?: string | null; // <-- ADICIONADO AQUI
+  pool_id?: string | null;
 };
 
-// --- ATUALIZADO: Adicionado fetchAndSyncProfile ao tipo do contexto ---
 interface AuthContextType {
   user: AppUser | null;
   loading: boolean;
@@ -24,7 +22,7 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<{ success: boolean; error: any | null }>;
   signOut: () => Promise<void>;
   updateUserProfile: (updates: Partial<Pick<AppUser, 'first_login'>>) => Promise<void>;
-  fetchAndSyncProfile: (sessionUser: User) => Promise<void>; // <-- ADICIONADO AQUI
+  fetchAndSyncProfile: (sessionUser: User) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -63,28 +61,29 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       throw error;
     }
     
-    // Combina o usuário da sessão com o perfil do banco de dados
     const combinedUser: AppUser = { ...sessionUser, ...profile };
     setUser(combinedUser);
-
     setIsAdmin(!!profile?.is_admin);
-    // A lógica de primeiro login agora também considera se o usuário já está em um bolão.
-    setIsFirstLogin(profile?.first_login !== true);
+    
+    // A lógica de primeiro login agora é baseada diretamente no perfil do banco de dados
+    setIsFirstLogin(profile?.first_login === false);
   }, []);
 
   useEffect(() => {
     const { data: authListener } = supabase.auth.onAuthStateChange(
       async (event, session) => {
+        setLoading(true);
         try {
           if (session?.user) {
             await fetchAndSyncProfile(session.user);
           } else {
             setUser(null);
+            setIsAdmin(false);
+            setIsFirstLogin(false);
           }
         } catch (error: any) {
           toast.error(`Falha ao carregar o perfil: ${error.message}`);
           await supabase.auth.signOut();
-          setUser(null);
         } finally {
           setLoading(false);
         }
@@ -105,18 +104,29 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const updateUserProfile = async (updates: Partial<Pick<AppUser, 'first_login'>>) => {
     if (!user) throw new Error("Usuário não autenticado para atualizar o perfil.");
     try {
-      const { error } = await supabase.from('users_custom').update(updates).eq('id', user.id);
+      const { data, error } = await supabase
+        .from('users_custom')
+        .update(updates)
+        .eq('id', user.id)
+        .select() // <-- Pede ao Supabase para retornar a linha atualizada
+        .single();
+
       if (error) throw error;
-      if (updates.first_login === true) {
-        setIsFirstLogin(false);
+      
+      // --- ALTERAÇÃO PRINCIPAL AQUI ---
+      // Atualiza o estado local do usuário com os dados recém-salvos no banco
+      if(data) {
+        const updatedUser: AppUser = { ...user, ...data };
+        setUser(updatedUser);
+        setIsFirstLogin(updatedUser.first_login === false);
       }
+
     } catch (error) {
       console.error("Erro em updateUserProfile:", error);
       throw error;
     }
   };
   
-  // --- ATUALIZADO: Expondo a função no valor do contexto ---
   const value = { user, loading, isAuthenticated, isFirstLogin, isAdmin, login, signOut, updateUserProfile, fetchAndSyncProfile };
 
   return (
