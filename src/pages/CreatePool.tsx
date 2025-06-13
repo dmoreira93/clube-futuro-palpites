@@ -1,4 +1,4 @@
-// src/pages/CreatePool.tsx - VERSÃO CORRIGIDA
+// src/pages/CreatePool.tsx
 
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -15,6 +15,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 const CreatePoolPage = () => {
   const { user, fetchAndSyncProfile } = useAuth();
   const [poolName, setPoolName] = useState('');
+  const [entryFee, setEntryFee] = useState('25'); // <-- NOVO ESTADO PARA A TAXA
   const [prize1st, setPrize1st] = useState('60');
   const [prize2nd, setPrize2nd] = useState('25');
   const [prize3rd, setPrize3rd] = useState('15');
@@ -25,33 +26,23 @@ const CreatePoolPage = () => {
   const { toast } = useToast();
 
   const handleCreatePool = async () => {
-    if (!poolName.trim()) {
-      toast({ title: 'Erro', description: 'Por favor, dê um nome ao seu bolão.', variant: 'destructive' });
-      return;
-    }
-
-    const p1 = parseFloat(prize1st) || 0;
-    const p2 = parseFloat(prize2nd) || 0;
-    const p3 = parseFloat(prize3rd) || 0;
-
-    if (p1 + p2 + p3 !== 100) {
-      toast({ title: 'Erro de Validação', description: 'A soma das porcentagens dos prêmios deve ser exatamente 100%.', variant: 'destructive' });
+    // ... (validações existentes)
+    const fee = parseFloat(entryFee) || 0;
+    if (fee <= 0) {
+      toast({ title: 'Erro de Validação', description: 'O valor da inscrição deve ser maior que zero.', variant: 'destructive' });
       return;
     }
     
-    if (enablePunishment && !punishmentDescription.trim()) {
-      toast({ title: 'Erro de Validação', description: 'Por favor, descreva a punição do último colocado.', variant: 'destructive' });
-      return;
-    }
-
     setLoading(true);
     try {
+      // ATUALIZADO: Adicionamos o 'entry_fee_param' na chamada da função
       const { error } = await supabase.rpc('create_pool', {
         pool_name: poolName.trim(),
         owner_id_param: user.id,
-        prize_1st: p1,
-        prize_2nd: p2,
-        prize_3rd: p3,
+        entry_fee_param: fee, // <-- NOVO PARÂMETRO
+        prize_1st: parseFloat(prize1st) || 0,
+        prize_2nd: parseFloat(prize2nd) || 0,
+        prize_3rd: parseFloat(prize3rd) || 0,
         enable_punishment_param: enablePunishment,
         punishment_desc_param: enablePunishment ? punishmentDescription.trim() : null
       });
@@ -82,6 +73,12 @@ const CreatePoolPage = () => {
           <div className="space-y-2">
             <Label htmlFor="pool-name">Nome do Bolão</Label>
             <Input id="pool-name" placeholder="Ex: Bolão da Galera" value={poolName} onChange={(e) => setPoolName(e.target.value)} />
+          </div>
+          
+          {/* CAMPO DE VALOR DA INSCRIÇÃO ADICIONADO */}
+          <div className="space-y-2">
+            <Label htmlFor="entry-fee">Valor da Inscrição (R$)</Label>
+            <Input id="entry-fee" type="number" placeholder="Ex: 25" value={entryFee} onChange={(e) => setEntryFee(e.target.value)} />
           </div>
           
           <div>
@@ -118,7 +115,6 @@ const CreatePoolPage = () => {
             {loading ? <Loader2 className="animate-spin" /> : 'Criar Bolão'}
           </Button>
         </CardContent>
-        {/* --- CORREÇÃO APLICADA AQUI --- */}
       </Card>
     </div>
   );

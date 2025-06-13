@@ -23,6 +23,8 @@ export type Match = {
 };
 
 // --- GARANTA QUE ESTE TIPO ESTEJA AQUI ---
+// ... (outros tipos: Team, Match)
+
 export type Pool = {
   id: string;
   name: string;
@@ -33,4 +35,5 @@ export type Pool = {
   prize_percent_3rd: number;
   enable_punishment: boolean;
   punishment_description: string | null;
+  entry_fee: number; // <-- ADICIONE ESTA LINHA
 };
