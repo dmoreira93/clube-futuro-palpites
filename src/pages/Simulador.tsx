@@ -22,20 +22,22 @@ const Simulador = () => {
   const [allTeams, setAllTeams] = useState<SimulatedTeamStats[]>([]);
   const [knockoutSelections, setKnockoutSelections] = useState<{ [matchId: string]: string }>({});
 
-  // src/pages/Simulador.tsx
-
-// ... (imports e início do componente)
-
-const Simulador = () => {
-  // ... (outros states)
-  const [knockoutSelections, setKnockoutSelections] = useState<{ [matchId: string]: string }>({});
-
   const handleSimulation = async () => {
-    // ... (início da função, busca de dados, etc.)
+    if (!user) {
+      toast.error('Você precisa estar logado para simular seus palpites.');
+      return;
+    }
     setIsLoading(true);
     setSimulatedResults(null);
+    setKnockoutSelections({}); // Garante que as seleções antigas sejam limpas
     try {
-      // ... (código do Promise.all para buscar palpites, times e grupos)
+      const [{ data: predictionsQueryData, error: pError }, { data: teamsData, error: tError }, { data: groupsData, error: gError }] = await Promise.all([
+        supabase.from('match_predictions')
+          .select('home_score, away_score, matches!inner(home_team_id, away_team_id)')
+          .eq('user_id', user.id),
+        supabase.from('teams').select('id, name, group_id'),
+        supabase.from('groups').select('id, name')
+      ]);
 
       if (pError || tError || gError) throw pError || tError || gError;
       if (!predictionsQueryData || predictionsQueryData.length === 0) {
@@ -44,34 +46,17 @@ const Simulador = () => {
         return;
       }
 
-      // ... (código que formata os palpites e calcula a classificação dos grupos)
+      const formattedPredictions = predictionsQueryData.map(p => ({
+        home_score: p.home_score,
+        away_score: p.away_score,
+        home_team_id: p.matches.home_team_id,
+        away_team_id: p.matches.away_team_id,
+      }));
+
       const results = calculateGroupStandings(formattedPredictions, teamsData as Team[] || [], groupsData || []);
       setSimulatedResults(results);
       setAllTeams(results.flatMap(g => g.standings));
-
-      // --- CORREÇÃO AQUI ---
-      // REMOVA ou COMENTE todo o bloco abaixo, que pré-selecionava os vencedores.
-      // O state 'knockoutSelections' já começa vazio, que é o correto.
-      /*
-      const r16Selections: { [key: string]: string } = {};
-      const getTeam = (groupName: string, position: number) => results.find(g => g.groupName === groupName)?.standings[position - 1];
-
-      const r16matches = [
-        { id: 'r16-1', winner: getTeam('A', 1) }, { id: 'r16-2', winner: getTeam('C', 1) },
-        { id: 'r16-3', winner: getTeam('E', 1) }, { id: 'r16-4', winner: getTeam('G', 1) },
-        { id: 'r16-5', winner: getTeam('B', 1) }, { id: 'r16-6', winner: getTeam('D', 1) },
-        { id: 'r16-7', winner: getTeam('F', 1) }, { id: 'r16-8', winner: getTeam('H', 1) },
-      ];
-
-      r16matches.forEach(match => {
-        if (match.winner) r16Selections[match.id] = match.winner.teamId;
-      });
-      setKnockoutSelections(r16Selections);
-      */
-      // Ao remover o bloco acima, apenas redefina o estado para garantir que esteja limpo.
-      setKnockoutSelections({});
-
-
+      
       toast.success("Simulação concluída! Agora selecione os vencedores do mata-mata.");
 
     } catch (error: any) {
@@ -82,16 +67,20 @@ const Simulador = () => {
     }
   };
 
-  // ... (resto do componente)
-};
-
   const handleKnockoutSelection = useCallback((matchId: string, teamId: string | null) => {
     setKnockoutSelections(prev => {
       const newState = { ...prev };
-      if (teamId) newState[matchId] = teamId;
-      else delete newState[matchId];
+      if (teamId) {
+        newState[matchId] = teamId;
+      } else {
+        delete newState[matchId];
+      }
 
       const cascadeClearMap: { [key: string]: string[] } = {
+        'r16-1': ['qf-1', 'sf-1', 'final', 'third_place'], 'r16-2': ['qf-1', 'sf-1', 'final', 'third_place'],
+        'r16-3': ['qf-2', 'sf-1', 'final', 'third_place'], 'r16-4': ['qf-2', 'sf-1', 'final', 'third_place'],
+        'r16-5': ['qf-3', 'sf-2', 'final', 'third_place'], 'r16-6': ['qf-3', 'sf-2', 'final', 'third_place'],
+        'r16-7': ['qf-4', 'sf-2', 'final', 'third_place'], 'r16-8': ['qf-4', 'sf-2', 'final', 'third_place'],
         'qf-1': ['sf-1', 'final', 'third_place'], 'qf-2': ['sf-1', 'final', 'third_place'],
         'qf-3': ['sf-2', 'final', 'third_place'], 'qf-4': ['sf-2', 'final', 'third_place'],
         'sf-1': ['final', 'third_place'], 'sf-2': ['final', 'third_place'],
@@ -106,27 +95,16 @@ const Simulador = () => {
   }, []);
 
   const handleAdoptGroupPrediction = async (groupId: string, firstTeamId: string, secondTeamId: string) => {
-    if (!user) {
-      toast.error('Você precisa estar logado.');
-      return;
-    }
-
+    if (!user) return;
     if (firstTeamId === secondTeamId) {
       toast.error("Você não pode escolher o mesmo time como 1º e 2º lugar.");
       return;
     }
-
     const toastId = toast.loading('Salvando palpites do grupo...');
     try {
-      const { error } = await supabase
-        .from('group_predictions')
-        .upsert({
-          user_id: user.id,
-          group_id: groupId,
-          predicted_first_team_id: firstTeamId,
-          predicted_second_team_id: secondTeamId,
-        }, { onConflict: 'user_id, group_id' });
-
+      const { error } = await supabase.from('group_predictions').upsert({
+        user_id: user.id, group_id: groupId, predicted_first_team_id: firstTeamId, predicted_second_team_id: secondTeamId,
+      }, { onConflict: 'user_id, group_id' });
       if (error) throw error;
       toast.success("Palpites do grupo salvos com sucesso!", { id: toastId });
     } catch (error: any) {
@@ -135,28 +113,12 @@ const Simulador = () => {
   };
 
   const handleAdoptFinalPredictions = async (championId: string, runnerUpId: string, thirdPlaceId: string, fourthPlaceId: string, finalHomeScore: number, finalAwayScore: number) => {
-    if (!user) {
-      toast.error('Você precisa estar logado.');
-      return;
-    }
-
+    if (!user) return;
     const toastId = toast.loading('Salvando palpites finais...');
-
     try {
-      const { error } = await supabase
-        .from('final_predictions')
-        .upsert({
-          user_id: user.id,
-          champion_id: championId,
-          runner_up_id: runnerUpId,
-          third_place_id: thirdPlaceId,
-          fourth_place_id: fourthPlaceId,
-          final_home_score: finalHomeScore,
-          final_away_score: finalAwayScore,
-        }, {
-          onConflict: 'user_id',
-        });
-
+      const { error } = await supabase.from('final_predictions').upsert({
+        user_id: user.id, champion_id: championId, runner_up_id: runnerUpId, third_place_id: thirdPlaceId, fourth_place_id: fourthPlaceId, final_home_score: finalHomeScore, final_away_score: finalAwayScore,
+      }, { onConflict: 'user_id' });
       if (error) throw error;
       toast.success('Palpites finais salvos com sucesso!', { id: toastId });
     } catch (error: any) {
