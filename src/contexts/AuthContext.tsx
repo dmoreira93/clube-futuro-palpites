@@ -1,10 +1,11 @@
-// src/contexts/AuthContext.tsx - VERSÃO CORRIGIDA
+// src/contexts/AuthContext.tsx - VERSÃO FINAL E UNIFICADA
 
 import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { User } from '@supabase/supabase-js';
 import { toast } from 'sonner';
 
+// Tipos de usuário, incluindo o pool_id que havia se perdido
 export type AppUser = User & {
   username?: string;
   name?: string;
@@ -13,6 +14,7 @@ export type AppUser = User & {
   pool_id?: string | null;
 };
 
+// Interface do Contexto
 interface AuthContextType {
   user: AppUser | null;
   loading: boolean;
@@ -21,7 +23,7 @@ interface AuthContextType {
   isAdmin: boolean;
   login: (email: string, password: string) => Promise<{ success: boolean; error: any | null }>;
   signOut: () => Promise<void>;
-  updateUserProfile: (updates: Partial<Pick<AppUser, 'first_login'>>) => Promise<void>;
+  updateUserProfile: (updates: Partial<Pick<AppUser, 'first_login' | 'pool_id'>>) => Promise<void>;
   fetchAndSyncProfile: (sessionUser: User) => Promise<AppUser | null>;
 }
 
@@ -35,22 +37,15 @@ export const useAuth = () => {
   return context;
 };
 
-interface AuthProviderProps {
-  children: ReactNode;
-}
-
-export const AuthProvider = ({ children }: AuthProviderProps) => {
+// Componente Provedor
+export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<AppUser | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // --- LÓGICA CORRIGIDA AQUI ---
-  // isAuthenticated, isFirstLogin, e isAdmin agora são derivados diretamente do estado 'user'.
-  // Isso é mais seguro e evita problemas de sincronia.
+  // Estados derivados: mais seguros e sempre em sincronia com o objeto 'user'
   const isAuthenticated = !!user;
-  // 'isFirstLogin' é verdadeiro se a coluna 'first_login' no banco for 'false'.
   const isFirstLogin = user ? user.first_login === false : false;
   const isAdmin = user?.is_admin ?? false;
-  // --- FIM DA CORREÇÃO ---
 
   const signOut = useCallback(async () => {
     await supabase.auth.signOut();
@@ -66,12 +61,12 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         .single();
       
       if (error && error.code !== 'PGRST116') {
-          if (error.message.includes('JWT') || error.code === 'PGRST301') {
-            toast.error("Sua sessão expirou. Por favor, faça login novamente.");
-            await signOut();
-            return null;
-          }
-          throw error;
+        if (error.message.includes('JWT') || error.code === 'PGRST301') {
+          toast.error("Sua sessão expirou. Por favor, faça login novamente.");
+          await signOut();
+          return null;
+        }
+        throw error;
       }
       
       const combinedUser: AppUser = { ...sessionUser, ...profile };
@@ -80,38 +75,35 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
     } catch (error) {
       console.error("Erro ao buscar perfil:", error);
-      toast.error("Não foi possível carregar os dados do seu perfil.");
       await signOut();
       return null;
     }
   }, [signOut]);
 
   useEffect(() => {
-    const initializeAuth = async () => {
-      setLoading(true);
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session?.user) {
-          await fetchAndSyncProfile(session.user);
-        }
-      } catch (e) {
-        console.error("Falha na inicialização do Auth", e);
-      } finally {
-        setLoading(false);
+    // Verificação inicial da sessão ao carregar a página
+    setLoading(true);
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        fetchAndSyncProfile(session.user).finally(() => setLoading(false));
+      } else {
+        setLoading(false); // Sem sessão, termina o carregamento
       }
-    };
+    });
 
-    initializeAuth();
-
+    // Listener para mudanças de autenticação (login, logout)
     const { data: authListener } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        setLoading(true);
-        if (event === 'SIGNED_IN' && session?.user) {
-          await fetchAndSyncProfile(session.user);
-        } else if (event === 'SIGNED_OUT') {
-          setUser(null);
-        }
-        setLoading(false);
+      (event, session) => {
+        // Reintroduzindo sua solução do setTimeout para evitar deadlocks
+        setTimeout(async () => {
+          setLoading(true);
+          if (session?.user) {
+            await fetchAndSyncProfile(session.user);
+          } else {
+            setUser(null);
+          }
+          setLoading(false);
+        }, 0);
       }
     );
 
@@ -121,37 +113,22 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   }, [fetchAndSyncProfile]);
   
   const login = async (email: string, password: string) => {
-    setLoading(true);
-    try {
-        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-        if (error) {
-            toast.error(error.message || "Email ou senha inválidos.");
-            return { success: false, error };
-        } 
-        if (data.user) {
-            await fetchAndSyncProfile(data.user);
-        }
-        return { success: true, error: null };
-    } finally {
-        setLoading(false);
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) {
+      toast.error(error.message || "Email ou senha inválidos.");
     }
+    // O listener onAuthStateChange cuidará do resto
+    return { success: !error, error };
   };
 
-  const updateUserProfile = async (updates: Partial<Pick<AppUser, 'first_login'>>) => {
+  const updateUserProfile = async (updates: Partial<Pick<AppUser, 'first_login' | 'pool_id'>>) => {
     if (!user) throw new Error("Usuário não autenticado para atualizar o perfil.");
-    try {
-      const { error } = await supabase
-        .from('users_custom')
-        .update(updates)
-        .eq('id', user.id);
-
-      if (error) throw error;
-      await fetchAndSyncProfile(user);
-
-    } catch (error) {
-      console.error("Erro em updateUserProfile:", error);
-      throw error;
-    }
+    const { error } = await supabase.from('users_custom').update(updates).eq('id', user.id);
+    if (error) {
+        toast.error("Erro ao atualizar perfil.");
+        throw error;
+    };
+    await fetchAndSyncProfile(user); // Re-sincroniza o estado local com o banco
   };
   
   const value = { user, loading, isAuthenticated, isFirstLogin, isAdmin, login, signOut, updateUserProfile, fetchAndSyncProfile };
