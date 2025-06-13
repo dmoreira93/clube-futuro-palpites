@@ -13,26 +13,22 @@ interface RankingRowProps {
   poolSettings: Pool | null;
 }
 
-// ESTA É A VERSÃO CORRETA DA FUNÇÃO
 const getPrizeText = (
   isCurrentUserAI: boolean,
   realUserRank: number,
   totalRealUsers: number,
   pool: Pool | null
 ): string => {
-  // Retorna vazio se não houver configurações, taxa de inscrição, etc.
   if (isCurrentUserAI || realUserRank < 0 || totalRealUsers === 0 || !pool || !pool.entry_fee) {
     return "";
   }
 
-  // Calcula o prêmio total baseado na taxa de inscrição do bolão
   const totalPrizePool = totalRealUsers * pool.entry_fee;
 
   const formatCurrency = (value: number) => {
     return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
   };
 
-  // Regras de premiação que calculam e formatam o VALOR MONETÁRIO
   if (realUserRank === 0 && pool.prize_percent_1st > 0) {
     return formatCurrency(totalPrizePool * (pool.prize_percent_1st / 100));
   }
@@ -43,8 +39,12 @@ const getPrizeText = (
     return formatCurrency(totalPrizePool * (pool.prize_percent_3rd / 100));
   }
 
-  // Regra da punição que busca a descrição do banco
-  if (pool.enable_punishment && totalRealUsers > 3 && realUserRank === totalRealUsers - 1) {
+  // Condição da Punição
+  // Só aplica se o último colocado não for um dos 3 primeiros premiados
+  const isLastPlace = realUserRank === totalRealUsers - 1;
+  const isAlsoPrizeWinner = realUserRank < 3;
+  
+  if (pool.enable_punishment && isLastPlace && !isAlsoPrizeWinner) {
     return pool.punishment_description || "Punição";
   }
 
