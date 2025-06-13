@@ -1,11 +1,10 @@
-// src/pages/Ranking.tsx - VERSÃO ATUALIZADA
-
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import RankingTable from '@/components/home/RankingTable';
 import { Loader2 } from 'lucide-react';
-import { Pool } from '@/types/matches'; // Certifique-se que este tipo existe
+import { Pool } from '@/types/matches';
+import { toast } from 'sonner';
 
 const RankingPage = () => {
   const { user } = useAuth();
@@ -28,12 +27,13 @@ const RankingPage = () => {
       
       if (error) throw error;
       setPoolSettings(data);
-    } catch (error) {
+    } catch (error: any) {
+      toast.error("Não foi possível carregar as regras de premiação do bolão.");
       console.error("Erro ao buscar configurações do bolão:", error);
     } finally {
       setLoading(false);
     }
-  }, [user]);
+  }, [user?.pool_id]); // Dependência mais estável
 
   useEffect(() => {
     fetchPoolSettings();
@@ -53,7 +53,6 @@ const RankingPage = () => {
         Ranking do Bolão: <span className="text-gray-700">{poolSettings?.name || '...'}</span>
       </h1>
       <div className="max-w-4xl mx-auto">
-        {/* Passando as configurações para a tabela */}
         <RankingTable poolSettings={poolSettings} />
       </div>
     </div>

@@ -1,51 +1,43 @@
-// src/components/ranking/RankingRow.tsx - VERSÃO ATUALIZADA
-
 import React from 'react';
 import { TableRow, TableCell } from "@/components/ui/table";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Participant } from "@/hooks/useParticipantsRanking";
 import { isAIParticipant } from '@/lib/utils';
-import { Pool } from '@/types/matches'; // Supondo que você tenha esse tipo
+import { Pool } from '@/types/matches';
 
 interface RankingRowProps {
   participant: Participant;
   index: number;
   realUserRank: number;
   totalRealParticipants: number;
-  poolSettings: Pool | null; // <-- NOVO: Recebe as configs do bolão
+  poolSettings: Pool | null; // Recebe as configurações do bolão
 }
 
+// Nova função que lê as configurações do bolão em vez de ter valores fixos
 const getPrizeText = (
   isCurrentUserAI: boolean,
   realUserRank: number,
   totalRealUsers: number,
-  pool: Pool | null // <-- NOVO: Recebe as configs do bolão
+  pool: Pool | null // Usa as configurações recebidas
 ): string => {
   if (isCurrentUserAI || realUserRank < 0 || totalRealUsers === 0 || !pool) {
     return "";
   }
-  
-  // Calcula o prêmio apenas se houver uma taxa de entrada (lógica futura)
-  // Por enquanto, vamos focar em exibir o percentual
-  // const totalPrizePool = totalRealUsers * (pool.entry_fee || 25); // Exemplo
-  // const formatCurrency = (value: number) => value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
-  if (realUserRank === 0) {
+  // Regras de premiação baseadas nas configurações
+  if (realUserRank === 0 && pool.prize_percent_1st > 0) {
     return `${pool.prize_percent_1st}% do Prêmio`;
   }
-  if (realUserRank === 1 && totalRealUsers > 1) {
+  if (realUserRank === 1 && totalRealUsers > 1 && pool.prize_percent_2nd > 0) {
     return `${pool.prize_percent_2nd}% do Prêmio`;
   }
-  if (realUserRank === 2 && totalRealUsers > 2) {
+  if (realUserRank === 2 && totalRealUsers > 2 && pool.prize_percent_3rd > 0) {
     return `${pool.prize_percent_3rd}% do Prêmio`;
   }
 
-  // Lógica da punição
-  if (pool.enable_punishment && totalRealUsers > 1 && realUserRank === totalRealUsers - 1) {
-    // Garante que a punição não sobrescreva o prêmio se houver 2 ou 3 participantes
-    if (totalRealUsers > 3 || (totalRealUsers > 1 && realUserRank > 0) && (totalRealUsers > 2 && realUserRank > 1)) {
-       return pool.punishment_description || "Punição não descrita";
-    }
+  // Regra da punição
+  if (pool.enable_punishment && totalRealUsers > 3 && realUserRank === totalRealUsers - 1) {
+    return pool.punishment_description || "Punição";
   }
 
   return "";
@@ -56,12 +48,15 @@ const RankingRow = ({
   index,
   realUserRank,
   totalRealParticipants,
-  poolSettings, // <-- NOVO
+  poolSettings,
 }: RankingRowProps) => {
   const isCurrentUserAI = isAIParticipant(participant);
-  // --- ATUALIZADO: Passa as configs para a função ---
   const prizeText = getPrizeText(isCurrentUserAI, realUserRank, totalRealParticipants, poolSettings);
   const isTopRealUser = !isCurrentUserAI && realUserRank !== -1 && realUserRank < 3;
+  
+  // Assegurando que a célula de prêmio/penalidade seja exibida
+  const participantAccuracy = participant.accuracy || '0%';
+  const participantMatches = (participant as any).matches ?? participant.correctWinners ?? 0;
 
   return (
     <TableRow className={isTopRealUser ? "bg-yellow-50" : ""}>
@@ -79,9 +74,8 @@ const RankingRow = ({
         </div>
       </TableCell>
       <TableCell className="text-right">{participant.points}</TableCell>
-      
-      <TableCell className="hidden md:table-cell text-right">{participant.exactScores}</TableCell>
-      <TableCell className="hidden md:table-cell text-right">{participant.correctWinners}</TableCell>
+      <TableCell className="hidden md:table-cell text-right">{participantMatches}</TableCell>
+      <TableCell className="hidden md:table-cell text-right">{participantAccuracy}</TableCell>
       <TableCell className="hidden md:table-cell text-right font-semibold text-sm">{prizeText}</TableCell>
     </TableRow>
   );

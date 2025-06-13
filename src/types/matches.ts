@@ -1,12 +1,10 @@
-// src/types/matches.ts
-
 import { Prediction } from "./predictions";
 
 export type Team = {
   id: string;
   name: string;
-  group_id?: string; // Group ID as optional
-  flag_url?: string; // Flag URL as optional
+  group_id?: string;
+  flag_url?: string;
 };
 
 export type Match = {
@@ -19,13 +17,12 @@ export type Match = {
   home_score: number | null;
   away_score: number | null;
   is_finished: boolean;
-  predictions?: Prediction[]; // Made predictions optional
+  predictions?: Prediction[];
   stage: string;
-  stadium?: string | null; // Add stadium property
+  stadium?: string | null;
 };
 
-// --- ADICIONE O TIPO ABAIXO ---
-
+// --- GARANTA QUE ESTE TIPO ESTEJA AQUI ---
 export type Pool = {
   id: string;
   name: string;
