@@ -1,91 +1,95 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/contexts/AuthContext';
 import RankingTable from '@/components/home/RankingTable';
-import { Loader2 } from 'lucide-react';
-import { Pool } from '@/types/matches';
-import { toast } from 'sonner';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import NextMatches from '@/components/home/NextMatches';
+import { Loader2, Settings } from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Link } from 'react-router-dom';
+import { useAuth } from '@/contexts/AuthContext';
+import { Pool } from '@/types/matches';
 
 const Dashboard = () => {
   const { user, loading: authLoading } = useAuth();
   const [poolSettings, setPoolSettings] = useState<Pool | null>(null);
-  const [settingsLoading, setSettingsLoading] = useState(true);
+  const [loading, setLoading] = useState(true);
+
+  // Hook unificado para buscar todas as informações do bolão
+  const fetchData = useCallback(async () => {
+    if (!user?.pool_id) {
+      setLoading(false);
+      return;
+    }
+    
+    try {
+      setLoading(true);
+      // Busca as configurações do bolão (prêmios, nome, etc.)
+      const { data: poolData, error: poolError } = await supabase
+        .from('pools')
+        .select('*')
+        .eq('id', user.pool_id)
+        .single();
+
+      if (poolError && poolError.code !== 'PGRST116') throw poolError;
+      setPoolSettings(poolData);
+
+    } catch (error) {
+      console.error("ERRO FATAL ao buscar dados do bolão:", error);
+    } finally {
+      setLoading(false);
+    }
+  }, [user?.pool_id]);
 
   useEffect(() => {
-    const fetchPoolSettings = async () => {
-      if (authLoading || !user?.pool_id) {
-        setSettingsLoading(false);
-        return;
-      }
-      
-      setSettingsLoading(true);
-      try {
-        const { data, error } = await supabase
-          .from('pools')
-          .select('*')
-          .eq('id', user.pool_id)
-          .single();
+    if (!authLoading) {
+      fetchData();
+    }
+  }, [authLoading, fetchData]);
 
-        if (error && error.code !== 'PGRST116') throw error;
-        setPoolSettings(data);
-      } catch (error: any) {
-        // Silencioso no dashboard para não poluir
-        console.error("Erro ao buscar configurações do bolão no dashboard:", error);
-      } finally {
-        setSettingsLoading(false);
-      }
-    };
-
-    fetchPoolSettings();
-  }, [user?.pool_id, authLoading]);
-
-  if (authLoading) {
+  if (authLoading || loading) {
     return (
-      <div className="flex justify-center items-center h-screen">
+      <div className="container mx-auto px-4 py-8 flex justify-center items-center h-screen">
         <Loader2 className="h-8 w-8 animate-spin text-fifa-blue" />
+        <span className="ml-4 text-lg">Carregando dados do seu bolão...</span>
       </div>
     );
   }
-  
+
   return (
-    <div className="container mx-auto p-4 md:p-6 lg:p-8 space-y-8">
-      {/* SEÇÃO DE BOAS-VINDAS RESTAURADA */}
-      <div className="text-center">
-        <h1 className="text-3xl font-bold text-fifa-blue">
-          Bem-vindo ao Bolão, <span className="text-gray-800 dark:text-gray-200">{user?.name || user?.email}!</span>
-        </h1>
-        <p className="text-muted-foreground mt-2">
-          Confira o ranking e seus próximos palpites.
-        </p>
+    <div className="container mx-auto px-4 py-8 space-y-8">
+      {/* Cabeçalho com nome do bolão e botão de configurações */}
+      <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4">
+          <h1 className="text-2xl md:text-3xl font-bold text-fifa-blue">
+            Dashboard: <span className="text-gray-700 dark:text-gray-300">{poolSettings?.name || 'Meu Bolão'}</span>
+          </h1>
+          <Link to="/pool-settings">
+              <Button variant="outline">
+                  <Settings className="mr-2 h-4 w-4" />
+                  Configurações do Bolão
+              </Button>
+          </Link>
       </div>
 
-      {/* SEÇÃO DE PRÓXIMOS JOGOS (Exemplo de outro item) */}
+      {/* Cards de Próximos Jogos */}
       <Card>
-          <CardHeader>
-              <CardTitle>Seus Próximos Palpites</CardTitle>
-              <CardDescription>Estes são os próximos jogos para os quais você ainda não palpitou.</CardDescription>
-          </CardHeader>
-          <CardContent>
-              <NextMatches userId={user?.id} />
-          </CardContent>
+        <CardHeader>
+            <CardTitle>Seus Próximos Palpites</CardTitle>
+            <CardDescription>Estes são os próximos jogos para os quais você ainda não palpitou.</CardDescription>
+        </CardHeader>
+        <CardContent>
+            <NextMatches userId={user?.id} />
+        </CardContent>
       </Card>
       
-      {/* SEÇÃO DO RANKING */}
+      {/* Card do Ranking */}
       <Card>
         <CardHeader>
           <CardTitle>Ranking Parcial</CardTitle>
           <CardDescription>A classificação atualizada do seu bolão.</CardDescription>
         </CardHeader>
         <CardContent>
-          {settingsLoading ? (
-            <div className="flex justify-center items-center h-40">
-              <Loader2 className="h-6 w-6 animate-spin" />
-            </div>
-          ) : (
-            <RankingTable poolSettings={poolSettings} />
-          )}
+          {/* Passando as configurações para a tabela de ranking */}
+          <RankingTable poolSettings={poolSettings} />
         </CardContent>
       </Card>
     </div>

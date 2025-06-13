@@ -13,8 +13,6 @@ interface RankingRowProps {
   poolSettings: Pool | null;
 }
 
-// Dentro de src/components/ranking/RankingRow.tsx
-
 const getPrizeText = (
   isCurrentUserAI: boolean,
   realUserRank: number,
@@ -31,24 +29,12 @@ const getPrizeText = (
     return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
   };
 
-  // Premiação
   if (realUserRank === 0 && pool.prize_percent_1st > 0) return formatCurrency(totalPrizePool * (pool.prize_percent_1st / 100));
   if (realUserRank === 1 && totalRealUsers > 1 && pool.prize_percent_2nd > 0) return formatCurrency(totalPrizePool * (pool.prize_percent_2nd / 100));
   if (realUserRank === 2 && totalRealUsers > 2 && pool.prize_percent_3rd > 0) return formatCurrency(totalPrizePool * (pool.prize_percent_3rd / 100));
 
-  // --- LÓGICA DA PUNIÇÃO COM DEBUG ---
   const isLastPlace = realUserRank === totalRealUsers - 1;
   const isAlsoPrizeWinner = realUserRank < 3;
-  
-  // Imprime no console as variáveis que usamos para decidir se mostra a punição
-  if(isLastPlace) {
-    console.log(`DEBUG PUNIÇÃO para ${pool.punishment_description}:`, {
-      enable_punishment: pool.enable_punishment,
-      isLastPlace: isLastPlace,
-      isAlsoPrizeWinner: isAlsoPrizeWinner,
-      conditionResult: pool.enable_punishment && isLastPlace && !isAlsoPrizeWinner
-    });
-  }
   
   if (pool.enable_punishment && isLastPlace && !isAlsoPrizeWinner) {
     return pool.punishment_description || "Punição";
