@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import RankingTable from '@/components/home/RankingTable';
@@ -7,26 +7,29 @@ import { Pool } from '@/types/matches';
 import { toast } from 'sonner';
 
 const RankingPage = () => {
-  const { user, loading: authLoading } = useAuth(); // Pegamos o 'loading' do AuthContext
+  const { user, loading: authLoading } = useAuth();
   const [poolSettings, setPoolSettings] = useState<Pool | null>(null);
   const [settingsLoading, setSettingsLoading] = useState(true);
 
   useEffect(() => {
     const fetchPoolSettings = async () => {
-      // A função só prossegue se tivermos um pool_id.
       if (!user?.pool_id) {
-        // Se não tiver, apenas aguardamos. O AuthContext irá atualizar o user e disparar o efeito novamente.
-        setSettingsLoading(false); // Já podemos parar de carregar as configurações.
+        setSettingsLoading(false);
         return;
       }
       
       setSettingsLoading(true);
       try {
+        console.log(`DEBUG: Iniciando busca pelo bolão com pool_id: ${user.pool_id}`);
+        
         const { data, error } = await supabase
           .from('pools')
           .select('*')
           .eq('id', user.pool_id)
           .single();
+
+        // LINHA DE DIAGNÓSTICO CRÍTICA
+        console.log('DEBUG: Resultado da busca pelo bolão (pools):', { data, error });
 
         if (error && error.code !== 'PGRST116') {
           throw error;
@@ -35,8 +38,7 @@ const RankingPage = () => {
         if (data) {
           setPoolSettings(data);
         } else {
-          // Isso pode acontecer se o pool_id do usuário não for válido.
-          toast.error("Não foi possível encontrar as configurações do seu bolão. Verifique se você está no bolão correto.");
+          toast.info("As configurações do seu bolão ainda não foram definidas.");
         }
 
       } catch (error: any) {
@@ -47,14 +49,11 @@ const RankingPage = () => {
       }
     };
 
-    // O useEffect agora depende diretamente do pool_id.
-    // Ele só será executado quando authLoading for false e o pool_id estiver disponível.
     if (!authLoading) {
       fetchPoolSettings();
     }
   }, [user?.pool_id, authLoading]);
 
-  // A página está carregando se a autenticação OU as configurações estiverem carregando.
   if (authLoading || settingsLoading) {
     return (
       <div className="flex justify-center items-center h-screen">
