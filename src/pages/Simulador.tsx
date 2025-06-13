@@ -22,21 +22,20 @@ const Simulador = () => {
   const [allTeams, setAllTeams] = useState<SimulatedTeamStats[]>([]);
   const [knockoutSelections, setKnockoutSelections] = useState<{ [matchId: string]: string }>({});
 
+  // src/pages/Simulador.tsx
+
+// ... (imports e início do componente)
+
+const Simulador = () => {
+  // ... (outros states)
+  const [knockoutSelections, setKnockoutSelections] = useState<{ [matchId: string]: string }>({});
+
   const handleSimulation = async () => {
-    if (!user) {
-      toast.error('Você precisa estar logado para simular seus palpites.');
-      return;
-    }
+    // ... (início da função, busca de dados, etc.)
     setIsLoading(true);
     setSimulatedResults(null);
     try {
-      const [{ data: predictionsQueryData, error: pError }, { data: teamsData, error: tError }, { data: groupsData, error: gError }] = await Promise.all([
-        supabase.from('match_predictions')
-          .select('home_score, away_score, matches!inner(home_team_id, away_team_id)')
-          .eq('user_id', user.id),
-        supabase.from('teams').select('id, name, group_id'),
-        supabase.from('groups').select('id, name')
-      ]);
+      // ... (código do Promise.all para buscar palpites, times e grupos)
 
       if (pError || tError || gError) throw pError || tError || gError;
       if (!predictionsQueryData || predictionsQueryData.length === 0) {
@@ -45,17 +44,15 @@ const Simulador = () => {
         return;
       }
 
-      const formattedPredictions = predictionsQueryData.map(p => ({
-        home_score: p.home_score,
-        away_score: p.away_score,
-        home_team_id: p.matches.home_team_id,
-        away_team_id: p.matches.away_team_id,
-      }));
-
+      // ... (código que formata os palpites e calcula a classificação dos grupos)
       const results = calculateGroupStandings(formattedPredictions, teamsData as Team[] || [], groupsData || []);
       setSimulatedResults(results);
       setAllTeams(results.flatMap(g => g.standings));
 
+      // --- CORREÇÃO AQUI ---
+      // REMOVA ou COMENTE todo o bloco abaixo, que pré-selecionava os vencedores.
+      // O state 'knockoutSelections' já começa vazio, que é o correto.
+      /*
       const r16Selections: { [key: string]: string } = {};
       const getTeam = (groupName: string, position: number) => results.find(g => g.groupName === groupName)?.standings[position - 1];
 
@@ -70,8 +67,12 @@ const Simulador = () => {
         if (match.winner) r16Selections[match.id] = match.winner.teamId;
       });
       setKnockoutSelections(r16Selections);
+      */
+      // Ao remover o bloco acima, apenas redefina o estado para garantir que esteja limpo.
+      setKnockoutSelections({});
 
-      toast.success("Simulação concluída!");
+
+      toast.success("Simulação concluída! Agora selecione os vencedores do mata-mata.");
 
     } catch (error: any) {
       console.error("Erro na simulação:", error);
@@ -80,6 +81,9 @@ const Simulador = () => {
       setIsLoading(false);
     }
   };
+
+  // ... (resto do componente)
+};
 
   const handleKnockoutSelection = useCallback((matchId: string, teamId: string | null) => {
     setKnockoutSelections(prev => {

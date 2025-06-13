@@ -1,4 +1,4 @@
-// src/components/simulation/KnockoutBracket.tsx
+// src/components/simulation/KnockoutBracket.tsx - VERSÃO ATUALIZADA
 
 import React from 'react';
 import { SimulatedGroup, SimulatedTeamStats } from '@/lib/simulationEngine';
@@ -7,30 +7,34 @@ import { Button } from '@/components/ui/button';
 import { Save } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
-// --- Tipos e Interfaces (sem alterações) ---
+// --- Tipos e Interfaces ---
 interface KnockoutBracketProps {
   simulatedGroups: SimulatedGroup[];
   knockoutSelections: { [matchId: string]: string };
-  onSelectionChange: (matchId: string, teamId: string) => void;
-  onAdoptFinalPrediction: (role: 'champion' | 'runner_up' | 'third_place' | 'fourth_place', teamId: string | undefined) => void;
+  onSelectionChange: (matchId: string, teamId: string | null) => void;
+  // ATUALIZADO: A prop agora espera todos os dados de uma vez
+  onAdoptAllFinalPredictions: (
+    championId: string, 
+    runnerUpId: string, 
+    thirdPlaceId: string, 
+    fourthPlaceId: string,
+    finalHomeScore: number,
+    finalAwayScore: number
+  ) => void;
   allTeams: SimulatedTeamStats[];
 }
+
 interface MatchupProps {
   title: string;
+  matchId: string; // Adicionado para garantir que a chave seja única e acessível
   team1?: SimulatedTeamStats;
   team2?: SimulatedTeamStats;
   selectedValue?: string;
   onSelect: (value: string) => void;
 }
-interface StaticMatchupProps {
-  title: string;
-  team1?: SimulatedTeamStats;
-  team2?: SimulatedTeamStats;
-  winnerId?: string;
-}
 
-// --- Componentes Auxiliares (sem alterações na lógica) ---
-const Matchup: React.FC<MatchupProps> = ({ title, team1, team2, selectedValue, onSelect }) => {
+// --- Componentes Auxiliares (com pequenas melhorias) ---
+const Matchup: React.FC<MatchupProps> = ({ title, matchId, team1, team2, selectedValue, onSelect }) => {
     const canSelect = team1 && team2;
     return (
       <div className="border p-2 rounded-md bg-gray-50 dark:bg-gray-800/50 text-sm h-[68px] flex flex-col justify-center print:h-auto print:text-[9px] print:p-1 print:border-gray-400">
@@ -46,27 +50,16 @@ const Matchup: React.FC<MatchupProps> = ({ title, team1, team2, selectedValue, o
         </Select>
       </div>
     );
-  };
+};
   
-  const StaticMatchup: React.FC<StaticMatchupProps> = ({ title, team1, team2, winnerId }) => (
-      <div className="border p-2 rounded-md bg-gray-100 dark:bg-gray-800 text-sm h-[68px] flex flex-col justify-center print:h-auto print:text-[9px] print:p-1 print:border-gray-400">
-        <p className="font-bold text-gray-600 dark:text-gray-300 mb-1 print:text-[10px] print:font-semibold print:mb-0.5">{title}</p>
-        <div className="space-y-0.5">
-          <p className={winnerId === team1?.teamId ? 'font-bold text-green-600' : 'text-gray-500'}>{team1?.teamName || 'A definir'}</p>
-          <p className={winnerId === team2?.teamId ? 'font-bold text-green-600' : 'text-gray-500'}>{team2?.teamName || 'A definir'}</p>
-        </div>
-      </div>
-  );
-
-// --- Componente Principal com NOVO LAYOUT ---
+// --- Componente Principal ---
 const KnockoutBracket: React.FC<KnockoutBracketProps> = ({
   simulatedGroups,
   knockoutSelections,
   onSelectionChange,
-  onAdoptFinalPrediction,
+  onAdoptAllFinalPredictions,
   allTeams,
 }) => {
-  // --- Lógica de busca de times (sem alterações) ---
   const getTeam = (groupName: string, position: number) => simulatedGroups.find(g => g.groupName === groupName)?.standings[position - 1];
   const findTeamById = (teamId?: string) => teamId ? allTeams.find(t => t.teamId === teamId) : undefined;
   const getLoser = (team1?: SimulatedTeamStats, team2?: SimulatedTeamStats, winnerId?: string) => {
@@ -97,54 +90,57 @@ const KnockoutBracket: React.FC<KnockoutBracketProps> = ({
   const runnerUp = getLoser(final_teams[0], final_teams[1], knockoutSelections['final']);
   const thirdPlace = findTeamById(knockoutSelections['third_place']);
   const fourthPlace = getLoser(third_place_teams[0], third_place_teams[1], knockoutSelections['third_place']);
+  const allFinalPositionsSet = champion && runnerUp && thirdPlace && fourthPlace;
+
+  const handleAdoptClick = () => {
+    if (allFinalPositionsSet) {
+      // Por padrão, adota 0x0 como placar da final, já que não é definido aqui.
+      onAdoptAllFinalPredictions(champion.teamId, runnerUp.teamId, thirdPlace.teamId, fourthPlace.teamId, 0, 0);
+    }
+  };
 
   return (
     <Card id="knockout-bracket-card" className="print:border-none print:shadow-none">
-      <CardHeader className="flex flex-row items-center justify-between print-hidden">
-        <CardTitle className="text-2xl md:text-3xl font-bold text-fifa-blue">Chaveamento do Mata-Mata</CardTitle>
+      <CardHeader className="flex-row items-center justify-between print-hidden">
+        <CardTitle className="text-2xl font-bold text-fifa-blue">Chaveamento do Mata-Mata</CardTitle>
+        {allFinalPositionsSet && (
+          <Button onClick={handleAdoptClick}>
+            <Save className="mr-2 h-4 w-4" />
+            Adotar Palpites Finais
+          </Button>
+        )}
       </CardHeader>
-      {/* Container principal com Flexbox */}
+
       <CardContent className="flex justify-between space-x-2 md:space-x-4 print:space-x-2">
-        
-        {/* Coluna Oitavas */}
         <div className="flex flex-col w-1/4 space-y-2">
-          <h3 className="font-bold text-lg text-center print:text-xs">Oitavas</h3>
-          {r16.map(match => <StaticMatchup key={match.id} {...match} title={`Oitavas ${match.id.slice(-1)}`} winnerId={knockoutSelections[match.id]} />)}
+          <h3 className="text-lg font-bold text-center print:text-xs">Oitavas</h3>
+          {r16.map(match => (
+            <Matchup
+              key={match.id}
+              matchId={match.id}
+              title={`Oitavas ${match.id.slice(-1)}`}
+              team1={match.team1}
+              team2={match.team2}
+              selectedValue={knockoutSelections[match.id]}
+              onSelect={(teamId) => onSelectionChange(match.id, teamId)}
+            />
+          ))}
         </div>
 
-        {/* Coluna Quartas */}
         <div className="flex flex-col w-1/4 justify-around">
-          <h3 className="font-bold text-lg text-center print:text-xs">Quartas</h3>
+          <h3 className="text-lg font-bold text-center print:text-xs">Quartas</h3>
           {Object.entries(qf_teams).map(([id, teams]) => <Matchup key={id} matchId={id} title={`Quartas ${id.slice(-1)}`} team1={teams[0]} team2={teams[1]} selectedValue={knockoutSelections[id]} onSelect={(val) => onSelectionChange(id, val)} />)}
         </div>
 
-        {/* Coluna Semifinais */}
         <div className="flex flex-col w-1/4 justify-around">
-           <h3 className="font-bold text-lg text-center print:text-xs">Semifinais</h3>
-           {Object.entries(sf_teams).map(([id, teams]) => <Matchup key={id} matchId={id} title={`Semi ${id.slice(-1)}`} team1={teams[0]} team2={teams[1]} selectedValue={knockoutSelections[id]} onSelect={(val) => onSelectionChange(id, val)} />)}
+          <h3 className="text-lg font-bold text-center print:text-xs">Semifinais</h3>
+          {Object.entries(sf_teams).map(([id, teams]) => <Matchup key={id} matchId={id} title={`Semi ${id.slice(-1)}`} team1={teams[0]} team2={teams[1]} selectedValue={knockoutSelections[id]} onSelect={(val) => onSelectionChange(id, val)} />)}
         </div>
         
-        {/* Coluna Finais */}
         <div className="flex flex-col w-1/4 justify-around">
-          <h3 className="font-bold text-lg text-center print:text-xs">Finais</h3>
-          <div>
-            <Matchup matchId='final' title='Final' team1={final_teams[0]} team2={final_teams[1]} selectedValue={knockoutSelections['final']} onSelect={(val) => onSelectionChange('final', val)} />
-            {champion && runnerUp && (
-              <div className="mt-2 space-y-1 text-center print-hidden">
-                  <Button size="sm" className="w-full bg-green-600" onClick={() => onAdoptFinalPrediction('champion', champion.teamId)}>Adotar {champion.teamName} como Campeão</Button>
-                  <Button size="sm" className="w-full bg-orange-600" onClick={() => onAdoptFinalPrediction('runner_up', runnerUp.teamId)}>Adotar {runnerUp.teamName} como Vice</Button>
-              </div>
-            )}
-          </div>
-          <div>
-            <Matchup matchId='third_place' title='Disputa 3º Lugar' team1={third_place_teams[0]} team2={third_place_teams[1]} selectedValue={knockoutSelections['third_place']} onSelect={(val) => onSelectionChange('third_place', val)} />
-             {thirdPlace && fourthPlace && (
-                <div className="mt-2 space-y-1 text-center print-hidden">
-                    <Button size="sm" className="w-full bg-yellow-600" onClick={() => onAdoptFinalPrediction('third_place', thirdPlace.teamId)}>Adotar {thirdPlace.teamName} como 3º</Button>
-                    <Button size="sm" className="w-full bg-gray-500 text-white" onClick={() => onAdoptFinalPrediction('fourth_place', fourthPlace.teamId)}>Adotar {fourthPlace.teamName} como 4º</Button>
-                </div>
-             )}
-          </div>
+          <h3 className="text-lg font-bold text-center print:text-xs">Finais</h3>
+          <Matchup matchId='final' title='Final' team1={final_teams[0]} team2={final_teams[1]} selectedValue={knockoutSelections['final']} onSelect={(val) => onSelectionChange('final', val)} />
+          <Matchup matchId='third_place' title='Disputa 3º Lugar' team1={third_place_teams[0]} team2={third_place_teams[1]} selectedValue={knockoutSelections['third_place']} onSelect={(val) => onSelectionChange('third_place', val)} />
         </div>
       </CardContent>
     </Card>

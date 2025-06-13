@@ -1,3 +1,4 @@
+// src/types/matches.ts
 
 import { Prediction } from "./predictions";
 
@@ -21,4 +22,18 @@ export type Match = {
   predictions?: Prediction[]; // Made predictions optional
   stage: string;
   stadium?: string | null; // Add stadium property
+};
+
+// --- ADICIONE O TIPO ABAIXO ---
+
+export type Pool = {
+  id: string;
+  name: string;
+  owner_id: string;
+  invite_code: string;
+  prize_percent_1st: number;
+  prize_percent_2nd: number;
+  prize_percent_3rd: number;
+  enable_punishment: boolean;
+  punishment_description: string | null;
 };
