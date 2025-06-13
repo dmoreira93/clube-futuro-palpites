@@ -1,4 +1,4 @@
-// src/pages/HomePage.tsx
+// src/pages/HomePage.tsx - VERSÃO ATUALIZADA
 
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -8,7 +8,6 @@ import StatsCard from '@/components/home/StatsCard';
 import { Users, Shield, ArrowRight, Gamepad2, UserPlus, Award } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
 const HomePage = () => {
   const { isAuthenticated } = useAuth();
@@ -17,9 +16,9 @@ const HomePage = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Se o usuário já está logado, navega direto para o dashboard.
     if (isAuthenticated) {
       navigate('/dashboard');
+      return;
     }
 
     const fetchStats = async () => {
@@ -40,13 +39,11 @@ const HomePage = () => {
       }
     };
     
-    // Apenas busca as estatísticas se o usuário não estiver autenticado.
     if (!isAuthenticated) {
       fetchStats();
     }
   }, [isAuthenticated, navigate]);
 
-  // Enquanto verifica a autenticação, não mostra nada para evitar um "flash" da página.
   if (isAuthenticated) {
     return null;
   }
@@ -63,13 +60,22 @@ const HomePage = () => {
         </p>
         <div className="mt-8 flex flex-col sm:flex-row justify-center gap-4">
           <Link to="/cadastro">
-            <Button size="lg" className="bg-fifa-green hover:bg-green-700 text-white font-bold w-full sm:w-auto">
+            {/* --- BOTÃO ATUALIZADO --- */}
+            <Button 
+              size="lg" 
+              className="bg-fifa-green hover:bg-green-700 text-white font-bold shadow-lg hover:shadow-xl transform transition-transform hover:scale-105 w-full sm:w-auto"
+            >
               Crie seu Bolão Grátis
               <ArrowRight className="ml-2 h-5 w-5" />
             </Button>
           </Link>
           <Link to="/login">
-            <Button size="lg" variant="outline" className="w-full sm:w-auto">
+            {/* --- BOTÃO ATUALIZADO --- */}
+            <Button 
+              size="lg" 
+              variant="outline"
+              className="shadow-md hover:shadow-lg transform transition-transform hover:scale-105 w-full sm:w-auto"
+            >
               Acessar meu Bolão
             </Button>
           </Link>

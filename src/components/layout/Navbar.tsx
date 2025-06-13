@@ -1,7 +1,8 @@
-// src/components/layout/Navbar.tsx
+// src/components/layout/Navbar.tsx - VERSÃO ATUALIZADA
 
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+// --- 1. Importar useLocation ---
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import {
   Volleyball as SoccerBallIcon,
@@ -14,9 +15,11 @@ import { useAuth } from "@/contexts/AuthContext";
 
 const Navbar = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-
   const { isAuthenticated, isAdmin, user, signOut, loading } = useAuth();
   const navigate = useNavigate();
+  // --- 2. Obter a localização atual ---
+  const location = useLocation();
+  const isHomePage = location.pathname === '/';
 
   const handleLogout = async () => {
     await signOut();
@@ -29,6 +32,11 @@ const Navbar = () => {
     }
 
     if (!isAuthenticated) {
+      // --- 3. Condição para esconder os botões na homepage ---
+      if (isHomePage) {
+        return null; // Não renderiza nada na home
+      }
+
       return (
         <>
           <Link to="/cadastro">
@@ -63,7 +71,9 @@ const Navbar = () => {
       </div>
     );
   };
-
+  
+  // ... O restante do seu componente Navbar continua igual
+  // (a lógica do menu mobile já se beneficiará dessa alteração)
   return (
     <nav className="bg-fifa-blue text-white shadow-lg">
       <div className="container mx-auto px-4">
@@ -115,14 +125,15 @@ const Navbar = () => {
             >
               Critérios
             </Link>
-            <Link
-              to="/resultados"
-              className="hover:text-fifa-gold transition-colors"
-            >
-              Resultados
-            </Link>
+            {isAuthenticated && (
+              <Link
+                to="/resultados"
+                className="hover:text-fifa-gold transition-colors"
+              >
+                Resultados
+              </Link>
+            )}
             
-            {/* CORREÇÃO: Adicionada verificação de autenticação */}
             {isAuthenticated && (
               <>
                 <Link
@@ -167,15 +178,16 @@ const Navbar = () => {
               >
                 Critérios
               </Link>
-              <Link
-                to="/resultados"
-                className="block py-2 px-4 hover:bg-fifa-green rounded transition-colors"
-                onClick={() => setIsMenuOpen(false)}
-              >
-                Resultados
-              </Link>
+              {isAuthenticated && (
+                <Link
+                  to="/resultados"
+                  className="block py-2 px-4 hover:bg-fifa-green rounded transition-colors"
+                  onClick={() => setIsMenuOpen(false)}
+                >
+                  Resultados
+                </Link>
+              )}
 
-              {/* CORREÇÃO: Adicionada verificação de autenticação para o menu mobile */}
               {isAuthenticated && (
                 <>
                   <Link
@@ -207,46 +219,7 @@ const Navbar = () => {
               )}
 
               <div className="border-t border-white/20 mt-4 pt-4">
-                {loading && (
-                  <div className="flex justify-center">
-                    <Loader2 className="h-5 w-5 animate-spin" />
-                  </div>
-                )}
-                {!loading && !isAuthenticated && (
-                  <>
-                    <Link
-                      to="/cadastro"
-                      className="block text-center py-2 px-4 bg-white/10 hover:bg-white/20 rounded font-medium transition-colors"
-                      onClick={() => setIsMenuOpen(false)}
-                    >
-                      Cadastrar
-                    </Link>
-                    <Link
-                      to="/login"
-                      className="block text-center mt-2 py-2 px-4 bg-fifa-gold text-fifa-blue rounded font-medium transition-colors"
-                      onClick={() => setIsMenuOpen(false)}
-                    >
-                      Entrar
-                    </Link>
-                  </>
-                )}
-                {!loading && isAuthenticated && (
-                  <div className="flex items-center justify-between px-4">
-                    <span className="text-sm">
-                      Olá, {user?.name || user?.email}
-                    </span>
-                    <button
-                      className="flex items-center py-2 px-3 bg-white/10 hover:bg-white/20 rounded transition-colors"
-                      onClick={() => {
-                        handleLogout();
-                        setIsMenuOpen(false);
-                      }}
-                    >
-                      <LogOut className="w-4 h-4 mr-1" />
-                      Sair
-                    </button>
-                  </div>
-                )}
+                {renderNavContent()}
               </div>
             </div>
           </div>
