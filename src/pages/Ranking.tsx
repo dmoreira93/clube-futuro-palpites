@@ -25,15 +25,19 @@ const RankingPage = () => {
         .eq('id', user.pool_id)
         .single();
       
+      // --- LINHAS DE DEBUG ADICIONADAS ---
+      console.log('DEBUG: Resultado da busca pelo bolão (pools):', { data, error });
+      // ------------------------------------
+
       if (error) throw error;
       setPoolSettings(data);
     } catch (error: any) {
-      toast.error("Não foi possível carregar as regras de premiação do bolão.");
+      toast.error("Não foi possível carregar as configurações do bolão.");
       console.error("Erro ao buscar configurações do bolão:", error);
     } finally {
       setLoading(false);
     }
-  }, [user?.pool_id]); // Dependência mais estável
+  }, [user?.pool_id]);
 
   useEffect(() => {
     fetchPoolSettings();
