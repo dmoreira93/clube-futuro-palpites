@@ -1,12 +1,10 @@
-// src/hooks/useParticipantsRanking.ts
+// src/hooks/useParticipantsRanking.ts - VERSÃO ATUALIZADA
+
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 
-// --- (Início) ALTERAÇÕES NOS TIPOS ---
-// Tipos foram movidos e ajustados para refletir a nova lógica
-
-// Representa o que vem da tabela 'users_custom'
+// Seus tipos de dados permanecem os mesmos
 type UserData = {
     id: string;
     name: string;
@@ -14,47 +12,61 @@ type UserData = {
     avatar_url: string | null;
     total_points: number | null;
     is_admin: boolean;
-    created_at: string; // Adicionado para desempate
+    created_at: string;
+    pool_id?: string | null; // Garante que a propriedade pool_id esteja no tipo
 };
 
-// Representa o objeto final do participante no ranking
 export type Participant = {
   id: string;
   name: string;
   username: string;
   avatar_url: string | null;
   points: number;
-  exactScores: number; // Renomeado de 'matches' para clareza
-  correctWinners: number; // Novo campo para desempate
+  exactScores: number;
+  correctWinners: number;
   accuracy: string;
-  createdAt: string; // Novo campo para desempate final
+  createdAt: string;
 };
-// --- (Fim) ALTERAÇÕES NOS TIPOS ---
 
 
 const useParticipantsRanking = () => {
-  const { signOut } = useAuth();
+  const { user, signOut } = useAuth(); // Pegamos o usuário logado do contexto
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // O useCallback foi usado para memorizar a função e evitar recriações desnecessárias
   const fetchRanking = useCallback(async () => {
+    // Se não houver usuário ou o usuário não tiver um pool_id, não busca dados.
+    if (!user?.pool_id) {
+      setLoading(false);
+      setParticipants([]);
+      return;
+    }
+
     try {
       setLoading(true);
       setError(null);
 
-      // 1. Buscar todos os usuários e seus dados principais
+      // 1. Buscar todos os usuários DO MESMO BOLÃO e seus dados principais
       const { data: usersData, error: usersError } = await supabase
         .from('users_custom')
-        .select('id, name, username, avatar_url, is_admin, total_points, created_at'); // Adicionado created_at
+        .select('id, name, username, avatar_url, is_admin, total_points, created_at')
+        .eq('pool_id', user.pool_id); // <-- FILTRO ESSENCIAL ADICIONADO AQUI
+
       if (usersError) throw usersError;
 
-      const nonAdminUsers = (usersData as UserData[]).filter(user => !user.is_admin);
+      // O restante da sua lógica para calcular estatísticas e ordenar o ranking continua igual
+      // pois ela já opera sobre a lista de usuários filtrada.
+
+      const nonAdminUsers = (usersData as UserData[]).filter(u => !u.is_admin);
       const userIds = nonAdminUsers.map(u => u.id);
 
-      // --- (Início) ALTERAÇÃO NA BUSCA DE DADOS ---
-      // 2. Buscar contagens de pontos por tipo para desempate
+      if (userIds.length === 0) {
+        setParticipants([]);
+        setLoading(false);
+        return;
+      }
+
       const { data: pointsData, error: pointsError } = await supabase
         .from('user_points')
         .select('user_id, points_type')
@@ -62,30 +74,25 @@ const useParticipantsRanking = () => {
       
       if (pointsError) throw pointsError;
       
-      // 3. Processar os dados de pontos para criar um mapa de estatísticas
       const userStats: { [userId: string]: { exactScores: number, correctWinners: number, totalPredictions: number } } = {};
 
-      // Inicializa as estatísticas para todos os usuários
       userIds.forEach(id => {
         userStats[id] = { exactScores: 0, correctWinners: 0, totalPredictions: 0 };
       });
 
-      // Preenche com os dados de pontos
       (pointsData || []).forEach(point => {
         const stats = userStats[point.user_id];
         if (stats) {
-          stats.totalPredictions += 1; // Cada registro é um palpite em jogo finalizado
+          stats.totalPredictions += 1;
           if (point.points_type === 'EXACT_SCORE') {
             stats.exactScores += 1;
-            stats.correctWinners += 1; // Acerto exato também é um acerto de vencedor
+            stats.correctWinners += 1;
           } else if (point.points_type === 'CORRECT_WINNER') {
             stats.correctWinners += 1;
           }
         }
       });
-      // --- (Fim) ALTERAÇÃO NA BUSCA DE DADOS ---
 
-      // 4. Constrói a lista de participantes para o ranking
       const finalRanking: Participant[] = nonAdminUsers
         .map((user) => {
           const stats = userStats[user.id] || { exactScores: 0, correctWinners: 0, totalPredictions: 0 };
@@ -103,25 +110,12 @@ const useParticipantsRanking = () => {
           };
         });
 
-      // --- (Início) NOVA LÓGICA DE ORDENAÇÃO ---
-      // 5. Ordena a classificação com os novos critérios de desempate
       finalRanking.sort((a, b) => {
-        // Critério 1: Pontos (descendente)
-        if (b.points !== a.points) {
-          return b.points - a.points;
-        }
-        // Critério 2: Placares Exatos (descendente)
-        if (b.exactScores !== a.exactScores) {
-          return b.exactScores - a.exactScores;
-        }
-        // Critério 3: Vencedores Corretos (descendente)
-        if (b.correctWinners !== a.correctWinners) {
-            return b.correctWinners - a.correctWinners;
-        }
-        // Critério 4: Data de Cadastro (ascendente - mais antigo primeiro)
+        if (b.points !== a.points) return b.points - a.points;
+        if (b.exactScores !== a.exactScores) return b.exactScores - a.exactScores;
+        if (b.correctWinners !== a.correctWinners) return b.correctWinners - a.correctWinners;
         return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
       });
-      // --- (Fim) NOVA LÓGICA DE ORDENAÇÃO ---
 
       setParticipants(finalRanking);
       
@@ -134,13 +128,13 @@ const useParticipantsRanking = () => {
     } finally {
       setLoading(false);
     }
-  }, [signOut]);
+  }, [user, signOut]); // A função agora depende do objeto 'user' para pegar o pool_id
 
   useEffect(() => {
     fetchRanking();
   }, [fetchRanking]);
 
-  return { participants, loading, error, refetch: fetchRanking }; // Adicionado refetch para poder atualizar
+  return { participants, loading, error, refetch: fetchRanking };
 };
 
 export default useParticipantsRanking;

@@ -1,7 +1,7 @@
-// src/pages/Cadastro.tsx
+// src/pages/Cadastro.tsx - VERSÃO ATUALIZADA
 
-import { useState } from "react";
-// A importação do Layout foi REMOVIDA
+import { useState, useEffect } from "react";
+import { Link, useNavigate, useParams } from "react-router-dom"; // Importa useNavigate e useParams
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
@@ -12,14 +12,18 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { useToast } from "@/hooks/use-toast";
+import { useToast } from "@/hooks/use-toast"; // Verifique se o caminho está correto
 import { Label } from "@/components/ui/label";
 import { UserIcon } from "lucide-react";
-import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { Loader2 } from "lucide-react";
+
 
 const Cadastro = () => {
   const { toast } = useToast();
+  const navigate = useNavigate(); // Hook para navegação
+  const { inviteCode } = useParams(); // Pega o código de convite da URL, se existir
+
   const [formData, setFormData] = useState({
     name: "",
     nickname: "",
@@ -28,6 +32,16 @@ const Cadastro = () => {
     confirmPassword: "",
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (inviteCode) {
+      toast({
+        title: "Convite Aceito!",
+        description: `Você está se cadastrando para entrar em um bolão. Complete seu cadastro.`,
+      });
+    }
+  }, [inviteCode, toast]);
+
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -60,42 +74,63 @@ const Cadastro = () => {
 
     setIsSubmitting(true);
 
-    const { error } = await supabase.auth.signUp({
-      email: formData.email,
-      password: formData.password,
-      options: {
-        data: {
-          name: formData.name,
-          nickname: formData.nickname,
-        },
-      },
-    });
+    try {
+        let poolId = null;
 
-    if (error) {
-      toast({
-        title: "Erro ao cadastrar",
-        description: error.message,
-        variant: "destructive",
-      });
-    } else {
-      toast({
-        title: "Cadastro realizado com sucesso!",
-        description: "Você já pode fazer login e começar a participar do bolão.",
-      });
+        // Se um código de convite foi passado pela URL, verifica se ele é válido
+        if (inviteCode) {
+            const { data: pool, error: poolError } = await supabase
+              .from('pools')
+              .select('id')
+              .eq('invite_code', inviteCode.trim().toUpperCase())
+              .single();
+            
+            if (poolError || !pool) {
+              throw new Error("Código de convite inválido ou não encontrado.");
+            }
+            poolId = pool.id;
+        }
 
-      setFormData({
-        name: "",
-        nickname: "",
-        email: "",
-        password: "",
-        confirmPassword: "",
-      });
+        // Tenta criar o usuário com a senha
+        const { data: authData, error: signUpError } = await supabase.auth.signUp({
+            email: formData.email,
+            password: formData.password,
+            options: {
+              data: {
+                name: formData.name,
+                username: formData.nickname,
+                // Associa o pool_id no momento do cadastro se houver um código
+                pool_id: poolId 
+              },
+            },
+        });
+
+        if (signUpError) {
+            throw signUpError;
+        }
+
+        if (!authData.user) {
+            throw new Error("Não foi possível criar o usuário. Tente novamente.");
+        }
+
+        toast({
+            title: "Cadastro realizado com sucesso!",
+            description: "Enviamos um e-mail de confirmação. Por favor, verifique sua caixa de entrada.",
+        });
+
+        navigate('/login'); // Redireciona para o login após o sucesso
+
+    } catch (error: any) {
+        toast({
+            title: "Erro ao cadastrar",
+            description: error.message || "Ocorreu um erro desconhecido.",
+            variant: "destructive",
+        });
+    } finally {
+        setIsSubmitting(false);
     }
-
-    setIsSubmitting(false);
   };
 
-  // A tag <Layout> foi removida daqui
   return (
     <div className="max-w-md mx-auto py-12">
       <div className="text-center mb-8">
@@ -188,7 +223,7 @@ const Cadastro = () => {
                 className="w-full bg-fifa-blue hover:bg-opacity-90"
                 disabled={isSubmitting}
               >
-                {isSubmitting ? "Cadastrando..." : "Cadastrar"}
+                {isSubmitting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Cadastrando...</> : "Cadastrar"}
               </Button>
             </div>
           </form>
