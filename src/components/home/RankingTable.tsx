@@ -1,111 +1,78 @@
-// src/components/home/RankingTable.tsx
-import React from 'react';
+// src/components/home/RankingTable.tsx - VERSÃO ATUALIZADA
+
+import useParticipantsRanking from "@/hooks/useParticipantsRanking";
 import {
   Table,
   TableBody,
+  TableCell,
   TableHead,
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import RankingRow from "@/components/ranking/RankingRow";
-import useParticipantsRanking, { Participant } from "@/hooks/useParticipantsRanking";
-import { Users as UsersIcon } from "lucide-react";
-import { isAIParticipant } from '@/lib/utils'; // Ajuste o caminho se necessário
+import RankingRow from "../ranking/RankingRow";
+import { isAIParticipant } from "@/lib/utils";
+import { Pool } from '@/types/matches'; // Certifique-se que este tipo existe
 
-const RankingTable = () => {
-  const { participants, loading, error } = useParticipantsRanking();
+// A tabela agora espera receber as configurações do bolão
+interface RankingTableProps {
+  poolSettings: Pool | null;
+}
 
-  const realParticipants = participants.filter(p => !isAIParticipant(p));
-  const totalRealParticipants = realParticipants.length;
-
-  const realUserRankMap = new Map<string, number>();
-  realParticipants.forEach((p, idx) => {
-    realUserRankMap.set(p.id, idx);
-  });
-
-  const renderCardHeader = () => (
-    <CardHeader className="bg-fifa-blue text-white pb-4">
-      <CardTitle>Ranking de Participantes</CardTitle>
-      <CardDescription className="text-sm text-gray-300 pt-1">
-        (Obs.: as IAs não serão consideradas para vencedores/perdedores)
-      </CardDescription>
-    </CardHeader>
-  );
+const RankingTable = ({ poolSettings }: RankingTableProps) => {
+  const { participants, loading } = useParticipantsRanking();
 
   if (loading) {
-    // ... (código de loading)
     return (
-        <Card className="shadow-lg">
-          {renderCardHeader()}
-          <CardContent className="p-4">
-            <div className="space-y-4">
-              {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}
-            </div>
-          </CardContent>
-        </Card>
-      );
+      <div className="space-y-2">
+        {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
+      </div>
+    );
   }
 
-  if (error) {
-    // ... (código de erro)
-    return (
-        <Card className="shadow-lg">
-          <CardHeader className="bg-red-500 text-white">
-            <CardTitle>Erro ao Carregar Ranking</CardTitle>
-          </CardHeader>
-          <CardContent className="p-4">
-            <p className="text-red-600">{error}</p>
-          </CardContent>
-        </Card>
-      );
-  }
+  const realUsers = participants.filter(p => !isAIParticipant(p));
 
   return (
-    <Card className="shadow-lg">
-      {renderCardHeader()}
-      <CardContent className="p-0">
-        <div className="overflow-x-auto"> {/* Mantém a rolagem para segurança */}
-          {participants.length === 0 ? (
-            <div className="flex flex-col items-center justify-center p-8 text-gray-500">
-              <UsersIcon className="w-16 h-16 mb-4" />
-              <p className="text-lg font-semibold">Nenhum participante encontrado ainda.</p>
-            </div>
-          ) : (
-            <Table>
-              <TableHeader className="bg-gray-100">
-                <TableRow>
-                  <TableHead className="w-[50px] text-center">Posição</TableHead>
-                  <TableHead>Nome</TableHead>
-                  <TableHead className="text-right">Qtde Pontos</TableHead>
-                  {/* Colunas visíveis apenas em telas médias (md) ou maiores */}
-                  <TableHead className="hidden md:table-cell text-right">Jogos Pont.</TableHead>
-                  <TableHead className="hidden md:table-cell text-right">Acerto</TableHead>
-                  <TableHead className="hidden md:table-cell text-right">Prêmio</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {participants.map((participant, overallIndex) => {
-                  const isAI = isAIParticipant(participant);
-                  const realUserRank = isAI ? -1 : (realUserRankMap.get(participant.id) ?? -1);
+    <div className="border rounded-lg overflow-hidden shadow-lg">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead className="w-12 text-center">#</TableHead>
+            <TableHead>Participante</TableHead>
+            <TableHead className="text-right">Pontos</TableHead>
+            <TableHead className="hidden md:table-cell text-right">Placares</TableHead>
+            <TableHead className="hidden md:table-cell text-right">Vencedores</TableHead>
+            <TableHead className="hidden md:table-cell text-right">Prêmio</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {participants.length > 0 ? (
+            participants.map((participant, index) => {
+              const realUserRank = isAIParticipant(participant) 
+                ? -1 
+                : realUsers.findIndex(u => u.id === participant.id);
 
-                  return (
-                    <RankingRow
-                      key={participant.id}
-                      participant={participant}
-                      index={overallIndex}
-                      realUserRank={realUserRank}
-                      totalRealParticipants={totalRealParticipants}
-                    />
-                  );
-                })}
-              </TableBody>
-            </Table>
+              return (
+                <RankingRow
+                  key={participant.id}
+                  participant={participant}
+                  index={index}
+                  realUserRank={realUserRank}
+                  totalRealParticipants={realUsers.length}
+                  poolSettings={poolSettings} // <-- Passando as configurações para cada linha
+                />
+              );
+            })
+          ) : (
+            <TableRow>
+              <TableCell colSpan={6} className="text-center py-8">
+                Ainda não há participantes no ranking deste bolão.
+              </TableCell>
+            </TableRow>
           )}
-        </div>
-      </CardContent>
-    </Card>
+        </TableBody>
+      </Table>
+    </div>
   );
 };
 

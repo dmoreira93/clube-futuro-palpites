@@ -1,95 +1,61 @@
-// src/pages/Ranking.tsx
-import React from "react";
-// A importação do Layout foi REMOVIDA
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import RankingRow from "@/components/ranking/RankingRow";
-import useParticipantsRanking from "@/hooks/useParticipantsRanking";
-import { Loader2 } from "lucide-react";
-import { isAIParticipant } from '@/lib/utils';
+// src/pages/Ranking.tsx - VERSÃO ATUALIZADA
+
+import { useState, useEffect, useCallback } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
+import RankingTable from '@/components/home/RankingTable';
+import { Loader2 } from 'lucide-react';
+import { Pool } from '@/types/matches'; // Certifique-se que este tipo existe
 
 const RankingPage = () => {
-  const { participants, loading, error } = useParticipantsRanking();
+  const { user } = useAuth();
+  const [poolSettings, setPoolSettings] = useState<Pool | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  const realParticipants = participants.filter(p => !isAIParticipant(p));
-  const totalRealParticipants = realParticipants.length;
+  const fetchPoolSettings = useCallback(async () => {
+    if (!user?.pool_id) {
+      setLoading(false);
+      return;
+    }
 
-  const realUserRankMap = new Map<string, number>();
-  realParticipants.forEach((p, idx) => {
-    realUserRankMap.set(p.id, idx);
-  });
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('pools')
+        .select('*')
+        .eq('id', user.pool_id)
+        .single();
+      
+      if (error) throw error;
+      setPoolSettings(data);
+    } catch (error) {
+      console.error("Erro ao buscar configurações do bolão:", error);
+    } finally {
+      setLoading(false);
+    }
+  }, [user]);
 
-  // A tag <Layout> foi removida daqui
+  useEffect(() => {
+    fetchPoolSettings();
+  }, [fetchPoolSettings]);
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center h-screen">
+        <Loader2 className="h-8 w-8 animate-spin text-fifa-blue" />
+      </div>
+    );
+  }
+
   return (
-    <div className="container mx-auto p-4 max-w-4xl">
-      <h1 className="text-3xl font-bold text-center mb-2 text-fifa-blue">
-        Ranking dos Participantes
+    <div className="container mx-auto px-4 py-8">
+      <h1 className="text-3xl font-bold text-center text-fifa-blue mb-6">
+        Ranking do Bolão: <span className="text-gray-700">{poolSettings?.name || '...'}</span>
       </h1>
-      <p className="text-sm text-center text-gray-600 mb-8">
-        (Obs.: as IAs não serão consideradas para vencedores/perdedores)
-      </p>
-
-      {error && (
-        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4" role="alert">
-          <strong className="font-bold">Erro!</strong> <span className="block sm:inline">{error}</span>
-        </div>
-      )}
-
-      {loading ? (
-        <div className="flex justify-center items-center h-64">
-          <Loader2 className="h-8 w-8 animate-spin text-fifa-blue" />
-          <p className="ml-2 text-gray-600">Carregando ranking...</p>
-        </div>
-      ) : (
-        <Card className="shadow-lg">
-          <CardHeader className="bg-gray-50 border-b">
-            <CardTitle className="text-xl">Classificação Geral</CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-100">
-                  <tr>
-                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Posição
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Nome
-                    </th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Qtde Pontos
-                    </th>
-                    <th className="hidden md:table-cell px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Partidas Pont.
-                    </th>
-                    <th className="hidden md:table-cell px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Acurácia
-                    </th>
-                    <th className="hidden md:table-cell px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Prêmio
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {participants.map((participant, overallIndex) => {
-                    const isAI = isAIParticipant(participant);
-                    const realUserRank = isAI ? -1 : (realUserRankMap.get(participant.id) ?? -1);
-
-                    return (
-                      <RankingRow
-                        key={participant.id}
-                        participant={participant}
-                        index={overallIndex}
-                        realUserRank={realUserRank}
-                        totalRealParticipants={totalRealParticipants}
-                      />
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      <div className="max-w-4xl mx-auto">
+        {/* Passando as configurações para a tabela */}
+        <RankingTable poolSettings={poolSettings} />
+      </div>
     </div>
   );
 };
