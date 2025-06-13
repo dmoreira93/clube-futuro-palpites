@@ -60,9 +60,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         .eq('id', sessionUser.id)
         .single();
       
-      // **MELHORIA PRINCIPAL**: Se a busca falhar por um token inválido, deslogue o usuário.
       if (error && error.code !== 'PGRST116') {
-          // PGRST301 é um erro comum de JWT inválido
           if (error.message.includes('JWT') || error.code === 'PGRST301') {
             toast.error("Sua sessão expirou. Por favor, faça login novamente.");
             await signOut();
@@ -78,7 +76,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     } catch (error) {
       console.error("Erro ao buscar perfil:", error);
       toast.error("Não foi possível carregar os dados do seu perfil.");
-      await signOut(); // Força o logout em caso de erro.
+      await signOut();
       return null;
     }
   }, [signOut]);
@@ -114,7 +112,6 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   
   const login = async (email: string, password: string) => {
     setLoading(true);
-    // **MELHORIA**: Envolvemos o processo em try/finally para garantir que o loading termine.
     try {
         const { data, error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) {

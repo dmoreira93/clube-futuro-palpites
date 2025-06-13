@@ -33,7 +33,6 @@ const useParticipantsRanking = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // **MELHORIA**: useCallback agora depende apenas do pool_id do usuário.
   const fetchRanking = useCallback(async () => {
     if (!user?.pool_id) {
       setLoading(false);
@@ -45,7 +44,6 @@ const useParticipantsRanking = () => {
       setLoading(true);
       setError(null);
       
-      // A lógica interna permanece a mesma
       const { data: usersData, error: usersError } = await supabase
         .from('users_custom')
         .select('id, name, username, avatar_url, is_admin, total_points, created_at')
@@ -113,7 +111,7 @@ const useParticipantsRanking = () => {
     } finally {
       setLoading(false);
     }
-  }, [user?.pool_id, signOut]); // **MELHORIA**: A dependência agora é mais específica.
+  }, [user?.pool_id, signOut]);
 
   useEffect(() => {
     fetchRanking();
