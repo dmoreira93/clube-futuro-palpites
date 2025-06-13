@@ -13,7 +13,7 @@ interface RankingRowProps {
   poolSettings: Pool | null;
 }
 
-// --- FUNÇÃO ATUALIZADA PARA CALCULAR O VALOR MONETÁRIO ---
+// ESTA É A VERSÃO CORRETA DA FUNÇÃO
 const getPrizeText = (
   isCurrentUserAI: boolean,
   realUserRank: number,
@@ -32,7 +32,7 @@ const getPrizeText = (
     return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
   };
 
-  // Regras de premiação usando os percentuais do banco
+  // Regras de premiação que calculam e formatam o VALOR MONETÁRIO
   if (realUserRank === 0 && pool.prize_percent_1st > 0) {
     return formatCurrency(totalPrizePool * (pool.prize_percent_1st / 100));
   }
@@ -43,14 +43,13 @@ const getPrizeText = (
     return formatCurrency(totalPrizePool * (pool.prize_percent_3rd / 100));
   }
 
-  // Regra da punição
+  // Regra da punição que busca a descrição do banco
   if (pool.enable_punishment && totalRealUsers > 3 && realUserRank === totalRealUsers - 1) {
     return pool.punishment_description || "Punição";
   }
 
   return "";
 };
-
 
 const RankingRow = ({
   participant,
@@ -63,12 +62,11 @@ const RankingRow = ({
   const prizeText = getPrizeText(isCurrentUserAI, realUserRank, totalRealParticipants, poolSettings);
   const isTopRealUser = !isCurrentUserAI && realUserRank !== -1 && realUserRank < 3;
   
-  // Lógica para garantir que as colunas sempre tenham um valor
   const participantMatches = (participant as any).matches ?? participant.correctWinners ?? 0;
   const participantAccuracy = participant.accuracy || '0%';
 
   return (
-    <TableRow className={isTopRealUser ? "bg-yellow-100" : ""}>
+    <TableRow className={isTopRealUser ? "bg-yellow-100 dark:bg-yellow-900/20" : ""}>
       <TableCell className="text-center font-medium">{index + 1}</TableCell>
       <TableCell>
         <div className="flex items-center gap-2">
@@ -78,7 +76,7 @@ const RankingRow = ({
           </Avatar>
           <div>
             <div className="font-medium">{participant.name}</div>
-            <div className="text-xs text-gray-500">@{participant.username}</div>
+            <div className="text-xs text-gray-500 dark:text-gray-400">@{participant.username}</div>
           </div>
         </div>
       </TableCell>
