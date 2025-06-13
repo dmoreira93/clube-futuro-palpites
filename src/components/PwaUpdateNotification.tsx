@@ -1,7 +1,8 @@
-// src/components/PwaUpdateNotification.tsx
+// src/components/PwaUpdateNotification.tsx - VERSÃO COM IMPORTAÇÃO ALTERNATIVA
 
 import { useEffect } from 'react';
-import { useRegisterSW } from 'vite-plugin-pwa/react';
+// --- ALTERAÇÃO AQUI: Mudamos o caminho da importação ---
+import { useRegisterSW } from 'vite-plugin-pwa/virtual'; 
 import { toast } from 'sonner';
 import { Button } from './ui/button';
 import { Rocket } from 'lucide-react';
@@ -20,18 +21,16 @@ function PwaUpdateNotification() {
     },
   });
 
-  // Função para fechar o toast
   const close = () => {
     setOfflineReady(false);
     setNeedRefresh(false);
   };
   
-  // Hook para mostrar o toast quando uma nova versão for detectada
   useEffect(() => {
     if (needRefresh) {
       toast.info('Uma nova versão do aplicativo está disponível!', {
         position: 'top-center',
-        duration: Infinity, // O toast não some sozinho
+        duration: Infinity,
         icon: <Rocket className="h-4 w-4" />,
         action: (
           <Button
@@ -45,7 +44,6 @@ function PwaUpdateNotification() {
         onDismiss: () => close(),
       });
     } else if (offlineReady) {
-        // Opcional: notificar quando o app está pronto para uso offline
         toast.success('Aplicativo pronto para funcionar offline.', {
             position: 'top-center',
             duration: 5000,
@@ -54,7 +52,7 @@ function PwaUpdateNotification() {
     }
   }, [needRefresh, offlineReady, setNeedRefresh, updateServiceWorker]);
 
-  return null; // O componente não renderiza nada visível diretamente
+  return null;
 }
 
 export default PwaUpdateNotification;
