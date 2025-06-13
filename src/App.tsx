@@ -1,4 +1,4 @@
-// src/App.tsx - VERSÃO SEM O COMPONENTE PWA
+// src/App.tsx
 
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
@@ -6,7 +6,7 @@ import Layout from "./components/layout/Layout";
 
 // Importações das páginas
 import HomePage from "./pages/HomePage";
-import Dashboard from "./pages/Index";
+import Dashboard from "./pages/Dashboard"; // O antigo Index agora é o Dashboard
 import Login from "./pages/Login";
 import Cadastro from "./pages/Cadastro";
 import Palpites from "./pages/Palpites";
@@ -23,6 +23,7 @@ import Simulador from "./pages/Simulador";
 import JoinPoolPage from "./pages/JoinPool"; 
 import CreatePoolPage from "./pages/CreatePool";
 import ProtectedRoute from "./components/auth/ProtectedRoute";
+import PoolSettingsPage from "./pages/PoolSettings"; // <-- 1. IMPORTAÇÃO DA NOVA PÁGINA
 
 function App() {
   return (
@@ -51,6 +52,7 @@ function App() {
             <Route path="/change-password" element={<ProtectedRoute><ChangePassword /></ProtectedRoute>} />
             <Route path="/join-pool" element={<ProtectedRoute><JoinPoolPage /></ProtectedRoute>} />
             <Route path="/create-pool" element={<ProtectedRoute><CreatePoolPage /></ProtectedRoute>} />
+            <Route path="/pool-settings" element={<ProtectedRoute><PoolSettingsPage /></ProtectedRoute>} /> {/* <-- 2. NOVA ROTA ADICIONADA */}
 
             {/* Rotas de Admin */}
             <Route path="/admin-login" element={<AdminLogin />} />
