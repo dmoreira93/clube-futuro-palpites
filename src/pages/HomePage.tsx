@@ -61,22 +61,20 @@ const HomePage = () => {
         <div className="mt-8 flex flex-col sm:flex-row justify-center gap-4">
           <Link to="/cadastro">
             {/* --- BOTÃO ATUALIZADO --- */}
-            <Button 
-              size="lg" 
-              className="bg-fifa-green hover:bg-green-700 text-white font-bold shadow-lg hover:shadow-xl transform transition-transform hover:scale-105 w-full sm:w-auto"
+            <Button
+            size="lg"
+            className="
+            w-full sm:w-auto
+            bg-gradient-to-r from-green-500 to-green-600
+            text-white font-bold
+            shadow-lg hover:shadow-2xl
+            transform transition-all duration-300 ease-in-out
+            hover:scale-105 hover:-translate-y-1
+            ring-2 ring-green-500/50 ring-offset-2 ring-offset-background
+            "
             >
-              Crie seu Bolão Grátis
-              <ArrowRight className="ml-2 h-5 w-5" />
-            </Button>
-          </Link>
-          <Link to="/login">
-            {/* --- BOTÃO ATUALIZADO --- */}
-            <Button 
-              size="lg" 
-              variant="outline"
-              className="shadow-md hover:shadow-lg transform transition-transform hover:scale-105 w-full sm:w-auto"
-            >
-              Acessar meu Bolão
+            Crie seu Bolão Grátis
+            <ArrowRight className="ml-2 h-5 w-5" />
             </Button>
           </Link>
         </div>
