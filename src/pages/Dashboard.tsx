@@ -1,4 +1,4 @@
-// src/pages/Dashboard.tsx
+// src/pages/Dashboard.tsx - VERSÃO COM BOTÃO CORRIGIDO
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -121,9 +121,10 @@ const Dashboard = () => {
       </div>
 
       <div className="text-center mb-8">
-        <Link to="/palpites">
+        {/* --- CORREÇÃO AQUI --- */}
+        <Link to="/palpites-do-dia">
           <Button className="bg-fifa-green hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition-colors duration-300">
-            Dar meus Palpites
+            Ver Palpites dos Jogos do Dia
           </Button>
         </Link>
       </div>
@@ -158,4 +159,4 @@ const Dashboard = () => {
   );
 };
 
-export default Dashboard; // A exportação corresponde ao nome do componente
+export default Dashboard;
