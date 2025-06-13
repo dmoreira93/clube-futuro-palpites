@@ -13,24 +13,28 @@ const RankingPage = () => {
 
   const fetchPoolSettings = useCallback(async () => {
     if (!user?.pool_id) {
+      console.log("DEBUG: Usuário não tem pool_id, busca cancelada.");
       setLoading(false);
       return;
     }
 
     setLoading(true);
     try {
+      console.log(`DEBUG: Buscando bolão com pool_id: ${user.pool_id}`); // Log para ver qual ID está sendo usado
       const { data, error } = await supabase
         .from('pools')
         .select('*')
         .eq('id', user.pool_id)
         .single();
       
-      // --- LINHAS DE DEBUG ADICIONADAS ---
       console.log('DEBUG: Resultado da busca pelo bolão (pools):', { data, error });
-      // ------------------------------------
 
-      if (error) throw error;
+      if (error && error.code !== 'PGRST116') { // PGRST116: "exact-one row expected, but 0 rows were returned"
+        throw error;
+      }
+      
       setPoolSettings(data);
+
     } catch (error: any) {
       toast.error("Não foi possível carregar as configurações do bolão.");
       console.error("Erro ao buscar configurações do bolão:", error);
