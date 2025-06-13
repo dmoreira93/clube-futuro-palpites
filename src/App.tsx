@@ -1,13 +1,12 @@
-// src/App.tsx - VERSÃO FINAL COM NOTIFICAÇÃO DE ATUALIZAÇÃO
+// src/App.tsx - VERSÃO SEM O COMPONENTE PWA
 
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
 import Layout from "./components/layout/Layout";
-import PwaUpdateNotification from "./components/PwaUpdateNotification"; // <-- 1. IMPORTAÇÃO DO COMPONENTE
 
 // Importações das páginas
 import HomePage from "./pages/HomePage";
-import Dashboard from "./pages/Index"; // O antigo Index agora é o Dashboard
+import Dashboard from "./pages/Index";
 import Login from "./pages/Login";
 import Cadastro from "./pages/Cadastro";
 import Palpites from "./pages/Palpites";
@@ -29,9 +28,6 @@ function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
-        {/* 2. COMPONENTE ADICIONADO PARA OUVIR ATUALIZAÇÕES */}
-        <PwaUpdateNotification /> 
-        
         <Layout>
           <Routes>
             {/* Rota Pública Principal */}
@@ -44,7 +40,7 @@ function App() {
             <Route path="/criterios" element={<Criterios />} />
             <Route path="*" element={<NotFound />} />
             
-            {/* Rotas Protegidas (requerem login e pertencimento a um bolão) */}
+            {/* Rotas Protegidas */}
             <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
             <Route path="/ranking" element={<ProtectedRoute><RankingPage /></ProtectedRoute>} />
             <Route path="/resultados" element={<ProtectedRoute><Resultados /></ProtectedRoute>} />
