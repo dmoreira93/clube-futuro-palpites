@@ -76,6 +76,21 @@ const HomePage = () => {
             Crie seu Bolão Grátis
             <ArrowRight className="ml-2 h-5 w-5" />
             </Button>
+            <Button
+            size="lg"
+            variant="default" // Removemos o "outline" para poder aplicar uma cor de fundo
+            className="
+            w-full sm:w-auto
+            bg-slate-800 text-white
+            hover:bg-slate-700
+            border-2 border-slate-700
+            shadow-md hover:shadow-lg
+            transform transition-transform duration-300
+            hover:scale-105
+            "
+            >
+            Acessar meu Bolão
+            </Button>
           </Link>
         </div>
       </section>
