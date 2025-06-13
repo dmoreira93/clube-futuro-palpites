@@ -1,8 +1,9 @@
-// src/App.tsx - VERSÃO ATUALIZADA
+// src/App.tsx - VERSÃO FINAL COM NOTIFICAÇÃO DE ATUALIZAÇÃO
 
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
 import Layout from "./components/layout/Layout";
+import PwaUpdateNotification from "./components/PwaUpdateNotification"; // <-- 1. IMPORTAÇÃO DO COMPONENTE
 
 // Importações das páginas
 import HomePage from "./pages/HomePage";
@@ -28,6 +29,9 @@ function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
+        {/* 2. COMPONENTE ADICIONADO PARA OUVIR ATUALIZAÇÕES */}
+        <PwaUpdateNotification /> 
+        
         <Layout>
           <Routes>
             {/* Rota Pública Principal */}
