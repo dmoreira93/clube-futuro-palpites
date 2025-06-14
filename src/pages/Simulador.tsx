@@ -22,21 +22,20 @@ const Simulador = () => {
   const [allTeams, setAllTeams] = useState<SimulatedTeamStats[]>([]);
   const [knockoutSelections, setKnockoutSelections] = useState<{ [matchId: string]: string }>({});
 
-  // --- LÓGICA DE PRAZO ADICIONADA AQUI ---
-  // O formato 'YYYY-MM-DDTHH:mm:ss-HH:mm' (com timezone) é o mais seguro.
-  // Usando a data atual, 15 de Junho de 2025, às 18:00.
-  const deadline = new Date('2025-06-15T18:00:00-03:00'); 
-  const isDeadlinePassed = new Date() > deadline;
+  // --- LÓGICA DE PRAZO ADICIONADA ---
+  // Define o prazo final em UTC para maior precisão.
+  // 15 de Junho de 2025 às 18:00 no horário de Brasília (UTC-3) é 21:00 em UTC.
+  const deadlineUTC = new Date(Date.UTC(2025, 5, 15, 21, 0, 0)); // Mês 5 = Junho
+  const isDeadlinePassed = new Date() > deadlineUTC;
 
   const handleSimulation = async () => {
-    // ... (sua função handleSimulation, SEM aquele bloco que pré-seleciona as oitavas)
     if (!user) {
       toast.error('Você precisa estar logado para simular seus palpites.');
       return;
     }
     setIsLoading(true);
     setSimulatedResults(null);
-    setKnockoutSelections({}); // Limpa seleções antigas
+    setKnockoutSelections({}); // Limpa seleções anteriores
     try {
       const [{ data: predictionsQueryData, error: pError }, { data: teamsData, error: tError }, { data: groupsData, error: gError }] = await Promise.all([
         supabase.from('match_predictions').select('home_score, away_score, matches!inner(home_team_id, away_team_id)').eq('user_id', user.id),
