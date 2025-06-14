@@ -4,12 +4,14 @@ import { Button } from '@/components/ui/button';
 import { SimulatedGroup } from '@/lib/simulationEngine';
 import { Save } from 'lucide-react';
 
+// 1. ATUALIZANDO A INTERFACE
 interface Props {
   simulatedGroups: SimulatedGroup[];
   onAdoptPrediction: (groupId: string, firstTeamId: string, secondTeamId: string) => void;
+  isDeadlinePassed: boolean; // <-- Prop adicionada
 }
 
-const SimulatedGroupTables = ({ simulatedGroups, onAdoptPrediction }: Props) => {
+const SimulatedGroupTables = ({ simulatedGroups, onAdoptPrediction, isDeadlinePassed }: Props) => {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 print:grid-cols-2">
       {simulatedGroups.map((group) => {
@@ -50,13 +52,16 @@ const SimulatedGroupTables = ({ simulatedGroups, onAdoptPrediction }: Props) => 
                 </TableBody>
               </Table>
               <div className="mt-3 text-right print:hidden">
+                {/* 2. ATUALIZANDO O BOTÃO */}
                 <Button
                   size="sm"
                   variant="outline"
                   className="border-blue-500 text-blue-500 hover:bg-blue-500 hover:text-white"
                   onClick={() => onAdoptPrediction(group.groupId, first.teamId, second.teamId)}
+                  disabled={isDeadlinePassed}
                 >
-                  <Save className="h-4 w-4 mr-1" /> Adotar posições do grupo
+                  <Save className="h-4 w-4 mr-1" /> 
+                  {isDeadlinePassed ? 'Prazo Encerrado' : 'Adotar posições do grupo'}
                 </Button>
               </div>
             </CardContent>

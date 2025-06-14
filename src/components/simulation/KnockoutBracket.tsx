@@ -1,5 +1,3 @@
-// src/components/simulation/KnockoutBracket.tsx - VERSÃO ATUALIZADA
-
 import React from 'react';
 import { SimulatedGroup, SimulatedTeamStats } from '@/lib/simulationEngine';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -12,7 +10,6 @@ interface KnockoutBracketProps {
   simulatedGroups: SimulatedGroup[];
   knockoutSelections: { [matchId: string]: string };
   onSelectionChange: (matchId: string, teamId: string | null) => void;
-  // ATUALIZADO: A prop agora espera todos os dados de uma vez
   onAdoptAllFinalPredictions: (
     championId: string, 
     runnerUpId: string, 
@@ -22,18 +19,19 @@ interface KnockoutBracketProps {
     finalAwayScore: number
   ) => void;
   allTeams: SimulatedTeamStats[];
+  isDeadlinePassed: boolean; // <-- 1. PROP ADICIONADA
 }
 
 interface MatchupProps {
   title: string;
-  matchId: string; // Adicionado para garantir que a chave seja única e acessível
+  matchId: string;
   team1?: SimulatedTeamStats;
   team2?: SimulatedTeamStats;
   selectedValue?: string;
   onSelect: (value: string) => void;
 }
 
-// --- Componentes Auxiliares (com pequenas melhorias) ---
+// --- Componente Matchup (sem alteração) ---
 const Matchup: React.FC<MatchupProps> = ({ title, matchId, team1, team2, selectedValue, onSelect }) => {
     const canSelect = team1 && team2;
     return (
@@ -59,6 +57,7 @@ const KnockoutBracket: React.FC<KnockoutBracketProps> = ({
   onSelectionChange,
   onAdoptAllFinalPredictions,
   allTeams,
+  isDeadlinePassed, // <-- 2. RECEBENDO A PROP
 }) => {
   const getTeam = (groupName: string, position: number) => simulatedGroups.find(g => g.groupName === groupName)?.standings[position - 1];
   const findTeamById = (teamId?: string) => teamId ? allTeams.find(t => t.teamId === teamId) : undefined;
@@ -94,7 +93,6 @@ const KnockoutBracket: React.FC<KnockoutBracketProps> = ({
 
   const handleAdoptClick = () => {
     if (allFinalPositionsSet) {
-      // Por padrão, adota 0x0 como placar da final, já que não é definido aqui.
       onAdoptAllFinalPredictions(champion.teamId, runnerUp.teamId, thirdPlace.teamId, fourthPlace.teamId, 0, 0);
     }
   };
@@ -104,9 +102,10 @@ const KnockoutBracket: React.FC<KnockoutBracketProps> = ({
       <CardHeader className="flex-row items-center justify-between print-hidden">
         <CardTitle className="text-2xl font-bold text-fifa-blue">Chaveamento do Mata-Mata</CardTitle>
         {allFinalPositionsSet && (
-          <Button onClick={handleAdoptClick}>
+          // --- 3. BOTÃO ATUALIZADO ---
+          <Button onClick={handleAdoptClick} disabled={isDeadlinePassed}>
             <Save className="mr-2 h-4 w-4" />
-            Adotar Palpites Finais
+            {isDeadlinePassed ? 'Prazo Encerrado' : 'Adotar Palpites Finais'}
           </Button>
         )}
       </CardHeader>

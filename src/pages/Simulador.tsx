@@ -1,5 +1,3 @@
-// src/pages/Simulador.tsx
-
 import React, { useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -24,19 +22,24 @@ const Simulador = () => {
   const [allTeams, setAllTeams] = useState<SimulatedTeamStats[]>([]);
   const [knockoutSelections, setKnockoutSelections] = useState<{ [matchId: string]: string }>({});
 
+  // --- LÓGICA DE PRAZO ADICIONADA AQUI ---
+  // O formato 'YYYY-MM-DDTHH:mm:ss-HH:mm' (com timezone) é o mais seguro.
+  // Usando a data atual, 15 de Junho de 2025, às 18:00.
+  const deadline = new Date('2025-06-15T18:00:00-03:00'); 
+  const isDeadlinePassed = new Date() > deadline;
+
   const handleSimulation = async () => {
+    // ... (sua função handleSimulation, SEM aquele bloco que pré-seleciona as oitavas)
     if (!user) {
       toast.error('Você precisa estar logado para simular seus palpites.');
       return;
     }
     setIsLoading(true);
     setSimulatedResults(null);
-    setKnockoutSelections({}); // Garante que as seleções antigas sejam limpas
+    setKnockoutSelections({}); // Limpa seleções antigas
     try {
       const [{ data: predictionsQueryData, error: pError }, { data: teamsData, error: tError }, { data: groupsData, error: gError }] = await Promise.all([
-        supabase.from('match_predictions')
-          .select('home_score, away_score, matches!inner(home_team_id, away_team_id)')
-          .eq('user_id', user.id),
+        supabase.from('match_predictions').select('home_score, away_score, matches!inner(home_team_id, away_team_id)').eq('user_id', user.id),
         supabase.from('teams').select('id, name, group_id'),
         supabase.from('groups').select('id, name')
       ]);
@@ -58,7 +61,6 @@ const Simulador = () => {
       const results = calculateGroupStandings(formattedPredictions, teamsData as Team[] || [], groupsData || []);
       setSimulatedResults(results);
       setAllTeams(results.flatMap(g => g.standings));
-      
       toast.success("Simulação concluída! Agora selecione os vencedores do mata-mata.");
 
     } catch (error: any) {
@@ -77,7 +79,6 @@ const Simulador = () => {
       } else {
         delete newState[matchId];
       }
-
       const cascadeClearMap: { [key: string]: string[] } = {
         'r16-1': ['qf-1', 'sf-1', 'final', 'third_place'], 'r16-2': ['qf-1', 'sf-1', 'final', 'third_place'],
         'r16-3': ['qf-2', 'sf-1', 'final', 'third_place'], 'r16-4': ['qf-2', 'sf-1', 'final', 'third_place'],
@@ -87,7 +88,6 @@ const Simulador = () => {
         'qf-3': ['sf-2', 'final', 'third_place'], 'qf-4': ['sf-2', 'final', 'third_place'],
         'sf-1': ['final', 'third_place'], 'sf-2': ['final', 'third_place'],
       };
-
       const downstreamMatchesToClear = cascadeClearMap[matchId as keyof typeof cascadeClearMap];
       if (downstreamMatchesToClear) {
         downstreamMatchesToClear.forEach(idToClear => { delete newState[idToClear]; });
@@ -155,16 +155,23 @@ const Simulador = () => {
             <div id="printable-simulation">
                 <div id="simulation-group-tables">
                     <h2 className="text-2xl font-bold text-center mb-4 hidden print:block">Classificação da Fase de Grupos</h2>
-                    <SimulatedGroupTables simulatedGroups={simulatedResults} onAdoptPrediction={handleAdoptGroupPrediction} />
+                    {/* --- PASSANDO A PROP DE BLOQUEIO --- */}
+                    <SimulatedGroupTables 
+                      simulatedGroups={simulatedResults} 
+                      onAdoptPrediction={handleAdoptGroupPrediction}
+                      isDeadlinePassed={isDeadlinePassed}
+                    />
                 </div>
                 <div id="simulation-knockout-bracket" className="mt-8">
                     <h2 className="text-2xl font-bold text-center mt-8 mb-4 hidden print:block">Chaveamento Mata-Mata</h2>
+                    {/* --- PASSANDO A PROP DE BLOQUEIO --- */}
                     <KnockoutBracket
                         simulatedGroups={simulatedResults}
                         knockoutSelections={knockoutSelections}
                         onSelectionChange={handleKnockoutSelection}
                         onAdoptAllFinalPredictions={handleAdoptFinalPredictions}
                         allTeams={allTeams}
+                        isDeadlinePassed={isDeadlinePassed}
                     />
                 </div>
             </div>
