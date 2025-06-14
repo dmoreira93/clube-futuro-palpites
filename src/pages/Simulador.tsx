@@ -25,7 +25,7 @@ const Simulador = () => {
   // --- LÓGICA DE PRAZO ADICIONADA ---
   // Define o prazo final em UTC para maior precisão.
   // 15 de Junho de 2025 às 18:00 no horário de Brasília (UTC-3) é 21:00 em UTC.
-  const deadlineUTC = new Date(Date.UTC(2025, 5, 15, 21, 0, 0)); // Mês 5 = Junho
+  const deadlineUTC = new Date(Date.UTC(2025, 5, 14, 18, 0, 0)); // Mês 5 = Junho
   const isDeadlinePassed = new Date() > deadlineUTC;
 
   const handleSimulation = async () => {
