@@ -1,5 +1,4 @@
 // supabase/functions/fetch-scores/index.ts - VERSÃO CORRIGIDA PARA SPORTMONKS
-// AJUSTE PARA O PARÂMETRO 'INCLUDE' DA V3 DA SPORTMONKS
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
@@ -14,23 +13,21 @@ serve(async (req) => {
   }
 
   try {
+    // Obtenha sua chave da Sportmonks dos Secrets do Deno (Supabase)
     const apiKey = Deno.env.get('SPORTMONKS_API_KEY');
 
     if (!apiKey) {
       throw new Error('SPORTMONKS_API_KEY não configurada nos Secrets do Supabase.');
     }
 
+    // Formata a data para o padrão YYYY-MM-DD (Sportmonks usa este formato)
     const today = new Date().toISOString().split('T')[0];
     
-    // ATENÇÃO AQUI: Removendo 'include=scores,participants' pois não é um parâmetro válido para 'fixtures' na v3 ou tem outra forma de ser incluído.
-    // Os dados essenciais (scores, teams) geralmente vêm diretamente no objeto do fixture na v3.
-    // Se eles não vierem, você pode precisar de um 'include' mais genérico como 'related' ou 'odds' dependendo do seu plano.
-    // Vamos começar sem o include, pois a maioria dos dados básicos já vem por padrão.
-    const apiUrl = `https://api.sportmonks.com/v3/football/fixtures?api_token=${apiKey}&local_date=${today}`;
-    // Se você ainda precisar de dados mais específicos (como escalações completas, etc.),
-    // você precisará consultar a documentação da Sportmonks V3 para ver quais 'includes' são válidos para fixtures.
-    // Por exemplo, alguns dados vêm em 'sportmonks.api.v3.football.fixtures.index.response.data.participants' diretamente.
-    // E os scores em 'sportmonks.api.v3.football.fixtures.index.response.data.scores'.
+    // URL base da Sportmonks para futebol (pode variar ligeiramente dependendo do seu plano e versão da API)
+    // Estamos buscando 'fixtures' (partidas) para uma data específica e incluindo 'scores' e 'participants'
+    // 'local_date' é o parâmetro para filtrar por data
+    // 'include' permite adicionar dados relacionados na mesma requisição
+    const apiUrl = `https://api.sportmonks.com/v3/football/fixtures?api_token=${apiKey}&local_date=${today}&include=scores,participants`;
 
     const apiResponse = await fetch(apiUrl, {
       method: 'GET',
@@ -43,6 +40,7 @@ serve(async (req) => {
 
     const data = await apiResponse.json();
 
+    // A Sportmonks retorna um objeto com a propriedade `data` que contém o array de fixtures.
     const fixtures = data.data || [];
 
     return new Response(JSON.stringify(fixtures), {
