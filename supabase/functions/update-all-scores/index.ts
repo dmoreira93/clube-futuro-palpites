@@ -1,4 +1,4 @@
-// supabase/functions/update-all-scores/index.ts - VERSÃO COMPLETA E CORRIGIDA
+// supabase/functions/update-all-scores/index.ts - VERSÃO COMPLETA E CORRIGIDA PARA API-FOOTBALL
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
@@ -8,14 +8,74 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Interface para os dados que esperamos da TheSportsDB
-interface TheSportsDBEvent {
-  idEvent: string;
-  idHomeTeam: string;
-  idAwayTeam: string;
-  intHomeScore: string | null;
-  intAwayScore: string | null;
-  strStatus: string; // Ex: "Match Finished"
+// Interface para os dados que esperamos da API-Football (simplificado)
+interface ApiFootballFixture {
+  fixture: {
+    id: number;
+    referee: string | null;
+    timezone: string;
+    date: string; // ISO format date-time
+    timestamp: number; // Unix timestamp
+    periods: {
+      first: number | null;
+      second: number | null;
+    };
+    venue: {
+      id: number | null;
+      name: string | null;
+      city: string | null;
+    };
+    status: {
+      long: string; // Ex: "Match Finished", "Halftime", "Not Started"
+      short: string; // Ex: "FT", "HT", "NS"
+      elapsed: number | null;
+    };
+  };
+  league: {
+    id: number;
+    name: string;
+    country: string;
+    logo: string;
+    flag: string | null;
+    season: number;
+    round: string;
+  };
+  teams: {
+    home: {
+      id: number;
+      name: string;
+      logo: string;
+      winner: boolean | null;
+    };
+    away: {
+      id: number;
+      name: string;
+      logo: string;
+      winner: boolean | null;
+    };
+  };
+  goals: {
+    home: number | null;
+    away: number | null;
+  };
+  score: {
+    halftime: {
+      home: number | null;
+      away: number | null;
+    };
+    fulltime: {
+      home: number | null;
+      away: number | null;
+    };
+    extratime: {
+      home: number | null;
+      away: number | null;
+    };
+    penalty: {
+      home: number | null;
+      away: number | null;
+    };
+  };
 }
 
 serve(async (req) => {
@@ -31,15 +91,17 @@ serve(async (req) => {
 
     // 1. Otimização: Verifica se há jogos para hoje que ainda não terminaram.
     const today = new Date();
-    const startOfDay = new Date(today.setUTCHours(0, 0, 0, 0)).toISOString();
-    const endOfDay = new Date(today.setUTCHours(23, 59, 59, 999)).toISOString();
+    // Ajuste para o fuso horário de Maringá (-03) se 'match_date' for armazenado localmente
+    const offsetMaringa = -3; // UTC-3
+    const startOfDayMaringa = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0 - offsetMaringa, 0, 0, 0);
+    const endOfDayMaringa = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23 - offsetMaringa, 59, 59, 999);
 
     const { data: activeMatchesToday, error: checkError } = await supabaseAdmin
       .from('matches')
-      .select('id')
+      .select('id, home_team_api_id, away_team_api_id') // Selecione também os IDs da API para mapeamento
       .eq('is_finished', false)
-      .gte('match_date', startOfDay)
-      .lte('match_date', endOfDay);
+      .gte('match_date', startOfDayMaringa.toISOString())
+      .lte('match_date', endOfDayMaringa.toISOString());
 
     if (checkError) throw checkError;
 
@@ -49,42 +111,59 @@ serve(async (req) => {
       });
     }
 
-    // 2. Se houver jogos, busca os dados da API externa
-    const { data: apiEvents, error: invokeError } = await supabaseAdmin.functions.invoke('fetch-scores');
+    // 2. Se houver jogos, busca os dados da API externa (API-Football)
+    const { data: apiFixtures, error: invokeError } = await supabaseAdmin.functions.invoke('fetch-scores');
     if (invokeError) throw invokeError;
-    if (!apiEvents) {
-      throw new Error("Não foi possível obter os dados da TheSportsDB.");
+    if (!apiFixtures) {
+      throw new Error("Não foi possível obter os dados da API-Football.");
     }
     
-    // 3. Filtra apenas os jogos que já terminaram
-    const finishedEvents: TheSportsDBEvent[] = (apiEvents as TheSportsDBEvent[]).filter(e => e.strStatus === 'Match Finished');
+    // 3. Filtra apenas os jogos que já terminaram (status 'FT' - Full Time)
+    const finishedFixtures: ApiFootballFixture[] = (apiFixtures as ApiFootballFixture[]).filter(fixture => 
+      fixture.fixture.status.short === 'FT' && 
+      fixture.goals.home !== null && 
+      fixture.goals.away !== null
+    );
     
-    if (finishedEvents.length === 0) {
-      return new Response(JSON.stringify({ message: "Nenhum jogo finalizado para atualizar na API." }), {
+    if (finishedFixtures.length === 0) {
+      return new Response(JSON.stringify({ message: "Nenhum jogo finalizado para atualizar na API-Football." }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    // 4. Lógica de atualização (agora completa)
+    // 4. Lógica de atualização
     let updatedCount = 0;
     let pointsCalculatedCount = 0;
 
-    for (const event of finishedEvents) {
-      const homeScore = parseInt(event.intHomeScore, 10);
-      const awayScore = parseInt(event.intAwayScore, 10);
+    for (const fixture of finishedFixtures) {
+      const homeScore = fixture.goals.home;
+      const awayScore = fixture.goals.away;
 
-      if (isNaN(homeScore) || isNaN(awayScore)) continue;
+      if (homeScore === null || awayScore === null) {
+        console.warn(`Placar nulo para a partida API-Football ID: ${fixture.fixture.id}`);
+        continue;
+      }
 
-      // Encontra a partida no nosso banco de dados usando o ID da API que mapeamos na tabela 'teams'
+      // Mapeamento dos IDs dos times da API-Football para seus IDs no seu DB
+      const homeTeamApiId = fixture.teams.home.id;
+      const awayTeamApiId = fixture.teams.away.id;
+
+      // Encontra a partida no nosso banco de dados usando os IDs da API dos times
       const { data: localMatch, error: matchError } = await supabaseAdmin
         .from('matches')
         .select('id')
-        .eq('home_team_api_id', event.idHomeTeam) // Assumindo que você tem uma coluna para o ID da API do time da casa
-        .eq('away_team_api_id', event.idAwayTeam) // E uma para o time visitante
+        .eq('home_team_api_id', homeTeamApiId) // Coluna no seu DB para o ID do time da casa na API externa
+        .eq('away_team_api_id', awayTeamApiId) // Coluna no seu DB para o ID do time visitante na API externa
         .eq('is_finished', false)
         .single();
         
-      if (matchError || !localMatch) continue;
+      if (matchError || !localMatch) {
+          // Se não encontrar o jogo ou já estiver finalizado no DB, pule
+          if (matchError && matchError.code !== 'PGRST116') { // PGRST116 é "No rows found"
+              console.error(`Erro ao buscar partida local com IDs API-Football (${homeTeamApiId}, ${awayTeamApiId}):`, matchError.message);
+          }
+          continue;
+      }
       
       const { error: updateError } = await supabaseAdmin
         .from('matches')
@@ -108,7 +187,7 @@ serve(async (req) => {
       }
     }
 
-    return new Response(JSON.stringify({ message: `${updatedCount} partidas atualizadas e pontos para ${pointsCalculatedCount} partidas processados.` }), {
+    return new Response(JSON.stringify({ message: `${updatedCount} partidas atualizadas e pontos para ${pointsCalculatedCount} partidas processados usando API-Football.` }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
 

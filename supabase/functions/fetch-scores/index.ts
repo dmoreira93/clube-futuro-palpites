@@ -1,10 +1,10 @@
-// supabase/functions/fetch-scores/index.ts - VERSÃO CORRIGIDA PARA THESPORTSDB
+// supabase/functions/fetch-scores/index.ts - VERSÃO CORRIGIDA PARA API-FOOTBALL
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-control-allow-headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
 serve(async (req) => {
@@ -13,30 +13,42 @@ serve(async (req) => {
   }
 
   try {
-    // A chave "123" para usuários gratuitos da TheSportsDB.
-    // Se você fizer upgrade no futuro, pode salvar sua chave pessoal nos Secrets.
-    const apiKey = Deno.env.get('API_FOOTBALL_KEY') || '123';
+    const rapidApiKey = Deno.env.get('API_FOOTBALL_KEY');
+    const rapidApiHost = 'api-football-v1.p.rapidapi.com'; // Host da API-Football na RapidAPI
 
-    // Formata a data para o padrão YYYY-MM-DD
+    if (!rapidApiKey) {
+      throw new Error('API_FOOTBALL_KEY não configurada nos Secrets do Supabase.');
+    }
+
+    // Formata a data para o padrão YYYY-MM-DD, que é o esperado pela API-Football
     const today = new Date().toISOString().split('T')[0];
     
-    // URL específica da TheSportsDB para buscar jogos do dia
-    const apiUrl = `https://www.thesportsdb.com/api/v1/json/${apiKey}/eventsday.php?d=${today}`;
+    // URL específica da API-Football para buscar jogos do dia
+    // Você pode adicionar um parâmetro 'timezone' se quiser resultados no seu fuso horário local
+    // Ex: `&timezone=America/Sao_Paulo`
+    const apiUrl = `https://api-football-v1.p.rapidapi.com/v3/fixtures?date=${today}`;
 
     const apiResponse = await fetch(apiUrl, {
       method: 'GET',
+      headers: {
+        'X-RapidAPI-Key': rapidApiKey,
+        'X-RapidAPI-Host': rapidApiHost,
+        'Content-Type': 'application/json', // Boa prática
+      },
     });
 
     if (!apiResponse.ok) {
-      throw new Error(`Erro na chamada para a TheSportsDB: ${apiResponse.statusText}`);
+      const errorText = await apiResponse.text();
+      console.error(`Erro na chamada para a API-Football: ${apiResponse.status} - ${errorText}`);
+      throw new Error(`Erro na chamada para a API-Football: ${apiResponse.statusText}`);
     }
 
     const data = await apiResponse.json();
 
-    // A TheSportsDB pode retornar um objeto com a propriedade `events: null` se não houver jogos.
-    const events = data.events || [];
+    // A API-Football retorna os resultados na propriedade `response`
+    const fixtures = data.response || [];
 
-    return new Response(JSON.stringify(events), {
+    return new Response(JSON.stringify(fixtures), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 200,
     });
