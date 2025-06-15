@@ -1,4 +1,4 @@
-// supabase/functions/update-all-scores/index.ts - VERSÃO FINAL
+// supabase/functions/update-all-scores/index.ts - VERSÃO OTIMIZADA
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
@@ -39,7 +39,25 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
     
-    // 1. Invoca nossa primeira função para buscar os dados da API-Football
+    // --- VERIFICAÇÃO INICIAL ADICIONADA AQUI ---
+    // 1. Verifica se há jogos para hoje que ainda não terminaram.
+    const { data: activeMatchesToday, error: checkError } = await supabaseAdmin
+      .from('matches')
+      .select('id')
+      .eq('is_finished', false)
+      .eq('match_date', new Date().toISOString().split('T')[0]); // Compara apenas a data
+
+    if (checkError) throw checkError;
+
+    // 2. Se não houver jogos ativos para hoje, encerra a execução.
+    if (!activeMatchesToday || activeMatchesToday.length === 0) {
+      return new Response(JSON.stringify({ message: "Nenhum jogo ativo para monitorar hoje. Pulando a chamada da API." }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+    // --- FIM DA VERIFICAÇÃO ---
+
+    // 3. Se houver jogos, a função continua normalmente...
     const { data: fixturesResponse, error: invokeError } = await supabaseAdmin.functions.invoke('fetch-scores');
     if (invokeError) throw invokeError;
     if (!fixturesResponse || !fixturesResponse.response) {
@@ -85,8 +103,6 @@ serve(async (req) => {
             console.error(`Erro ao atualizar partida ${localMatch.id}:`, updateError.message);
           } else {
             updatedCount++;
-            // --- ALTERAÇÃO AQUI: A linha foi descomentada ---
-            // Após atualizar o placar, chama a função para calcular os pontos de todos os palpites para esta partida.
             const { error: rpcError } = await supabaseAdmin.rpc('update_user_points_for_match', { match_id_param: localMatch.id });
             if (rpcError) {
                 console.error(`Erro ao calcular pontos para a partida ${localMatch.id}:`, rpcError.message);
