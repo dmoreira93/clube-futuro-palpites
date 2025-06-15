@@ -1,55 +1,46 @@
-import { useState, useEffect } from "react";
-import { 
-  Table, 
-  TableBody, 
-  TableCell, 
-  TableHead, 
-  TableHeader, 
-  TableRow 
-} from "@/components/ui/table";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { useToast } from "@/hooks/use-toast";
-import { Plus, Edit, Trash, Save, X } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
-import { supabase } from "@/integrations/supabase/client";  // Import conforme pedido
+// src/components/admin/AdminTeams.tsx - VERSÃO ATUALIZADA
 
-// Types
+import { useState, useEffect } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { useToast } from "@/components/ui/use-toast";
+import { Edit, Save, X, Loader2 } from "lucide-react";
+
+// ATUALIZADO: Adiciona o novo campo ao tipo
 interface Team {
-  id: number;
+  id: string;
   name: string;
-  shortName: string;
-  country: string;
+  flag_url: string | null;
+  api_football_id: number | null;
 }
 
 const AdminTeams = () => {
   const { toast } = useToast();
   const [teams, setTeams] = useState<Team[]>([]);
   const [editingTeam, setEditingTeam] = useState<Team | null>(null);
-  const [newTeam, setNewTeam] = useState<Omit<Team, "id">>({
-    name: "",
-    shortName: "",
-    country: ""
-  });
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
 
-  // Carregar times do Supabase ao montar o componente
   useEffect(() => {
     const fetchTeams = async () => {
       setLoading(true);
       const { data, error } = await supabase
-        .from<Team>("teams")
-        .select("*")
-        .order("id", { ascending: true });
+        .from("teams")
+        .select("id, name, flag_url, api_football_id") // Puxa o novo campo
+        .order("name", { ascending: true });
 
       if (error) {
-        toast({
-          title: "Erro ao carregar times",
-          description: error.message,
-          variant: "destructive"
-        });
-      } else if (data) {
-        setTeams(data);
+        toast({ title: "Erro ao carregar times", description: error.message, variant: "destructive" });
+      } else {
+        setTeams(data || []);
       }
       setLoading(false);
     };
@@ -57,254 +48,76 @@ const AdminTeams = () => {
     fetchTeams();
   }, [toast]);
 
-  const handleEditTeam = (team: Team) => {
-    setEditingTeam(team);
+  const handleEdit = (team: Team) => {
+    setEditingTeam({ ...team });
   };
 
-  const handleSaveEdit = async () => {
+  const handleSave = async () => {
     if (!editingTeam) return;
+    setLoading(true);
 
-    // Validação
-    if (!editingTeam.name || !editingTeam.shortName || !editingTeam.country) {
-      toast({
-        title: "Erro ao salvar",
-        description: "Todos os campos são obrigatórios",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    // Atualizar no Supabase
     const { error } = await supabase
       .from("teams")
       .update({
         name: editingTeam.name,
-        shortName: editingTeam.shortName,
-        country: editingTeam.country,
+        flag_url: editingTeam.flag_url,
+        api_football_id: editingTeam.api_football_id, // Salva o novo campo
       })
       .eq("id", editingTeam.id);
 
     if (error) {
-      toast({
-        title: "Erro ao atualizar time",
-        description: error.message,
-        variant: "destructive"
-      });
-      return;
+      toast({ title: "Erro ao atualizar time", description: error.message, variant: "destructive" });
+    } else {
+      toast({ title: "Time atualizado com sucesso!" });
+      setTeams(teams.map(t => (t.id === editingTeam.id ? editingTeam : t)));
+      setEditingTeam(null);
     }
-
-    // Atualizar localmente
-    setTeams(teams.map(team => 
-      team.id === editingTeam.id ? editingTeam : team
-    ));
-
-    toast({
-      title: "Time atualizado",
-      description: `${editingTeam.name} foi atualizado com sucesso`
-    });
-
-    setEditingTeam(null);
+    setLoading(false);
   };
-
-  const handleCancelEdit = () => {
-    setEditingTeam(null);
-  };
-
-  const handleDeleteTeam = async (id: number) => {
-    const teamToDelete = teams.find(team => team.id === id);
-    if (!teamToDelete) return;
-
-    const { error } = await supabase
-      .from("teams")
-      .delete()
-      .eq("id", id);
-
-    if (error) {
-      toast({
-        title: "Erro ao remover time",
-        description: error.message,
-        variant: "destructive"
-      });
-      return;
-    }
-
-    setTeams(teams.filter(team => team.id !== id));
-
-    toast({
-      title: "Time removido",
-      description: `${teamToDelete.name} foi removido com sucesso`
-    });
-  };
-
-  const handleAddTeam = async () => {
-    // Validação
-    if (!newTeam.name || !newTeam.shortName || !newTeam.country) {
-      toast({
-        title: "Erro ao adicionar",
-        description: "Todos os campos são obrigatórios",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    // Inserir no Supabase
-    const { data, error } = await supabase
-      .from("teams")
-      .insert([newTeam])
-      .select()
-      .single();
-
-    if (error) {
-      toast({
-        title: "Erro ao adicionar time",
-        description: error.message,
-        variant: "destructive"
-      });
-      return;
-    }
-
-    setTeams([...teams, data]);
-
-    // Resetar formulário
-    setNewTeam({
-      name: "",
-      shortName: "",
-      country: ""
-    });
-
-    toast({
-      title: "Time adicionado",
-      description: `${data.name} foi adicionado com sucesso`
-    });
-  };
+  
+  if (loading && !editingTeam) return <Loader2 className="animate-spin" />;
 
   return (
     <div>
-      <div className="mb-6">
-        <h2 className="text-xl font-bold mb-2">Gerenciar Times</h2>
-        <p className="text-gray-600">Adicione, edite ou remova os times participantes do torneio.</p>
-      </div>
-
-      <div className="bg-gray-50 p-4 rounded-lg mb-6">
-        <h3 className="text-lg font-semibold mb-3">Adicionar Novo Time</h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          <div>
-            <label className="text-sm text-gray-600 mb-1 block">Nome do Time</label>
-            <Input 
-              placeholder="Ex: Manchester City" 
-              value={newTeam.name}
-              onChange={(e) => setNewTeam({...newTeam, name: e.target.value})}
-              disabled={loading}
-            />
-          </div>
-          <div>
-            <label className="text-sm text-gray-600 mb-1 block">Abreviação</label>
-            <Input 
-              placeholder="Ex: MCI" 
-              maxLength={3}
-              value={newTeam.shortName}
-              onChange={(e) => setNewTeam({...newTeam, shortName: e.target.value.toUpperCase()})}
-              disabled={loading}
-            />
-          </div>
-          <div>
-            <label className="text-sm text-gray-600 mb-1 block">País</label>
-            <Input 
-              placeholder="Ex: Inglaterra" 
-              value={newTeam.country}
-              onChange={(e) => setNewTeam({...newTeam, country: e.target.value})}
-              disabled={loading}
-            />
-          </div>
-        </div>
-        <div className="mt-3 flex justify-end">
-          <Button onClick={handleAddTeam} className="bg-fifa-blue" disabled={loading}>
-            <Plus className="h-4 w-4 mr-1" /> Adicionar Time
-          </Button>
-        </div>
-      </div>
-
-      <div>
-        <h3 className="text-lg font-semibold mb-3">Lista de Times ({teams.length})</h3>
-        <div className="bg-white rounded-lg border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Nome</TableHead>
-                <TableHead>Abreviação</TableHead>
-                <TableHead>País</TableHead>
-                <TableHead className="text-right">Ações</TableHead>
+      <h2 className="text-xl font-bold mb-4">Mapeamento de Times da API</h2>
+      <p className="text-sm text-muted-foreground mb-4">
+        Associe cada time do seu sistema ao ID correspondente da API-Football. Isso é crucial para a automação dos placares.
+      </p>
+      <div className="border rounded-md">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Time no Sistema</TableHead>
+              <TableHead>URL da Bandeira</TableHead>
+              <TableHead>ID da API-Football</TableHead>
+              <TableHead className="text-right">Ações</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {teams.map(team => (
+              <TableRow key={team.id}>
+                {editingTeam?.id === team.id ? (
+                  <>
+                    <TableCell><Input value={editingTeam.name} onChange={(e) => setEditingTeam({ ...editingTeam, name: e.target.value })} /></TableCell>
+                    <TableCell><Input value={editingTeam.flag_url || ''} onChange={(e) => setEditingTeam({ ...editingTeam, flag_url: e.target.value })} /></TableCell>
+                    <TableCell><Input type="number" placeholder="Ex: 50" value={editingTeam.api_football_id || ''} onChange={(e) => setEditingTeam({ ...editingTeam, api_football_id: parseInt(e.target.value, 10) || null })} /></TableCell>
+                    <TableCell className="text-right flex gap-2 justify-end">
+                      <Button size="icon" onClick={handleSave} disabled={loading}><Save className="h-4 w-4" /></Button>
+                      <Button size="icon" variant="outline" onClick={() => setEditingTeam(null)}><X className="h-4 w-4" /></Button>
+                    </TableCell>
+                  </>
+                ) : (
+                  <>
+                    <TableCell>{team.name}</TableCell>
+                    <TableCell className="text-xs truncate max-w-xs">{team.flag_url}</TableCell>
+                    <TableCell>{team.api_football_id || <span className="text-muted-foreground">Não definido</span>}</TableCell>
+                    <TableCell className="text-right"><Button size="icon" variant="ghost" onClick={() => handleEdit(team)}><Edit className="h-4 w-4" /></Button></TableCell>
+                  </>
+                )}
               </TableRow>
-            </TableHeader>
-            <TableBody>
-              {teams.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={4} className="text-center py-4 text-gray-500">
-                    Nenhum time cadastrado
-                  </TableCell>
-                </TableRow>
-              ) : (
-                teams.map(team => (
-                  <TableRow key={team.id}>
-                    {editingTeam?.id === team.id ? (
-                      <>
-                        <TableCell>
-                          <Input 
-                            value={editingTeam.name} 
-                            onChange={(e) => setEditingTeam({...editingTeam, name: e.target.value})}
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <Input 
-                            value={editingTeam.shortName} 
-                            maxLength={3}
-                            onChange={(e) => setEditingTeam({...editingTeam, shortName: e.target.value.toUpperCase()})}
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <Input 
-                            value={editingTeam.country} 
-                            onChange={(e) => setEditingTeam({...editingTeam, country: e.target.value})}
-                          />
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex justify-end gap-2">
-                            <Button variant="outline" size="sm" onClick={handleSaveEdit} disabled={loading}>
-                              <Save className="h-4 w-4" />
-                            </Button>
-                            <Button variant="outline" size="sm" onClick={handleCancelEdit} disabled={loading}>
-                              <X className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </>
-                    ) : (
-                      <>
-                        <TableCell>{team.name}</TableCell>
-                        <TableCell>
-                          <Badge variant="outline" className="bg-gray-100">
-                            {team.shortName}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>{team.country}</TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex justify-end gap-2">
-                            <Button variant="outline" size="sm" onClick={() => handleEditTeam(team)} disabled={loading}>
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                            <Button variant="outline" size="sm" onClick={() => handleDeleteTeam(team.id)} disabled={loading}>
-                              <Trash className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </>
-                    )}
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </div>
+            ))}
+          </TableBody>
+        </Table>
       </div>
     </div>
   );
