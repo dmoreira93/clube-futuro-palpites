@@ -1,4 +1,4 @@
-// supabase/functions/update-all-scores/index.ts - VERSÃO CORRIGIDA PARA SPORTMONKS
+// supabase/functions/update-all-scores/index.ts - VERSÃO COMPLETA E CORRIGIDA
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
@@ -8,45 +8,14 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Interface para os dados que esperamos da Sportmonks (simplificado para o exemplo)
-// A estrutura real da Sportmonks é mais complexa, mas vamos focar nos pontos chave
-interface SportmonksFixture {
-  id: number; // ID da partida na Sportmonks
-  sport_id: number;
-  league_id: number;
-  season_id: number;
-  // ... outros campos ...
-  time: {
-    status: string; // Ex: "FT", "HT", "LIVE", "NS" (Not Started)
-    starting_at: {
-      date_time: string; // Ex: "2025-06-15 15:00:00"
-      date: string; // Ex: "2025-06-15"
-      time: string; // Ex: "15:00:00"
-    };
-  };
-  scores?: Array<{ // O array 'scores' pode conter diferentes tipos de placares (fulltime, halftime, etc.)
-    score: {
-      home: number;
-      away: number;
-    };
-    description: string; // Ex: "Full Time"
-    id: number;
-    participant_id: number;
-    type_id: number;
-    fixture_id: number;
-    // ... outros campos ...
-  }>;
-  participants?: Array<{ // Times envolvidos na partida
-    id: number; // ID do time na Sportmonks
-    name: string;
-    // ... outros campos ...
-    pivot: {
-      fixture_id: number;
-      participant_id: number;
-      position_id: number; // 1 para casa, 2 para fora
-      // ... outros campos ...
-    };
-  }>;
+// Interface para os dados que esperamos da TheSportsDB
+interface TheSportsDBEvent {
+  idEvent: string;
+  idHomeTeam: string;
+  idAwayTeam: string;
+  intHomeScore: string | null;
+  intAwayScore: string | null;
+  strStatus: string; // Ex: "Match Finished"
 }
 
 serve(async (req) => {
@@ -61,20 +30,16 @@ serve(async (req) => {
     );
 
     // 1. Otimização: Verifica se há jogos para hoje que ainda não terminaram.
-    // Sportmonks usa UTC para os dados, mas seu banco pode ter match_date em fuso horário local.
-    // É importante garantir que a comparação de datas seja consistente.
     const today = new Date();
-    // Ajuste para o fuso horário de Maringá (-03) se 'match_date' for armazenado localmente
-    const offsetMaringa = -3; // UTC-3
-    const startOfDayMaringa = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0 - offsetMaringa, 0, 0, 0);
-    const endOfDayMaringa = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23 - offsetMaringa, 59, 59, 999);
+    const startOfDay = new Date(today.setUTCHours(0, 0, 0, 0)).toISOString();
+    const endOfDay = new Date(today.setUTCHours(23, 59, 59, 999)).toISOString();
 
     const { data: activeMatchesToday, error: checkError } = await supabaseAdmin
       .from('matches')
-      .select('id, home_team_api_id, away_team_api_id') // Selecione também os IDs da API para mapeamento
+      .select('id')
       .eq('is_finished', false)
-      .gte('match_date', startOfDayMaringa.toISOString())
-      .lte('match_date', endOfDayMaringa.toISOString());
+      .gte('match_date', startOfDay)
+      .lte('match_date', endOfDay);
 
     if (checkError) throw checkError;
 
@@ -84,71 +49,42 @@ serve(async (req) => {
       });
     }
 
-    // 2. Se houver jogos, busca os dados da API externa (Sportmonks)
-    const { data: apiFixtures, error: invokeError } = await supabaseAdmin.functions.invoke('fetch-scores');
+    // 2. Se houver jogos, busca os dados da API externa
+    const { data: apiEvents, error: invokeError } = await supabaseAdmin.functions.invoke('fetch-scores');
     if (invokeError) throw invokeError;
-    if (!apiFixtures) {
-      throw new Error("Não foi possível obter os dados da Sportmonks.");
+    if (!apiEvents) {
+      throw new Error("Não foi possível obter os dados da TheSportsDB.");
     }
     
-    // 3. Filtra apenas os jogos que já terminaram (status 'FT' - Full Time)
-    const finishedFixtures: SportmonksFixture[] = (apiFixtures as SportmonksFixture[]).filter(fixture => 
-      fixture.time?.status === 'FT' && fixture.scores && fixture.scores.length > 0
-    );
+    // 3. Filtra apenas os jogos que já terminaram
+    const finishedEvents: TheSportsDBEvent[] = (apiEvents as TheSportsDBEvent[]).filter(e => e.strStatus === 'Match Finished');
     
-    if (finishedFixtures.length === 0) {
-      return new Response(JSON.stringify({ message: "Nenhum jogo finalizado para atualizar na API Sportmonks." }), {
+    if (finishedEvents.length === 0) {
+      return new Response(JSON.stringify({ message: "Nenhum jogo finalizado para atualizar na API." }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    // 4. Lógica de atualização
+    // 4. Lógica de atualização (agora completa)
     let updatedCount = 0;
     let pointsCalculatedCount = 0;
 
-    for (const fixture of finishedFixtures) {
-      // Sportmonks pode ter múltiplos 'scores'. Busque o 'Full Time' score.
-      const fullTimeScore = fixture.scores?.find(score => score.description === 'Full Time');
+    for (const event of finishedEvents) {
+      const homeScore = parseInt(event.intHomeScore, 10);
+      const awayScore = parseInt(event.intAwayScore, 10);
 
-      if (!fullTimeScore) {
-        console.warn(`Placar de tempo integral não encontrado para a partida Sportmonks ID: ${fixture.id}`);
-        continue;
-      }
+      if (isNaN(homeScore) || isNaN(awayScore)) continue;
 
-      const homeScore = fullTimeScore.score.home;
-      const awayScore = fullTimeScore.score.away;
-
-      if (typeof homeScore !== 'number' || typeof awayScore !== 'number') {
-        console.warn(`Placar inválido para a partida Sportmonks ID: ${fixture.id}`);
-        continue;
-      }
-
-      // Mapeamento dos IDs dos times da Sportmonks para seus IDs no seu DB
-      // Você precisa encontrar o ID da equipe da casa e visitante na resposta 'participants'
-      const homeTeamIdSportmonks = fixture.participants?.find(p => p.pivot.position_id === 1)?.id; // position_id 1 = Home
-      const awayTeamIdSportmonks = fixture.participants?.find(p => p.pivot.position_id === 2)?.id; // position_id 2 = Away
-
-      if (!homeTeamIdSportmonks || !awayTeamIdSportmonks) {
-        console.error(`IDs dos times da Sportmonks não encontrados para a partida: ${fixture.id}`);
-        continue;
-      }
-
-      // Encontra a partida no nosso banco de dados usando os IDs da API dos times
+      // Encontra a partida no nosso banco de dados usando o ID da API que mapeamos na tabela 'teams'
       const { data: localMatch, error: matchError } = await supabaseAdmin
         .from('matches')
         .select('id')
-        .eq('home_team_api_id', homeTeamIdSportmonks) // Coluna no seu DB para o ID do time da casa na API externa
-        .eq('away_team_api_id', awayTeamIdSportmonks) // Coluna no seu DB para o ID do time visitante na API externa
+        .eq('home_team_api_id', event.idHomeTeam) // Assumindo que você tem uma coluna para o ID da API do time da casa
+        .eq('away_team_api_id', event.idAwayTeam) // E uma para o time visitante
         .eq('is_finished', false)
         .single();
         
-      if (matchError || !localMatch) {
-          // Se não encontrar o jogo ou já estiver finalizado no DB, pule
-          if (matchError && matchError.code !== 'PGRST116') { // PGRST116 é "No rows found"
-              console.error(`Erro ao buscar partida local com IDs Sportmonks (${homeTeamIdSportmonks}, ${awayTeamIdSportmonks}):`, matchError.message);
-          }
-          continue;
-      }
+      if (matchError || !localMatch) continue;
       
       const { error: updateError } = await supabaseAdmin
         .from('matches')
@@ -172,7 +108,7 @@ serve(async (req) => {
       }
     }
 
-    return new Response(JSON.stringify({ message: `${updatedCount} partidas atualizadas e pontos para ${pointsCalculatedCount} partidas processados usando Sportmonks.` }), {
+    return new Response(JSON.stringify({ message: `${updatedCount} partidas atualizadas e pontos para ${pointsCalculatedCount} partidas processados.` }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
 

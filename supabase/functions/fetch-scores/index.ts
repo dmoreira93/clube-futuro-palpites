@@ -1,10 +1,10 @@
-// supabase/functions/fetch-scores/index.ts - VERSÃO CORRIGIDA PARA SPORTMONKS
+// supabase/functions/fetch-scores/index.ts - VERSÃO CORRIGIDA PARA THESPORTSDB
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-control-allow-headers': 'authorization, x-client-info, apikey, content-type',
 };
 
 serve(async (req) => {
@@ -13,37 +13,30 @@ serve(async (req) => {
   }
 
   try {
-    // Obtenha sua chave da Sportmonks dos Secrets do Deno (Supabase)
-    const apiKey = Deno.env.get('SPORTMONKS_API_KEY');
+    // A chave "123" para usuários gratuitos da TheSportsDB.
+    // Se você fizer upgrade no futuro, pode salvar sua chave pessoal nos Secrets.
+    const apiKey = Deno.env.get('API_FOOTBALL_KEY') || '123';
 
-    if (!apiKey) {
-      throw new Error('SPORTMONKS_API_KEY não configurada nos Secrets do Supabase.');
-    }
-
-    // Formata a data para o padrão YYYY-MM-DD (Sportmonks usa este formato)
+    // Formata a data para o padrão YYYY-MM-DD
     const today = new Date().toISOString().split('T')[0];
     
-    // URL base da Sportmonks para futebol (pode variar ligeiramente dependendo do seu plano e versão da API)
-    // Estamos buscando 'fixtures' (partidas) para uma data específica e incluindo 'scores' e 'participants'
-    // 'local_date' é o parâmetro para filtrar por data
-    // 'include' permite adicionar dados relacionados na mesma requisição
-    const apiUrl = `https://api.sportmonks.com/v3/football/fixtures?api_token=${apiKey}&local_date=${today}&include=scores,participants`;
+    // URL específica da TheSportsDB para buscar jogos do dia
+    const apiUrl = `https://www.thesportsdb.com/api/v1/json/${apiKey}/eventsday.php?d=${today}`;
 
     const apiResponse = await fetch(apiUrl, {
       method: 'GET',
     });
 
     if (!apiResponse.ok) {
-      const errorText = await apiResponse.text();
-      throw new Error(`Erro na chamada para a Sportmonks: ${apiResponse.status} - ${errorText}`);
+      throw new Error(`Erro na chamada para a TheSportsDB: ${apiResponse.statusText}`);
     }
 
     const data = await apiResponse.json();
 
-    // A Sportmonks retorna um objeto com a propriedade `data` que contém o array de fixtures.
-    const fixtures = data.data || [];
+    // A TheSportsDB pode retornar um objeto com a propriedade `events: null` se não houver jogos.
+    const events = data.events || [];
 
-    return new Response(JSON.stringify(fixtures), {
+    return new Response(JSON.stringify(events), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 200,
     });
