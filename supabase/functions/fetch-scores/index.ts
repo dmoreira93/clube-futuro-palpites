@@ -1,4 +1,4 @@
-// supabase/functions/fetch-scores/index.ts - VERSÃO CORRETA PARA API-FOOTBALL
+// supabase/functions/fetch-scores/index.ts - VERSÃO COM VALIDAÇÃO DE ERRO NO JSON
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
@@ -19,7 +19,6 @@ serve(async (_req) => {
     }
 
     const today = new Date().toISOString().split('T')[0];
-    // Você pode ajustar a liga (league=) e a temporada (season=) se necessário
     const apiUrl = `https://v3.football.api-sports.io/fixtures?date=${today}&league=1&season=2025`;
 
     const apiResponse = await fetch(apiUrl, {
@@ -37,6 +36,14 @@ serve(async (_req) => {
 
     const data = await apiResponse.json();
 
+    // --- VALIDAÇÃO ADICIONAL ADICIONADA AQUI ---
+    // Verifica se o objeto de resposta contém um campo 'errors' com conteúdo
+    if (data.errors && Object.keys(data.errors).length > 0) {
+      // Se houver erros, lança uma exceção com a mensagem da API
+      throw new Error(JSON.stringify(data.errors));
+    }
+    // --- FIM DA VALIDAÇÃO ---
+
     return new Response(JSON.stringify(data.response || []), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 200,
@@ -45,7 +52,7 @@ serve(async (_req) => {
   } catch (err) {
     return new Response(JSON.stringify({ error: err.message }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      status: 500,
+      status: 500, // Agora, erros lógicos também retornarão 500
     });
   }
 });
