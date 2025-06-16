@@ -34,9 +34,9 @@ const Criterios = () => {
                 </div>
               </div>
 
-              {/* AJUSTE: Regra de 7 pontos para o empate */}
+              {/* AJUSTE: Regra de 5 pontos para o empate */}
               <div className="flex items-center p-3 bg-purple-50 rounded-lg border-l-4 border-purple-500">
-                <div className="bg-purple-500 text-white rounded-full w-8 h-8 flex items-center justify-center font-bold mr-4">7</div>
+                <div className="bg-purple-500 text-white rounded-full w-8 h-8 flex items-center justify-center font-bold mr-4">5</div>
                 <div>
                   <h3 className="font-semibold">Acertar Empate (sem o placar exato)</h3>
                   <p className="text-sm text-gray-600">Você acerta que a partida terminaria empatada, mas não acerta o placar exato.</p>
