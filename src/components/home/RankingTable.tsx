@@ -40,7 +40,7 @@ const RankingTable = ({ poolSettings }: RankingTableProps) => {
             <TableHead>Participante</TableHead>
             <TableHead className="text-right">Pontos</TableHead>
             <TableHead className="hidden md:table-cell text-right">Jogos Pontuados</TableHead>
-            <TableHead className="hidden md:table-cell text-right">Acuracidade</TableHead>
+            <TableHead className="hidden md:table-cell text-right">% Placares Exatos</TableHead>
             <TableHead className="hidden md:table-cell text-right">Prêmio</TableHead>
           </TableRow>
         </TableHeader>
