@@ -17,8 +17,6 @@ type FetchedUser = {
     user_stats: {
         matches_played: number;
         accuracy_percentage: number;
-        exact_scores_count: number;
-        correct_winners_count: number;
     }[];
 };
 
@@ -29,11 +27,12 @@ export type Participant = {
   username: string;
   avatar_url: string | null;
   points: number;
-  matchesPlayed: number;
+  matchesPlayed: number; // Para "Jogos Pontuados"
+  accuracy: string; // Para "Acuracidade"
+  createdAt: string;
+  // Campos adicionais que podem ser úteis para desempate
   exactScores: number;
   correctWinners: number;
-  accuracy: string;
-  createdAt: string;
 };
 
 const useParticipantsRanking = () => {
@@ -53,7 +52,6 @@ const useParticipantsRanking = () => {
       setLoading(true);
       setError(null);
       
-      // Busca usuários e suas estatísticas de uma só vez
       const { data: usersData, error: usersError } = await supabase
         .from('users_custom')
         .select(`
@@ -64,7 +62,7 @@ const useParticipantsRanking = () => {
 
       if (usersError) throw usersError;
       
-      const nonAdminUsers = (usersData as FetchedUser[]).filter(u => !u.is_admin);
+      const nonAdminUsers = (usersData as any[]).filter(u => !u.is_admin);
       
       const finalRanking: Participant[] = nonAdminUsers.map((dbUser) => {
         const stats = dbUser.user_stats?.[0] || { 
@@ -81,12 +79,12 @@ const useParticipantsRanking = () => {
           avatar_url: dbUser.avatar_url,
           points: dbUser.total_points || 0,
           matchesPlayed: stats.matches_played,
+          accuracy: `${stats.accuracy_percentage || 0}%`,
           exactScores: stats.exact_scores_count,
           correctWinners: stats.correct_winners_count,
-          accuracy: `${stats.accuracy_percentage}%`,
           createdAt: dbUser.created_at,
         };
-      }).sort((a, b) => { // Ordena pelo critério completo
+      }).sort((a, b) => { // Critério de desempate
         if (b.points !== a.points) return b.points - a.points;
         if (b.exactScores !== a.exactScores) return b.exactScores - a.exactScores;
         if (b.correctWinners !== a.correctWinners) return b.correctWinners - a.correctWinners;

@@ -71,7 +71,7 @@ const RankingRow = ({
           </div>
         </div>
       </TableCell>
-      <TableCell className="text-right">{participant.points}</TableCell>
+      <TableCell className="text-right font-bold">{participant.points}</TableCell>
       <TableCell className="hidden md:table-cell text-right">{participant.matchesPlayed}</TableCell>
       <TableCell className="hidden md:table-cell text-right">{participant.accuracy}</TableCell>
       <TableCell className="hidden md:table-cell text-right font-semibold text-sm">{prizeText}</TableCell>
