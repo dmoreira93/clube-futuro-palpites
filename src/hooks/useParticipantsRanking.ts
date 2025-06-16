@@ -4,7 +4,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 
-type UserData = {
+// Tipo de dados do usuário vindo do banco
+type FetchedUser = {
     id: string;
     name: string;
     username: string;
@@ -13,16 +14,22 @@ type UserData = {
     is_admin: boolean;
     created_at: string;
     pool_id?: string | null;
+    user_stats: {
+        accuracy_percentage: number;
+        exact_scores_count: number;
+        correct_winners_count: number;
+    }[];
 };
 
+// Tipo de dados que o componente do ranking usará
 export type Participant = {
   id: string;
   name: string;
   username: string;
   avatar_url: string | null;
   points: number;
-  exactScores: number;
-  correctWinners: number;
+  exactScores: number; // Para a coluna "Placares"
+  correctWinners: number; // Para a coluna "Vencedores"
   accuracy: string;
   createdAt: string;
 };
@@ -44,56 +51,38 @@ const useParticipantsRanking = () => {
       setLoading(true);
       setError(null);
       
+      // Busca usuários e suas estatísticas de uma só vez
       const { data: usersData, error: usersError } = await supabase
         .from('users_custom')
-        .select('id, name, username, avatar_url, is_admin, total_points, created_at')
+        .select(`
+            id, name, username, avatar_url, is_admin, total_points, created_at,
+            user_stats ( accuracy_percentage, exact_scores_count, correct_winners_count )
+        `)
         .eq('pool_id', user.pool_id);
 
       if (usersError) throw usersError;
       
-      const nonAdminUsers = (usersData as UserData[]).filter(u => !u.is_admin);
-      const userIds = nonAdminUsers.map(u => u.id);
-
-      if (userIds.length === 0) {
-        setParticipants([]);
-        setLoading(false);
-        return;
-      }
+      const nonAdminUsers = (usersData as FetchedUser[]).filter(u => !u.is_admin);
       
-      const { data: pointsData, error: pointsError } = await supabase.from('user_points').select('user_id, points_type').in('user_id', userIds);
-      if (pointsError) throw pointsError;
-      
-      const userStats: { [userId: string]: { exactScores: number, correctWinners: number, totalPredictions: number } } = {};
-      userIds.forEach(id => { userStats[id] = { exactScores: 0, correctWinners: 0, totalPredictions: 0 }; });
-
-      (pointsData || []).forEach(point => {
-        const stats = userStats[point.user_id];
-        if (stats) {
-          stats.totalPredictions += 1;
-          if (point.points_type === 'EXACT_SCORE') {
-            stats.exactScores += 1;
-            stats.correctWinners += 1;
-          } else if (point.points_type === 'CORRECT_WINNER') {
-            stats.correctWinners += 1;
-          }
-        }
-      });
-      
-      const finalRanking: Participant[] = nonAdminUsers.map((user) => {
-        const stats = userStats[user.id] || { exactScores: 0, correctWinners: 0, totalPredictions: 0 };
-        const accuracy = stats.totalPredictions > 0 ? ((stats.exactScores / stats.totalPredictions) * 100).toFixed(0) : "0";
-        return {
-          id: user.id,
-          name: user.name,
-          username: user.username,
-          avatar_url: user.avatar_url,
-          points: user.total_points || 0,
-          exactScores: stats.exactScores,
-          correctWinners: stats.correctWinners,
-          accuracy: `${accuracy}%`,
-          createdAt: user.created_at,
+      const finalRanking: Participant[] = nonAdminUsers.map((dbUser) => {
+        const stats = dbUser.user_stats?.[0] || { 
+            accuracy_percentage: 0, 
+            exact_scores_count: 0, 
+            correct_winners_count: 0 
         };
-      }).sort((a, b) => {
+        
+        return {
+          id: dbUser.id,
+          name: dbUser.name,
+          username: dbUser.username,
+          avatar_url: dbUser.avatar_url,
+          points: dbUser.total_points || 0,
+          exactScores: stats.exact_scores_count,
+          correctWinners: stats.correct_winners_count,
+          accuracy: `${stats.accuracy_percentage}%`,
+          createdAt: dbUser.created_at,
+        };
+      }).sort((a, b) => { // Ordena pelo critério completo
         if (b.points !== a.points) return b.points - a.points;
         if (b.exactScores !== a.exactScores) return b.exactScores - a.exactScores;
         if (b.correctWinners !== a.correctWinners) return b.correctWinners - a.correctWinners;
