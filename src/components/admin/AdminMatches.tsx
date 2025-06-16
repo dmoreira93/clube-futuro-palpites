@@ -72,7 +72,7 @@ const AdminMatches = () => {
       toast.success("Resultado salvo! Calculando pontos...");
 
       // 2. Chama a função SQL para processar os pontos
-      const { error: rpcError } = await supabase.rpc('update_user_points_for_match', {
+      const { error: rpcError } = await supabase.rpc('update_user_stats_function', {
         match_id_param: matchId
       });
       if (rpcError) throw rpcError;
