@@ -1,3 +1,5 @@
+// src/components/ranking/RankingRow.tsx
+
 import React from 'react';
 import { TableRow, TableCell } from "@/components/ui/table";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -53,9 +55,6 @@ const RankingRow = ({
   const isCurrentUserAI = isAIParticipant(participant);
   const prizeText = getPrizeText(isCurrentUserAI, realUserRank, totalRealParticipants, poolSettings);
   const isTopRealUser = !isCurrentUserAI && realUserRank !== -1 && realUserRank < 3;
-  
-  const participantMatches = (participant as any).matches ?? participant.correctWinners ?? 0;
-  const participantAccuracy = participant.accuracy || '0%';
 
   return (
     <TableRow className={isTopRealUser ? "bg-yellow-100 dark:bg-yellow-900/20" : ""}>
@@ -73,8 +72,8 @@ const RankingRow = ({
         </div>
       </TableCell>
       <TableCell className="text-right">{participant.points}</TableCell>
-      <TableCell className="hidden md:table-cell text-right">{participantMatches}</TableCell>
-      <TableCell className="hidden md:table-cell text-right">{participantAccuracy}</TableCell>
+      <TableCell className="hidden md:table-cell text-right">{participant.matchesPlayed}</TableCell>
+      <TableCell className="hidden md:table-cell text-right">{participant.accuracy}</TableCell>
       <TableCell className="hidden md:table-cell text-right font-semibold text-sm">{prizeText}</TableCell>
     </TableRow>
   );

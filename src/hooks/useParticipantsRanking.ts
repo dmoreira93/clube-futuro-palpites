@@ -15,6 +15,7 @@ type FetchedUser = {
     created_at: string;
     pool_id?: string | null;
     user_stats: {
+        matches_played: number;
         accuracy_percentage: number;
         exact_scores_count: number;
         correct_winners_count: number;
@@ -28,8 +29,9 @@ export type Participant = {
   username: string;
   avatar_url: string | null;
   points: number;
-  exactScores: number; // Para a coluna "Placares"
-  correctWinners: number; // Para a coluna "Vencedores"
+  matchesPlayed: number;
+  exactScores: number;
+  correctWinners: number;
   accuracy: string;
   createdAt: string;
 };
@@ -56,7 +58,7 @@ const useParticipantsRanking = () => {
         .from('users_custom')
         .select(`
             id, name, username, avatar_url, is_admin, total_points, created_at,
-            user_stats ( accuracy_percentage, exact_scores_count, correct_winners_count )
+            user_stats ( matches_played, accuracy_percentage, exact_scores_count, correct_winners_count )
         `)
         .eq('pool_id', user.pool_id);
 
@@ -66,6 +68,7 @@ const useParticipantsRanking = () => {
       
       const finalRanking: Participant[] = nonAdminUsers.map((dbUser) => {
         const stats = dbUser.user_stats?.[0] || { 
+            matches_played: 0,
             accuracy_percentage: 0, 
             exact_scores_count: 0, 
             correct_winners_count: 0 
@@ -77,6 +80,7 @@ const useParticipantsRanking = () => {
           username: dbUser.username,
           avatar_url: dbUser.avatar_url,
           points: dbUser.total_points || 0,
+          matchesPlayed: stats.matches_played,
           exactScores: stats.exact_scores_count,
           correctWinners: stats.correct_winners_count,
           accuracy: `${stats.accuracy_percentage}%`,

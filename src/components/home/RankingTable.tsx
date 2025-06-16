@@ -1,4 +1,4 @@
-// src/components/home/RankingTable.tsx - VERSÃO ATUALIZADA
+// src/components/home/RankingTable.tsx
 
 import useParticipantsRanking from "@/hooks/useParticipantsRanking";
 import {
@@ -12,9 +12,8 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import RankingRow from "../ranking/RankingRow";
 import { isAIParticipant } from "@/lib/utils";
-import { Pool } from '@/types/matches'; // Certifique-se que este tipo existe
+import { Pool } from '@/types/matches';
 
-// A tabela agora espera receber as configurações do bolão
 interface RankingTableProps {
   poolSettings: Pool | null;
 }
@@ -40,8 +39,8 @@ const RankingTable = ({ poolSettings }: RankingTableProps) => {
             <TableHead className="w-12 text-center">#</TableHead>
             <TableHead>Participante</TableHead>
             <TableHead className="text-right">Pontos</TableHead>
-            <TableHead className="hidden md:table-cell text-right">Placares</TableHead>
-            <TableHead className="hidden md:table-cell text-right">Vencedores</TableHead>
+            <TableHead className="hidden md:table-cell text-right">Jogos Pontuados</TableHead>
+            <TableHead className="hidden md:table-cell text-right">Acuracidade</TableHead>
             <TableHead className="hidden md:table-cell text-right">Prêmio</TableHead>
           </TableRow>
         </TableHeader>
@@ -59,7 +58,7 @@ const RankingTable = ({ poolSettings }: RankingTableProps) => {
                   index={index}
                   realUserRank={realUserRank}
                   totalRealParticipants={realUsers.length}
-                  poolSettings={poolSettings} // <-- Passando as configurações para cada linha
+                  poolSettings={poolSettings}
                 />
               );
             })
