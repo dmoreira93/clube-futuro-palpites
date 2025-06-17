@@ -1,3 +1,5 @@
+// src/pages/Simulador.tsx - VERSÃO CORRIGIDA
+
 import React, { useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -8,6 +10,7 @@ import { toast } from 'sonner';
 import { calculateGroupStandings, SimulatedGroup, SimulatedTeamStats } from '@/lib/simulationEngine';
 import SimulatedGroupTables from '@/components/simulation/SimulatedGroupTables';
 import KnockoutBracket from '@/components/simulation/KnockoutBracket';
+import { isAfter } from 'date-fns'; // 1. IMPORTAR A FUNÇÃO 'isAfter'
 
 interface Team {
   id: string;
@@ -16,19 +19,21 @@ interface Team {
 }
 
 const Simulador = () => {
-  const { user } = useAuth();
+  // 2. PEGAR O 'pool' DO CONTEXTO DE AUTENTICAÇÃO
+  const { user, pool } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
   const [simulatedResults, setSimulatedResults] = useState<SimulatedGroup[] | null>(null);
   const [allTeams, setAllTeams] = useState<SimulatedTeamStats[]>([]);
   const [knockoutSelections, setKnockoutSelections] = useState<{ [matchId: string]: string }>({});
 
-  // --- LÓGICA DE PRAZO ADICIONADA ---
-  // Define o prazo final em UTC para maior precisão.
-  // 15 de Junho de 2025 às 18:00 no horário de Brasília (UTC-3) é 21:00 em UTC.
-  const deadlineUTC = new Date(Date.UTC(2024, 5, 14, 18, 0, 0)); // Mês 5 = Junho
-  const isDeadlinePassed = new Date() > deadlineUTC;
+  // --- LÓGICA DE PRAZO CORRIGIDA ---
+  // 3. USA A DATA LIMITE DINÂMICA DO BOLÃO EM VEZ DE UMA DATA FIXA
+  const isDeadlinePassed = pool?.prediction_deadline
+    ? isAfter(new Date(), new Date(pool.prediction_deadline))
+    : false;
 
   const handleSimulation = async () => {
+    // ... (o restante da sua função handleSimulation continua igual)
     if (!user) {
       toast.error('Você precisa estar logado para simular seus palpites.');
       return;
@@ -69,7 +74,8 @@ const Simulador = () => {
       setIsLoading(false);
     }
   };
-
+  
+  // ... (o restante do seu componente continua igual a partir daqui)
   const handleKnockoutSelection = useCallback((matchId: string, teamId: string | null) => {
     setKnockoutSelections(prev => {
       const newState = { ...prev };
@@ -154,7 +160,6 @@ const Simulador = () => {
             <div id="printable-simulation">
                 <div id="simulation-group-tables">
                     <h2 className="text-2xl font-bold text-center mb-4 hidden print:block">Classificação da Fase de Grupos</h2>
-                    {/* --- PASSANDO A PROP DE BLOQUEIO --- */}
                     <SimulatedGroupTables 
                       simulatedGroups={simulatedResults} 
                       onAdoptPrediction={handleAdoptGroupPrediction}
@@ -163,7 +168,6 @@ const Simulador = () => {
                 </div>
                 <div id="simulation-knockout-bracket" className="mt-8">
                     <h2 className="text-2xl font-bold text-center mt-8 mb-4 hidden print:block">Chaveamento Mata-Mata</h2>
-                    {/* --- PASSANDO A PROP DE BLOQUEIO --- */}
                     <KnockoutBracket
                         simulatedGroups={simulatedResults}
                         knockoutSelections={knockoutSelections}
