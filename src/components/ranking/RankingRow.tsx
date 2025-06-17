@@ -1,10 +1,11 @@
-// src/components/ranking/RankingRow.tsx (VERSÃO CORRIGIDA)
+// src/components/ranking/RankingRow.tsx (VERSÃO CORRIGIDA E FINAL)
 
 import React from 'react';
 import { TableRow, TableCell } from "@/components/ui/table";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Participant } from "@/hooks/useParticipantsRanking";
 import { useAuth } from '@/contexts/AuthContext';
+import { Pool } from '@/types/matches';
 
 interface RankingRowProps {
   participant: Participant;
@@ -13,41 +14,33 @@ interface RankingRowProps {
 }
 
 const RankingRow = ({ participant, index, totalParticipants }: RankingRowProps) => {
-  const { pool } = useAuth();
+  const { pool } = useAuth(); // Pega as regras do bolão do contexto
 
-  const getPrizeText = () => {
-    // Se não houver dados do bolão, sai da função para evitar erros
-    if (!pool) return "";
+  const getPrizeText = (
+    poolSettings: Pool | null,
+    rank: number,
+    totalRealUsers: number
+  ): string => {
+    if (!poolSettings || !poolSettings.entry_fee) return "";
 
-    const entryFee = pool.entry_fee || 0;
-    const adminFee = pool.admin_fee_percent || 0;
-    const totalPrizePool = (totalParticipants * entryFee) * (1 - (adminFee / 100.0));
+    const totalPrizePool = totalRealUsers * poolSettings.entry_fee;
+    const adminFeeMultiplier = 1 - ((poolSettings.admin_fee_percent || 0) / 100.0);
+    const finalPrizePool = totalPrizePool * adminFeeMultiplier;
+
+    const formatCurrency = (value: number) => value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+    if (rank === 1 && (poolSettings.prize_percent_1st || 0) > 0) return formatCurrency(finalPrizePool * (poolSettings.prize_percent_1st / 100));
+    if (rank === 2 && (poolSettings.prize_percent_2nd || 0) > 0) return formatCurrency(finalPrizePool * (poolSettings.prize_percent_2nd / 100));
+    if (rank === 3 && (poolSettings.prize_percent_3rd || 0) > 0) return formatCurrency(finalPrizePool * (poolSettings.prize_percent_3rd / 100));
     
-    const rank = index + 1;
-
-    // Calcula os prêmios
-    if (rank === 1 && (pool.prize_percent_1st || 0) > 0) {
-      const prize = totalPrizePool * (pool.prize_percent_1st / 100.0);
-      return prize.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-    }
-    if (rank === 2 && (pool.prize_percent_2nd || 0) > 0) {
-      const prize = totalPrizePool * (pool.prize_percent_2nd / 100.0);
-      return prize.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-    }
-    if (rank === 3 && (pool.prize_percent_3rd || 0) > 0) {
-      const prize = totalPrizePool * (pool.prize_percent_3rd / 100.0);
-      return prize.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-    }
-
-    // Calcula a punição para o último lugar
-    if (rank === totalParticipants && totalParticipants > 3 && pool.enable_punishment) {
-      return pool.punishment_description || "Punição";
+    if (rank === totalRealUsers && totalRealUsers > 3 && poolSettings.enable_punishment) {
+      return poolSettings.punishment_description || "Punição";
     }
 
     return "";
   };
-  
-  const prizeText = getPrizeText();
+
+  const prizeText = getPrizeText(pool, index + 1, totalParticipants);
   const isPrizeWinner = prizeText.includes('R$');
 
   return (

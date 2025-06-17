@@ -2,7 +2,7 @@
 
 import { useAuth } from "@/contexts/AuthContext";
 import useParticipantsRanking from "@/hooks/useParticipantsRanking";
-import RankingRow from "@/components/ranking/RankingRow";
+import RankingRow from "@/components/ranking/RankingRow"; // Usaremos o seu componente original
 import {
   Table,
   TableBody,
@@ -19,8 +19,7 @@ const RankingPage = () => {
   const { pool } = useAuth();
   const { participants, loading, error } = useParticipantsRanking();
 
-  // --- CORREÇÃO PRINCIPAL AQUI ---
-  // Filtramos para exibir apenas participantes que não são admin E não são IA.
+  // Filtra para exibir apenas participantes que não são admin nem IAs.
   const displayParticipants = participants.filter(p => !p.is_admin && !p.is_ai);
   // A contagem para prêmios considera apenas jogadores reais (sem IA).
   const totalRealParticipants = participants.filter(p => !p.is_ai).length;
@@ -35,10 +34,7 @@ const RankingPage = () => {
         <Alert variant="destructive" className="max-w-lg mx-auto">
           <AlertTriangle className="h-4 w-4" />
           <AlertTitle>Erro ao Carregar o Ranking</AlertTitle>
-          <AlertDescription>
-            Não foi possível buscar os dados. Por favor, recarregue a página.
-            <p className="text-xs mt-2">Detalhe: {error}</p>
-          </AlertDescription>
+          <AlertDescription>Não foi possível buscar os dados. Tente recarregar a página.</AlertDescription>
         </Alert>
       </div>
     );
@@ -53,10 +49,7 @@ const RankingPage = () => {
 
       <Card className="max-w-5xl mx-auto shadow-lg">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Trophy className="text-yellow-500" />
-            Classificação Geral
-          </CardTitle>
+          <CardTitle className="flex items-center gap-2"><Trophy className="text-yellow-500" />Classificação Geral</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="border rounded-md">
@@ -73,21 +66,17 @@ const RankingPage = () => {
               </TableHeader>
               <TableBody>
                 {displayParticipants.length > 0 ? (
-                  // Usamos a lista duplamente filtrada para renderizar
                   displayParticipants.map((participant, index) => (
                     <RankingRow
                       key={participant.id}
                       participant={participant}
                       index={index}
-                      // Passamos o total de participantes REAIS para o cálculo
                       totalParticipants={totalRealParticipants}
                     />
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={6} className="h-24 text-center">
-                      Ainda não há participantes no ranking deste bolão.
-                    </TableCell>
+                    <TableCell colSpan={6} className="h-24 text-center">Ainda não há participantes no ranking deste bolão.</TableCell>
                   </TableRow>
                 )}
               </TableBody>
