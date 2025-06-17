@@ -19,19 +19,14 @@ const RankingPage = () => {
   const { pool } = useAuth();
   const { participants, loading, error } = useParticipantsRanking();
 
-  // --- MUDANÇA PRINCIPAL AQUI ---
-  // Filtramos os participantes que não são admin nem IAs para a exibição no ranking.
+  // --- CORREÇÃO PRINCIPAL AQUI ---
+  // Filtramos para exibir apenas participantes que não são admin E não são IA.
   const displayParticipants = participants.filter(p => !p.is_admin && !p.is_ai);
-  // Contamos o total de participantes REAIS para o cálculo de prêmios.
+  // A contagem para prêmios considera apenas jogadores reais (sem IA).
   const totalRealParticipants = participants.filter(p => !p.is_ai).length;
 
-
   if (loading) {
-    return (
-      <div className="flex justify-center items-center h-screen">
-        <Loader2 className="h-8 w-8 animate-spin text-fifa-blue" />
-      </div>
-    );
+    return <div className="flex justify-center items-center h-screen"><Loader2 className="h-8 w-8 animate-spin text-fifa-blue" /></div>;
   }
 
   if (error) {
@@ -52,12 +47,8 @@ const RankingPage = () => {
   return (
     <div className="container mx-auto px-2 sm:px-4 py-8">
       <div className="text-center mb-6">
-        <h1 className="text-3xl sm:text-4xl font-bold text-fifa-blue">
-          Ranking do Bolão
-        </h1>
-        {pool?.name && (
-          <p className="text-lg text-muted-foreground">{pool.name}</p>
-        )}
+        <h1 className="text-3xl sm:text-4xl font-bold text-fifa-blue">Ranking do Bolão</h1>
+        {pool?.name && <p className="text-lg text-muted-foreground">{pool.name}</p>}
       </div>
 
       <Card className="max-w-5xl mx-auto shadow-lg">
@@ -82,7 +73,7 @@ const RankingPage = () => {
               </TableHeader>
               <TableBody>
                 {displayParticipants.length > 0 ? (
-                  // Usamos a lista filtrada para renderizar as linhas
+                  // Usamos a lista duplamente filtrada para renderizar
                   displayParticipants.map((participant, index) => (
                     <RankingRow
                       key={participant.id}

@@ -1,4 +1,4 @@
-// src/hooks/useParticipantsRanking.ts (VERSÃO CORRIGIDA)
+// src/hooks/useParticipantsRanking.ts
 
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
@@ -29,25 +29,22 @@ const useParticipantsRanking = () => {
     setLoading(true);
     setError(null);
     try {
-      // 1. Busca todos os usuários do bolão atual
       const { data: usersData, error: usersError } = await supabase
         .from('users_custom')
         .select('*')
         .eq('pool_id', user.pool_id);
       if (usersError) throw usersError;
 
-      // 2. Busca todas as estatísticas de pontos
       const { data: statsData, error: statsError } = await supabase
         .from('user_stats')
         .select('*');
       if (statsError) throw statsError;
 
-      // 3. Junta os dados no frontend
       const rankedParticipants = (usersData || [])
         .map(u => {
           const stats = statsData?.find(s => s.user_id === u.id);
           return {
-            ...u, // Inclui todos os campos de users_custom, como 'is_admin' e 'is_ai'
+            ...u,
             points: stats?.total_points || 0,
             matchesPlayed: stats?.matches_played || 0,
             accuracy: `${stats?.accuracy_percentage || 0}%`,

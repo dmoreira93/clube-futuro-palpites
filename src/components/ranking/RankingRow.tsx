@@ -9,15 +9,14 @@ import { useAuth } from '@/contexts/AuthContext';
 interface RankingRowProps {
   participant: Participant;
   index: number;
-  totalParticipants: number; // Agora recebe o total de participantes reais
+  totalParticipants: number;
 }
 
 const RankingRow = ({ participant, index, totalParticipants }: RankingRowProps) => {
   const { pool } = useAuth();
 
-  // Lógica de cálculo de prêmio/punição com verificações de segurança para evitar NaN
   const getPrizeText = () => {
-    // Se não houver dados do bolão, não calcula nada
+    // Se não houver dados do bolão, sai da função para evitar erros
     if (!pool) return "";
 
     const entryFee = pool.entry_fee || 0;
@@ -40,7 +39,7 @@ const RankingRow = ({ participant, index, totalParticipants }: RankingRowProps) 
       return prize.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
     }
 
-    // Calcula a punição para o último lugar (se houver mais de 3 participantes reais)
+    // Calcula a punição para o último lugar
     if (rank === totalParticipants && totalParticipants > 3 && pool.enable_punishment) {
       return pool.punishment_description || "Punição";
     }
