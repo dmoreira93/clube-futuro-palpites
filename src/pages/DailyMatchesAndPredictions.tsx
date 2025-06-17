@@ -175,11 +175,41 @@ const DailyMatchesAndPredictions: React.FC = () => {
         </TabsContent>
         
         <TabsContent value="groups" className="mt-6">
-            {/* O código para esta aba já estava correto e permanece */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {Object.values(groupedGroupPredictions).map(({ user_name, user_avatar, predictions }) => (
+                    <Card key={user_name} className="shadow-lg">
+                        <CardHeader className="flex flex-row items-center gap-3">
+                            <Avatar><AvatarImage src={user_avatar || ''} /><AvatarFallback>{user_name ? user_name.substring(0, 2) : '?'}</AvatarFallback></Avatar>
+                            <CardTitle>{user_name}</CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-2 text-sm">
+                            {predictions.sort((a,b) => a.group_name.localeCompare(b.group_name)).map(p => (
+                                <div key={p.group_name}><span className='font-bold'>{p.group_name}:</span> 1º {p.first_team_name}, 2º {p.second_team_name}</div>
+                            ))}
+                        </CardContent>
+                    </Card>
+                ))}
+            </div>
         </TabsContent>
 
         <TabsContent value="finals" className="mt-6">
-             {/* O código para esta aba já estava correto e permanece */}
+             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {finalPredictions.map(p => (
+                    <Card key={p.user_id} className="shadow-lg">
+                        <CardHeader className="flex flex-row items-center gap-3">
+                            <Avatar><AvatarImage src={p.user_avatar || ''} /><AvatarFallback>{p.user_name ? p.user_name.substring(0, 2) : '?'}</AvatarFallback></Avatar>
+                            <CardTitle>{p.user_name}</CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-1">
+                            <p><Crown className="inline h-4 w-4 mr-2 text-yellow-500"/><strong>Campeão:</strong> {p.champion_name}</p>
+                            <p><Medal className="inline h-4 w-4 mr-2 text-gray-400"/><strong>Vice:</strong> {p.runner_up_name}</p>
+                            <p><strong>3º Lugar:</strong> {p.third_place_name}</p>
+                            <p><strong>4º Lugar:</strong> {p.fourth_place_name}</p>
+                            <p className="font-semibold pt-2">Placar da Final: {p.final_home_score} x {p.final_away_score}</p>
+                        </CardContent>
+                    </Card>
+                ))}
+             </div>
         </TabsContent>
       </Tabs>
     </div>
