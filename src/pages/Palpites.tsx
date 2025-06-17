@@ -66,14 +66,214 @@ const Palpites = () => {
     });
 
     const fetchInitialData = useCallback(async () => {
-        // ... (toda a sua lógica de fetch continua idêntica)
+            if (!user) { setLoading(false); return; }
+        setLoading(true);
+        setError(null);
+        try {
+            const { data: matchesData, error: matchesError } = await supabase.from('matches').select('*, home_team:home_team_id(*), away_team:away_team_id(*)').order('match_date', { ascending: true });
+            if (matchesError) throw new Error(`Buscando Partidas: ${matchesError.message}`);
+            setAllMatches(matchesData || []);
+
+            const { data: predictionsData, error: predictionsError } = await supabase.from('match_predictions').select('*').eq('user_id', user.id);
+            if (predictionsError) throw new Error(`Buscando Palpites de Partida: ${predictionsError.message}`);
+            const loadedPredictions: { [matchId: string]: LocalPrediction } = {};
+            (predictionsData || []).forEach(p => {
+                loadedPredictions[p.match_id] = { match_id: p.match_id, home_score: p.home_score !== null ? String(p.home_score) : '', away_score: p.away_score !== null ? String(p.away_score) : '', prediction_id: p.id };
+            });
+            setDailyPredictions(loadedPredictions);
+
+            const { data: teamsData, error: teamsError } = await supabase.from('teams').select('*').order('name', { ascending: true });
+            if (teamsError) throw new Error(`Buscando Times: ${teamsError.message}`);
+            setTeams(teamsData || []);
+
+            const { data: groupsData, error: groupsError } = await supabase.from('groups').select('id, name').order('name', { ascending: true });
+            if (groupsError) throw new Error(`Buscando Grupos: ${groupsError.message}`);
+            setGroups(groupsData || []);
+
+            const { data: groupPredData, error: groupPredError } = await supabase.from('group_predictions').select('*').eq('user_id', user.id);
+            if (groupPredError) throw new Error(`Buscando Palpites de Grupo: ${groupPredError.message}`);
+            const loadedGroupPredictions: { [groupId: string]: GroupPredictionState } = {};
+            (groupPredData || []).forEach(gp => {
+                loadedGroupPredictions[gp.group_id] = { group_id: gp.group_id, predicted_first_team_id: gp.predicted_first_team_id, predicted_second_team_id: gp.predicted_second_team_id, prediction_id: gp.id };
+            });
+            setGroupPredictions(loadedGroupPredictions);
+
+            const { data: finalPredData, error: finalPredError } = await supabase.from('final_predictions').select('*').eq('user_id', user.id).single();
+            if (finalPredError && finalPredError.code !== 'PGRST116') throw new Error(`Buscando Palpites Finais: ${finalPredError.message}`);
+            if (finalPredData) setFinalPrediction({ ...(finalPredData as FinalPredictionState), prediction_id: finalPredData.id });
+        } catch (err: any) {
+            setError(err.message);
+            toast({ title: "Erro ao Carregar Dados", description: err.message, variant: "destructive", duration: 10000 });
+        } finally {
+            setLoading(false);
+        }
+
     }, [user, toast]);
     
     useEffect(() => {
         fetchInitialData();
     }, [fetchInitialData]);
 
-    // ... (toda a sua lógica de handlers e memos continua idêntica) ...
+    const groupStageMatches = useMemo(() => allMatches.filter(match => match.stage === "Fase de Grupos"), [allMatches]);
+    
+    const handleScoreChange = useCallback((matchId: string, type: 'home' | 'away', value: string) => {
+        setDailyPredictions(prev => ({ ...prev, [matchId]: { ...(prev[matchId] || { match_id: matchId, home_score: '', away_score: '' }), [type === 'home' ? 'home_score' : 'away_score']: value } }));
+    }, []);
+
+    const handleGroupTeamChange = useCallback((groupId: string, type: 'first' | 'second', teamId: string) => {
+        setGroupPredictions(prev => ({ ...prev, [groupId]: { ...(prev[groupId] || { group_id: groupId, predicted_first_team_id: null, predicted_second_team_id: null }), [type === 'first' ? 'predicted_first_team_id' : 'predicted_second_team_id']: teamId || null } }));
+    }, []);
+
+    const handleFinalPredictionChange = useCallback((field: keyof FinalPredictionState, value: string | number | null) => {
+        setFinalPrediction(prev => ({ ...prev, [field]: value }));
+    }, []);
+
+    const handleSaveDailyPrediction = useCallback(async (matchId: string) => {
+        if (!user) return;
+        const prediction = dailyPredictions[matchId];
+        if (!prediction || prediction.home_score.trim() === '' || prediction.away_score.trim() === '') { toast({ title: "Erro", description: "Preencha ambos os placares.", variant: "destructive" }); return; }
+        setSubmittingMatchId(matchId);
+        try {
+            const payload = { match_id: matchId, user_id: user.id, home_score: parseInt(prediction.home_score), away_score: parseInt(prediction.away_score) };
+            const { data, error } = await supabase.from('match_predictions').upsert(payload, { onConflict: 'match_id, user_id' }).select().single();
+            if (error) throw error;
+            if (data) {
+                setDailyPredictions(prev => ({ ...prev, [matchId]: { ...prev[matchId], prediction_id: data.id } }));
+                toast({ title: "Sucesso!", description: `Palpite salvo!` });
+            }
+        } catch (error: any) {
+            toast({ title: "Erro ao salvar", description: error.message, variant: "destructive" });
+        } finally {
+            setSubmittingMatchId(null);
+        }
+    }, [user, dailyPredictions, toast]);
+    
+    const handleSaveGroupPrediction = useCallback(async (groupId: string) => {
+        if (!user) return;
+        const prediction = groupPredictions[groupId];
+        if (!prediction || !prediction.predicted_first_team_id || !prediction.predicted_second_team_id) { toast({ title: "Erro", description: "Selecione os dois times.", variant: "destructive" }); return; }
+        if (prediction.predicted_first_team_id === prediction.predicted_second_team_id) { toast({ title: "Erro", description: "Os times do 1º e 2º lugar devem ser diferentes.", variant: "destructive"}); return; }
+        setSubmittingMatchId(groupId);
+        try {
+            const payload = { group_id: groupId, user_id: user.id, predicted_first_team_id: prediction.predicted_first_team_id, predicted_second_team_id: prediction.predicted_second_team_id };
+            const { data, error } = await supabase.from('group_predictions').upsert(payload, { onConflict: 'group_id, user_id' }).select().single();
+            if (error) throw error;
+            if (data) {
+                setGroupPredictions(prev => ({ ...prev, [groupId]: { ...prev[groupId], prediction_id: data.id }}));
+                toast({ title: "Sucesso!", description: `Palpite do grupo ${groups.find(g => g.id === groupId)?.name} salvo!` });
+            }
+        } catch (error: any) {
+            toast({ title: "Erro ao salvar", description: error.message, variant: "destructive" });
+        } finally {
+            setSubmittingMatchId(null);
+        }
+    }, [user, groupPredictions, groups, toast]);
+    
+    const handleSaveFinalPrediction = useCallback(async () => {
+        if (!user) return;
+        if (!finalPrediction.champion_id || !finalPrediction.runner_up_id || !finalPrediction.third_place_id || !finalPrediction.fourth_place_id || finalPrediction.final_home_score === null || finalPrediction.final_away_score === null) {
+            toast({ title: "Erro de Validação", description: "Por favor, preencha todos os campos do palpite da final.", variant: "destructive" }); return;
+        }
+        const finalTeams = [finalPrediction.champion_id, finalPrediction.runner_up_id, finalPrediction.third_place_id, finalPrediction.fourth_place_id];
+        if (new Set(finalTeams).size !== 4) { toast({ title: "Erro", description: "Os times do 1º, 2º, 3º e 4º lugar devem ser diferentes.", variant: "destructive"}); return; }
+        setSubmittingMatchId('final');
+        try {
+            const payload = { user_id: user.id, champion_id: finalPrediction.champion_id, runner_up_id: finalPrediction.runner_up_id, third_place_id: finalPrediction.third_place_id, fourth_place_id: finalPrediction.fourth_place_id, final_home_score: finalPrediction.final_home_score, final_away_score: finalPrediction.final_away_score };
+            const { data, error } = await supabase.from('final_predictions').upsert(payload, { onConflict: 'user_id' }).select().single();
+            if (error) throw error;
+            if (data) {
+                setFinalPrediction(prev => ({ ...prev, prediction_id: data.id }));
+                toast({ title: "Sucesso!", description: "Seu palpite da final foi salvo!" });
+            }
+        } catch (error: any) {
+            toast({ title: "Erro ao salvar", description: error.message, variant: "destructive" });
+        } finally {
+            setSubmittingMatchId(null);
+        }
+    }, [user, finalPrediction, toast]);
+    
+    // src/pages/Palpites.tsx - VERSÃO CORRIGIDA
+
+// ...
+// src/pages/Palpites.tsx - VERSÃO COM AJUSTES DE ORDENAÇÃO
+
+// ... (todo o código do início do arquivo permanece o mesmo)
+
+    const handlePrintReceipt = useCallback(() => {
+        if (!user) return;
+        
+        const userMatchPredictionsForReceipt = Object.values(dailyPredictions)
+          .map(p => {
+            const match = allMatches.find(m => m.id === p.match_id);
+            if (!match || p.home_score.trim() === "" || p.away_score.trim() === "") return null;
+            return { match, home_score_prediction: parseInt(p.home_score, 10), away_score_prediction: parseInt(p.away_score, 10) };
+          })
+          .filter(Boolean as any)
+         // --- NOVA LINHA: Ordena as partidas por data ---
+        .sort((a, b) => new Date(a.match.match_date).getTime() - new Date(b.match.match_date).getTime());
+      
+        const userGroupPredictionsForReceipt = Object.values(groupPredictions)
+          .map(gp => {
+            if (!gp.predicted_first_team_id || !gp.predicted_second_team_id) return null;
+            const group = groups.find(g => g.id === gp.group_id);
+            const firstTeam = teams.find(t => t.id === gp.predicted_first_team_id);
+            const secondTeam = teams.find(t => t.id === gp.predicted_second_team_id);
+            if (!group || !firstTeam || !secondTeam) return null;
+            return { group_name: group.name, predicted_first_team: firstTeam, predicted_second_team: secondTeam };
+          })
+        .filter(Boolean as any)
+        // --- NOVA LINHA: Ordena os grupos pelo nome ---
+        .sort((a, b) => a.group_name.localeCompare(b.group_name));
+      
+        const getTeamById = (id: string | null): Team | undefined => teams.find(t => t.id === id);
+        let finalPredictionReceipt = null;
+        if (finalPrediction.champion_id && finalPrediction.runner_up_id && finalPrediction.third_place_id && finalPrediction.fourth_place_id) {
+            const champ = getTeamById(finalPrediction.champion_id);
+            const runnerUp = getTeamById(finalPrediction.runner_up_id);
+            const third = getTeamById(finalPrediction.third_place_id);
+            const fourth = getTeamById(finalPrediction.fourth_place_id);
+            if(champ && runnerUp && third && fourth) {
+                finalPredictionReceipt = {
+                    champion: champ,
+                    runner_up: runnerUp,
+                    third_place: third,
+                    fourth_place: fourth,
+                    final_home_score: finalPrediction.final_home_score,
+                    final_away_score: finalPrediction.final_away_score,
+                };
+            }
+        }
+        
+        if (userMatchPredictionsForReceipt.length === 0 && userGroupPredictionsForReceipt.length === 0 && !finalPredictionReceipt) {
+            toast({ title: "Nenhum Palpite", description: "Você precisa preencher ao menos um palpite completo para gerar o comprovante.", variant: "default" });
+            return;
+        }
+    
+        const dateGenerated = new Date();
+        const receiptHtml = ReactDOMServer.renderToString(
+          <PredictionReceipt
+            user={user}
+            predictions={userMatchPredictionsForReceipt as any}
+            groupPredictions={userGroupPredictionsForReceipt as any}
+            finalPrediction={finalPredictionReceipt as any}
+            dateGenerated={dateGenerated}
+          />
+        );
+      
+        const printWindow = window.open('', '_blank');
+        if (printWindow) {
+          printWindow.document.write(`<!DOCTYPE html><html><head><title>Comprovante de Palpites</title><style>body { font-family: Arial, sans-serif; margin: 20px; } @media print { body * { visibility: visible !important; } }</style></head><body>${receiptHtml}</body></html>`);
+          printWindow.document.close();
+          setTimeout(() => {
+            printWindow.focus();
+            printWindow.print();
+          }, 500);
+        } else {
+            toast({ title: "Erro de Pop-up", description: "Não foi possível abrir a janela de impressão. Por favor, desabilite o bloqueador de pop-ups.", variant: "destructive"});
+        }
+    }, [user, dailyPredictions, allMatches, teams, groupPredictions, groups, finalPrediction, toast]);
+
+// ... (o restante do arquivo permanece igual)
 
     if (loading) { return <div className="flex justify-center items-center h-screen"><Loader2 className="h-10 w-10 animate-spin text-fifa-blue" /></div>; }
     if (!user) { navigate("/login"); return null; }
