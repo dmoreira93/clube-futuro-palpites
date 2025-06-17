@@ -1,23 +1,25 @@
-// src/pages/Admin.tsx
+// src/pages/Admin.tsx (VERSÃO ATUALIZADA)
 
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-// O import do Layout foi REMOVIDO daqui
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import AdminTeams from "@/components/admin/AdminTeams";
 import AdminGroups from "@/components/admin/AdminGroups";
 import AdminMatches from "@/components/admin/AdminMatches";
 import AdminUsers from "@/components/admin/AdminUsers";
 import AdminTournamentResults from "@/components/admin/AdminTournamentResults";
+import AdminChampionships from "@/components/admin/AdminChampionships"; // Importado
+import AdminScoringCriteria from "@/components/admin/AdminScoringCriteria"; // Importado
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Shield, AlertTriangle, LogOut, Loader2 } from "lucide-react";
+import { AlertTriangle, LogOut, Loader2 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 
 const Admin = () => {
   const navigate = useNavigate();
-  const { isAdmin, logout, isLoadingAuth } = useAuth();
+  // Corrigido para usar signOut, conforme definido no AuthContext
+  const { isAdmin, signOut, isLoadingAuth } = useAuth();
   const [isLoadingComponent, setIsLoadingComponent] = useState(true);
 
   useEffect(() => {
@@ -38,14 +40,12 @@ const Admin = () => {
   }, [isAdmin, navigate, isLoadingAuth, isLoadingComponent]);
 
   const handleLogout = () => {
-    logout();
+    signOut(); // Usando signOut
     navigate("/admin-login");
   };
 
-  // Loader inicial enquanto a autenticação está ativa
   if (isLoadingAuth || isLoadingComponent) {
     return (
-      // A tag <Layout> foi removida daqui
       <div className="max-w-4xl mx-auto flex items-center justify-center min-h-[400px]">
         <Loader2 className="h-8 w-8 animate-spin text-fifa-blue" />
         <p className="ml-2 text-fifa-blue">Carregando painel...</p>
@@ -53,13 +53,11 @@ const Admin = () => {
     );
   }
 
-  // Se não for admin, não renderiza nada antes do redirecionamento
   if (!isAdmin) {
     return null;
   }
 
   return (
-    // A tag <Layout> foi removida daqui
     <div className="max-w-7xl mx-auto px-4 py-8">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-4xl font-bold text-fifa-blue">
@@ -83,14 +81,28 @@ const Admin = () => {
       </Alert>
 
       <Card className="p-4">
-        <Tabs defaultValue="teams" className="space-y-4">
-          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-3 md:grid-cols-5">
+        {/* Alterado o valor padrão e a grade de colunas para acomodar as novas abas */}
+        <Tabs defaultValue="championships" className="space-y-4">
+          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 lg:grid-cols-7">
+            <TabsTrigger value="championships">Campeonatos</TabsTrigger>
+            <TabsTrigger value="scoring">Pontuação</TabsTrigger>
             <TabsTrigger value="teams">Times</TabsTrigger>
             <TabsTrigger value="groups">Grupos</TabsTrigger>
             <TabsTrigger value="matches">Partidas</TabsTrigger>
-            <TabsTrigger value="tournament-results">Resultados Finais</TabsTrigger>
+            <TabsTrigger value="tournament-results">Resultados</TabsTrigger>
             <TabsTrigger value="users">Usuários</TabsTrigger>
           </TabsList>
+          
+          {/* Adicionadas as novas abas */}
+          <TabsContent value="championships" className="space-y-4">
+            <AdminChampionships />
+          </TabsContent>
+
+          <TabsContent value="scoring" className="space-y-4">
+            <AdminScoringCriteria />
+          </TabsContent>
+
+          {/* Abas existentes */}
           <TabsContent value="teams" className="space-y-4">
             <AdminTeams />
           </TabsContent>
