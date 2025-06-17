@@ -1,4 +1,4 @@
-// src/pages/DailyMatchesAndPredictions.tsx - VERSÃO COMPLETA E CORRIGIDA
+// src/pages/DailyMatchesAndPredictions.tsx
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -15,9 +15,9 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
-// Tipos para os novos dados
+// Tipos (sem alteração)
 interface GroupPrediction { user_id: string; user_name: string; user_avatar: string; group_name: string; first_team_name: string; second_team_name: string; }
-interface FinalPrediction { user_id: string; user_name: string; user_avatar: string; champion_name: string; runner_up_name: string; third_place_name: string; fourth_place_name: string; final_home_score: number; final_away_score: number; }
+interface FinalPrediction { user_id: string; user_name: string; user_avatar: string; champion_name: string; runner_up_name: string; third_place_name: string; fourth_place_name: string; final_home_score: number | null; final_away_score: number | null; }
 interface DisplayMatch extends SupabaseMatchResultFromMatches { home_team: { name: string; }; away_team: { name: string; }; }
 
 const DailyMatchesAndPredictions: React.FC = () => {
@@ -33,45 +33,104 @@ const DailyMatchesAndPredictions: React.FC = () => {
   const [allUsers, setAllUsers] = useState<User[]>([]);
   const [currentDate, setCurrentDate] = useState(new Date());
 
+  // --- FUNÇÃO ATUALIZADA ---
   const loadAllData = useCallback(async () => {
-    if (!pool?.id) { setLoading(false); return; }
+    if (!pool?.id) {
+        setLoading(false);
+        return;
+    }
     setLoading(true);
     setError(null);
+
     try {
-      // Lógica de data corrigida e mais robusta
-      const utcStartString = startOfDay(currentDate).toISOString();
-      const utcEndString = endOfDay(currentDate).toISOString();
-      
-      const matchesData = await fetchMatchesInUTCRange(utcStartString, utcEndString);
-      setDailyMatches(matchesData as DisplayMatch[] || []);
+        // Busca de partidas do dia (sem alteração)
+        const utcStartString = startOfDay(currentDate).toISOString();
+        const utcEndString = endOfDay(currentDate).toISOString();
+        const matchesData = await fetchMatchesInUTCRange(utcStartString, utcEndString);
+        setDailyMatches((matchesData as DisplayMatch[]) || []);
 
-      if (matchesData && matchesData.length > 0) {
-        const matchIds = matchesData.map(match => match.id);
-        const dailyPredsData = await fetchMatchPredictionsForMatches(matchIds);
-        setDailyPredictions(dailyPredsData || []);
-      } else {
-        setDailyPredictions([]);
-      }
+        if (matchesData && matchesData.length > 0) {
+            const matchIds = matchesData.map((match) => match.id);
+            const dailyPredsData = await fetchMatchPredictionsForMatches(matchIds);
+            setDailyPredictions(dailyPredsData || []);
+        } else {
+            setDailyPredictions([]);
+        }
 
-      // Busca de dados globais (grupos, finais, usuários)
-      const [usersData, groupPredsData, finalPredsData] = await Promise.all([
-        fetchUsersCustom(),
-        supabase.rpc('get_all_group_predictions', { p_pool_id: pool.id }),
-        supabase.rpc('get_all_final_predictions', { p_pool_id: pool.id })
-      ]);
+        // Busca todos os usuários do bolão atual
+        const { data: usersInPool, error: usersError } = await supabase
+            .from('users_custom')
+            .select('id, name, avatar_url, is_admin')
+            .eq('pool_id', pool.id);
+        
+        if (usersError) throw usersError;
 
-      setAllUsers(usersData.filter(u => !u.is_admin) || []);
-      setGroupPredictions(groupPredsData.data || []);
-      setFinalPredictions(finalPredsData.data || []);
+        const regularUsers = (usersInPool || []).filter(u => !u.is_admin);
+        setAllUsers(regularUsers as User[]);
+        
+        const userIdsInPool = regularUsers.map(u => u.id);
+
+        if (userIdsInPool.length > 0) {
+            // Busca palpites de grupo e finais diretamente, filtrando pelos usuários do bolão
+            const [groupPredsResponse, finalPredsResponse] = await Promise.all([
+                supabase
+                    .from('group_predictions')
+                    .select('*, user_id, groups(name), predicted_first_team:predicted_first_team_id(name), predicted_second_team:predicted_second_team_id(name)')
+                    .in('user_id', userIdsInPool),
+                supabase
+                    .from('final_predictions')
+                    .select('*, user_id, champion:champion_id(name), runner_up:runner_up_id(name), third_place:third_place_id(name), fourth_place:fourth_place_id(name)')
+                    .in('user_id', userIdsInPool)
+            ]);
+
+            if (groupPredsResponse.error) throw groupPredsResponse.error;
+            if (finalPredsResponse.error) throw finalPredsResponse.error;
+
+            // Formata os dados para a estrutura que o componente espera
+            const formattedGroupPreds = (groupPredsResponse.data || []).map(p => {
+                const user = regularUsers.find(u => u.id === p.user_id);
+                return {
+                    user_id: p.user_id,
+                    user_name: user?.name || '?',
+                    user_avatar: user?.avatar_url || '',
+                    group_name: p.groups.name,
+                    first_team_name: p.predicted_first_team.name,
+                    second_team_name: p.predicted_second_team.name,
+                };
+            });
+
+            const formattedFinalPreds = (finalPredsResponse.data || []).map(p => {
+                const user = regularUsers.find(u => u.id === p.user_id);
+                return {
+                    user_id: p.user_id,
+                    user_name: user?.name || '?',
+                    user_avatar: user?.avatar_url || '',
+                    champion_name: p.champion?.name,
+                    runner_up_name: p.runner_up?.name,
+                    third_place_name: p.third_place?.name,
+                    fourth_place_name: p.fourth_place?.name,
+                    final_home_score: p.final_home_score,
+                    final_away_score: p.final_away_score,
+                };
+            });
+            
+            setGroupPredictions(formattedGroupPreds);
+            setFinalPredictions(formattedFinalPreds);
+
+        } else {
+            setGroupPredictions([]);
+            setFinalPredictions([]);
+        }
 
     } catch (err: any) {
-      console.error("Erro ao carregar dados:", err.message);
-      setError("Não foi possível carregar os dados dos palpites.");
+        console.error("Erro ao carregar dados:", err.message);
+        setError("Não foi possível carregar os dados dos palpites.");
     } finally {
-      setLoading(false);
+        setLoading(false);
     }
   }, [currentDate, pool?.id]);
   
+  // O resto do seu componente permanece igual...
   useEffect(() => {
     loadAllData();
   }, [loadAllData]);
