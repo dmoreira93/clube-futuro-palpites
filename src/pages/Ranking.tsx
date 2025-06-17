@@ -19,8 +19,12 @@ const RankingPage = () => {
   const { pool } = useAuth();
   const { participants, loading, error } = useParticipantsRanking();
 
-  // Filtra os participantes para não exibir IAs e para calcular prêmios corretamente
-  const realParticipants = participants.filter(p => !p.is_ai);
+  // --- MUDANÇA PRINCIPAL AQUI ---
+  // Filtramos os participantes que não são admin nem IAs para a exibição no ranking.
+  const displayParticipants = participants.filter(p => !p.is_admin && !p.is_ai);
+  // Contamos o total de participantes REAIS para o cálculo de prêmios.
+  const totalRealParticipants = participants.filter(p => !p.is_ai).length;
+
 
   if (loading) {
     return (
@@ -37,7 +41,7 @@ const RankingPage = () => {
           <AlertTriangle className="h-4 w-4" />
           <AlertTitle>Erro ao Carregar o Ranking</AlertTitle>
           <AlertDescription>
-            Não foi possível buscar os dados do ranking. Por favor, tente recarregar a página.
+            Não foi possível buscar os dados. Por favor, recarregue a página.
             <p className="text-xs mt-2">Detalhe: {error}</p>
           </AlertDescription>
         </Alert>
@@ -77,13 +81,15 @@ const RankingPage = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {realParticipants.length > 0 ? (
-                  realParticipants.map((participant, index) => (
+                {displayParticipants.length > 0 ? (
+                  // Usamos a lista filtrada para renderizar as linhas
+                  displayParticipants.map((participant, index) => (
                     <RankingRow
                       key={participant.id}
                       participant={participant}
                       index={index}
-                      totalParticipants={realParticipants.length}
+                      // Passamos o total de participantes REAIS para o cálculo
+                      totalParticipants={totalRealParticipants}
                     />
                   ))
                 ) : (

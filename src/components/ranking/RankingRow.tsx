@@ -9,15 +9,16 @@ import { useAuth } from '@/contexts/AuthContext';
 interface RankingRowProps {
   participant: Participant;
   index: number;
-  totalParticipants: number;
+  totalParticipants: number; // Agora recebe o total de participantes reais
 }
 
 const RankingRow = ({ participant, index, totalParticipants }: RankingRowProps) => {
-  const { pool } = useAuth(); // Usamos o pool para pegar as regras de premiação
+  const { pool } = useAuth();
 
   // Lógica de cálculo de prêmio/punição com verificações de segurança para evitar NaN
   const getPrizeText = () => {
-    if (!pool || participant.is_ai) return "";
+    // Se não houver dados do bolão, não calcula nada
+    if (!pool) return "";
 
     const entryFee = pool.entry_fee || 0;
     const adminFee = pool.admin_fee_percent || 0;
@@ -25,18 +26,21 @@ const RankingRow = ({ participant, index, totalParticipants }: RankingRowProps) 
     
     const rank = index + 1;
 
-    if (rank === 1 && pool.prize_percent_1st > 0) {
+    // Calcula os prêmios
+    if (rank === 1 && (pool.prize_percent_1st || 0) > 0) {
       const prize = totalPrizePool * (pool.prize_percent_1st / 100.0);
       return prize.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
     }
-    if (rank === 2 && pool.prize_percent_2nd > 0) {
+    if (rank === 2 && (pool.prize_percent_2nd || 0) > 0) {
       const prize = totalPrizePool * (pool.prize_percent_2nd / 100.0);
       return prize.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
     }
-    if (rank === 3 && pool.prize_percent_3rd > 0) {
+    if (rank === 3 && (pool.prize_percent_3rd || 0) > 0) {
       const prize = totalPrizePool * (pool.prize_percent_3rd / 100.0);
       return prize.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
     }
+
+    // Calcula a punição para o último lugar (se houver mais de 3 participantes reais)
     if (rank === totalParticipants && totalParticipants > 3 && pool.enable_punishment) {
       return pool.punishment_description || "Punição";
     }

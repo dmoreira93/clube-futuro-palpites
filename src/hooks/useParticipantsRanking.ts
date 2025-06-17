@@ -42,12 +42,12 @@ const useParticipantsRanking = () => {
         .select('*');
       if (statsError) throw statsError;
 
-      // 3. Junta os dados no frontend, como era feito antes
+      // 3. Junta os dados no frontend
       const rankedParticipants = (usersData || [])
         .map(u => {
           const stats = statsData?.find(s => s.user_id === u.id);
           return {
-            ...u,
+            ...u, // Inclui todos os campos de users_custom, como 'is_admin' e 'is_ai'
             points: stats?.total_points || 0,
             matchesPlayed: stats?.matches_played || 0,
             accuracy: `${stats?.accuracy_percentage || 0}%`,
