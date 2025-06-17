@@ -5,7 +5,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { format, parseISO, isAfter, startOfDay, addDays, subHours } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
-import { ChevronLeft, ChevronRight, Info, Crown, Medal } from 'lucide-react';
+// Linha corrigida
+import { ChevronLeft, ChevronRight, Info, Crown, Medal, Loader2 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
