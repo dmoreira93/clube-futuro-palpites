@@ -1,4 +1,4 @@
-// src/components/ranking/RankingRow.tsx (VERSÃO COM CÁLCULO NO FRONTEND)
+// src/components/ranking/RankingRow.tsx (VERSÃO CORRIGIDA)
 
 import React from 'react';
 import { TableRow, TableCell } from "@/components/ui/table";
@@ -15,11 +15,14 @@ interface RankingRowProps {
 const RankingRow = ({ participant, index, totalParticipants }: RankingRowProps) => {
   const { pool } = useAuth(); // Usamos o pool para pegar as regras de premiação
 
-  // Lógica de cálculo de prêmio e punição volta para o frontend
+  // Lógica de cálculo de prêmio/punição com verificações de segurança para evitar NaN
   const getPrizeText = () => {
     if (!pool || participant.is_ai) return "";
 
-    const totalPrizePool = (totalParticipants * (pool.entry_fee || 0)) * (1 - ((pool.admin_fee_percent || 0) / 100.0));
+    const entryFee = pool.entry_fee || 0;
+    const adminFee = pool.admin_fee_percent || 0;
+    const totalPrizePool = (totalParticipants * entryFee) * (1 - (adminFee / 100.0));
+    
     const rank = index + 1;
 
     if (rank === 1 && pool.prize_percent_1st > 0) {

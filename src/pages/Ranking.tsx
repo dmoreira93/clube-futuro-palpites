@@ -1,4 +1,4 @@
-// src/pages/Ranking.tsx (VERSÃO ATUALIZADA E COMPLETA)
+// src/pages/Ranking.tsx (VERSÃO CORRIGIDA)
 
 import { useAuth } from "@/contexts/AuthContext";
 import useParticipantsRanking from "@/hooks/useParticipantsRanking";
@@ -16,17 +16,12 @@ import { Loader2, Trophy, AlertTriangle } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 const RankingPage = () => {
-  // Pega o bolão do contexto para o título da página
   const { pool } = useAuth();
-  
-  // Hook que busca e ordena todos os participantes e suas estatísticas
   const { participants, loading, error } = useParticipantsRanking();
 
-  // Filtramos os participantes para não exibir IAs no ranking principal
-  // e para calcular os prêmios corretamente com base no número de jogadores reais.
+  // Filtra os participantes para não exibir IAs e para calcular prêmios corretamente
   const realParticipants = participants.filter(p => !p.is_ai);
 
-  // Exibe um loader enquanto os dados estão sendo carregados
   if (loading) {
     return (
       <div className="flex justify-center items-center h-screen">
@@ -35,7 +30,6 @@ const RankingPage = () => {
     );
   }
 
-  // Exibe uma mensagem de erro se a busca de dados falhar
   if (error) {
     return (
       <div className="container mx-auto p-4 text-center">

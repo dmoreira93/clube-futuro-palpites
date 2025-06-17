@@ -1,11 +1,10 @@
-// src/hooks/useParticipantsRanking.ts (VERSÃO RESTAURADA E SEGURA)
+// src/hooks/useParticipantsRanking.ts (VERSÃO CORRIGIDA)
 
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { User } from '@/utils/pointsCalculator/types';
 
-// O tipo volta a ser mais simples, sem o prêmio calculado
 export type Participant = User & {
   points: number;
   matchesPlayed: number;
@@ -15,7 +14,7 @@ export type Participant = User & {
 };
 
 const useParticipantsRanking = () => {
-  const { user, pool, signOut } = useAuth(); // Agora usamos o 'pool' do contexto
+  const { user, signOut } = useAuth();
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
