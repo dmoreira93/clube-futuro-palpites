@@ -1,63 +1,32 @@
-// src/components/ranking/RankingRow.tsx
+// src/components/ranking/RankingRow.tsx (VERSÃO SIMPLIFICADA)
 
 import React from 'react';
 import { TableRow, TableCell } from "@/components/ui/table";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Participant } from "@/hooks/useParticipantsRanking";
-import { isAIParticipant } from '@/lib/utils';
-import { Pool } from '@/types/matches';
 
 interface RankingRowProps {
   participant: Participant;
   index: number;
-  realUserRank: number;
-  totalRealParticipants: number;
-  poolSettings: Pool | null;
 }
 
-const getPrizeText = (
-  isCurrentUserAI: boolean,
-  realUserRank: number,
-  totalRealUsers: number,
-  pool: Pool | null
-): string => {
-  if (isCurrentUserAI || realUserRank < 0 || totalRealUsers === 0 || !pool || !pool.entry_fee) {
-    return "";
+// Função para formatar o prêmio
+const formatPrize = (prize: string | null): string => {
+  if (!prize) return "";
+  // Verifica se é um número (prêmio) ou texto (punição)
+  const numericValue = parseFloat(prize);
+  if (!isNaN(numericValue)) {
+    return numericValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
   }
-
-  const totalPrizePool = totalRealUsers * pool.entry_fee;
-
-  const formatCurrency = (value: number) => {
-    return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-  };
-
-  if (realUserRank === 0 && pool.prize_percent_1st > 0) return formatCurrency(totalPrizePool * (pool.prize_percent_1st / 100));
-  if (realUserRank === 1 && totalRealUsers > 1 && pool.prize_percent_2nd > 0) return formatCurrency(totalPrizePool * (pool.prize_percent_2nd / 100));
-  if (realUserRank === 2 && totalRealUsers > 2 && pool.prize_percent_3rd > 0) return formatCurrency(totalPrizePool * (pool.prize_percent_3rd / 100));
-
-  const isLastPlace = realUserRank === totalRealUsers - 1;
-  const isAlsoPrizeWinner = realUserRank < 3;
-  
-  if (pool.enable_punishment && isLastPlace && !isAlsoPrizeWinner) {
-    return pool.punishment_description || "Punição";
-  }
-
-  return "";
+  return prize; // Retorna o texto da punição
 };
 
-const RankingRow = ({
-  participant,
-  index,
-  realUserRank,
-  totalRealParticipants,
-  poolSettings,
-}: RankingRowProps) => {
-  const isCurrentUserAI = isAIParticipant(participant);
-  const prizeText = getPrizeText(isCurrentUserAI, realUserRank, totalRealParticipants, poolSettings);
-  const isTopRealUser = !isCurrentUserAI && realUserRank !== -1 && realUserRank < 3;
+const RankingRow = ({ participant, index }: RankingRowProps) => {
+  const prizeText = formatPrize(participant.prize);
+  const isPrizeWinner = participant.prize && !isNaN(parseFloat(participant.prize));
 
   return (
-    <TableRow className={isTopRealUser ? "bg-yellow-100 dark:bg-yellow-900/20" : ""}>
+    <TableRow className={isPrizeWinner ? "bg-yellow-100 dark:bg-yellow-900/20" : ""}>
       <TableCell className="text-center font-medium">{index + 1}</TableCell>
       <TableCell>
         <div className="flex items-center gap-2">
@@ -67,7 +36,7 @@ const RankingRow = ({
           </Avatar>
           <div>
             <div className="font-medium">{participant.name}</div>
-            <div className="text-xs text-gray-500 dark:text-gray-400">@{participant.username}</div>
+            <div className="text-xs text-muted-foreground">@{participant.username}</div>
           </div>
         </div>
       </TableCell>
