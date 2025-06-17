@@ -1,6 +1,6 @@
-// src/pages/CreatePool.tsx
+// src/pages/CreatePool.tsx (VERSÃO ATUALIZADA)
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -8,60 +8,96 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { useToast } from '@/components/ui/use-toast';
+import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from '@/components/ui/switch';
+
+interface Championship {
+  id: string;
+  name: string;
+}
 
 const CreatePoolPage = () => {
   const { user, fetchAndSyncProfile } = useAuth();
-  const [poolName, setPoolName] = useState('');
-  const [entryFee, setEntryFee] = useState('25'); // <-- NOVO ESTADO PARA A TAXA
-  const [prize1st, setPrize1st] = useState('60');
-  const [prize2nd, setPrize2nd] = useState('25');
-  const [prize3rd, setPrize3rd] = useState('15');
-  const [enablePunishment, setEnablePunishment] = useState(false);
-  const [punishmentDescription, setPunishmentDescription] = useState('Paga um café da manhã para o campeão!');
-  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
-  const { toast } = useToast();
+  
+  const [championships, setChampionships] = useState<Championship[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  // Estados para os novos campos do formulário
+  const [poolName, setPoolName] = useState('');
+  const [selectedChampionship, setSelectedChampionship] = useState<string | undefined>();
+  const [entryFee, setEntryFee] = useState('25');
+  const [prize1st, setPrize1st] = useState('70');
+  const [prize2nd, setPrize2nd] = useState('30');
+  const [prize3rd, setPrize3rd] = useState('0');
+  const [adminFee, setAdminFee] = useState('0');
+  const [maxParticipants, setMaxParticipants] = useState(''); // Vazio por padrão = sem limite
+  const [predictionDeadline, setPredictionDeadline] = useState('');
+  const [isPublic, setIsPublic] = useState(false);
+  const [enablePunishment, setEnablePunishment] = useState(false);
+  const [punishmentDescription, setPunishmentDescription] = useState('Paga um café para o campeão!');
+
+  useEffect(() => {
+    // Busca os campeonatos disponíveis para preencher o select
+    const fetchChampionships = async () => {
+      const { data, error } = await supabase.from('championships').select('id, name');
+      if (error) {
+        toast.error("Erro ao carregar campeonatos.");
+      } else {
+        setChampionships(data);
+      }
+    };
+    fetchChampionships();
+  }, []);
 
   const handleCreatePool = async () => {
-    // ... (validações existentes)
-    const fee = parseFloat(entryFee) || 0;
-    if (fee <= 0) {
-      toast({ title: 'Erro de Validação', description: 'O valor da inscrição deve ser maior que zero.', variant: 'destructive' });
+    // Validações
+    if (!poolName.trim() || !selectedChampionship) {
+      toast.error("Nome do Bolão e Campeonato são obrigatórios.");
       return;
     }
-    
+    const totalPrizes = parseFloat(prize1st) + parseFloat(prize2nd) + parseFloat(prize3rd) + parseFloat(adminFee);
+    if (totalPrizes !== 100) {
+      toast.error("A soma dos prêmios e da taxa de admin deve ser exatamente 100%.");
+      return;
+    }
+
     setLoading(true);
     try {
-      // ATUALIZADO: Adicionamos o 'entry_fee_param' na chamada da função
-      const { error } = await supabase.rpc('create_pool', {
-        pool_name: poolName.trim(),
-        owner_id_param: user.id,
-        entry_fee_param: fee, // <-- NOVO PARÂMETRO
-        prize_1st: parseFloat(prize1st) || 0,
-        prize_2nd: parseFloat(prize2nd) || 0,
-        prize_3rd: parseFloat(prize3rd) || 0,
-        enable_punishment_param: enablePunishment,
-        punishment_desc_param: enablePunishment ? punishmentDescription.trim() : null
+      const { data, error } = await supabase.rpc('create_pool', {
+        p_pool_name: poolName.trim(),
+        p_owner_id: user.id,
+        p_championship_id: selectedChampionship,
+        p_entry_fee: parseFloat(entryFee) || 0,
+        p_prize_1st: parseFloat(prize1st) || 0,
+        p_prize_2nd: parseFloat(prize2nd) || 0,
+        p_prize_3rd: parseFloat(prize3rd) || 0,
+        p_admin_fee: parseFloat(adminFee) || 0,
+        p_prediction_deadline: predictionDeadline || null,
+        p_max_participants: maxParticipants ? parseInt(maxParticipants) : null,
+        p_is_public: isPublic,
+        p_enable_punishment: enablePunishment,
+        p_punishment_desc: enablePunishment ? punishmentDescription.trim() : null
       });
-      
+
       if (error) throw error;
       
       await fetchAndSyncProfile(user);
-      toast({ title: 'Bolão Criado!', description: 'Seu novo bolão foi criado com sucesso. Convide seus amigos!' });
+      toast.success('Bolão criado com sucesso! Você será redirecionado.');
       navigate('/dashboard');
 
     } catch (error: any) {
-      toast({ title: 'Erro ao criar o bolão', description: error.message, variant: 'destructive' });
+      toast.error('Erro ao criar o bolão', { description: error.message });
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="max-w-md mx-auto py-12">
+    <div className="max-w-2xl mx-auto py-12">
       <Card>
         <CardHeader>
           <CardTitle>Criar Novo Bolão</CardTitle>
@@ -70,43 +106,70 @@ const CreatePoolPage = () => {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          <div className="space-y-2">
-            <Label htmlFor="pool-name">Nome do Bolão</Label>
-            <Input id="pool-name" placeholder="Ex: Bolão da Galera" value={poolName} onChange={(e) => setPoolName(e.target.value)} />
+          {/* --- NOVOS CAMPOS ADICIONADOS AQUI --- */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="pool-name">Nome do Bolão</Label>
+              <Input id="pool-name" placeholder="Ex: Bolão da Galera" value={poolName} onChange={(e) => setPoolName(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="championship">Campeonato</Label>
+              <Select value={selectedChampionship} onValueChange={setSelectedChampionship}>
+                <SelectTrigger id="championship"><SelectValue placeholder="Selecione o campeonato..." /></SelectTrigger>
+                <SelectContent>
+                  {championships.map(champ => (
+                    <SelectItem key={champ.id} value={champ.id}>{champ.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
-          
-          {/* CAMPO DE VALOR DA INSCRIÇÃO ADICIONADO */}
-          <div className="space-y-2">
-            <Label htmlFor="entry-fee">Valor da Inscrição (R$)</Label>
-            <Input id="entry-fee" type="number" placeholder="Ex: 25" value={entryFee} onChange={(e) => setEntryFee(e.target.value)} />
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="entry-fee">Valor da Inscrição (R$)</Label>
+              <Input id="entry-fee" type="number" value={entryFee} onChange={(e) => setEntryFee(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="prediction-deadline">Prazo Final para Palpites</Label>
+              <Input id="prediction-deadline" type="datetime-local" value={predictionDeadline} onChange={(e) => setPredictionDeadline(e.target.value)} />
+            </div>
           </div>
           
           <div>
-            <Label>Distribuição dos Prêmios (%)</Label>
-            <div className="grid grid-cols-3 gap-2 mt-2">
+            <Label>Distribuição dos Prêmios + Taxa (%)</Label>
+            <div className="grid grid-cols-4 gap-2 mt-2">
               <div><Label htmlFor="prize-1st" className="text-xs text-muted-foreground">1º Lugar</Label><Input id="prize-1st" type="number" value={prize1st} onChange={(e) => setPrize1st(e.target.value)} /></div>
               <div><Label htmlFor="prize-2nd" className="text-xs text-muted-foreground">2º Lugar</Label><Input id="prize-2nd" type="number" value={prize2nd} onChange={(e) => setPrize2nd(e.target.value)} /></div>
               <div><Label htmlFor="prize-3rd" className="text-xs text-muted-foreground">3º Lugar</Label><Input id="prize-3rd" type="number" value={prize3rd} onChange={(e) => setPrize3rd(e.target.value)} /></div>
+              <div><Label htmlFor="admin-fee" className="text-xs text-muted-foreground">Taxa Admin</Label><Input id="admin-fee" type="number" value={adminFee} onChange={(e) => setAdminFee(e.target.value)} /></div>
             </div>
-            <p className="text-xs text-muted-foreground mt-1">A soma deve ser 100.</p>
+            <p className="text-xs text-muted-foreground mt-1">A soma de todos os campos deve ser 100.</p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+                <Label htmlFor="max-participants">Nº Máximo de Participantes</Label>
+                <Input id="max-participants" type="number" placeholder="Deixe em branco para ilimitado" value={maxParticipants} onChange={(e) => setMaxParticipants(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+                <Label>Visibilidade do Bolão</Label>
+                <div className="flex items-center space-x-2 h-10">
+                    <Switch id="is-public" checked={isPublic} onCheckedChange={setIsPublic} />
+                    <Label htmlFor="is-public">{isPublic ? "Público (visível na homepage)" : "Privado (somente por convite)"}</Label>
+                </div>
+            </div>
           </div>
 
           <div className="space-y-4">
             <div className="flex items-center space-x-2">
               <Checkbox id="enable-punishment" checked={enablePunishment} onCheckedChange={(checked) => setEnablePunishment(checked as boolean)} />
-              <Label htmlFor="enable-punishment" className="cursor-pointer">
-                Habilitar "punição" para o último colocado?
-              </Label>
+              <Label htmlFor="enable-punishment">Habilitar "punição" para o último colocado?</Label>
             </div>
             {enablePunishment && (
               <div className="space-y-2 animate-in fade-in-0">
                 <Label htmlFor="punishment-description">Descreva a punição</Label>
-                <Input 
-                  id="punishment-description" 
-                  placeholder="Ex: Paga um café para o campeão"
-                  value={punishmentDescription}
-                  onChange={(e) => setPunishmentDescription(e.target.value)}
-                />
+                <Input id="punishment-description" value={punishmentDescription} onChange={(e) => setPunishmentDescription(e.target.value)} />
               </div>
             )}
           </div>
