@@ -1,4 +1,4 @@
-// src/components/admin/AdminChampionships.tsx
+// src/components/admin/AdminChampionships.tsx (CORRIGIDO)
 
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -12,6 +12,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+// IMPORTAÇÃO CORRIGIDA: Agora importa de "dialog" em vez de "alert-dialog"
 import {
   Dialog,
   DialogContent,
@@ -20,7 +21,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from "@/components/ui/alert-dialog"; // Reutilizando o AlertDialog como modal
+} from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { Loader2, Plus, Edit, Trash2 } from "lucide-react";
 import { Label } from "../ui/label";
