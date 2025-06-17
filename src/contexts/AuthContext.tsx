@@ -1,11 +1,12 @@
-// src/contexts/AuthContext.tsx - VERSÃO FINAL E UNIFICADA
+// src/contexts/AuthContext.tsx (VERSÃO ATUALIZADA)
 
 import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { User } from '@supabase/supabase-js';
 import { toast } from 'sonner';
+import { Pool } from '@/types/matches'; // Importamos o tipo Pool
 
-// Tipos de usuário, incluindo o pool_id que havia se perdido
+// Tipos de usuário, incluindo o pool_id
 export type AppUser = User & {
   username?: string;
   name?: string;
@@ -14,9 +15,10 @@ export type AppUser = User & {
   pool_id?: string | null;
 };
 
-// Interface do Contexto
+// Interface do Contexto com o 'pool'
 interface AuthContextType {
   user: AppUser | null;
+  pool: Pool | null; // <-- ADICIONADO
   loading: boolean;
   isAuthenticated: boolean;
   isFirstLogin: boolean;
@@ -37,12 +39,11 @@ export const useAuth = () => {
   return context;
 };
 
-// Componente Provedor
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<AppUser | null>(null);
+  const [pool, setPool] = useState<Pool | null>(null); // <-- NOVO ESTADO
   const [loading, setLoading] = useState(true);
 
-  // Estados derivados: mais seguros e sempre em sincronia com o objeto 'user'
   const isAuthenticated = !!user;
   const isFirstLogin = user ? user.first_login === false : false;
   const isAdmin = user?.is_admin ?? false;
@@ -50,6 +51,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const signOut = useCallback(async () => {
     await supabase.auth.signOut();
     setUser(null);
+    setPool(null); // Limpa os dados do bolão ao deslogar
   }, []);
 
   const fetchAndSyncProfile = useCallback(async (sessionUser: User): Promise<AppUser | null> => {
@@ -60,78 +62,85 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         .eq('id', sessionUser.id)
         .single();
       
-      if (error && error.code !== 'PGRST116') {
-        if (error.message.includes('JWT') || error.code === 'PGRST301') {
-          toast.error("Sua sessão expirou. Por favor, faça login novamente.");
-          await signOut();
-          return null;
-        }
-        throw error;
-      }
+      if (error && error.code !== 'PGRST116') throw error;
       
       const combinedUser: AppUser = { ...sessionUser, ...profile };
       setUser(combinedUser);
+
+      // LÓGICA ADICIONADA: Busca os dados do bolão do usuário
+      if (combinedUser.pool_id) {
+        const { data: poolData, error: poolError } = await supabase
+          .from('pools')
+          .select('*')
+          .eq('id', combinedUser.pool_id)
+          .single();
+
+        if (poolError) {
+          toast.error("Não foi possível carregar os dados do seu bolão.");
+          setPool(null);
+        } else {
+          setPool(poolData as Pool);
+        }
+      } else {
+        setPool(null); // Garante que não há dados de bolão se o usuário não pertencer a um
+      }
+      
       return combinedUser;
 
-    } catch (error) {
-      console.error("Erro ao buscar perfil:", error);
+    } catch (error: any) {
+      console.error("Erro ao buscar perfil/bolão:", error);
       await signOut();
       return null;
     }
   }, [signOut]);
 
   useEffect(() => {
-    // Verificação inicial da sessão ao carregar a página
     setLoading(true);
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user) {
         fetchAndSyncProfile(session.user).finally(() => setLoading(false));
       } else {
-        setLoading(false); // Sem sessão, termina o carregamento
+        setLoading(false);
       }
     });
 
-    // Listener para mudanças de autenticação (login, logout)
     const { data: authListener } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        // Reintroduzindo sua solução do setTimeout para evitar deadlocks
+      (_event, session) => {
         setTimeout(async () => {
           setLoading(true);
-          if (session?.user) {
-            await fetchAndSyncProfile(session.user);
+          const sessionUser = session?.user;
+          if (sessionUser) {
+            await fetchAndSyncProfile(sessionUser);
           } else {
             setUser(null);
+            setPool(null);
           }
           setLoading(false);
         }, 0);
       }
     );
 
-    return () => {
-      authListener.subscription.unsubscribe();
-    };
+    return () => authListener.subscription.unsubscribe();
   }, [fetchAndSyncProfile]);
   
   const login = async (email: string, password: string) => {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) {
-      toast.error(error.message || "Email ou senha inválidos.");
-    }
-    // O listener onAuthStateChange cuidará do resto
+    if (error) toast.error(error.message || "Email ou senha inválidos.");
     return { success: !error, error };
   };
 
   const updateUserProfile = async (updates: Partial<Pick<AppUser, 'first_login' | 'pool_id'>>) => {
-    if (!user) throw new Error("Usuário não autenticado para atualizar o perfil.");
+    if (!user) throw new Error("Usuário não autenticado.");
     const { error } = await supabase.from('users_custom').update(updates).eq('id', user.id);
     if (error) {
         toast.error("Erro ao atualizar perfil.");
         throw error;
     };
-    await fetchAndSyncProfile(user); // Re-sincroniza o estado local com o banco
+    await fetchAndSyncProfile(user);
   };
   
-  const value = { user, loading, isAuthenticated, isFirstLogin, isAdmin, login, signOut, updateUserProfile, fetchAndSyncProfile };
+  // Incluído 'pool' no valor do contexto
+  const value = { user, pool, loading, isAuthenticated, isFirstLogin, isAdmin, login, signOut, updateUserProfile, fetchAndSyncProfile };
 
   return (
     <AuthContext.Provider value={value}>

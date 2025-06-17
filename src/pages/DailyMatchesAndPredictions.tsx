@@ -1,13 +1,13 @@
-// src/pages/DailyMatchesAndPredictions.tsx
+// src/pages/DailyMatchesAndPredictions.tsx (VERSÃO ATUALIZADA)
 
 import React, { useState, useEffect } from 'react';
-// A importação do Layout foi REMOVIDA
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { format, parseISO, startOfDay, endOfDay, addDays, subHours } from 'date-fns';
+import { format, parseISO, startOfDay, addDays, subHours, isAfter } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
 import { ChevronLeft, ChevronRight, Info } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useAuth } from '@/contexts/AuthContext'; // IMPORTADO
 import {
   fetchMatchPredictionsForMatches,
   fetchUsersCustom,
@@ -27,8 +27,7 @@ import {
 } from '@/components/ui/tooltip';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
-
-// Definição de tipos para o que vamos exibir
+// Definição de tipos (sem alteração)
 interface DisplayMatch extends SupabaseMatchResultFromMatches {
   home_team: { name: string; flag_url?: string; group_id?: string; group?: { name: string } } | null;
   away_team: { name: string; flag_url?: string; group_id?: string; group?: { name: string } } | null;
@@ -36,6 +35,7 @@ interface DisplayMatch extends SupabaseMatchResultFromMatches {
 }
 
 const DailyMatchesAndPredictions: React.FC = () => {
+  const { pool } = useAuth(); // Usando o contexto para pegar os dados do bolão
   const [matches, setMatches] = useState<DisplayMatch[]>([]);
   const [allPredictions, setAllPredictions] = useState<SupabaseMatchPrediction[]>([]);
   const [allUsers, setAllUsers] = useState<User[]>([]);
@@ -43,7 +43,7 @@ const DailyMatchesAndPredictions: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [currentDate, setCurrentDate] = useState(new Date());
 
-  const predictionDisplayCutoffDate = new Date('2025-06-14T18:00:00-03:00');
+  // REMOVIDA a data fixa que estava aqui
 
   useEffect(() => {
     const loadData = async () => {
@@ -57,22 +57,20 @@ const DailyMatchesAndPredictions: React.FC = () => {
 
         const matchesData = await fetchMatchesInUTCRange(utcStartString, utcEndString);
 
-        if (!matchesData) {
+        if (!matchesData || matchesData.length === 0) {
           setMatches([]);
           setAllPredictions([]);
           setAllUsers([]);
-          setLoading(false);
-          return;
+        } else {
+            const matchIds = matchesData.map(match => match.id);
+            const predictionsData = await fetchMatchPredictionsForMatches(matchIds);
+            const usersData = await fetchUsersCustom();
+            const nonAdminUsers = usersData.filter(user => !user.is_admin);
+
+            setMatches(matchesData);
+            setAllPredictions(predictionsData || []);
+            setAllUsers(nonAdminUsers || []);
         }
-
-        const matchIds = matchesData.map(match => match.id);
-        const predictionsData = await fetchMatchPredictionsForMatches(matchIds);
-        const usersData = await fetchUsersCustom();
-        const nonAdminUsers = usersData.filter(user => !user.is_admin);
-
-        setMatches(matchesData);
-        setAllPredictions(predictionsData || []);
-        setAllUsers(nonAdminUsers || []);
 
       } catch (err: any) {
         console.error("Erro ao carregar dados:", err.message);
@@ -92,9 +90,17 @@ const DailyMatchesAndPredictions: React.FC = () => {
       return newDate;
     });
   };
-  
+
+  // --- NOVA LÓGICA DE VISUALIZAÇÃO ---
+  const shouldShowPredictions = pool?.prediction_deadline
+    ? isAfter(new Date(), new Date(pool.prediction_deadline))
+    : false;
+
+  const deadlineFormatted = pool?.prediction_deadline
+    ? format(new Date(pool.prediction_deadline), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })
+    : "indefinido";
+
   if (error) {
-    // A tag <Layout> foi removida daqui
     return (
       <div className="container mx-auto p-4 text-center text-red-600">
         <Alert variant="destructive">
@@ -105,8 +111,7 @@ const DailyMatchesAndPredictions: React.FC = () => {
       </div>
     );
   }
-
-  // A tag <Layout> foi removida daqui
+  
   return (
     <div className="container mx-auto px-4 py-8">
       <h1 className="text-3xl font-bold text-center text-fifa-blue mb-8">Palpites dos Participantes por Partida</h1>
@@ -136,7 +141,6 @@ const DailyMatchesAndPredictions: React.FC = () => {
             const matchPredictions = allPredictions.filter(
               p => p.match_id === match.id && allUsers.some(u => u.id === p.user_id)
             );
-            const shouldShowPredictions = Date.now() > predictionDisplayCutoffDate.getTime();
 
             return (
               <Card key={match.id} className="shadow-lg">
@@ -155,7 +159,7 @@ const DailyMatchesAndPredictions: React.FC = () => {
                       {matchPredictions.length === 0 ? (
                         <p className="text-gray-500 text-sm">Nenhum palpite registrado para esta partida ainda.</p>
                       ) : (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 text-sm">
                           {matchPredictions.map(prediction => {
                             const user = allUsers.find(u => u.id === prediction.user_id);
                             if (!user) return null;
@@ -186,10 +190,10 @@ const DailyMatchesAndPredictions: React.FC = () => {
                   ) : (
                     <div className="text-center py-6">
                       <p className="text-orange-600 font-semibold text-lg">
-                        Os palpites serão visíveis após {format(predictionDisplayCutoffDate, 'dd/MM/yyyy HH:mm', { locale: ptBR })}.
+                        Os palpites serão visíveis após o prazo final do bolão.
                       </p>
                       <p className="text-gray-500 text-sm mt-2">
-                        Volte mais tarde para ver os palpites dos participantes.
+                        Prazo: {deadlineFormatted}.
                       </p>
                     </div>
                   )}
