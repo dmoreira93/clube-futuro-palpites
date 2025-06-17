@@ -1,99 +1,52 @@
-// src/hooks/useParticipantsRanking.ts (VERSÃO RESTAURADA E CORRIGIDA)
+// src/hooks/useParticipantsRanking.ts
 
-import { useState, useEffect, useCallback } from 'react';
-import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/contexts/AuthContext';
-import { User } from '@/utils/pointsCalculator/types'; // Usando seu tipo User
+import { useEffect, useState } from "react";
+import { useAuth } from "@/contexts/AuthContext";
 
-// O tipo final que o componente de ranking usará
-export type Participant = User & {
+export interface Participant {
+  id: string;
+  name: string;
+  username: string;
+  avatar_url: string | null;
   points: number;
-  matchesPlayed: number;
+  matchesplayed: number;
   accuracy: string;
-  exactScores: number;
-  correctWinners: number;
-};
+  exactscores: number;
+  correctwinners: number;
+  createdat: string;
+  prize: string | null;
+}
 
 const useParticipantsRanking = () => {
-  const { user, signOut } = useAuth();
+  const { pool } = useAuth();
   const [participants, setParticipants] = useState<Participant[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchRanking = useCallback(async () => {
-    if (!user?.pool_id) {
-      setLoading(false);
-      setParticipants([]);
-      return;
-    }
-
-    try {
+  useEffect(() => {
+    const fetchRanking = async () => {
+      if (!pool?.id) return;
       setLoading(true);
       setError(null);
-      
-      // PASSO 1: Busca todos os usuários do bolão.
-      const { data: usersData, error: usersError } = await supabase
-        .from('users_custom')
-        .select('id, name, username, avatar_url, is_admin, is_ai, total_points, created_at')
-        .eq('pool_id', user.pool_id);
 
-      if (usersError) throw usersError;
-      
-      const userIds = usersData.map(u => u.id);
-      if (userIds.length === 0) {
-        setParticipants([]);
+      try {
+        const response = await fetch(`/api/pools/${pool.id}/ranking`);
+        if (!response.ok) {
+          throw new Error("Falha ao buscar o ranking.");
+        }
+        const data: Participant[] = await response.json();
+        setParticipants(data);
+      } catch (err: any) {
+        setError(err.message);
+      } finally {
         setLoading(false);
-        return;
       }
+    };
 
-      // PASSO 2: Busca as estatísticas para todos esses usuários.
-      const { data: statsData, error: statsError } = await supabase
-        .from('user_stats')
-        .select('user_id, matches_played, accuracy_percentage, exact_scores_count, correct_winners_count')
-        .in('user_id', userIds);
-      
-      if (statsError) throw statsError;
-
-      const statsMap = new Map<string, typeof statsData[0]>();
-      statsData.forEach(stat => statsMap.set(stat.user_id, stat));
-
-      // PASSO 3: Combina os dados e ordena.
-      const finalRanking: Participant[] = usersData.map((dbUser) => {
-        const stats = statsMap.get(dbUser.id);
-        return {
-          ...dbUser, // Mantém todos os campos de users_custom (id, name, is_admin, is_ai)
-          points: dbUser.total_points || 0,
-          matchesPlayed: stats?.matches_played || 0,
-          accuracy: `${stats?.accuracy_percentage || 0}%`,
-          exactScores: stats?.exact_scores_count || 0,
-          correctWinners: stats?.correct_winners_count || 0,
-          createdAt: dbUser.created_at,
-        };
-      }).sort((a, b) => {
-        if (b.points !== a.points) return b.points - a.points;
-        if (b.exactScores !== a.exactScores) return b.exactScores - a.exactScores;
-        if (b.correctWinners !== a.correctWinners) return b.correctWinners - a.correctWinners;
-        return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
-      });
-      
-      setParticipants(finalRanking);
-      
-    } catch (error: any) {
-      console.error("Erro ao carregar o ranking:", error);
-      setError(error.message);
-      if (error?.message?.includes('JWT')) {
-        await signOut();
-      }
-    } finally {
-      setLoading(false);
-    }
-  }, [user?.pool_id, signOut]);
-
-  useEffect(() => {
     fetchRanking();
-  }, [fetchRanking]);
+  }, [pool?.id]);
 
-  return { participants, loading, error, refetch: fetchRanking };
+  return { participants, loading, error };
 };
 
 export default useParticipantsRanking;

@@ -1,8 +1,8 @@
-// src/pages/Ranking.tsx (VERSÃO CORRIGIDA)
+// src/pages/Ranking.tsx
 
 import { useAuth } from "@/contexts/AuthContext";
 import useParticipantsRanking from "@/hooks/useParticipantsRanking";
-import RankingRow from "@/components/ranking/RankingRow"; // Usaremos o seu componente original
+import RankingRow from "@/components/ranking/RankingRow";
 import {
   Table,
   TableBody,
@@ -18,11 +18,6 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 const RankingPage = () => {
   const { pool } = useAuth();
   const { participants, loading, error } = useParticipantsRanking();
-
-  // Filtra para exibir apenas participantes que não são admin nem IAs.
-  const displayParticipants = participants.filter(p => !p.is_admin && !p.is_ai);
-  // A contagem para prêmios considera apenas jogadores reais (sem IA).
-  const totalRealParticipants = participants.filter(p => !p.is_ai).length;
 
   if (loading) {
     return <div className="flex justify-center items-center h-screen"><Loader2 className="h-8 w-8 animate-spin text-fifa-blue" /></div>;
@@ -65,13 +60,12 @@ const RankingPage = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {displayParticipants.length > 0 ? (
-                  displayParticipants.map((participant, index) => (
+                {participants.length > 0 ? (
+                  participants.map((participant, index) => (
                     <RankingRow
                       key={participant.id}
                       participant={participant}
                       index={index}
-                      totalParticipants={totalRealParticipants}
                     />
                   ))
                 ) : (

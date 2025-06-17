@@ -11,14 +11,8 @@ import {
 } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import RankingRow from "../ranking/RankingRow";
-import { isAIParticipant } from "@/lib/utils";
-import { Pool } from '@/types/matches';
 
-interface RankingTableProps {
-  poolSettings: Pool | null;
-}
-
-const RankingTable = ({ poolSettings }: RankingTableProps) => {
+const RankingTable = () => {
   const { participants, loading } = useParticipantsRanking();
 
   if (loading) {
@@ -29,8 +23,6 @@ const RankingTable = ({ poolSettings }: RankingTableProps) => {
     );
   }
 
-  const realUsers = participants.filter(p => !isAIParticipant(p));
-
   return (
     <div className="border rounded-lg overflow-hidden shadow-lg">
       <Table>
@@ -39,29 +31,20 @@ const RankingTable = ({ poolSettings }: RankingTableProps) => {
             <TableHead className="w-12 text-center">#</TableHead>
             <TableHead>Participante</TableHead>
             <TableHead className="text-right">Pontos</TableHead>
-            <TableHead className="hidden md:table-cell text-right">Jogos Pontuados</TableHead>
-            <TableHead className="hidden md:table-cell text-right">% Placares Exatos</TableHead>
-            <TableHead className="hidden md:table-cell text-right">Prêmio</TableHead>
+            <TableHead className="hidden md:table-cell text-right">Jogos</TableHead>
+            <TableHead className="hidden md:table-cell text-right">Precisão</TableHead>
+            <TableHead className="hidden md:table-cell text-right">Prêmio/Punição</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {participants.length > 0 ? (
-            participants.map((participant, index) => {
-              const realUserRank = isAIParticipant(participant) 
-                ? -1 
-                : realUsers.findIndex(u => u.id === participant.id);
-
-              return (
-                <RankingRow
-                  key={participant.id}
-                  participant={participant}
-                  index={index}
-                  realUserRank={realUserRank}
-                  totalRealParticipants={realUsers.length}
-                  poolSettings={poolSettings}
-                />
-              );
-            })
+            participants.map((participant, index) => (
+              <RankingRow
+                key={participant.id}
+                participant={participant}
+                index={index}
+              />
+            ))
           ) : (
             <TableRow>
               <TableCell colSpan={6} className="text-center py-8">
