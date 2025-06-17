@@ -1,29 +1,48 @@
-// src/components/ranking/RankingRow.tsx (VERSÃO SIMPLIFICADA)
+// src/components/ranking/RankingRow.tsx (VERSÃO COM CÁLCULO NO FRONTEND)
 
 import React from 'react';
 import { TableRow, TableCell } from "@/components/ui/table";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Participant } from "@/hooks/useParticipantsRanking";
+import { useAuth } from '@/contexts/AuthContext';
 
 interface RankingRowProps {
   participant: Participant;
   index: number;
+  totalParticipants: number;
 }
 
-// Função para formatar o prêmio
-const formatPrize = (prize: string | null): string => {
-  if (!prize) return "";
-  // Verifica se é um número (prêmio) ou texto (punição)
-  const numericValue = parseFloat(prize);
-  if (!isNaN(numericValue)) {
-    return numericValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-  }
-  return prize; // Retorna o texto da punição
-};
+const RankingRow = ({ participant, index, totalParticipants }: RankingRowProps) => {
+  const { pool } = useAuth(); // Usamos o pool para pegar as regras de premiação
 
-const RankingRow = ({ participant, index }: RankingRowProps) => {
-  const prizeText = formatPrize(participant.prize);
-  const isPrizeWinner = participant.prize && !isNaN(parseFloat(participant.prize));
+  // Lógica de cálculo de prêmio e punição volta para o frontend
+  const getPrizeText = () => {
+    if (!pool || participant.is_ai) return "";
+
+    const totalPrizePool = (totalParticipants * (pool.entry_fee || 0)) * (1 - ((pool.admin_fee_percent || 0) / 100.0));
+    const rank = index + 1;
+
+    if (rank === 1 && pool.prize_percent_1st > 0) {
+      const prize = totalPrizePool * (pool.prize_percent_1st / 100.0);
+      return prize.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    }
+    if (rank === 2 && pool.prize_percent_2nd > 0) {
+      const prize = totalPrizePool * (pool.prize_percent_2nd / 100.0);
+      return prize.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    }
+    if (rank === 3 && pool.prize_percent_3rd > 0) {
+      const prize = totalPrizePool * (pool.prize_percent_3rd / 100.0);
+      return prize.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    }
+    if (rank === totalParticipants && totalParticipants > 3 && pool.enable_punishment) {
+      return pool.punishment_description || "Punição";
+    }
+
+    return "";
+  };
+  
+  const prizeText = getPrizeText();
+  const isPrizeWinner = prizeText.includes('R$');
 
   return (
     <TableRow className={isPrizeWinner ? "bg-yellow-100 dark:bg-yellow-900/20" : ""}>
