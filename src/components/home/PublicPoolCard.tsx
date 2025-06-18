@@ -2,17 +2,17 @@
 
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Tag, Users, Calendar, Trophy, ArrowRight } from "lucide-react";
+// Adicionado o ícone de cadeado para o botão desabilitado
+import { Tag, Users, Calendar, Trophy, ArrowRight, Lock } from "lucide-react";
 import { Link } from "react-router-dom";
 
-// A interface define a "forma" dos dados que o nosso card espera receber.
-// Ela corresponde exatamente ao que a função get_public_pools() do Supabase retorna.
+// Interface (sem alterações)
 export interface PublicPool {
   id: string;
   name: string;
   entry_fee: number;
   prediction_deadline: string | null;
-  invite_code: string; // Usado para o link de convite
+  invite_code: string;
   championship: { name: string } | null;
   participant_count: number;
   max_participants: number | null;
@@ -23,21 +23,24 @@ interface PublicPoolCardProps {
 }
 
 export const PublicPoolCard = ({ pool }: PublicPoolCardProps) => {
-  // Formata a data para um formato amigável (dd/mm/aaaa) ou exibe um texto padrão.
+  // Formatações (sem alterações)
   const deadline = pool.prediction_deadline
     ? new Date(pool.prediction_deadline).toLocaleDateString('pt-BR', { timeZone: 'UTC' })
     : 'Não definida';
 
-  // Cria a string de participantes, por ex: "15/100" ou apenas "15" se não houver limite.
   const vagas = pool.max_participants 
     ? `${pool.participant_count}/${pool.max_participants}` 
     : `${pool.participant_count}`;
 
-  // Formata o valor da inscrição para o formato de moeda Real (R$).
   const entryFeeFormatted = (pool.entry_fee || 0).toLocaleString('pt-BR', { 
     style: 'currency', 
     currency: 'BRL' 
   });
+
+  // *** LÓGICA DE VERIFICAÇÃO ADICIONADA AQUI ***
+  // Verifica se o bolão está cheio.
+  // A condição é: o bolão tem um limite máximo E o número de participantes é maior ou igual a esse limite.
+  const isFull = pool.max_participants !== null && pool.participant_count >= pool.max_participants;
 
   return (
     <Card className="flex flex-col hover:shadow-lg transition-shadow">
@@ -66,13 +69,22 @@ export const PublicPoolCard = ({ pool }: PublicPoolCardProps) => {
         </div>
       </CardContent>
       <CardFooter>
-        {/* O link de cadastro usa o 'invite_code' para direcionar o novo usuário ao bolão correto. */}
-        <Link to={`/cadastro/${pool.invite_code}`} className="w-full">
-          <Button className="w-full bg-fifa-green hover:bg-green-700">
-            Participar deste Bolão
-            <ArrowRight className="h-4 w-4 ml-2" />
+        {/* *** BOTÃO COM LÓGICA CONDICIONAL *** */}
+        {isFull ? (
+          // Se o bolão estiver cheio, renderiza um botão desabilitado
+          <Button className="w-full" disabled>
+            <Lock className="h-4 w-4 mr-2" />
+            Sem vagas disponíveis
           </Button>
-        </Link>
+        ) : (
+          // Caso contrário, renderiza o link com o botão de participar
+          <Link to={`/cadastro/${pool.invite_code}`} className="w-full">
+            <Button className="w-full bg-fifa-green hover:bg-green-700">
+              Participar deste Bolão
+              <ArrowRight className="h-4 w-4 ml-2" />
+            </Button>
+          </Link>
+        )}
       </CardFooter>
     </Card>
   );
