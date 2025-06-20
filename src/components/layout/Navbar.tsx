@@ -1,4 +1,4 @@
-// src/components/layout/Navbar.tsx
+// src/components/layout/Navbar.tsx (VERSÃO COM O LINK "RESULTADOS" RESTAURADO)
 
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -21,7 +21,7 @@ import {
   LogOut,
   User,
   Loader2,
-  Newspaper, // Ícone para o link de notícias
+  Newspaper,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -44,7 +44,7 @@ const Navbar = () => {
 
     if (!isAuthenticated) {
       if (isHomePage) {
-        return null; // Em linha com o seu pedido, não mostra botões de login/cadastro na home
+        return null;
       }
       return (
         <div className="flex items-center space-x-2">
@@ -120,6 +120,10 @@ const Navbar = () => {
           <div className="hidden md:flex items-center space-x-4">
             <Link to="/criterios" className="text-sm font-medium hover:text-fifa-gold transition-colors">Critérios</Link>
             {isAuthenticated && <Link to="/ranking" className="text-sm font-medium hover:text-fifa-gold transition-colors">Ranking</Link>}
+            
+            {/* LINK RESTAURADO AQUI */}
+            {isAuthenticated && <Link to="/resultados" className="text-sm font-medium hover:text-fifa-gold transition-colors">Resultados</Link>}
+            
             {isAuthenticated && <Link to="/noticias" className="text-sm font-medium hover:text-fifa-gold transition-colors">Notícias</Link>}
             {isAuthenticated && <Link to="/simulador" className="text-sm font-medium hover:text-fifa-gold transition-colors">Simulador</Link>}
           </div>
