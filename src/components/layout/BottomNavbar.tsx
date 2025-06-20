@@ -1,4 +1,4 @@
-// src/components/layout/BottomNavbar.tsx
+// src/components/layout/BottomNavbar.tsx (Apenas para referência)
 
 import { NavLink } from 'react-router-dom';
 import { Home, ListChecks, Calculator, Trophy, Medal } from "lucide-react";
@@ -12,9 +12,10 @@ const BottomNavbar = () => {
     return null; 
   }
 
+  // Links que foram removidos do menu hambúrguer agora vivem aqui no mobile
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 flex justify-around border-t border-gray-200 bg-white py-2 shadow-t-lg md:hidden">
-      <NavLink to="/" className={({ isActive }) => `flex flex-col items-center text-xs ${isActive ? 'text-fifa-blue' : 'text-gray-500'}`}>
+    <nav className="fixed bottom-0 left-0 right-0 z-50 flex justify-around border-t bg-white py-2 shadow-t-lg md:hidden">
+      <NavLink to="/dashboard" end className={({ isActive }) => `flex flex-col items-center text-xs ${isActive ? 'text-fifa-blue' : 'text-gray-500'}`}>
         <Home className="h-6 w-6" />
         <span>Início</span>
       </NavLink>
@@ -22,13 +23,10 @@ const BottomNavbar = () => {
         <ListChecks className="h-6 w-6" />
         <span>Palpites</span>
       </NavLink>
-      
-      {/* VERIFIQUE SE ESTE BLOCO EXISTE NO SEU ARQUIVO */}
       <NavLink to="/simulador" className={({ isActive }) => `flex flex-col items-center text-xs ${isActive ? 'text-fifa-blue' : 'text-gray-500'}`}>
         <Calculator className="h-6 w-6" />
         <span>Simulador</span>
       </NavLink>
-
       <NavLink to="/ranking" className={({ isActive }) => `flex flex-col items-center text-xs ${isActive ? 'text-fifa-blue' : 'text-gray-500'}`}>
         <Trophy className="h-6 w-6" />
         <span>Ranking</span>
