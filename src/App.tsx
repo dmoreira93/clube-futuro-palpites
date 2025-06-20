@@ -1,4 +1,4 @@
-// src/App.tsx
+// src/App.tsx (VERSÃO COMPLETA E ATUALIZADA)
 
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
@@ -6,7 +6,7 @@ import Layout from "./components/layout/Layout";
 
 // Importações das páginas
 import HomePage from "./pages/HomePage";
-import Dashboard from "./pages/Dashboard"; // O antigo Index agora é o Dashboard
+import Dashboard from "./pages/Dashboard";
 import Login from "./pages/Login";
 import Cadastro from "./pages/Cadastro";
 import Palpites from "./pages/Palpites";
@@ -20,10 +20,11 @@ import ChangePassword from "./pages/ChangePassword";
 import UserPredictions from "./pages/UserPredictions";
 import DailyMatchesAndPredictions from "./pages/DailyMatchesAndPredictions";
 import Simulador from "./pages/Simulador";
-import JoinPoolPage from "./pages/JoinPool"; 
+import JoinPoolPage from "./pages/JoinPool";
 import CreatePoolPage from "./pages/CreatePool";
 import ProtectedRoute from "./components/auth/ProtectedRoute";
-import PoolSettingsPage from "./pages/PoolSettings"; // <-- 1. IMPORTAÇÃO DA NOVA PÁGINA
+import PoolSettingsPage from "./pages/PoolSettings";
+import ProfilePage from "./pages/Profile"; // Importação da nova página de perfil
 
 function App() {
   return (
@@ -40,7 +41,7 @@ function App() {
             <Route path="/cadastro/:inviteCode" element={<Cadastro />} />
             <Route path="/criterios" element={<Criterios />} />
             <Route path="*" element={<NotFound />} />
-            
+
             {/* Rotas Protegidas */}
             <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
             <Route path="/ranking" element={<ProtectedRoute><RankingPage /></ProtectedRoute>} />
@@ -52,7 +53,10 @@ function App() {
             <Route path="/change-password" element={<ProtectedRoute><ChangePassword /></ProtectedRoute>} />
             <Route path="/join-pool" element={<ProtectedRoute><JoinPoolPage /></ProtectedRoute>} />
             <Route path="/create-pool" element={<ProtectedRoute><CreatePoolPage /></ProtectedRoute>} />
-            <Route path="/pool-settings" element={<ProtectedRoute><PoolSettingsPage /></ProtectedRoute>} /> {/* <-- 2. NOVA ROTA ADICIONADA */}
+            <Route path="/pool-settings" element={<ProtectedRoute><PoolSettingsPage /></ProtectedRoute>} />
+            
+            {/* Nova rota de Perfil adicionada */}
+            <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
 
             {/* Rotas de Admin */}
             <Route path="/admin-login" element={<AdminLogin />} />
