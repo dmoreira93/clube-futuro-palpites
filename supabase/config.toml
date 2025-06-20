@@ -1,22 +1,27 @@
+# supabase/config.toml (VERSÃO CORRIGIDA)
+
 project_id = "wdbaoomwhuiztjoazagd"
+
 [functions.fetch-scores]
 enabled = true
 verify_jwt = true
 import_map = "./functions/fetch-scores/deno.json"
-# Uncomment to specify a custom file path to the entrypoint.
-# Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
 entrypoint = "./functions/fetch-scores/index.ts"
-# Specifies static files to be bundled with the function. Supports glob patterns.
-# For example, if you want to serve static HTML pages in your function:
-# static_files = [ "./functions/fetch-scores/*.html" ]
 
 [functions.update-all-scores]
 enabled = true
 verify_jwt = true
 import_map = "./functions/update-all-scores/deno.json"
-# Uncomment to specify a custom file path to the entrypoint.
-# Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
 entrypoint = "./functions/update-all-scores/index.ts"
-# Specifies static files to be bundled with the function. Supports glob patterns.
-# For example, if you want to serve static HTML pages in your function:
-# static_files = [ "./functions/update-all-scores/*.html" ]
+
+[functions.send-notification]
+enabled = true
+verify_jwt = true
+import_map = "./functions/send-notification/deno.json"
+entrypoint = "./functions/send-notification/index.ts"
+
+[functions.fetch-rss-news]
+enabled = true
+verify_jwt = false
+import_map = "./functions/fetch-rss-news/deno.json"
+entrypoint = "./functions/fetch-rss-news/index.ts"

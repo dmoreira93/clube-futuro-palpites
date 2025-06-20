@@ -25,6 +25,7 @@ import CreatePoolPage from "./pages/CreatePool";
 import ProtectedRoute from "./components/auth/ProtectedRoute";
 import PoolSettingsPage from "./pages/PoolSettings";
 import ProfilePage from "./pages/Profile"; // Importação da nova página de perfil
+import NoticiasPage from "./pages/Noticias"; // Importe a nova página
 
 function App() {
   return (
@@ -41,7 +42,11 @@ function App() {
             <Route path="/cadastro/:inviteCode" element={<Cadastro />} />
             <Route path="/criterios" element={<Criterios />} />
             <Route path="*" element={<NotFound />} />
+            {/* Nova Rota de Notícias */}
+            <Route path="/noticias" element={<ProtectedRoute><NoticiasPage /></ProtectedRoute>} />
 
+            <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
+            {/* ... (resto das rotas) ... */}
             {/* Rotas Protegidas */}
             <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
             <Route path="/ranking" element={<ProtectedRoute><RankingPage /></ProtectedRoute>} />

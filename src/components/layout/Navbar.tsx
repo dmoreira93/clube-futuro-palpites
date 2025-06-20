@@ -1,4 +1,4 @@
-// src/components/layout/Navbar.tsx (VERSÃO COM AJUSTE FINAL)
+// src/components/layout/Navbar.tsx
 
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -21,6 +21,7 @@ import {
   LogOut,
   User,
   Loader2,
+  Newspaper, // Ícone para o link de notícias
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -29,7 +30,6 @@ const Navbar = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Variável para detectar se estamos na página inicial
   const isHomePage = location.pathname === '/';
 
   const handleLogout = async () => {
@@ -37,19 +37,15 @@ const Navbar = () => {
     navigate("/");
   };
 
-  // Função que renderiza as ações do usuário (login/cadastro ou menu de perfil)
   const renderUserActions = () => {
     if (loading && !user) {
       return <Loader2 className="h-6 w-6 animate-spin text-white" />;
     }
 
     if (!isAuthenticated) {
-      // Se for a página inicial, não renderiza nada (os botões já estão no corpo da página).
       if (isHomePage) {
-        return null;
+        return null; // Em linha com o seu pedido, não mostra botões de login/cadastro na home
       }
-      
-      // Em outras páginas (como /criterios), mostra os botões para facilitar o acesso.
       return (
         <div className="flex items-center space-x-2">
           <Link to="/cadastro">
@@ -70,7 +66,6 @@ const Navbar = () => {
       );
     }
 
-    // Se estiver autenticado, mostra o menu do usuário com o avatar.
     return (
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
@@ -115,8 +110,6 @@ const Navbar = () => {
     <nav className="bg-fifa-blue text-white shadow-lg sticky top-0 z-40">
       <div className="container mx-auto px-4">
         <div className="flex justify-between items-center py-2 h-16">
-          
-          {/* Lado Esquerdo: Logo */}
           <Link to={isAuthenticated ? "/dashboard" : "/"} className="flex items-center space-x-2">
             <SoccerBallIcon className="w-8 h-8 text-fifa-gold" />
             <span className="font-bold text-lg hidden sm:inline text-fifa-gold">
@@ -124,14 +117,14 @@ const Navbar = () => {
             </span>
           </Link>
           
-          {/* Lado Direito: Links e Ações do Usuário */}
-          <div className="flex items-center space-x-2 sm:space-x-4">
-            {/* Link "Critérios" que aparece em todas as telas */}
-            <Link to="/criterios" className="text-sm font-medium hover:text-fifa-gold transition-colors">
-              Critérios
-            </Link>
+          <div className="hidden md:flex items-center space-x-4">
+            <Link to="/criterios" className="text-sm font-medium hover:text-fifa-gold transition-colors">Critérios</Link>
+            {isAuthenticated && <Link to="/ranking" className="text-sm font-medium hover:text-fifa-gold transition-colors">Ranking</Link>}
+            {isAuthenticated && <Link to="/noticias" className="text-sm font-medium hover:text-fifa-gold transition-colors">Notícias</Link>}
+            {isAuthenticated && <Link to="/simulador" className="text-sm font-medium hover:text-fifa-gold transition-colors">Simulador</Link>}
+          </div>
 
-            {/* Ações do usuário (que são condicionais à página e ao login) */}
+          <div className="flex items-center">
             {renderUserActions()}
           </div>
         </div>
