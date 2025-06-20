@@ -1,6 +1,6 @@
-// src/components/layout/Navbar.tsx (VERSÃO FINAL E SIMPLIFICADA)
+// src/components/layout/Navbar.tsx (VERSÃO COM AJUSTE FINAL)
 
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -25,24 +25,31 @@ import {
 import { useAuth } from "@/contexts/AuthContext";
 
 const Navbar = () => {
-  // O estado isMenuOpen e a lógica do menu mobile foram removidos.
   const { isAuthenticated, isAdmin, user, signOut, loading } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+
+  // Variável para detectar se estamos na página inicial
+  const isHomePage = location.pathname === '/';
 
   const handleLogout = async () => {
     await signOut();
     navigate("/");
   };
 
-  // Esta função agora renderiza as ações do usuário em TODAS as telas (mobile e desktop)
+  // Função que renderiza as ações do usuário (login/cadastro ou menu de perfil)
   const renderUserActions = () => {
-    // Mostra o loader apenas enquanto o estado de autenticação carrega
     if (loading && !user) {
       return <Loader2 className="h-6 w-6 animate-spin text-white" />;
     }
 
-    // Se não estiver autenticado, mostra os botões de Login/Cadastro
     if (!isAuthenticated) {
+      // Se for a página inicial, não renderiza nada (os botões já estão no corpo da página).
+      if (isHomePage) {
+        return null;
+      }
+      
+      // Em outras páginas (como /criterios), mostra os botões para facilitar o acesso.
       return (
         <div className="flex items-center space-x-2">
           <Link to="/cadastro">
@@ -63,7 +70,7 @@ const Navbar = () => {
       );
     }
 
-    // Se estiver autenticado, mostra o DropdownMenu com o avatar do usuário
+    // Se estiver autenticado, mostra o menu do usuário com o avatar.
     return (
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
@@ -90,8 +97,8 @@ const Navbar = () => {
           </DropdownMenuItem>
           {isAdmin && (
             <DropdownMenuItem onSelect={() => navigate('/admin')}>
-                <ShieldIcon className="mr-2 h-4 w-4" />
-                <span>Painel Admin</span>
+              <ShieldIcon className="mr-2 h-4 w-4" />
+              <span>Painel Admin</span>
             </DropdownMenuItem>
           )}
           <DropdownMenuSeparator />
@@ -105,12 +112,11 @@ const Navbar = () => {
   };
 
   return (
-     <nav className="bg-fifa-blue text-white shadow-lg sticky top-0 z-40">
+    <nav className="bg-fifa-blue text-white shadow-lg sticky top-0 z-40">
       <div className="container mx-auto px-4">
-        {/* Layout principal da Navbar com justify-between */}
-        <div className="flex justify-between items-center py-2">
+        <div className="flex justify-between items-center py-2 h-16">
           
-          {/* 1. Logo (sempre visível à esquerda) */}
+          {/* Lado Esquerdo: Logo */}
           <Link to={isAuthenticated ? "/dashboard" : "/"} className="flex items-center space-x-2">
             <SoccerBallIcon className="w-8 h-8 text-fifa-gold" />
             <span className="font-bold text-lg hidden sm:inline text-fifa-gold">
@@ -118,16 +124,14 @@ const Navbar = () => {
             </span>
           </Link>
           
-          {/* 2. Links de Navegação centrais (visíveis apenas no desktop) */}
-          <div className="hidden md:flex items-center space-x-4">
-            {isAuthenticated && <Link to="/ranking" className="hover:text-fifa-gold transition-colors">Ranking</Link>}
-            {isAuthenticated && <Link to="/palpites-do-dia" className="hover:text-fifa-gold transition-colors">Palpites da Galera</Link>}
-            {isAuthenticated && <Link to="/palpites" className="hover:text-fifa-gold transition-colors">Meus Palpites</Link>}
-            {isAuthenticated && <Link to="/simulador" className="hover:text-fifa-gold transition-colors">Simulador</Link>}
-          </div>
+          {/* Lado Direito: Links e Ações do Usuário */}
+          <div className="flex items-center space-x-2 sm:space-x-4">
+            {/* Link "Critérios" que aparece em todas as telas */}
+            <Link to="/criterios" className="text-sm font-medium hover:text-fifa-gold transition-colors">
+              Critérios
+            </Link>
 
-          {/* 3. Ações do Usuário (sempre visível à direita) */}
-          <div className="flex items-center">
+            {/* Ações do usuário (que são condicionais à página e ao login) */}
             {renderUserActions()}
           </div>
         </div>
