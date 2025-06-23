@@ -1,4 +1,4 @@
-// src/App.tsx (VERSÃO COMPLETA E ATUALIZADA)
+// src/App.tsx (VERSÃO FINAL COMPLETA E CORRIGIDA)
 
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
@@ -24,8 +24,9 @@ import JoinPoolPage from "./pages/JoinPool";
 import CreatePoolPage from "./pages/CreatePool";
 import ProtectedRoute from "./components/auth/ProtectedRoute";
 import PoolSettingsPage from "./pages/PoolSettings";
-import ProfilePage from "./pages/Profile"; // Importação da nova página de perfil
-import NoticiasPage from "./pages/Noticias"; // Importe a nova página
+import ProfilePage from "./pages/Profile";
+import NoticiasPage from "./pages/Noticias";
+import AuditoriaPontos from "./pages/AuditoriaPontos"; // Rota de auditoria importada
 
 function App() {
   return (
@@ -33,37 +34,33 @@ function App() {
       <BrowserRouter>
         <Layout>
           <Routes>
-            {/* Rota Pública Principal */}
+            {/* --- Rotas Públicas --- */}
             <Route path="/" element={<HomePage />} />
-
-            {/* Outras Rotas Públicas */}
             <Route path="/login" element={<Login />} />
             <Route path="/cadastro" element={<Cadastro />} />
             <Route path="/cadastro/:inviteCode" element={<Cadastro />} />
             <Route path="/criterios" element={<Criterios />} />
             <Route path="*" element={<NotFound />} />
-            {/* Nova Rota de Notícias */}
-            <Route path="/noticias" element={<ProtectedRoute><NoticiasPage /></ProtectedRoute>} />
-
-            <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
-            {/* ... (resto das rotas) ... */}
-            {/* Rotas Protegidas */}
+            
+            {/* --- Rotas Protegidas (acessíveis a todos os usuários logados) --- */}
             <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+            <Route path="/palpites" element={<ProtectedRoute><Palpites /></ProtectedRoute>} />
             <Route path="/ranking" element={<ProtectedRoute><RankingPage /></ProtectedRoute>} />
             <Route path="/resultados" element={<ProtectedRoute><Resultados /></ProtectedRoute>} />
-            <Route path="/palpites-usuarios" element={<ProtectedRoute><UserPredictions /></ProtectedRoute>} />
-            <Route path="/palpites-do-dia" element={<ProtectedRoute><DailyMatchesAndPredictions /></ProtectedRoute>} />
-            <Route path="/palpites" element={<ProtectedRoute><Palpites /></ProtectedRoute>} />
             <Route path="/simulador" element={<ProtectedRoute><Simulador /></ProtectedRoute>} />
-            <Route path="/change-password" element={<ProtectedRoute><ChangePassword /></ProtectedRoute>} />
+            <Route path="/noticias" element={<ProtectedRoute><NoticiasPage /></ProtectedRoute>} />
+            <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
             <Route path="/join-pool" element={<ProtectedRoute><JoinPoolPage /></ProtectedRoute>} />
             <Route path="/create-pool" element={<ProtectedRoute><CreatePoolPage /></ProtectedRoute>} />
             <Route path="/pool-settings" element={<ProtectedRoute><PoolSettingsPage /></ProtectedRoute>} />
+            <Route path="/change-password" element={<ProtectedRoute><ChangePassword /></ProtectedRoute>} />
+            <Route path="/palpites-usuarios" element={<ProtectedRoute><UserPredictions /></ProtectedRoute>} />
+            <Route path="/palpites-do-dia" element={<ProtectedRoute><DailyMatchesAndPredictions /></ProtectedRoute>} />
             
-            {/* Nova rota de Perfil adicionada */}
-            <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
+            {/* Nova rota de Auditoria para todos os usuários logados */}
+            <Route path="/auditoria" element={<ProtectedRoute><AuditoriaPontos /></ProtectedRoute>} />
 
-            {/* Rotas de Admin */}
+            {/* --- Rotas de Admin --- */}
             <Route path="/admin-login" element={<AdminLogin />} />
             <Route path="/admin" element={<ProtectedRoute adminOnly={true}><Admin /></ProtectedRoute>} />
           </Routes>
