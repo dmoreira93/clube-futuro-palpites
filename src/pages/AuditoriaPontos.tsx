@@ -1,4 +1,4 @@
-// src/pages/AuditoriaPontos.tsx (VERSÃO COM TABELA RESPONSIVA)
+// src/pages/AuditoriaPontos.tsx (VERSÃO FINAL COM DETALHES DE GRUPO E FINAIS)
 
 import { useState, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
@@ -13,23 +13,31 @@ import { Badge } from '@/components/ui/badge';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
-// A função fetchAllAuditData permanece a mesma da versão anterior
-
+// A função de busca de dados permanece a mesma, pois já busca tudo que precisamos.
 const fetchAllAuditData = async (poolId: string | undefined) => {
   if (!poolId) return null;
   const { data: users, error: usersError } = await supabase.from('users_custom').select('id, name').eq('pool_id', poolId).eq('is_admin', false);
   if (usersError) throw usersError;
   const userIds = users.map(u => u.id);
   if (userIds.length === 0) return { users: [], points: [], teams: [], matches: [], matchPredictions: [], groupPredictions: [], groups: [], groupsResults: [], finalPredictions: [], tournamentResults: [] };
-  const [{ data: points }, { data: teams }, { data: matches }, { data: matchPredictions }, { data: groupPredictions }, { data: groups }, { data: groupsResults }, { data: finalPredictions }, { data: tournamentResults }] = await Promise.all([
+  
+  const [
+    { data: points, error: pointsError }, { data: teams, error: teamsError },
+    { data: matches, error: matchesError }, { data: matchPredictions, error: mpError },
+    { data: groupPredictions, error: gpError }, { data: groups, error: groupsError },
+    { data: groupsResults, error: grError }, { data: finalPredictions, error: fpError },
+    { data: tournamentResults, error: trError }
+  ] = await Promise.all([
     supabase.from('user_points').select('*').in('user_id', userIds), supabase.from('teams').select('*'),
     supabase.from('matches').select('*'), supabase.from('match_predictions').select('*').in('user_id', userIds),
-    supabase.from('group_predictions').select('*').in('user_id', userIds), supabase.from('groups').select('*'),
-    supabase.from('groups_results').select('*'), supabase.from('final_predictions').select('*').in('user_id', userIds),
-    supabase.from('tournament_results').select('*')
+    supabase.from('group_predictions').select('*').in('user_id', userIds),
+    supabase.from('groups').select('*'), supabase.from('groups_results').select('*'),
+    supabase.from('final_predictions').select('*').in('user_id', userIds), supabase.from('tournament_results').select('*')
   ]);
-  const anyError = usersError || !points || !teams || !matches || !matchPredictions || !groupPredictions || !groups || !groupsResults || !finalPredictions || !tournamentResults;
+
+  const anyError = usersError || pointsError || teamsError || matchesError || mpError || gpError || groupsError || grError || fpError || trError;
   if (anyError) throw new Error("Falha ao buscar um dos recursos necessários para a auditoria.");
+
   return { users, points, teams, matches, matchPredictions, groupPredictions, groups, groupsResults, finalPredictions, tournamentResults };
 };
 
@@ -45,26 +53,50 @@ const AuditoriaPontos = () => {
   });
 
   const processedData = useMemo(() => {
-    // A lógica de processamento de dados permanece a mesma da versão anterior
     if (!data) return [];
     const { users, points, teams, matches, matchPredictions, groupPredictions, groups, groupsResults, finalPredictions, tournamentResults } = data;
-    if (!points) return [];
+    
+    if (!points || !users || !teams || !matches || !matchPredictions || !groupPredictions || !groups || !groupsResults || !finalPredictions || !tournamentResults) {
+        return [];
+    }
+
     const teamMap = new Map(teams.map(t => [t.id, t.name]));
+
+    // Mapa de traduções para os critérios de pontuação
     const pointTypeTranslations: { [key: string]: string } = {
-        'EXACT_SCORE': "Placar Exato", 'CORRECT_WINNER': "Acertou o Vencedor",
-        'CORRECT_DRAW': "Acertou o Empate", 'PARTIAL_SCORE': "Gols de 1 Time",
-        'group_classification': "Classificação de Grupo", 'final_champion': "Campeão",
-        'final_runner_up': "Vice-Campeão", 'final_third_place': "3º Lugar",
-        'final_fourth_place': "4º Lugar", 'final_score': "Placar da Final",
-        'bonus_top_4': "Bônus Top 4 Exato", 'NO_POINTS': "Sem Pontuação",
+        'EXACT_SCORE': "Placar Exato",
+        'CORRECT_WINNER': "Acertou o Vencedor",
+        'CORRECT_DRAW': "Acertou o Empate",
+        'PARTIAL_SCORE': "Gols de 1 Time",
+        'group_classification_exact': "Classificação Exata",
+        'group_classification_inverted': "Classificação Invertida",
+        'group_classification_one_team': "Classificação 1 Time",
+        'final_champion': "Acertou: Campeão",
+        'final_runner_up': "Acertou: Vice-Campeão",
+        'final_third_place': "Acertou: 3º Lugar",
+        'final_fourth_place': "Acertou: 4º Lugar",
+        'final_score': "Acertou: Placar da Final",
+        'bonus_top_4': "Bônus: Top 4 Exato",
+        'NO_POINTS': "Sem Pontuação",
     };
+
     const getPointTypeDescription = (type: string | null) => type ? (pointTypeTranslations[type] || type) : "Não definido";
-    const matchPointTypes = new Set(['EXACT_SCORE', 'CORRECT_WINNER', 'CORRECT_DRAW', 'PARTIAL_SCORE', 'NO_POINTS']);
+
     const reportData = points.map(point => {
         const user = users.find(u => u.id === point.user_id);
-        const reportRow = { id: point.id, participante: user?.name || 'N/A', data: point.created_at, jogo: 'N/A', resultado: 'N/A', palpite: 'N/A', tipo_pontuacao: getPointTypeDescription(point.points_type), pontos: point.points, sortDate: parseISO(point.created_at).getTime() };
-        if (point.points_type && matchPointTypes.has(point.points_type)) {
-            const prediction = matchPredictions.find(p => p.id === point.prediction_id);
+        const reportRow = {
+            id: point.id, participante: user?.name || 'N/A', data: point.created_at,
+            jogo: 'N/A', resultado: 'N/A', palpite: 'N/A',
+            tipo_pontuacao: getPointTypeDescription(point.points_type),
+            pontos: point.points, sortDate: parseISO(point.created_at).getTime()
+        };
+
+        const pointType = point.points_type;
+        const predictionId = point.prediction_id;
+
+        // Lógica para Pontos de Partida
+        if (['EXACT_SCORE', 'CORRECT_WINNER', 'CORRECT_DRAW', 'PARTIAL_SCORE', 'NO_POINTS'].includes(pointType)) {
+            const prediction = matchPredictions.find(p => p.id === predictionId);
             const match = matches.find(m => m.id === prediction?.match_id);
             if (match && prediction) {
                 reportRow.jogo = `${teamMap.get(match.home_team_id) || 'Time A'} vs ${teamMap.get(match.away_team_id) || 'Time B'}`;
@@ -73,8 +105,9 @@ const AuditoriaPontos = () => {
                 reportRow.sortDate = parseISO(match.match_date).getTime();
             }
         } 
-        else if (point.points_type === 'group_classification') {
-            const prediction = groupPredictions.find(p => p.id === point.prediction_id);
+        // Lógica para Pontos de Classificação de Grupo
+        else if (pointType && pointType.startsWith('group_classification')) {
+            const prediction = groupPredictions.find(p => p.id === predictionId);
             const group = groups.find(g => g.id === prediction?.group_id);
             const result = groupsResults.find(r => r.group_id === prediction?.group_id);
             if (prediction && group) {
@@ -83,30 +116,46 @@ const AuditoriaPontos = () => {
                 reportRow.resultado = result ? `1º ${teamMap.get(result.first_place_team_id) || 'N/A'}, 2º ${teamMap.get(result.second_place_team_id) || 'N/A'}` : 'Pendente';
             }
         }
-        else if (point.points_type && point.points_type.startsWith('final_')) {
+        // Lógica para Pontos da Fase Final
+        else if (pointType && pointType.startsWith('final_')) {
             const prediction = finalPredictions.find(p => p.user_id === point.user_id);
             const result = tournamentResults?.[0]; 
             if (prediction && result) {
-                reportRow.jogo = 'Fase Final'; let predTeamId, resTeamId, position = 'N/A';
-                switch(point.points_type) {
+                reportRow.jogo = 'Fase Final';
+                let predTeamId, resTeamId, position = '';
+                switch(pointType) {
                     case 'final_champion': position = 'Campeão'; predTeamId = prediction.champion_id; resTeamId = result.champion_id; break;
                     case 'final_runner_up': position = 'Vice'; predTeamId = prediction.runner_up_id; resTeamId = result.runner_up_id; break;
+                    case 'final_third_place': position = '3º Lugar'; predTeamId = prediction.third_place_id; resTeamId = result.third_place_id; break;
+                    case 'final_fourth_place': position = '4º Lugar'; predTeamId = prediction.fourth_place_id; resTeamId = result.fourth_place_id; break;
+                    case 'final_score':
+                        reportRow.jogo = 'Placar da Final';
+                        reportRow.palpite = `${prediction.final_home_score} - ${prediction.final_away_score}`;
+                        reportRow.resultado = `${result.final_home_score} - ${result.final_away_score}`;
+                        break;
                 }
-                reportRow.palpite = `${position}: ${teamMap.get(predTeamId) || 'N/A'}`;
-                reportRow.resultado = `${position}: ${teamMap.get(resTeamId) || 'N/A'}`;
+                if (position) {
+                    reportRow.palpite = `${position}: ${teamMap.get(predTeamId) || 'N/A'}`;
+                    reportRow.resultado = `${position}: ${teamMap.get(resTeamId) || 'N/A'}`;
+                }
             }
         }
+        
         return reportRow;
     });
+    
     return reportData.sort((a, b) => b.sortDate - a.sortDate);
+
   }, [data]);
 
   const users = useMemo(() => data?.users?.sort((a, b) => a.name.localeCompare(b.name)) || [], [data?.users]);
+  
   const filteredData = useMemo(() => {
     if (selectedUserId === 'all') return processedData;
     const selectedUserName = users.find(u => u.id === selectedUserId)?.name;
     return processedData.filter(item => item.participante === selectedUserName);
   }, [processedData, selectedUserId, users]);
+  
   const totalPoints = useMemo(() => filteredData.reduce((sum, item) => sum + item.pontos, 0), [filteredData]);
 
   if (isLoading) return <div className="flex justify-center items-center py-20"><Loader2 className="h-12 w-12 animate-spin text-fifa-blue" /></div>;
@@ -141,7 +190,6 @@ const AuditoriaPontos = () => {
                 <TableRow>
                   <TableHead>Participante</TableHead>
                   <TableHead>Jogo/Origem</TableHead>
-                  {/* --- MUDANÇAS AQUI: colunas ocultas em telas pequenas --- */}
                   <TableHead className="hidden md:table-cell">Resultado Oficial</TableHead>
                   <TableHead className="hidden md:table-cell">Palpite</TableHead>
                   <TableHead className="hidden md:table-cell">Critério</TableHead>
@@ -155,7 +203,6 @@ const AuditoriaPontos = () => {
                     <TableRow key={item.id}>
                       <TableCell className="font-medium">{item.participante}</TableCell>
                       <TableCell>{item.jogo}</TableCell>
-                      {/* --- MUDANÇAS AQUI: colunas ocultas em telas pequenas --- */}
                       <TableCell className="hidden md:table-cell">{item.resultado}</TableCell>
                       <TableCell className="hidden md:table-cell">{item.palpite}</TableCell>
                       <TableCell className="hidden md:table-cell">{item.tipo_pontuacao}</TableCell>
