@@ -1,4 +1,4 @@
-// src/pages/AuditoriaPontos.tsx (VERSÃO FINAL COM ORDENAÇÃO E TRADUÇÕES)
+// src/pages/AuditoriaPontos.tsx (VERSÃO COMPLETA E FINAL)
 
 import { useState, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
@@ -34,15 +34,11 @@ const fetchAllAuditData = async (poolId: string | undefined) => {
     { data: groupsResults, error: grError }, { data: finalPredictions, error: fpError },
     { data: tournamentResults, error: trError }
   ] = await Promise.all([
-    supabase.from('user_points').select('*').in('user_id', userIds),
-    supabase.from('teams').select('*'),
-    supabase.from('matches').select('*'),
-    supabase.from('match_predictions').select('*').in('user_id', userIds),
+    supabase.from('user_points').select('*').in('user_id', userIds), supabase.from('teams').select('*'),
+    supabase.from('matches').select('*'), supabase.from('match_predictions').select('*').in('user_id', userIds),
     supabase.from('group_predictions').select('*').in('user_id', userIds),
-    supabase.from('groups').select('*'),
-    supabase.from('groups_results').select('*'),
-    supabase.from('final_predictions').select('*').in('user_id', userIds),
-    supabase.from('tournament_results').select('*')
+    supabase.from('groups').select('*'), supabase.from('groups_results').select('*'),
+    supabase.from('final_predictions').select('*').in('user_id', userIds), supabase.from('tournament_results').select('*')
   ]);
 
   const anyError = usersError || pointsError || teamsError || matchesError || mpError || gpError || groupsError || grError || fpError || trError;
@@ -74,6 +70,7 @@ const AuditoriaPontos = () => {
     const pointTypeTranslations: { [key: string]: string } = {
         'EXACT_SCORE': "Placar Exato",
         'CORRECT_WINNER': "Acertou o Vencedor",
+        'CORRECT_DRAW': "Acertou o Empate",
         'PARTIAL_SCORE': "Gols de 1 Time",
         'group_classification': "Classificação de Grupo",
         'final_champion': "Campeão",
@@ -84,32 +81,20 @@ const AuditoriaPontos = () => {
         'bonus_top_4': "Bônus Top 4 Exato",
         'NO_POINTS': "Sem Pontuação",
     };
-
+    
     const getPointTypeDescription = (type: string | null) => type ? (pointTypeTranslations[type] || type) : "Não definido";
 
-    const matchPointTypes = new Set(['EXACT_SCORE', 'CORRECT_WINNER', 'PARTIAL_SCORE', 'NO_POINTS']);
+    const matchPointTypes = new Set(['EXACT_SCORE', 'CORRECT_WINNER', 'CORRECT_DRAW', 'PARTIAL_SCORE', 'NO_POINTS']);
 
     const reportData = points.map(point => {
         const user = users.find(u => u.id === point.user_id);
-        const reportRow = {
-            id: point.id,
-            participante: user?.name || 'N/A',
-            data: point.created_at,
-            jogo: 'N/A',
-            resultado: 'N/A',
-            palpite: 'N/A',
-            tipo_pontuacao: getPointTypeDescription(point.points_type),
-            pontos: point.points,
-            sortDate: new Date(point.created_at).getTime() // Data para ordenação
-        };
+        const reportRow = { id: point.id, participante: user?.name || 'N/A', data: point.created_at, jogo: 'N/A', resultado: 'N/A', palpite: 'N/A', tipo_pontuacao: getPointTypeDescription(point.points_type), pontos: point.points, sortDate: parseISO(point.created_at).getTime() };
 
         if (point.points_type && matchPointTypes.has(point.points_type)) {
             const prediction = matchPredictions.find(p => p.id === point.prediction_id);
             const match = matches.find(m => m.id === prediction?.match_id);
             if (match && prediction) {
-                const homeTeam = teamMap.get(match.home_team_id) || 'Time A';
-                const awayTeam = teamMap.get(match.away_team_id) || 'Time B';
-                reportRow.jogo = `${homeTeam} vs ${awayTeam}`;
+                reportRow.jogo = `${teamMap.get(match.home_team_id) || 'Time A'} vs ${teamMap.get(match.away_team_id) || 'Time B'}`;
                 reportRow.resultado = match.is_finished ? `${match.home_score} - ${match.away_score}` : 'Pendente';
                 reportRow.palpite = `${prediction.home_score} - ${prediction.away_score}`;
                 reportRow.sortDate = parseISO(match.match_date).getTime();
@@ -121,16 +106,8 @@ const AuditoriaPontos = () => {
             const result = groupsResults.find(r => r.group_id === prediction?.group_id);
             if (prediction && group) {
                 reportRow.jogo = `Classificação Grupo ${group.name}`;
-                const predFirst = teamMap.get(prediction.predicted_first_team_id) || 'N/A';
-                const predSecond = teamMap.get(prediction.predicted_second_team_id) || 'N/A';
-                reportRow.palpite = `1º ${predFirst}, 2º ${predSecond}`;
-                if (result) {
-                    const resFirst = teamMap.get(result.first_place_team_id) || 'N/A';
-                    const resSecond = teamMap.get(result.second_place_team_id) || 'N/A';
-                    reportRow.resultado = `1º ${resFirst}, 2º ${resSecond}`;
-                } else {
-                    reportRow.resultado = 'Pendente';
-                }
+                reportRow.palpite = `1º ${teamMap.get(prediction.predicted_first_team_id) || 'N/A'}, 2º ${teamMap.get(prediction.predicted_second_team_id) || 'N/A'}`;
+                reportRow.resultado = result ? `1º ${teamMap.get(result.first_place_team_id) || 'N/A'}, 2º ${teamMap.get(result.second_place_team_id) || 'N/A'}` : 'Pendente';
             }
         }
         else if (point.points_type && point.points_type.startsWith('final_')) {
@@ -147,13 +124,10 @@ const AuditoriaPontos = () => {
                 reportRow.resultado = `${position}: ${teamMap.get(resTeamId) || 'N/A'}`;
             }
         }
-        
         return reportRow;
     });
     
-    // Ordena pelo sortDate (data do jogo ou da criação do ponto)
     return reportData.sort((a, b) => b.sortDate - a.sortDate);
-
   }, [data]);
 
   const users = useMemo(() => data?.users?.sort((a, b) => a.name.localeCompare(b.name)) || [], [data?.users]);
@@ -166,12 +140,9 @@ const AuditoriaPontos = () => {
   
   const totalPoints = useMemo(() => filteredData.reduce((sum, item) => sum + item.pontos, 0), [filteredData]);
 
-  if (isLoading) {
-    return <div className="flex justify-center items-center py-20"><Loader2 className="h-12 w-12 animate-spin text-fifa-blue" /></div>;
-  }
-  
-  // O restante do componente (o return com o JSX) permanece igual.
-  // ...
+  if (isLoading) return <div className="flex justify-center items-center py-20"><Loader2 className="h-12 w-12 animate-spin text-fifa-blue" /></div>;
+  if (error) return <Alert variant="destructive"><AlertCircle className="h-4 w-4" /><AlertTitle>Erro ao Carregar Auditoria</AlertTitle><AlertDescription>{(error as Error).message}</AlertDescription></Alert>;
+
   return (
     <div className="container mx-auto max-w-7xl py-8">
       <Card>
@@ -183,14 +154,10 @@ const AuditoriaPontos = () => {
           <div className="flex flex-col sm:flex-row justify-between items-center gap-4 p-4 bg-muted/50 rounded-lg">
             <div>
               <Select value={selectedUserId} onValueChange={setSelectedUserId}>
-                <SelectTrigger className="w-full sm:w-[280px]">
-                  <SelectValue placeholder="Filtrar por participante..." />
-                </SelectTrigger>
+                <SelectTrigger className="w-full sm:w-[280px]"><SelectValue placeholder="Filtrar por participante..." /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todos os Participantes</SelectItem>
-                  {users.map(user => (
-                    <SelectItem key={user.id} value={user.id}>{user.name}</SelectItem>
-                  ))}
+                  {users.map(user => (<SelectItem key={user.id} value={user.id}>{user.name}</SelectItem>))}
                 </SelectContent>
               </Select>
             </div>
@@ -225,7 +192,7 @@ const AuditoriaPontos = () => {
                         <Badge variant={item.pontos > 0 ? 'default' : 'destructive'}>{item.pontos}</Badge>
                       </TableCell>
                       <TableCell className="text-right text-xs">
-                        {format(new Date(item.data), 'dd/MM/yy HH:mm', { locale: ptBR })}
+                        {format(parseISO(item.data), 'dd/MM/yy HH:mm', { locale: ptBR })}
                       </TableCell>
                     </TableRow>
                   ))
