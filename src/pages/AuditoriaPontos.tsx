@@ -1,4 +1,4 @@
-// src/pages/AuditoriaPontos.tsx (NOVA VERSÃO SEM RPC)
+// src/pages/AuditoriaPontos.tsx (VERSÃO COMPLETA E DETALHADA)
 
 import { useState, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
@@ -13,73 +13,147 @@ import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
-// --- NOVAS FUNÇÕES DE BUSCA DE DADOS ---
-
-// Busca todos os dados brutos necessários
+// --- FUNÇÃO PARA BUSCAR TODOS OS DADOS NECESSÁRIOS ---
 const fetchAllAuditData = async (poolId: string | undefined) => {
   if (!poolId) return null;
 
-  const { data: users, error: usersError } = await supabase
-    .from('users_custom')
-    .select('id, name, avatar_url')
-    .eq('pool_id', poolId)
-    .eq('is_admin', false);
+  // Busca usuários do bolão
+  const { data: users, error: usersError } = await supabase.from('users_custom').select('id, name').eq('pool_id', poolId).eq('is_admin', false);
   if (usersError) throw usersError;
 
   const userIds = users.map(u => u.id);
 
-  const { data: points, error: pointsError } = await supabase
-    .from('user_points')
-    .select('*')
-    .in('user_id', userIds);
+  // Busca todos os pontos desses usuários
+  const { data: points, error: pointsError } = await supabase.from('user_points').select('*').in('user_id', userIds);
   if (pointsError) throw pointsError;
 
-  // Adicione mais buscas conforme necessário (partidas, grupos, etc.)
-  // Por simplicidade inicial, vamos focar nos pontos e usuários.
-  // Você pode expandir isso para buscar detalhes de partidas/grupos depois.
+  // Busca dados de apoio para montar o relatório
+  const [
+    { data: teams },
+    { data: matches },
+    { data: matchPredictions },
+    { data: groupPredictions },
+    { data: groups },
+    { data: groupsResults },
+    { data: finalPredictions },
+    { data: tournamentResults }
+  ] = await Promise.all([
+    supabase.from('teams').select('*'),
+    supabase.from('matches').select('*'),
+    supabase.from('match_predictions').select('*').in('user_id', userIds),
+    supabase.from('group_predictions').select('*').in('user_id', userIds),
+    supabase.from('groups').select('*'),
+    supabase.from('groups_results').select('*'),
+    supabase.from('final_predictions').select('*').in('user_id', userIds),
+    supabase.from('tournament_results').select('*')
+  ]);
 
-  return { users, points };
+  return { users, points, teams, matches, matchPredictions, groupPredictions, groups, groupsResults, finalPredictions, tournamentResults: tournamentResults || [] };
 };
-
 
 const AuditoriaPontos = () => {
   const { pool } = useAuth();
   const [selectedUserId, setSelectedUserId] = useState('all');
 
-  // useQuery agora busca os dados brutos
   const { data, isLoading, error } = useQuery({
-    queryKey: ['rawAuditData', pool?.id],
+    queryKey: ['fullAuditData', pool?.id],
     queryFn: () => fetchAllAuditData(pool?.id),
     enabled: !!pool?.id,
   });
 
-  // Processa e formata os dados no frontend
+  // Processa e formata os dados para o relatório detalhado
   const processedData = useMemo(() => {
-    if (!data || !data.points || !data.users) return [];
+    if (!data) return [];
+    const { users, points, teams, matches, matchPredictions, groupPredictions, groups, groupsResults, finalPredictions, tournamentResults } = data;
     
-    return data.points.map(point => {
-      const user = data.users.find(u => u.id === point.user_id);
-      return {
-        ...point,
-        user_name: user?.name || 'Usuário Desconhecido',
-        details: { // Detalhes simplificados por enquanto
-          entity: `Pontos de ${point.points_type || 'Origem Desconhecida'}`,
+    // Mapeia IDs para nomes para facilitar a busca
+    const teamMap = new Map(teams?.map(t => [t.id, t.name]));
+
+    // Traduz os tipos de ponto para uma descrição amigável
+    const pointTypeMap: { [key: string]: string } = {
+        exact_score: "Placar Exato",
+        match_winner: "Acertou o Vencedor",
+        draw: "Acertou Empate",
+        home_team_goals: "Acertou Gols Casa",
+        away_team_goals: "Acertou Gols Visitante",
+        group_classification: "Classificados do Grupo",
+        final_champion: "Acertou o Campeão",
+        final_runner_up: "Acertou o Vice",
+        final_third_place: "Acertou o 3º Lugar",
+        final_fourth_place: "Acertou o 4º Lugar",
+    };
+
+    return points?.map(point => {
+        const user = users?.find(u => u.id === point.user_id);
+        const reportRow = {
+            id: point.id,
+            participante: user?.name || 'N/A',
+            data: point.created_at,
+            jogo: 'N/A',
+            resultado: 'N/A',
+            palpite: 'N/A',
+            tipo_pontuacao: pointTypeMap[point.points_type] || point.points_type,
+            pontos: point.points,
+        };
+
+        // Detalhes para pontos de PARTIDAS
+        if (point.points_type.includes('match') || ['exact_score', 'draw', 'home_team_goals', 'away_team_goals'].includes(point.points_type)) {
+            const prediction = matchPredictions?.find(p => p.id === point.prediction_id);
+            const match = matches?.find(m => m.id === prediction?.match_id);
+            if (match && prediction) {
+                const homeTeam = teamMap.get(match.home_team_id) || 'Time A';
+                const awayTeam = teamMap.get(match.away_team_id) || 'Time B';
+                reportRow.jogo = `${homeTeam} vs ${awayTeam}`;
+                reportRow.resultado = match.is_completed ? `${match.home_score} - ${match.away_score}` : 'Pendente';
+                reportRow.palpite = `${prediction.home_score} - ${prediction.away_score}`;
+            }
+        } 
+        // Detalhes para pontos de CLASSIFICAÇÃO DE GRUPO
+        else if (point.points_type === 'group_classification') {
+            const prediction = groupPredictions?.find(p => p.id === point.prediction_id);
+            const group = groups?.find(g => g.id === prediction?.group_id);
+            const result = groupsResults?.find(r => r.group_id === prediction?.group_id);
+            if (prediction && group && result) {
+                reportRow.jogo = `Classificação Grupo ${group.name}`;
+                const predFirst = teamMap.get(prediction.predicted_first_team_id);
+                const predSecond = teamMap.get(prediction.predicted_second_team_id);
+                reportRow.palpite = `1º ${predFirst}, 2º ${predSecond}`;
+                const resFirst = teamMap.get(result.first_place_team_id);
+                const resSecond = teamMap.get(result.second_place_team_id);
+                reportRow.resultado = `1º ${resFirst}, 2º ${resSecond}`;
+            }
         }
-      };
-    }).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+        // Detalhes para pontos da FASE FINAL
+        else if (point.points_type.includes('final')) {
+            const prediction = finalPredictions?.find(p => p.user_id === point.user_id); // Assumindo uma previsão final por usuário
+            const result = tournamentResults?.[0]; // Assumindo uma linha de resultado final
+            if (prediction && result) {
+                reportRow.jogo = `Fase Final`;
+                if(point.points_type === 'final_champion') {
+                  reportRow.palpite = `Campeão: ${teamMap.get(prediction.champion_id) || 'N/A'}`;
+                  reportRow.resultado = `Campeão: ${teamMap.get(result.champion_id) || 'N/A'}`;
+                } else if (point.points_type === 'final_runner_up') {
+                  reportRow.palpite = `Vice: ${teamMap.get(prediction.vice_champion_id) || 'N/A'}`;
+                  reportRow.resultado = `Vice: ${teamMap.get(result.runner_up_id) || 'N/A'}`;
+                }
+            }
+        }
+        
+        return reportRow;
+    }).sort((a, b) => new Date(b.data).getTime() - new Date(a.data).getTime()) || [];
   }, [data]);
 
   const users = useMemo(() => {
-    return data?.users.sort((a, b) => a.name.localeCompare(b.name)) || [];
+    return data?.users?.sort((a, b) => a.name.localeCompare(b.name)) || [];
   }, [data?.users]);
 
   const filteredData = useMemo(() => {
     if (selectedUserId === 'all') return processedData;
-    return processedData.filter(item => item.user_id === selectedUserId);
-  }, [processedData, selectedUserId]);
+    return processedData.filter(item => item.participante === users.find(u => u.id === selectedUserId)?.name);
+  }, [processedData, selectedUserId, users]);
   
   const totalPoints = useMemo(() => {
-    return filteredData.reduce((sum, item) => sum + item.points, 0);
+    return filteredData.reduce((sum, item) => sum + item.pontos, 0);
   }, [filteredData]);
 
   if (isLoading) {
@@ -91,22 +165,18 @@ const AuditoriaPontos = () => {
       <Alert variant="destructive">
         <AlertCircle className="h-4 w-4" />
         <AlertTitle>Erro ao Carregar Auditoria</AlertTitle>
+
         <AlertDescription>{(error as Error).message}</AlertDescription>
       </Alert>
     );
   }
 
   return (
-    <div className="container mx-auto max-w-5xl py-8">
+    <div className="container mx-auto max-w-7xl py-8">
       <Card>
         <CardHeader>
-          <CardTitle className="text-2xl flex items-center gap-2">
-            <FileText className="text-fifa-blue" />
-            Auditoria de Pontos do Bolão
-          </CardTitle>
-          <CardDescription>
-            Visualize o detalhe de cada ponto ganho pelos participantes. Use o filtro para analisar um jogador específico.
-          </CardDescription>
+          <CardTitle className="text-2xl flex items-center gap-2"><FileText className="text-fifa-blue" />Auditoria de Pontos</CardTitle>
+          <CardDescription>Visualize o detalhe de cada ponto ganho por todos os participantes do bolão.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="flex flex-col sm:flex-row justify-between items-center gap-4 p-4 bg-muted/50 rounded-lg">
@@ -134,7 +204,10 @@ const AuditoriaPontos = () => {
               <TableHeader>
                 <TableRow>
                   <TableHead>Participante</TableHead>
-                  <TableHead>Origem</TableHead>
+                  <TableHead>Jogo/Origem</TableHead>
+                  <TableHead>Resultado Oficial</TableHead>
+                  <TableHead>Palpite</TableHead>
+                  <TableHead>Critério</TableHead>
                   <TableHead className="text-center">Pontos</TableHead>
                   <TableHead className="text-right">Data</TableHead>
                 </TableRow>
@@ -143,20 +216,23 @@ const AuditoriaPontos = () => {
                 {filteredData.length > 0 ? (
                   filteredData.map((item) => (
                     <TableRow key={item.id}>
-                      <TableCell className="font-medium">{item.user_name}</TableCell>
-                      <TableCell>{item.details.entity}</TableCell>
+                      <TableCell className="font-medium">{item.participante}</TableCell>
+                      <TableCell>{item.jogo}</TableCell>
+                      <TableCell>{item.resultado}</TableCell>
+                      <TableCell>{item.palpite}</TableCell>
+                      <TableCell>{item.tipo_pontuacao}</TableCell>
                       <TableCell className="text-center font-bold">
-                          <Badge variant={item.points > 0 ? 'default' : 'secondary'}>{item.points}</Badge>
+                        <Badge variant={item.pontos > 0 ? 'default' : 'destructive'}>{item.pontos}</Badge>
                       </TableCell>
                       <TableCell className="text-right text-xs">
-                          {format(new Date(item.created_at), 'dd/MM/yy HH:mm', { locale: ptBR })}
+                        {format(new Date(item.data), 'dd/MM/yy HH:mm', { locale: ptBR })}
                       </TableCell>
                     </TableRow>
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={4} className="h-24 text-center">
-                      Nenhum registro de ponto encontrado.
+                    <TableCell colSpan={7} className="h-24 text-center">
+                      Nenhum registro de ponto encontrado para a seleção atual.
                     </TableCell>
                   </TableRow>
                 )}
