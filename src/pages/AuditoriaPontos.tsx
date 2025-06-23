@@ -1,4 +1,4 @@
-// src/pages/AuditoriaPontos.tsx (VERSÃO FINAL COM TRUDAÇÕES CORRIGIDAS)
+// src/pages/AuditoriaPontos.tsx (VERSÃO FINAL COM ORDENAÇÃO E TRADUÇÕES)
 
 import { useState, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
@@ -10,7 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Loader2, AlertCircle, FileText } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import { format } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 // --- Função para buscar todos os dados necessários de uma vez ---
@@ -28,14 +28,10 @@ const fetchAllAuditData = async (poolId: string | undefined) => {
   }
   
   const [
-    { data: points, error: pointsError },
-    { data: teams, error: teamsError },
-    { data: matches, error: matchesError },
-    { data: matchPredictions, error: mpError },
-    { data: groupPredictions, error: gpError },
-    { data: groups, error: groupsError },
-    { data: groupsResults, error: grError },
-    { data: finalPredictions, error: fpError },
+    { data: points, error: pointsError }, { data: teams, error: teamsError },
+    { data: matches, error: matchesError }, { data: matchPredictions, error: mpError },
+    { data: groupPredictions, error: gpError }, { data: groups, error: groupsError },
+    { data: groupsResults, error: grError }, { data: finalPredictions, error: fpError },
     { data: tournamentResults, error: trError }
   ] = await Promise.all([
     supabase.from('user_points').select('*').in('user_id', userIds),
@@ -65,7 +61,6 @@ const AuditoriaPontos = () => {
     enabled: !!pool?.id,
   });
 
-  // Processa e formata os dados para o relatório detalhado
   const processedData = useMemo(() => {
     if (!data) return [];
     const { users, points, teams, matches, matchPredictions, groupPredictions, groups, groupsResults, finalPredictions, tournamentResults } = data;
@@ -79,7 +74,6 @@ const AuditoriaPontos = () => {
     const pointTypeTranslations: { [key: string]: string } = {
         'EXACT_SCORE': "Placar Exato",
         'CORRECT_WINNER': "Acertou o Vencedor",
-        'CORRECT_DRAW': "Acertou o Empate", // *** ADICIONADO AQUI ***
         'PARTIAL_SCORE': "Gols de 1 Time",
         'group_classification': "Classificação de Grupo",
         'final_champion': "Campeão",
@@ -87,18 +81,15 @@ const AuditoriaPontos = () => {
         'final_third_place': "3º Lugar",
         'final_fourth_place': "4º Lugar",
         'final_score': "Placar da Final",
-        'bonus_top_4': "Bônus Top 4 Exato"
+        'bonus_top_4': "Bônus Top 4 Exato",
+        'NO_POINTS': "Sem Pontuação",
     };
 
-    const getPointTypeDescription = (type: string | null, matchResult?: {home_score: number | null, away_score: number | null}) => {
-      if (!type) return "Não definido";
-      if (type === 'CORRECT_WINNER' && matchResult && matchResult.home_score === matchResult.away_score) {
-        return pointTypeTranslations['CORRECT_DRAW'];
-      }
-      return pointTypeTranslations[type] || type;
-    };
+    const getPointTypeDescription = (type: string | null) => type ? (pointTypeTranslations[type] || type) : "Não definido";
 
-    return points.map(point => {
+    const matchPointTypes = new Set(['EXACT_SCORE', 'CORRECT_WINNER', 'PARTIAL_SCORE', 'NO_POINTS']);
+
+    const reportData = points.map(point => {
         const user = users.find(u => u.id === point.user_id);
         const reportRow = {
             id: point.id,
@@ -107,11 +98,10 @@ const AuditoriaPontos = () => {
             jogo: 'N/A',
             resultado: 'N/A',
             palpite: 'N/A',
-            tipo_pontuacao: 'N/A',
+            tipo_pontuacao: getPointTypeDescription(point.points_type),
             pontos: point.points,
+            sortDate: new Date(point.created_at).getTime() // Data para ordenação
         };
-
-        const matchPointTypes = new Set(['EXACT_SCORE', 'CORRECT_WINNER', 'PARTIAL_SCORE', 'NO_POINTS']);
 
         if (point.points_type && matchPointTypes.has(point.points_type)) {
             const prediction = matchPredictions.find(p => p.id === point.prediction_id);
@@ -122,7 +112,7 @@ const AuditoriaPontos = () => {
                 reportRow.jogo = `${homeTeam} vs ${awayTeam}`;
                 reportRow.resultado = match.is_finished ? `${match.home_score} - ${match.away_score}` : 'Pendente';
                 reportRow.palpite = `${prediction.home_score} - ${prediction.away_score}`;
-                reportRow.tipo_pontuacao = getPointTypeDescription(point.points_type, match);
+                reportRow.sortDate = parseISO(match.match_date).getTime();
             }
         } 
         else if (point.points_type === 'group_classification') {
@@ -141,7 +131,6 @@ const AuditoriaPontos = () => {
                 } else {
                     reportRow.resultado = 'Pendente';
                 }
-                reportRow.tipo_pontuacao = getPointTypeDescription(point.points_type);
             }
         }
         else if (point.points_type && point.points_type.startsWith('final_')) {
@@ -156,18 +145,19 @@ const AuditoriaPontos = () => {
                 }
                 reportRow.palpite = `${position}: ${teamMap.get(predTeamId) || 'N/A'}`;
                 reportRow.resultado = `${position}: ${teamMap.get(resTeamId) || 'N/A'}`;
-                reportRow.tipo_pontuacao = getPointTypeDescription(point.points_type);
             }
-        } else {
-            reportRow.tipo_pontuacao = getPointTypeDescription(point.points_type);
         }
         
         return reportRow;
-    }).sort((a, b) => new Date(b.data).getTime() - new Date(a.data).getTime());
+    });
+    
+    // Ordena pelo sortDate (data do jogo ou da criação do ponto)
+    return reportData.sort((a, b) => b.sortDate - a.sortDate);
+
   }, [data]);
 
   const users = useMemo(() => data?.users?.sort((a, b) => a.name.localeCompare(b.name)) || [], [data?.users]);
-
+  
   const filteredData = useMemo(() => {
     if (selectedUserId === 'all') return processedData;
     const selectedUserName = users.find(u => u.id === selectedUserId)?.name;
@@ -176,7 +166,11 @@ const AuditoriaPontos = () => {
   
   const totalPoints = useMemo(() => filteredData.reduce((sum, item) => sum + item.pontos, 0), [filteredData]);
 
-  // O restante do componente (o return com o JSX) permanece igual ao anterior.
+  if (isLoading) {
+    return <div className="flex justify-center items-center py-20"><Loader2 className="h-12 w-12 animate-spin text-fifa-blue" /></div>;
+  }
+  
+  // O restante do componente (o return com o JSX) permanece igual.
   // ...
   return (
     <div className="container mx-auto max-w-7xl py-8">
