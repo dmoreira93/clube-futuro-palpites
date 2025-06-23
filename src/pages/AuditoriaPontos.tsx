@@ -1,4 +1,4 @@
-// src/pages/AuditoriaPontos.tsx
+// src/pages/AuditoriaPontos.tsx (NOVA VERSÃO SEM RPC)
 
 import { useState, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
@@ -13,62 +13,88 @@ import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
-// Interfaces para os dados
-interface AuditDetail {
-  entity: string;
-  match_name?: string;
-  match_result?: string;
-  prediction?: string;
-  result?: string;
-  prediction_champion?: string;
-  result_champion?: string;
-}
+// --- NOVAS FUNÇÕES DE BUSCA DE DADOS ---
 
-interface AuditData {
-  user_id: string;
-  user_name: string;
-  points: number;
-  points_type: string;
-  created_at: string;
-  details: AuditDetail;
-}
+// Busca todos os dados brutos necessários
+const fetchAllAuditData = async (poolId: string | undefined) => {
+  if (!poolId) return null;
 
-// Função para buscar os dados via RPC
-const fetchAuditData = async (poolId: string | undefined) => {
-  if (!poolId) return [];
-  const { data, error } = await supabase.rpc('get_pool_audit_data', { p_pool_id: poolId });
-  if (error) throw new Error(error.message);
-  return data as AuditData[];
+  const { data: users, error: usersError } = await supabase
+    .from('users_custom')
+    .select('id, name, avatar_url')
+    .eq('pool_id', poolId)
+    .eq('is_admin', false);
+  if (usersError) throw usersError;
+
+  const userIds = users.map(u => u.id);
+
+  const { data: points, error: pointsError } = await supabase
+    .from('user_points')
+    .select('*')
+    .in('user_id', userIds);
+  if (pointsError) throw pointsError;
+
+  // Adicione mais buscas conforme necessário (partidas, grupos, etc.)
+  // Por simplicidade inicial, vamos focar nos pontos e usuários.
+  // Você pode expandir isso para buscar detalhes de partidas/grupos depois.
+
+  return { users, points };
 };
+
 
 const AuditoriaPontos = () => {
   const { pool } = useAuth();
   const [selectedUserId, setSelectedUserId] = useState('all');
 
-  // Busca os dados usando React Query
-  const { data: auditData = [], isLoading, error } = useQuery<AuditData[]>({
-    queryKey: ['auditData', pool?.id],
-    queryFn: () => fetchAuditData(pool?.id),
-    enabled: !!pool?.id, // A query só roda se o usuário tiver um pool_id
+  // useQuery agora busca os dados brutos
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['rawAuditData', pool?.id],
+    queryFn: () => fetchAllAuditData(pool?.id),
+    enabled: !!pool?.id,
   });
 
-  // Extrai a lista de usuários únicos para o filtro
+  // Processa e formata os dados no frontend
+  const processedData = useMemo(() => {
+    if (!data || !data.points || !data.users) return [];
+    
+    return data.points.map(point => {
+      const user = data.users.find(u => u.id === point.user_id);
+      return {
+        ...point,
+        user_name: user?.name || 'Usuário Desconhecido',
+        details: { // Detalhes simplificados por enquanto
+          entity: `Pontos de ${point.points_type || 'Origem Desconhecida'}`,
+        }
+      };
+    }).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  }, [data]);
+
   const users = useMemo(() => {
-    if (!auditData) return [];
-    const uniqueUsers = Array.from(new Map(auditData.map(item => [item.user_id, { id: item.user_id, name: item.user_name }])).values());
-    return uniqueUsers.sort((a, b) => a.name.localeCompare(b.name));
-  }, [auditData]);
+    return data?.users.sort((a, b) => a.name.localeCompare(b.name)) || [];
+  }, [data?.users]);
 
-  // Filtra os dados com base no usuário selecionado
   const filteredData = useMemo(() => {
-    if (selectedUserId === 'all') return auditData;
-    return auditData.filter(item => item.user_id === selectedUserId);
-  }, [auditData, selectedUserId]);
-
-  // Calcula o total de pontos do filtro
+    if (selectedUserId === 'all') return processedData;
+    return processedData.filter(item => item.user_id === selectedUserId);
+  }, [processedData, selectedUserId]);
+  
   const totalPoints = useMemo(() => {
     return filteredData.reduce((sum, item) => sum + item.points, 0);
   }, [filteredData]);
+
+  if (isLoading) {
+    return <div className="flex justify-center items-center py-20"><Loader2 className="h-12 w-12 animate-spin text-fifa-blue" /></div>;
+  }
+
+  if (error) {
+    return (
+      <Alert variant="destructive">
+        <AlertCircle className="h-4 w-4" />
+        <AlertTitle>Erro ao Carregar Auditoria</AlertTitle>
+        <AlertDescription>{(error as Error).message}</AlertDescription>
+      </Alert>
+    );
+  }
 
   return (
     <div className="container mx-auto max-w-5xl py-8">
@@ -103,61 +129,40 @@ const AuditoriaPontos = () => {
             </div>
           </div>
 
-          {isLoading ? (
-            <div className="flex justify-center items-center py-20"><Loader2 className="h-12 w-12 animate-spin text-fifa-blue" /></div>
-          ) : error ? (
-            <Alert variant="destructive">
-              <AlertCircle className="h-4 w-4" />
-              <AlertTitle>Erro ao Carregar Auditoria</AlertTitle>
-              <AlertDescription>{error.message}</AlertDescription>
-            </Alert>
-          ) : (
-            <div className="border rounded-md">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Participante</TableHead>
-                    <TableHead>Detalhes</TableHead>
-                    <TableHead className="text-center">Pontos</TableHead>
-                    <TableHead className="text-right">Data</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredData.length > 0 ? (
-                    filteredData.map((item, index) => (
-                      <TableRow key={`${item.user_id}-${item.created_at}-${index}`}>
-                        <TableCell className="font-medium">{item.user_name}</TableCell>
-                        <TableCell>
-                          <div className="flex flex-col">
-                            <span className="font-semibold">{item.details.entity}</span>
-                            <span className="text-xs text-muted-foreground">
-                                {item.details.match_name && `Partida: ${item.details.match_name}`}
-                                {item.details.prediction && ` | Palpite: ${item.details.prediction}`}
-                                {item.details.result && ` | Resultado: ${item.details.result}`}
-                                {item.details.match_result && ` | Resultado: ${item.details.match_result}`}
-                                {item.details.prediction_champion && ` | Palpite Campeão: ${item.details.prediction_champion}`}
-                            </span>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-center font-bold">
-                            <Badge variant={item.points > 0 ? 'default' : 'secondary'}>{item.points}</Badge>
-                        </TableCell>
-                        <TableCell className="text-right text-xs">
-                            {format(new Date(item.created_at), 'dd/MM/yy HH:mm', { locale: ptBR })}
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  ) : (
-                    <TableRow>
-                      <TableCell colSpan={4} className="h-24 text-center">
-                        Nenhum registro de ponto encontrado para a seleção atual.
+          <div className="border rounded-md">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Participante</TableHead>
+                  <TableHead>Origem</TableHead>
+                  <TableHead className="text-center">Pontos</TableHead>
+                  <TableHead className="text-right">Data</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredData.length > 0 ? (
+                  filteredData.map((item) => (
+                    <TableRow key={item.id}>
+                      <TableCell className="font-medium">{item.user_name}</TableCell>
+                      <TableCell>{item.details.entity}</TableCell>
+                      <TableCell className="text-center font-bold">
+                          <Badge variant={item.points > 0 ? 'default' : 'secondary'}>{item.points}</Badge>
+                      </TableCell>
+                      <TableCell className="text-right text-xs">
+                          {format(new Date(item.created_at), 'dd/MM/yy HH:mm', { locale: ptBR })}
                       </TableCell>
                     </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </div>
-          )}
+                  ))
+                ) : (
+                  <TableRow>
+                    <TableCell colSpan={4} className="h-24 text-center">
+                      Nenhum registro de ponto encontrado.
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
         </CardContent>
       </Card>
     </div>
