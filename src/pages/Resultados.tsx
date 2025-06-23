@@ -1,4 +1,4 @@
-// src/pages/Resultados.tsx (VERSÃO CORRIGIDA)
+// src/pages/Resultados.tsx (VERSÃO FINAL CORRIGIDA)
 
 import React, { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -72,9 +72,9 @@ const Resultados = () => {
     queryKey: ['finalResultData'],
     queryFn: async () => {
       // --- CORREÇÃO APLICADA AQUI ---
+      // Trocamos .single() por .limit(1).maybeSingle() para ser mais tolerante
       const { data, error } = await supabase
         .from('tournament_results')
-        // Trocamos o '*' por uma lista explícita de colunas para evitar ambiguidade.
         .select(`
           id, final_home_score, final_away_score,
           champion:champion_id(id, name), 
@@ -82,9 +82,10 @@ const Resultados = () => {
           third_place:third_place_id(id, name), 
           fourth_place:fourth_place_id(id, name)
         `)
-        .single();
+        .limit(1)
+        .maybeSingle(); // Usando maybeSingle() em vez de single()
       
-      if (error && error.code !== 'PGRST116') throw error;
+      if (error) throw error;
       return data as FinalResult | null;
     },
   });
