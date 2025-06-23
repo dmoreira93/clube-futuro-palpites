@@ -1,4 +1,4 @@
-// src/components/layout/Navbar.tsx (VERSÃO FINAL CORRIGIDA)
+// src/components/layout/Navbar.tsx (VERSÃO COM CORREÇÃO DE ESCOPO)
 
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -32,21 +32,22 @@ const Navbar = () => {
   const { isAuthenticated, isAdmin, user, signOut, loading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-
-  // Verifica se a rota atual é a página inicial
   const isHomePage = location.pathname === '/';
 
+  // --- CORREÇÃO APLICADA AQUI ---
+  // A função handleLogout foi movida para cima, antes de ser usada.
+  const handleLogout = async () => {
+    await signOut();
+    navigate("/");
+  };
+
   const renderUserActions = () => {
-    // Exibe um loader enquanto a autenticação está carregando
     if (loading && !user) return <Loader2 className="h-6 w-6 animate-spin text-white" />;
 
-    // Lógica para usuário DESLOGADO
     if (!isAuthenticated) {
-      // Se estiver na página inicial, não mostra os botões de Entrar/Cadastrar
       if (isHomePage) {
         return null;
       }
-      // Em outras páginas, mostra os botões
       return (
         <div className="flex items-center space-x-2">
           <Button variant="outline" size="sm" onClick={() => navigate("/cadastro")} className="border-fifa-gold text-fifa-gold hover:bg-fifa-gold hover:text-white">Cadastrar</Button>
@@ -55,7 +56,6 @@ const Navbar = () => {
       );
     }
     
-    // Lógica para usuário LOGADO (Menu do Perfil)
     return (
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
@@ -89,7 +89,6 @@ const Navbar = () => {
             <span className="font-bold text-lg hidden sm:inline text-fifa-gold">Futuro Palpites</span>
           </Link>
           
-          {/* Links de navegação principais */}
           <div className="hidden md:flex items-center space-x-1">
             <NavLink to="/criterios">Critérios</NavLink>
             {isAuthenticated && (
