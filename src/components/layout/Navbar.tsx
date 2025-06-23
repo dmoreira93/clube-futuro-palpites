@@ -1,4 +1,4 @@
-// src/components/layout/Navbar.tsx (VERSÃO COM O LINK "RESULTADOS" RESTAURADO)
+// src/components/layout/Navbar.tsx (VERSÃO CORRIGIDA E COMPLETA)
 
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -22,6 +22,7 @@ import {
   User,
   Loader2,
   Newspaper,
+  FileText, // 1. IMPORTE O ÍCONE
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -90,6 +91,11 @@ const Navbar = () => {
             <User className="mr-2 h-4 w-4" />
             <span>Meu Perfil</span>
           </DropdownMenuItem>
+          {/* 2. ADICIONE O ITEM DE AUDITORIA AQUI */}
+          <DropdownMenuItem onSelect={() => navigate('/auditoria')}>
+            <FileText className="mr-2 h-4 w-4" />
+            <span>Auditoria de Pontos</span>
+          </DropdownMenuItem>
           {isAdmin && (
             <DropdownMenuItem onSelect={() => navigate('/admin')}>
               <ShieldIcon className="mr-2 h-4 w-4" />
@@ -120,12 +126,12 @@ const Navbar = () => {
           <div className="hidden md:flex items-center space-x-4">
             <Link to="/criterios" className="text-sm font-medium hover:text-fifa-gold transition-colors">Critérios</Link>
             {isAuthenticated && <Link to="/ranking" className="text-sm font-medium hover:text-fifa-gold transition-colors">Ranking</Link>}
-            
-            {/* LINK RESTAURADO AQUI */}
             {isAuthenticated && <Link to="/resultados" className="text-sm font-medium hover:text-fifa-gold transition-colors">Resultados</Link>}
-            
             {isAuthenticated && <Link to="/noticias" className="text-sm font-medium hover:text-fifa-gold transition-colors">Notícias</Link>}
             {isAuthenticated && <Link to="/simulador" className="text-sm font-medium hover:text-fifa-gold transition-colors">Simulador</Link>}
+            
+            {/* 3. ADICIONE O LINK DE AUDITORIA NA BARRA PRINCIPAL */}
+            {isAuthenticated && <Link to="/auditoria" className="text-sm font-medium hover:text-fifa-gold transition-colors">Auditoria</Link>}
           </div>
 
           <div className="flex items-center">

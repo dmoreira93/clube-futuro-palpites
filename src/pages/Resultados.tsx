@@ -1,9 +1,8 @@
-// src/pages/Resultados.tsx
+// src/pages/Resultados.tsx (VERSÃO CORRIGIDA)
 
 import React, { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/components/ui/use-toast";
-// A importação do Layout foi REMOVIDA
 import { MatchCard } from "@/components/results/MatchCard";
 import { ResultForm } from "@/components/results/ResultForm";
 import { supabase } from "@/integrations/supabase/client";
@@ -12,7 +11,7 @@ import { Match as MatchType, Team } from "@/types/matches";
 import { Loader2, Trophy, Users as UsersIcon } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
-// Interfaces para os dados que vamos buscar
+// Interfaces para os dados
 type FetchedMatch = MatchType & {
   home_team: Team | null;
   away_team: Team | null;
@@ -72,7 +71,19 @@ const Resultados = () => {
   const { data: finalResultData, isLoading: isLoadingFinalResult } = useQuery<FinalResult | null>({
     queryKey: ['finalResultData'],
     queryFn: async () => {
-      const { data, error } = await supabase.from('tournament_results').select(`*, champion:champion_id(*), runner_up:runner_up_id(*), third_place:third_place_id(*), fourth_place:fourth_place_id(*)`).single();
+      // --- CORREÇÃO APLICADA AQUI ---
+      const { data, error } = await supabase
+        .from('tournament_results')
+        // Trocamos o '*' por uma lista explícita de colunas para evitar ambiguidade.
+        .select(`
+          id, final_home_score, final_away_score,
+          champion:champion_id(id, name), 
+          runner_up:runner_up_id(id, name), 
+          third_place:third_place_id(id, name), 
+          fourth_place:fourth_place_id(id, name)
+        `)
+        .single();
+      
       if (error && error.code !== 'PGRST116') throw error;
       return data as FinalResult | null;
     },
@@ -90,7 +101,6 @@ const Resultados = () => {
     queryClient.invalidateQueries({ queryKey: ['matchesResultsGroupStage'] });
   };
 
-  // A tag <Layout> foi removida daqui
   return (
     <div className="container mx-auto p-4 max-w-6xl">
       <h1 className="text-3xl font-bold text-center text-fifa-blue mb-8">Resultados da Fase de Grupos</h1>
