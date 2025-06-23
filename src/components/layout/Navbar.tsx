@@ -1,6 +1,6 @@
-// src/components/layout/Navbar.tsx (VERSÃO ATUALIZADA)
+// src/components/layout/Navbar.tsx (VERSÃO FINAL CORRIGIDA)
 
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -16,11 +16,12 @@ import {
   AvatarImage,
 } from "@/components/ui/avatar";
 import {
-  LogOut, User, Loader2, Newspaper, FileText, BarChart3,
-  ListChecks, Shield, Trophy, Medal, Calculator, Home
+  LogOut, User, Loader2, Newspaper, FileText,
+  ListChecks, Shield, Trophy, Medal, Calculator, BarChart3
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 
+// Componente auxiliar para os links de navegação com estilo
 const NavLink = ({ to, children }: { to: string; children: React.ReactNode }) => (
   <Button variant="ghost" asChild className="text-sm font-semibold text-white hover:bg-white/10 hover:text-white">
     <Link to={to}>{children}</Link>
@@ -30,15 +31,22 @@ const NavLink = ({ to, children }: { to: string; children: React.ReactNode }) =>
 const Navbar = () => {
   const { isAuthenticated, isAdmin, user, signOut, loading } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
 
-  const handleLogout = async () => {
-    await signOut();
-    navigate("/");
-  };
+  // Verifica se a rota atual é a página inicial
+  const isHomePage = location.pathname === '/';
 
   const renderUserActions = () => {
+    // Exibe um loader enquanto a autenticação está carregando
     if (loading && !user) return <Loader2 className="h-6 w-6 animate-spin text-white" />;
+
+    // Lógica para usuário DESLOGADO
     if (!isAuthenticated) {
+      // Se estiver na página inicial, não mostra os botões de Entrar/Cadastrar
+      if (isHomePage) {
+        return null;
+      }
+      // Em outras páginas, mostra os botões
       return (
         <div className="flex items-center space-x-2">
           <Button variant="outline" size="sm" onClick={() => navigate("/cadastro")} className="border-fifa-gold text-fifa-gold hover:bg-fifa-gold hover:text-white">Cadastrar</Button>
@@ -46,6 +54,8 @@ const Navbar = () => {
         </div>
       );
     }
+    
+    // Lógica para usuário LOGADO (Menu do Perfil)
     return (
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
@@ -78,12 +88,19 @@ const Navbar = () => {
             <BarChart3 className="w-8 h-8 text-fifa-gold" />
             <span className="font-bold text-lg hidden sm:inline text-fifa-gold">Futuro Palpites</span>
           </Link>
+          
+          {/* Links de navegação principais */}
           <div className="hidden md:flex items-center space-x-1">
-            {isAuthenticated && <NavLink to="/criterios">Critérios</NavLink>}
-            {isAuthenticated && <NavLink to="/ranking">Ranking</NavLink>}
-            {isAuthenticated && <NavLink to="/resultados">Resultados</NavLink>}
-            {isAuthenticated && <NavLink to="/noticias">Notícias</NavLink>}
+            <NavLink to="/criterios">Critérios</NavLink>
+            {isAuthenticated && (
+              <>
+                <NavLink to="/ranking">Ranking</NavLink>
+                <NavLink to="/resultados">Resultados</NavLink>
+                <NavLink to="/noticias">Notícias</NavLink>
+              </>
+            )}
           </div>
+
           <div className="flex items-center">{renderUserActions()}</div>
         </div>
       </div>
