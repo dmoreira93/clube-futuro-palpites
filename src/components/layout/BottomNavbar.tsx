@@ -1,8 +1,7 @@
-// src/components/layout/BottomNavbar.tsx
+// src/components/layout/BottomNavbar.tsx (VERSÃO ATUALIZADA)
 
 import { NavLink } from 'react-router-dom';
-// 1. IMPORTE O NOVO ÍCONE
-import { Home, ListChecks, Calculator, Trophy, Medal, Newspaper, FileText } from "lucide-react"; 
+import { Home, Trophy, Medal, Newspaper } from "lucide-react"; 
 import { useAuth } from '@/contexts/AuthContext';
 
 const BottomNavbar = () => {
@@ -12,37 +11,26 @@ const BottomNavbar = () => {
     return null; 
   }
 
+  const navLinkClass = ({ isActive }: { isActive: boolean }) => 
+    `flex flex-col items-center justify-center text-xs gap-1 transition-colors ${isActive ? 'text-fifa-blue' : 'text-gray-500 hover:text-fifa-blue'}`;
+
   return (
-    // 2. AJUSTE O GRID PARA 7 COLUNAS (ou o número que fizer sentido)
-    <nav className="fixed bottom-0 left-0 right-0 z-50 grid grid-cols-7 items-center border-t bg-white py-2 shadow-t-lg md:hidden">
-      <NavLink to="/dashboard" end className={({ isActive }) => `flex flex-col items-center text-xs ${isActive ? 'text-fifa-blue' : 'text-gray-500'}`}>
+    <nav className="fixed bottom-0 left-0 right-0 z-50 grid grid-cols-4 items-center border-t bg-white/95 py-2 shadow-t-lg backdrop-blur-sm md:hidden">
+      <NavLink to="/dashboard" end className={navLinkClass}>
         <Home className="h-5 w-5" />
-        <span className="mt-1">Início</span>
+        <span>Início</span>
       </NavLink>
-      <NavLink to="/palpites" className={({ isActive }) => `flex flex-col items-center text-xs ${isActive ? 'text-fifa-blue' : 'text-gray-500'}`}>
-        <ListChecks className="h-5 w-5" />
-        <span className="mt-1">Palpites</span>
-      </NavLink>
-      <NavLink to="/noticias" className={({ isActive }) => `flex flex-col items-center text-xs ${isActive ? 'text-fifa-blue' : 'text-gray-500'}`}>
-        <Newspaper className="h-5 w-5" />
-        <span className="mt-1">Notícias</span>
-      </NavLink>
-      <NavLink to="/simulador" className={({ isActive }) => `flex flex-col items-center text-xs ${isActive ? 'text-fifa-blue' : 'text-gray-500'}`}>
-        <Calculator className="h-5 w-5" />
-        <span className="mt-1">Simulador</span>
-      </NavLink>
-      <NavLink to="/ranking" className={({ isActive }) => `flex flex-col items-center text-xs ${isActive ? 'text-fifa-blue' : 'text-gray-500'}`}>
+      <NavLink to="/ranking" className={navLinkClass}>
         <Trophy className="h-5 w-5" />
-        <span className="mt-1">Ranking</span>
+        <span>Ranking</span>
       </NavLink>
-      <NavLink to="/resultados" className={({ isActive }) => `flex flex-col items-center text-xs ${isActive ? 'text-fifa-blue' : 'text-gray-500'}`}>
+      <NavLink to="/resultados" className={navLinkClass}>
         <Medal className="h-5 w-5" />
-        <span className="mt-1">Resultados</span>
+        <span>Resultados</span>
       </NavLink>
-      {/* 3. ADICIONE O NOVO LINK AQUI */}
-      <NavLink to="/auditoria" className={({ isActive }) => `flex flex-col items-center text-xs ${isActive ? 'text-fifa-blue' : 'text-gray-500'}`}>
-        <FileText className="h-5 w-5" />
-        <span className="mt-1">Auditoria</span>
+      <NavLink to="/noticias" className={navLinkClass}>
+        <Newspaper className="h-5 w-5" />
+        <span>Notícias</span>
       </NavLink>
     </nav>
   );
