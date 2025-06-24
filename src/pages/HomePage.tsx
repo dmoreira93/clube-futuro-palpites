@@ -1,4 +1,4 @@
-// src/pages/HomePage.tsx (VERSÃO FINAL E CORRETA)
+// src/pages/HomePage.tsx (VERSÃO FINAL COM AJUSTES NO PWA)
 
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -67,7 +67,7 @@ const PublicPoolsSection = () => {
   return (
     <section>
       <div className="flex flex-col md:flex-row justify-center items-center gap-4 mb-8">
-        <h2 className="text-3xl font-bold text-center">Bolões Públicos Abertos</h2>
+        <h2 className="text-2xl md:text-3xl font-bold text-center">Bolões Públicos Abertos</h2>
         <div className="flex items-center gap-2">
           <Label htmlFor="championship-filter">Filtrar por:</Label>
           <Select value={selectedChampionship} onValueChange={handleFilterChange}>
@@ -151,7 +151,7 @@ const DesktopHomePage = () => {
 
 
 // ===================================================================
-//  LAYOUT PARA PWA
+//  LAYOUT PARA PWA (VERSÃO COM AJUSTES)
 // ===================================================================
 const Stat = ({ icon: Icon, value, label }: { icon: React.ElementType, value: string, label: string }) => (
   <div className="flex items-center gap-4"><div className="bg-fifa-gold/20 p-3 rounded-lg"><Icon className="h-6 w-6 text-fifa-gold" /></div><div className="flex flex-col"><span className="text-2xl font-bold text-fifa-blue">{value}</span><span className="text-sm text-muted-foreground">{label}</span></div></div>
@@ -169,10 +169,18 @@ const ActionButton = ({ icon: Icon, label, onClick }: { icon: React.ElementType,
 
 const PwaHomePage = () => {
     const navigate = useNavigate();
+    const currentYear = new Date().getFullYear();
+
     return (
         <div className="flex flex-col min-h-screen bg-gray-50 text-fifa-blue">
-            <header className="bg-fifa-blue p-4 shadow-md sticky top-0 z-10"><h1 className="text-xl font-bold text-center text-fifa-gold">Futuro Palpites</h1></header>
-            <main className="flex flex-col gap-8 p-4">
+            {/* Cabeçalho Ajustado */}
+            <header className="bg-fifa-blue p-4 shadow-md flex items-center justify-center gap-3">
+                <BarChart3 className="w-7 h-7 text-fifa-gold" />
+                <h1 className="text-xl font-bold text-fifa-gold">Futuro Palpites</h1>
+            </header>
+
+            {/* Conteúdo Principal */}
+            <main className="flex-grow flex flex-col gap-8 p-4">
                 <StatBanner />
                 <div className="grid grid-cols-3 gap-4">
                     <ActionButton icon={PlusCircle} label="Criar Bolão" onClick={() => navigate('/login')} />
@@ -183,6 +191,11 @@ const PwaHomePage = () => {
                     <PublicPoolsSection />
                 </div>
             </main>
+
+            {/* Rodapé Simplificado */}
+            <footer className="bg-fifa-blue text-center p-4">
+                <p className="text-xs text-gray-300">&copy; {currentYear} Clube do Futuro Palpites. Todos os direitos reservados.</p>
+            </footer>
         </div>
     );
 };
