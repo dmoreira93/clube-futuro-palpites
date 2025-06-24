@@ -39,7 +39,7 @@ export const PwaHomePage = () => {
                 
                 <div className='w-full'>
                     <h2 className="text-lg font-bold mb-4 text-center">Bolões Públicos</h2>
-                    <PublicPoolsList />
+                    <PublicPoolsSection />
                 </div>
             </main>
         </div>
