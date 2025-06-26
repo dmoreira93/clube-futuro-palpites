@@ -1,3 +1,5 @@
+// src/types/matches.ts
+
 import { Prediction } from "./predictions";
 
 export type Team = {
@@ -22,9 +24,6 @@ export type Match = {
   stadium?: string | null;
 };
 
-// --- GARANTA QUE ESTE TIPO ESTEJA AQUI ---
-// ... (outros tipos: Team, Match)
-
 export type Pool = {
   id: string;
   name: string;
@@ -35,5 +34,7 @@ export type Pool = {
   prize_percent_3rd: number;
   enable_punishment: boolean;
   punishment_description: string | null;
-  entry_fee: number; // <-- ADICIONE ESTA LINHA
+  entry_fee: number;
+  payment_required: boolean; // NOVO CAMPO
+  prediction_deadline: string | null; // Adicionado para consistência
 };

@@ -4,21 +4,21 @@ import { createContext, useContext, useState, useEffect, ReactNode, useCallback 
 import { supabase } from '@/integrations/supabase/client';
 import { User } from '@supabase/supabase-js';
 import { toast } from 'sonner';
-import { Pool } from '@/types/matches'; // Importamos o tipo Pool
+import { Pool } from '@/types/matches';
 
-// Tipos de usuário, incluindo o pool_id
+// ALTERADO: Adicionado payment_status ao AppUser
 export type AppUser = User & {
   username?: string;
   name?: string;
   is_admin?: boolean;
   first_login?: boolean;
   pool_id?: string | null;
+  payment_status?: 'paid' | 'pending'; // NOVO CAMPO
 };
 
-// Interface do Contexto com o 'pool'
 interface AuthContextType {
   user: AppUser | null;
-  pool: Pool | null; // <-- ADICIONADO
+  pool: Pool | null;
   loading: boolean;
   isAuthenticated: boolean;
   isFirstLogin: boolean;
@@ -41,7 +41,7 @@ export const useAuth = () => {
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<AppUser | null>(null);
-  const [pool, setPool] = useState<Pool | null>(null); // <-- NOVO ESTADO
+  const [pool, setPool] = useState<Pool | null>(null);
   const [loading, setLoading] = useState(true);
 
   const isAuthenticated = !!user;
@@ -51,14 +51,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const signOut = useCallback(async () => {
     await supabase.auth.signOut();
     setUser(null);
-    setPool(null); // Limpa os dados do bolão ao deslogar
+    setPool(null);
   }, []);
 
   const fetchAndSyncProfile = useCallback(async (sessionUser: User): Promise<AppUser | null> => {
     try {
       const { data: profile, error } = await supabase
         .from('users_custom')
-        .select('*')
+        .select('*') // O '*' já inclui o novo campo 'payment_status'
         .eq('id', sessionUser.id)
         .single();
       
@@ -67,7 +67,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       const combinedUser: AppUser = { ...sessionUser, ...profile };
       setUser(combinedUser);
 
-      // LÓGICA ADICIONADA: Busca os dados do bolão do usuário
       if (combinedUser.pool_id) {
         const { data: poolData, error: poolError } = await supabase
           .from('pools')
@@ -82,7 +81,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           setPool(poolData as Pool);
         }
       } else {
-        setPool(null); // Garante que não há dados de bolão se o usuário não pertencer a um
+        setPool(null);
       }
       
       return combinedUser;
@@ -139,7 +138,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     await fetchAndSyncProfile(user);
   };
   
-  // Incluído 'pool' no valor do contexto
   const value = { user, pool, loading, isAuthenticated, isFirstLogin, isAdmin, login, signOut, updateUserProfile, fetchAndSyncProfile };
 
   return (

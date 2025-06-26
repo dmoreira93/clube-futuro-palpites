@@ -34,14 +34,14 @@ const CreatePoolPage = () => {
   const [prize2nd, setPrize2nd] = useState('30');
   const [prize3rd, setPrize3rd] = useState('0');
   const [adminFee, setAdminFee] = useState('0');
-  const [maxParticipants, setMaxParticipants] = useState(''); // Vazio por padrão = sem limite
+  const [maxParticipants, setMaxParticipants] = useState('');
   const [predictionDeadline, setPredictionDeadline] = useState('');
   const [isPublic, setIsPublic] = useState(false);
   const [enablePunishment, setEnablePunishment] = useState(false);
   const [punishmentDescription, setPunishmentDescription] = useState('Paga um café para o campeão!');
+  const [paymentRequired, setPaymentRequired] = useState(false); // NOVO ESTADO
 
   useEffect(() => {
-    // Busca os campeonatos disponíveis para preencher o select
     const fetchChampionships = async () => {
       const { data, error } = await supabase.from('championships').select('id, name');
       if (error) {
@@ -54,7 +54,6 @@ const CreatePoolPage = () => {
   }, []);
 
   const handleCreatePool = async () => {
-    // Validações
     if (!poolName.trim() || !selectedChampionship) {
       toast.error("Nome do Bolão e Campeonato são obrigatórios.");
       return;
@@ -67,6 +66,7 @@ const CreatePoolPage = () => {
 
     setLoading(true);
     try {
+        // ALTERADO: Adicionado 'p_payment_required' na chamada RPC
       const { data, error } = await supabase.rpc('create_pool', {
         p_pool_name: poolName.trim(),
         p_owner_id: user.id,
@@ -80,7 +80,8 @@ const CreatePoolPage = () => {
         p_max_participants: maxParticipants ? parseInt(maxParticipants) : null,
         p_is_public: isPublic,
         p_enable_punishment: enablePunishment,
-        p_punishment_desc: enablePunishment ? punishmentDescription.trim() : null
+        p_punishment_desc: enablePunishment ? punishmentDescription.trim() : null,
+        p_payment_required: paymentRequired // NOVO PARÂMETRO
       });
 
       if (error) throw error;
@@ -106,7 +107,6 @@ const CreatePoolPage = () => {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          {/* --- NOVOS CAMPOS ADICIONADOS AQUI --- */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="pool-name">Nome do Bolão</Label>
@@ -172,6 +172,14 @@ const CreatePoolPage = () => {
                 <Input id="punishment-description" value={punishmentDescription} onChange={(e) => setPunishmentDescription(e.target.value)} />
               </div>
             )}
+          </div>
+          
+           {/* NOVO CAMPO DE PAGAMENTO */}
+          <div className="space-y-4">
+            <div className="flex items-center space-x-2">
+                <Checkbox id="payment-required" checked={paymentRequired} onCheckedChange={(checked) => setPaymentRequired(checked as boolean)} />
+                <Label htmlFor="payment-required">Exigir confirmação de pagamento para liberar palpites?</Label>
+            </div>
           </div>
 
           <Button onClick={handleCreatePool} disabled={loading} className="w-full">
