@@ -1,24 +1,23 @@
-// src/hooks/useParticipantsRanking.ts
+// src/hooks/useParticipantsRanking.ts (VERSÃO FINAL)
 
 import { useEffect, useState, useCallback } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 
-// Interface atualizada para incluir todos os campos necessários
 export interface Participant {
   id: string;
   name: string;
   username: string;
   avatar_url: string | null;
-  points: number; // Este campo vem como 'total_points' do DB, mas vamos usar o alias 'points'
-  is_admin: boolean;
+  points: number;
   matchesplayed: number;
   accuracy: string;
   exactscores: number;
   correctwinners: number;
   createdat: string;
-  prize?: string | null; // Opcional, será adicionado no frontend
-  rank?: number; // Opcional, será adicionado no frontend
+  prize: string | null;
+  rank: number;
+  is_admin: boolean; // Necessário para filtros
 }
 
 const useParticipantsRanking = () => {
@@ -46,7 +45,6 @@ const useParticipantsRanking = () => {
         throw rpcError;
       }
       
-      // Mapeia total_points para points para consistência
       const formattedData = data.map((p: any) => ({...p, points: p.total_points}));
 
       setParticipants(formattedData as Participant[]);
