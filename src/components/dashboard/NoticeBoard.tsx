@@ -1,4 +1,4 @@
-// src/components/dashboard/NoticeBoard.tsx (VERSÃO FINAL COM CORREÇÃO NO MURAL E RANKING)
+// src/components/dashboard/NoticeBoard.tsx (VERSÃO FINAL COM FORMATAÇÃO DE PRÊMIO)
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -14,6 +14,19 @@ import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Separator } from '../ui/separator';
 import { Badge } from '../ui/badge';
 import { cn } from '@/lib/utils';
+
+// NOVO: Função para formatar o prêmio
+const formatPrize = (prizeString: string | null | undefined): string | null => {
+    if (!prizeString) return null;
+    if (prizeString.startsWith('R$ ')) {
+        const value = parseFloat(prizeString.replace('R$ ', '').replace(',', '.'));
+        if (!isNaN(value)) {
+            return `R$ ${value.toFixed(2).replace('.', ',')}`;
+        }
+    }
+    return prizeString;
+};
+
 
 const NoticeBoard = () => {
   const { user, pool } = useAuth();
@@ -59,7 +72,7 @@ const NoticeBoard = () => {
     enabled: !!pool,
   });
 
-  // ALTERADO: A mutação agora chama a nova função RPC
+  // A mutação agora chama a nova função RPC
   const upsertMessage = useMutation({
     mutationFn: async (messageText: string) => {
       if (!pool?.id) throw new Error("Bolão não encontrado.");
@@ -172,7 +185,8 @@ const NoticeBoard = () => {
                                                   )}>{index + 1}º</Badge>
                                                   {winner.name}
                                                 </p>
-                                                {winner.prize && <p className="text-xs text-gray-600 dark:text-gray-400 font-semibold">{winner.prize}</p>}
+                                                {/* ALTERADO: Aplicando a função de formatação */}
+                                                {winner.prize && <p className="text-xs text-gray-600 dark:text-gray-400 font-semibold">{formatPrize(winner.prize)}</p>}
                                             </div>
                                         </div>
                                         <span className="font-mono text-sm font-bold">{winner.points} pts</span>
@@ -194,7 +208,8 @@ const NoticeBoard = () => {
                                                 <Badge variant="destructive">{rankingData?.length}º</Badge>
                                                 {lastPlace.name}
                                             </p>
-                                            {lastPlace.prize && <p className="text-xs text-red-700 dark:text-red-400 font-semibold">{lastPlace.prize}</p>}
+                                            {/* ALTERADO: Aplicando a função de formatação */}
+                                            {lastPlace.prize && <p className="text-xs text-red-700 dark:text-red-400 font-semibold">{formatPrize(lastPlace.prize)}</p>}
                                         </div>
                                     </div>
                                     <span className="font-mono text-sm font-bold">{lastPlace.points} pts</span>
