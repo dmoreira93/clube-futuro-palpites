@@ -1,6 +1,6 @@
-// src/components/dashboard/NoticeBoard.tsx (VERSÃO FINAL COM PÓDIO CORRIGIDO)
+// src/components/dashboard/NoticeBoard.tsx (VERSÃO FINAL CORRIGIDA)
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -13,13 +13,14 @@ import { Participant } from '@/hooks/useParticipantsRanking';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Separator } from '../ui/separator';
 import { Badge } from '../ui/badge';
-import { cn } from '@/lib/utils'; // Importando o utilitário cn
+import { cn } from '@/lib/utils';
 
 const NoticeBoard = () => {
   const { user, pool } = useAuth();
   const queryClient = useQueryClient();
   const [newMessage, setNewMessage] = useState('');
 
+  // Busca as estatísticas principais
   const { data: stats, isLoading: isLoadingStats } = useQuery({
     queryKey: ['dashboardStats', pool?.id],
     queryFn: async () => {
@@ -31,6 +32,7 @@ const NoticeBoard = () => {
     enabled: !!pool,
   });
 
+  // Busca os recados
   const { data: message, isLoading: isLoadingMessages } = useQuery({
     queryKey: ['poolMessages', pool?.id],
     queryFn: async () => {
@@ -45,13 +47,15 @@ const NoticeBoard = () => {
     }
   });
   
+  // Busca o ranking completo
   const { data: rankingData, isLoading: isLoadingRanking } = useQuery<Participant[]>({
     queryKey: ['poolRankingForPrizes', pool?.id],
     queryFn: async () => {
         if (!pool?.id) return [];
         const { data, error } = await supabase.rpc('get_pool_ranking', { p_pool_id: pool.id });
         if (error) throw new Error("Não foi possível carregar o ranking para prêmios.");
-        return data || [];
+        // A função RPC já retorna os dados ordenados, mas garantimos a ordenação aqui também.
+        return (data || []).sort((a: Participant, b: Participant) => b.points - a.points);
     },
     enabled: !!pool,
   });
@@ -63,7 +67,7 @@ const NoticeBoard = () => {
         pool_id: pool.id,
         user_id: user.id,
         message: messageText,
-      }, { onConflict: 'pool_id, user_id' });
+      }, { onConflict: 'pool_id, user_id' }); 
       if (error) throw error;
     },
     onSuccess: () => {
@@ -77,9 +81,9 @@ const NoticeBoard = () => {
 
   const isOwner = user?.id === pool?.owner_id;
   
-  // ALTERADO: Lógica de seleção baseada no rank
-  const topThree = rankingData?.filter(p => p.rank <= 3) || [];
-  const lastPlace = rankingData?.find(p => p.rank === rankingData.length && rankingData.length > 3) || null;
+  // ALTERADO: Lógica de seleção baseada no array ordenado
+  const topThree = rankingData?.slice(0, 3) || [];
+  const lastPlace = rankingData && rankingData.length > 3 ? rankingData[rankingData.length - 1] : null;
 
   return (
     <Card className="shadow-lg">
@@ -138,7 +142,7 @@ const NoticeBoard = () => {
           )}
         </div>
 
-        {/* ATUALIZADO: Seção de Prêmios e Punições com nova estrutura e estilo */}
+        {/* ATUALIZADO: Seção de Prêmios e Punições */}
         {(isLoadingRanking || topThree.length > 0 || lastPlace) && <Separator />}
 
         <div>
@@ -148,26 +152,27 @@ const NoticeBoard = () => {
                         {topThree.length > 0 && (
                             <div className="space-y-2">
                                 <h4 className="font-semibold text-center text-muted-foreground">Primeiros Colocados</h4>
-                                {topThree.sort((a,b) => a.rank - b.rank).map(winner => (
+                                {topThree.map((winner, index) => (
                                     <div key={winner.id} className={cn(
                                         "flex items-center justify-between p-3 rounded-md border-l-4",
-                                        winner.rank === 1 && "bg-blue-50 dark:bg-blue-900/20 border-blue-500",
-                                        winner.rank === 2 && "bg-green-50 dark:bg-green-900/20 border-green-500",
-                                        winner.rank === 3 && "bg-green-50/50 dark:bg-green-900/10 border-green-400"
+                                        index === 0 && "bg-blue-50 dark:bg-blue-900/30 border-blue-500",
+                                        index === 1 && "bg-green-50 dark:bg-green-900/20 border-green-500",
+                                        index === 2 && "bg-green-50/50 dark:bg-green-900/10 border-green-400"
                                     )}>
                                         <div className="flex items-center gap-3">
                                             <Avatar className="h-8 w-8">
-                                                <AvatarImage src={winner.avatar_url || ''} />
-                                                <AvatarFallback>{winner.name.substring(0,1)}</AvatarFallback>
+                                              <AvatarImage src={winner.avatar_url || ''} />
+                                              <AvatarFallback>{winner.name.substring(0,1)}</AvatarFallback>
                                             </Avatar>
                                             <div>
                                                 <p className="font-bold flex items-center gap-2">
-                                                <Badge variant="secondary" className={cn(
-                                                    winner.rank === 1 && "bg-blue-500 text-white",
-                                                    winner.rank === 2 && "bg-green-500 text-white",
-                                                    winner.rank === 3 && "bg-green-400 text-white",
-                                                )}>{winner.rank}º</Badge>
-                                                {winner.name}
+                                                  <Badge variant="secondary" className={cn(
+                                                      "font-bold",
+                                                      index === 0 && "bg-blue-600 text-white",
+                                                      index === 1 && "bg-green-600 text-white",
+                                                      index === 2 && "bg-green-500 text-white",
+                                                  )}>{index + 1}º</Badge>
+                                                  {winner.name}
                                                 </p>
                                                 {winner.prize && <p className="text-xs text-gray-600 dark:text-gray-400 font-semibold">{winner.prize}</p>}
                                             </div>
@@ -178,7 +183,7 @@ const NoticeBoard = () => {
                             </div>
                         )}
                          {lastPlace && (
-                             <div className="space-y-2">
+                             <div className="space-y-2 mt-4">
                                 <h4 className="font-semibold text-center text-muted-foreground">Lanterna</h4>
                                 <div className="flex items-center justify-between p-3 rounded-md bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500">
                                     <div className="flex items-center gap-3">
@@ -188,7 +193,7 @@ const NoticeBoard = () => {
                                         </Avatar>
                                         <div>
                                             <p className="font-bold flex items-center gap-2">
-                                                <Badge variant="destructive">{lastPlace.rank}º</Badge>
+                                                <Badge variant="destructive">{rankingData?.length}º</Badge>
                                                 {lastPlace.name}
                                             </p>
                                             {lastPlace.prize && <p className="text-xs text-red-700 dark:text-red-400 font-semibold">{lastPlace.prize}</p>}
