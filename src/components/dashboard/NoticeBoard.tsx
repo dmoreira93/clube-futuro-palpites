@@ -1,4 +1,4 @@
-// src/components/dashboard/NoticeBoard.tsx (VERSÃO FINAL COM FORMATAÇÃO DE PRÊMIO)
+// src/components/dashboard/NoticeBoard.tsx (VERSÃO FINAL COM TODAS AS CORREÇÕES)
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -7,7 +7,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Loader2, Megaphone, Trophy, Star, UserX } from 'lucide-react';
+import { Loader2, Megaphone, Trophy, Star, UserX, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Participant } from '@/hooks/useParticipantsRanking';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
@@ -15,7 +15,7 @@ import { Separator } from '../ui/separator';
 import { Badge } from '../ui/badge';
 import { cn } from '@/lib/utils';
 
-// NOVO: Função para formatar o prêmio
+// Função para formatar o prêmio para duas casas decimais
 const formatPrize = (prizeString: string | null | undefined): string | null => {
     if (!prizeString) return null;
     if (prizeString.startsWith('R$ ')) {
@@ -33,6 +33,9 @@ const NoticeBoard = () => {
   const queryClient = useQueryClient();
   const [newMessage, setNewMessage] = useState('');
 
+  // Define uma chave de query única para os recados, que depende do ID do bolão
+  const poolMessagesQueryKey = ['poolMessages', pool?.id];
+
   // Busca as estatísticas principais
   const { data: stats, isLoading: isLoadingStats } = useQuery({
     queryKey: ['dashboardStats', pool?.id],
@@ -45,9 +48,9 @@ const NoticeBoard = () => {
     enabled: !!pool,
   });
 
-  // Busca os recados
+  // Busca o recado mais recente
   const { data: message, isLoading: isLoadingMessages } = useQuery({
-    queryKey: ['poolMessages', pool?.id],
+    queryKey: poolMessagesQueryKey,
     queryFn: async () => {
       if (!pool?.id) return null;
       const { data, error } = await supabase.from('pool_messages').select('message').eq('pool_id', pool.id).order('created_at', { ascending: false }).limit(1).maybeSingle();
@@ -56,11 +59,11 @@ const NoticeBoard = () => {
     },
     enabled: !!pool,
     onSuccess: (data) => {
-      if(data?.message) setNewMessage(data.message);
+      setNewMessage(data?.message || '');
     }
   });
   
-  // Busca o ranking completo
+  // Busca o ranking completo para exibir o pódio
   const { data: rankingData, isLoading: isLoadingRanking } = useQuery<Participant[]>({
     queryKey: ['poolRankingForPrizes', pool?.id],
     queryFn: async () => {
@@ -72,7 +75,7 @@ const NoticeBoard = () => {
     enabled: !!pool,
   });
 
-  // A mutação agora chama a nova função RPC
+  // Mutação para salvar/atualizar o recado
   const upsertMessage = useMutation({
     mutationFn: async (messageText: string) => {
       if (!pool?.id) throw new Error("Bolão não encontrado.");
@@ -84,10 +87,28 @@ const NoticeBoard = () => {
     },
     onSuccess: () => {
       toast.success("Recado do bolão atualizado!");
-      queryClient.invalidateQueries({ queryKey: ['poolMessages'] });
+      // CORREÇÃO: Invalidando a chave de query correta
+      queryClient.invalidateQueries({ queryKey: poolMessagesQueryKey });
     },
     onError: (error: any) => {
       toast.error("Falha ao salvar o recado.", { description: error.message });
+    }
+  });
+
+  // Mutação para deletar o recado
+  const deleteMessage = useMutation({
+    mutationFn: async () => {
+        if (!pool?.id) throw new Error("Bolão não encontrado.");
+        const { error } = await supabase.rpc('delete_pool_message', { p_pool_id: pool.id });
+        if (error) throw error;
+    },
+    onSuccess: () => {
+        toast.success("Recado removido!");
+        setNewMessage(''); 
+        queryClient.invalidateQueries({ queryKey: poolMessagesQueryKey });
+    },
+    onError: (error: any) => {
+        toast.error("Falha ao remover o recado.", { description: error.message });
     }
   });
 
@@ -111,10 +132,18 @@ const NoticeBoard = () => {
               onChange={(e) => setNewMessage(e.target.value)}
               rows={3}
             />
-            <Button onClick={() => upsertMessage.mutate(newMessage)} disabled={upsertMessage.isPending}>
-              {upsertMessage.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Salvar Recado
-            </Button>
+            <div className="flex gap-2">
+                <Button onClick={() => upsertMessage.mutate(newMessage)} disabled={upsertMessage.isPending}>
+                {upsertMessage.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Salvar Recado
+                </Button>
+                {message && (
+                    <Button variant="destructive" onClick={() => deleteMessage.mutate()} disabled={deleteMessage.isPending}>
+                        {deleteMessage.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4"/>}
+                        Remover Recado
+                    </Button>
+                )}
+            </div>
           </div>
         )}
         {isLoadingMessages ? <Loader2 className="animate-spin" /> : message?.message && !isOwner && (
@@ -185,7 +214,6 @@ const NoticeBoard = () => {
                                                   )}>{index + 1}º</Badge>
                                                   {winner.name}
                                                 </p>
-                                                {/* ALTERADO: Aplicando a função de formatação */}
                                                 {winner.prize && <p className="text-xs text-gray-600 dark:text-gray-400 font-semibold">{formatPrize(winner.prize)}</p>}
                                             </div>
                                         </div>
@@ -208,7 +236,6 @@ const NoticeBoard = () => {
                                                 <Badge variant="destructive">{rankingData?.length}º</Badge>
                                                 {lastPlace.name}
                                             </p>
-                                            {/* ALTERADO: Aplicando a função de formatação */}
                                             {lastPlace.prize && <p className="text-xs text-red-700 dark:text-red-400 font-semibold">{formatPrize(lastPlace.prize)}</p>}
                                         </div>
                                     </div>
