@@ -1,4 +1,4 @@
-// src/components/dashboard/NoticeBoard.tsx (VERSÃO FINAL COM PÓDIO)
+// src/components/dashboard/NoticeBoard.tsx (VERSÃO FINAL COM PÓDIO CORRIGIDO)
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -13,13 +13,13 @@ import { Participant } from '@/hooks/useParticipantsRanking';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Separator } from '../ui/separator';
 import { Badge } from '../ui/badge';
+import { cn } from '@/lib/utils'; // Importando o utilitário cn
 
 const NoticeBoard = () => {
   const { user, pool } = useAuth();
   const queryClient = useQueryClient();
   const [newMessage, setNewMessage] = useState('');
 
-  // Busca as estatísticas principais
   const { data: stats, isLoading: isLoadingStats } = useQuery({
     queryKey: ['dashboardStats', pool?.id],
     queryFn: async () => {
@@ -31,7 +31,6 @@ const NoticeBoard = () => {
     enabled: !!pool,
   });
 
-  // Busca os recados
   const { data: message, isLoading: isLoadingMessages } = useQuery({
     queryKey: ['poolMessages', pool?.id],
     queryFn: async () => {
@@ -46,7 +45,6 @@ const NoticeBoard = () => {
     }
   });
   
-  // Busca o ranking completo para pegar os premiados
   const { data: rankingData, isLoading: isLoadingRanking } = useQuery<Participant[]>({
     queryKey: ['poolRankingForPrizes', pool?.id],
     queryFn: async () => {
@@ -65,7 +63,7 @@ const NoticeBoard = () => {
         pool_id: pool.id,
         user_id: user.id,
         message: messageText,
-      }, { onConflict: 'pool_id, user_id' }); // Supondo uma constraint unique(pool_id, user_id)
+      }, { onConflict: 'pool_id, user_id' });
       if (error) throw error;
     },
     onSuccess: () => {
@@ -79,9 +77,9 @@ const NoticeBoard = () => {
 
   const isOwner = user?.id === pool?.owner_id;
   
-  // Filtra os premiados e o punido do ranking
-  const prizeWinners = rankingData?.filter(p => p.prize && p.prize.startsWith('R$')) || [];
-  const punishmentWinner = rankingData?.find(p => p.prize && !p.prize.startsWith('R$')) || null;
+  // ALTERADO: Lógica de seleção baseada no rank
+  const topThree = rankingData?.filter(p => p.rank <= 3) || [];
+  const lastPlace = rankingData?.find(p => p.rank === rankingData.length && rankingData.length > 3) || null;
 
   return (
     <Card className="shadow-lg">
@@ -140,49 +138,65 @@ const NoticeBoard = () => {
           )}
         </div>
 
-        {/* ALTERADO: Seção de Prêmios e Punições agora renderiza as linhas do ranking */}
-        {(isLoadingRanking || prizeWinners.length > 0 || punishmentWinner) && <Separator />}
+        {/* ATUALIZADO: Seção de Prêmios e Punições com nova estrutura e estilo */}
+        {(isLoadingRanking || topThree.length > 0 || lastPlace) && <Separator />}
 
         <div>
             {isLoadingRanking ? <div className="flex justify-center"><Loader2 className="animate-spin" /></div> :
-                (prizeWinners.length > 0 || punishmentWinner) && (
-                    <div className="space-y-3">
-                        <h4 className="font-semibold text-center text-muted-foreground">Pódio e Punição</h4>
-                        {prizeWinners.sort((a,b) => a.rank - b.rank).map(winner => (
-                            <div key={winner.id} className="flex items-center justify-between p-3 rounded-md bg-green-50 dark:bg-green-900/20 border-l-4 border-green-500">
-                                <div className="flex items-center gap-3">
-                                    <Avatar className="h-8 w-8">
-                                      <AvatarImage src={winner.avatar_url || ''} />
-                                      <AvatarFallback>{winner.name.substring(0,1)}</AvatarFallback>
-                                    </Avatar>
-                                    <div>
-                                        <p className="font-bold flex items-center gap-2">
-                                          <Badge variant="secondary" className="bg-yellow-400 text-black">{winner.rank}º</Badge>
-                                          {winner.name}
-                                        </p>
-                                        <p className="text-xs text-green-700 dark:text-green-400 font-semibold">{winner.prize}</p>
+                (topThree.length > 0 || lastPlace) && (
+                    <div className="space-y-4">
+                        {topThree.length > 0 && (
+                            <div className="space-y-2">
+                                <h4 className="font-semibold text-center text-muted-foreground">Primeiros Colocados</h4>
+                                {topThree.sort((a,b) => a.rank - b.rank).map(winner => (
+                                    <div key={winner.id} className={cn(
+                                        "flex items-center justify-between p-3 rounded-md border-l-4",
+                                        winner.rank === 1 && "bg-blue-50 dark:bg-blue-900/20 border-blue-500",
+                                        winner.rank === 2 && "bg-green-50 dark:bg-green-900/20 border-green-500",
+                                        winner.rank === 3 && "bg-green-50/50 dark:bg-green-900/10 border-green-400"
+                                    )}>
+                                        <div className="flex items-center gap-3">
+                                            <Avatar className="h-8 w-8">
+                                                <AvatarImage src={winner.avatar_url || ''} />
+                                                <AvatarFallback>{winner.name.substring(0,1)}</AvatarFallback>
+                                            </Avatar>
+                                            <div>
+                                                <p className="font-bold flex items-center gap-2">
+                                                <Badge variant="secondary" className={cn(
+                                                    winner.rank === 1 && "bg-blue-500 text-white",
+                                                    winner.rank === 2 && "bg-green-500 text-white",
+                                                    winner.rank === 3 && "bg-green-400 text-white",
+                                                )}>{winner.rank}º</Badge>
+                                                {winner.name}
+                                                </p>
+                                                {winner.prize && <p className="text-xs text-gray-600 dark:text-gray-400 font-semibold">{winner.prize}</p>}
+                                            </div>
+                                        </div>
+                                        <span className="font-mono text-sm font-bold">{winner.points} pts</span>
                                     </div>
-                                </div>
-                                <span className="font-mono text-sm font-bold">{winner.points} pts</span>
+                                ))}
                             </div>
-                        ))}
-                         {punishmentWinner && (
-                             <div className="flex items-center justify-between p-3 rounded-md bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500">
-                                <div className="flex items-center gap-3">
-                                    <Avatar className="h-8 w-8">
-                                      <AvatarImage src={punishmentWinner.avatar_url || ''} />
-                                      <AvatarFallback>{punishmentWinner.name.substring(0,1)}</AvatarFallback>
-                                    </Avatar>
-                                    <div>
-                                        <p className="font-bold flex items-center gap-2">
-                                          <Badge variant="destructive">{punishmentWinner.rank}º</Badge>
-                                          {punishmentWinner.name}
-                                        </p>
-                                        <p className="text-xs text-red-700 dark:text-red-400 font-semibold">{punishmentWinner.prize}</p>
+                        )}
+                         {lastPlace && (
+                             <div className="space-y-2">
+                                <h4 className="font-semibold text-center text-muted-foreground">Lanterna</h4>
+                                <div className="flex items-center justify-between p-3 rounded-md bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500">
+                                    <div className="flex items-center gap-3">
+                                        <Avatar className="h-8 w-8">
+                                            <AvatarImage src={lastPlace.avatar_url || ''} />
+                                            <AvatarFallback>{lastPlace.name.substring(0,1)}</AvatarFallback>
+                                        </Avatar>
+                                        <div>
+                                            <p className="font-bold flex items-center gap-2">
+                                                <Badge variant="destructive">{lastPlace.rank}º</Badge>
+                                                {lastPlace.name}
+                                            </p>
+                                            {lastPlace.prize && <p className="text-xs text-red-700 dark:text-red-400 font-semibold">{lastPlace.prize}</p>}
+                                        </div>
                                     </div>
+                                    <span className="font-mono text-sm font-bold">{lastPlace.points} pts</span>
                                 </div>
-                                <span className="font-mono text-sm font-bold">{punishmentWinner.points} pts</span>
-                            </div>
+                             </div>
                          )}
                     </div>
                 )
