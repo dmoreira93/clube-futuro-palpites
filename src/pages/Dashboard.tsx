@@ -1,4 +1,4 @@
-// src/pages/Dashboard.tsx (VERSÃO ATUALIZADA)
+// src/pages/Dashboard.tsx (VERSÃO FINAL COM GESTÃO DE PAGAMENTOS)
 
 import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -8,12 +8,11 @@ import { Users, Volleyball as SoccerBallIcon, Flag as FlagIcon, Loader2, Setting
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import { Pool } from "@/types/matches";
-import NoticeBoard from "@/components/dashboard/NoticeBoard"; // NOVO
-import PaymentManagement from "@/components/dashboard/PaymentManagement"; // NOVO
+import NoticeBoard from "@/components/dashboard/NoticeBoard";
+import PaymentManagement from "@/components/dashboard/PaymentManagement"; // Importa o novo componente
 
 const Dashboard = () => {
-  const { user, pool, loading: authLoading } = useAuth(); // Pegando o 'pool' do contexto
+  const { user, pool, loading: authLoading } = useAuth();
   const [stats, setStats] = useState({
     totalUsers: 0,
     matchesPlayed: 0,
@@ -30,7 +29,6 @@ const Dashboard = () => {
     
     setLoading(true);
     try {
-      // Simplificando as chamadas, já que o pool agora vem do contexto
       const [
         userCountData,
         finishedMatchesData,
@@ -114,18 +112,16 @@ const Dashboard = () => {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2">
-          {/* ALTERADO: Tabela de ranking foi trocada pelo Mural de Avisos */}
           <NoticeBoard />
         </div>
         <div className="lg:col-span-1 flex flex-col gap-8">
-          <NextMatches />
           
           {/* NOVO: Condicional para exibir a Gestão de Pagamentos */}
           {isOwner && pool?.payment_required && (
               <PaymentManagement />
           )}
-          
-          {/* REMOVIDO: Card de Notificações foi retirado */}
+
+          <NextMatches />
         </div>
       </div>
     </div>
