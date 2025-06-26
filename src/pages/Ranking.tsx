@@ -90,4 +90,4 @@ const RankingPage = () => {
   );
 };
 
-export default Ranking;
+export default RankingPage;
