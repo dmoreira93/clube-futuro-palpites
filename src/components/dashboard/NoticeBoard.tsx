@@ -1,13 +1,13 @@
-// src/components/dashboard/NoticeBoard.tsx (VERSÃO FINAL CORRIGIDA)
+// src/components/dashboard/NoticeBoard.tsx (VERSÃO FINAL COM CORREÇÃO NO MURAL)
 
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Loader2, Megaphone, Trophy, Star, UserX, Award } from 'lucide-react';
+import { Loader2, Megaphone, Trophy, Star, UserX } from 'lucide-react';
 import { toast } from 'sonner';
 import { Participant } from '@/hooks/useParticipantsRanking';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
@@ -37,8 +37,9 @@ const NoticeBoard = () => {
     queryKey: ['poolMessages', pool?.id],
     queryFn: async () => {
       if (!pool?.id) return null;
-      const { data, error } = await supabase.from('pool_messages').select('message').eq('pool_id', pool.id).order('created_at', { ascending: false }).limit(1).single();
-      if (error && error.code !== 'PGRST116') throw error;
+      // CORREÇÃO: Trocado .single() por .maybeSingle() para evitar o erro 406
+      const { data, error } = await supabase.from('pool_messages').select('message').eq('pool_id', pool.id).order('created_at', { ascending: false }).limit(1).maybeSingle();
+      if (error) throw error;
       return data;
     },
     enabled: !!pool,
@@ -54,7 +55,6 @@ const NoticeBoard = () => {
         if (!pool?.id) return [];
         const { data, error } = await supabase.rpc('get_pool_ranking', { p_pool_id: pool.id });
         if (error) throw new Error("Não foi possível carregar o ranking para prêmios.");
-        // A função RPC já retorna os dados ordenados, mas garantimos a ordenação aqui também.
         return (data || []).sort((a: Participant, b: Participant) => b.points - a.points);
     },
     enabled: !!pool,
@@ -63,6 +63,7 @@ const NoticeBoard = () => {
   const upsertMessage = useMutation({
     mutationFn: async (messageText: string) => {
       if (!pool?.id || !user?.id) throw new Error("Usuário ou bolão não encontrado.");
+      // CORREÇÃO: O onConflict agora vai funcionar por causa do script SQL acima
       const { error } = await supabase.from('pool_messages').upsert({
         pool_id: pool.id,
         user_id: user.id,
@@ -72,7 +73,7 @@ const NoticeBoard = () => {
     },
     onSuccess: () => {
       toast.success("Recado do bolão atualizado!");
-      queryClient.invalidateQueries({ queryKey: ['poolMessages', pool?.id] });
+      queryClient.invalidateQueries({ queryKey: ['poolMessages'] });
     },
     onError: (error: any) => {
       toast.error("Falha ao salvar o recado.", { description: error.message });
@@ -81,7 +82,6 @@ const NoticeBoard = () => {
 
   const isOwner = user?.id === pool?.owner_id;
   
-  // ALTERADO: Lógica de seleção baseada no array ordenado
   const topThree = rankingData?.slice(0, 3) || [];
   const lastPlace = rankingData && rankingData.length > 3 ? rankingData[rankingData.length - 1] : null;
 
@@ -114,7 +114,7 @@ const NoticeBoard = () => {
 
         {/* Seção de Estatísticas */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
-          {isLoadingStats ? <Loader2 className="animate-spin" /> : stats && (
+          {isLoadingStats ? <div className="col-span-full flex justify-center"><Loader2 className="animate-spin"/></div> : stats && (
             <>
               <div className="flex flex-col items-center justify-center p-2 bg-slate-50 rounded-lg">
                 <Trophy className="text-yellow-500 mb-1"/>
@@ -142,7 +142,7 @@ const NoticeBoard = () => {
           )}
         </div>
 
-        {/* ATUALIZADO: Seção de Prêmios e Punições */}
+        {/* Seção de Prêmios e Punições */}
         {(isLoadingRanking || topThree.length > 0 || lastPlace) && <Separator />}
 
         <div>
