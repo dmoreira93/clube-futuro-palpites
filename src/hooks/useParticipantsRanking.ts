@@ -1,4 +1,4 @@
-// src/hooks/useParticipantsRanking.ts (VERSÃO FINAL)
+// src/hooks/useParticipantsRanking.ts
 
 import { useEffect, useState, useCallback } from "react";
 import { useAuth } from "@/contexts/AuthContext";
@@ -9,15 +9,14 @@ export interface Participant {
   name: string;
   username: string;
   avatar_url: string | null;
-  points: number;
+  points: number; // Vem como 'total_points' do DB
+  is_admin: boolean;
   matchesplayed: number;
-  accuracy: string;
   exactscores: number;
-  correctwinners: number;
-  createdat: string;
-  prize: string | null;
-  rank: number;
-  is_admin: boolean; // Necessário para filtros
+  // Os campos abaixo serão calculados no frontend
+  rank?: number;
+  accuracy?: string;
+  prize?: string | null;
 }
 
 const useParticipantsRanking = () => {
