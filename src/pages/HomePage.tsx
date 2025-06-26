@@ -122,7 +122,7 @@ const DesktopHomePage = () => {
     <div className="w-full space-y-16">
       <section className="text-center py-12">
         <h1 className="text-4xl md:text-6xl font-bold text-fifa-blue">Clube Futuro Palpites</h1>
-        <p className="mt-4 text-lg md:text-xl text-muted-foreground max-w-3xl mx-auto">A plataforma definitiva para criar e competir em bolões de futebol. Encontre um bolão público ou crie o seu!</p>
+        <p className="mt-4 text-lg md:text-xl text-muted-foreground max-w-3xl mx-auto">A plataforma definitiva para criar e competir em bolões de futebol. Encontre um bolão público ou crie o seu e convide seus amigos!</p>
         <div className="mt-8 flex flex-col sm:flex-row justify-center gap-4">
           <Link to="/cadastro"><Button size="lg" className="bg-fifa-green hover:bg-green-700 text-white font-bold shadow-lg w-full sm:w-auto">Crie seu Bolão Grátis<ArrowRight className="ml-2 h-5 w-5" /></Button></Link>
           <Link to="/login"><Button size="lg" variant="outline" className="shadow-md w-full sm:w-auto">Acessar meu Bolão</Button></Link>
