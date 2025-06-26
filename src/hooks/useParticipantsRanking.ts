@@ -9,11 +9,12 @@ export interface Participant {
   name: string;
   username: string;
   avatar_url: string | null;
-  points: number; // Vem como 'total_points' do DB
+  points: number;
   is_admin: boolean;
-  matchesplayed: number;
+  matchesplayed: number; // Total de palpites
+  scored_matches: number; // Jogos com pontuação > 0
   exactscores: number;
-  // Os campos abaixo serão calculados no frontend
+  // Campos calculados no frontend
   rank?: number;
   accuracy?: string;
   prize?: string | null;
@@ -44,7 +45,7 @@ const useParticipantsRanking = () => {
         throw rpcError;
       }
       
-      const formattedData = data.map((p: any) => ({...p, points: p.total_points}));
+      const formattedData = data.map((p: any) => ({...p, points: p.total_points || 0}));
 
       setParticipants(formattedData as Participant[]);
     } catch (err: any) {

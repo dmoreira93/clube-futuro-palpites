@@ -30,11 +30,9 @@ const calculatePrize = (rank: number, participant: Participant, totalHumanPartic
     if (rank === 2 && pool.prize_percent_2nd > 0) return `R$ ${(totalPot * pool.prize_percent_2nd / 100).toFixed(2).replace('.', ',')}`;
     if (rank === 3 && pool.prize_percent_3rd > 0) return `R$ ${(totalPot * pool.prize_percent_3rd / 100).toFixed(2).replace('.', ',')}`;
   }
-
   if (pool.enable_punishment && rank === totalHumanParticipants && totalHumanParticipants > 3) {
     return pool.punishment_description || "";
   }
-
   return "";
 };
 
@@ -43,15 +41,20 @@ const RankingPage = () => {
   const { participants, loading, error } = useParticipantsRanking();
 
   const rankedParticipants = useMemo(() => {
-    const allUsers = participants.filter(p => !p.is_admin);
-    const humanParticipants = allUsers.filter(p => !isAIParticipant(p));
+    // Primeiro, filtramos os admins para não aparecerem na lista
+    const allNonAdmins = participants.filter(p => !p.is_admin);
+    // Em seguida, criamos uma lista separada apenas de humanos para calcular os prêmios
+    const humanParticipants = allNonAdmins.filter(p => !isAIParticipant(p));
     
-    return allUsers.map((participant, index) => {
+    return allNonAdmins.map((participant, index) => {
       const rank = index + 1;
+      // O rank para prêmio é baseado na posição dele dentro da lista de humanos
       const humanRank = humanParticipants.findIndex(h => h.id === participant.id) + 1;
+      
       const prize = calculatePrize(humanRank, participant, humanParticipants.length, pool);
-      const accuracy = participant.matchesplayed > 0 
-        ? `${Math.round((participant.exactscores * 100) / participant.matchesplayed)}%` 
+      
+      const accuracy = participant.scored_matches > 0 
+        ? `${Math.round((participant.exactscores * 100) / participant.scored_matches)}%` 
         : '0%';
 
       return { ...participant, rank, prize, accuracy };
@@ -59,7 +62,7 @@ const RankingPage = () => {
   }, [participants, pool]);
 
   if (loading) return <div className="flex justify-center items-center h-screen"><Loader2 className="h-8 w-8 animate-spin text-fifa-blue" /></div>;
-  if (error) return <div className="container mx-auto p-4 text-center"><Alert variant="destructive" className="max-w-lg mx-auto"><AlertTriangle className="h-4 w-4" /><AlertTitle>Erro ao Carregar o Ranking</AlertTitle><AlertDescription>{error}</AlertDescription></Alert></div>;
+  if (error) return <div className="container mx-auto p-4 text-center"><Alert variant="destructive" className="max-w-lg mx-auto"><AlertTriangle className="h-4 w-4" /><AlertTitle>Erro ao Carregar o Ranking</AlertTitle><AlertDescription>{error.message}</AlertDescription></Alert></div>;
 
   return (
     <div className="container mx-auto px-2 sm:px-4 py-8">
@@ -72,11 +75,11 @@ const RankingPage = () => {
         <CardContent>
           <div className="border rounded-md">
             <Table>
-              <TableHeader><TableRow><TableHead className="w-[50px] text-center">Pos.</TableHead><TableHead>Participante</TableHead><TableHead className="text-right">Pontos</TableHead><TableHead className="hidden md:table-cell text-right">Jogos</TableHead><TableHead className="hidden md:table-cell text-right">Precisão</TableHead><TableHead className="hidden md:table-cell text-right">Prêmio/Punição</TableHead></TableRow></TableHeader>
+              <TableHeader><TableRow><TableHead className="w-[50px] text-center">Pos.</TableHead><TableHead>Participante</TableHead><TableHead className="text-right">Pontos</TableHead><TableHead className="hidden md:table-cell text-right">Jogos Pontuados</TableHead><TableHead className="hidden md:table-cell text-right">Precisão</TableHead><TableHead className="hidden md:table-cell text-right">Prêmio/Punição</TableHead></TableRow></TableHeader>
               <TableBody>
                 {rankedParticipants.length > 0 ? (
                   rankedParticipants.map((participant, index) => (
-                    <RankingRow key={participant.id} participant={participant} index={index} />
+                    <RankingRow key={participant.id} participant={{...participant, rank: index + 1}} index={index} />
                   ))
                 ) : (
                   <TableRow><TableCell colSpan={6} className="h-24 text-center">Ainda não há participantes no ranking deste bolão.</TableCell></TableRow>

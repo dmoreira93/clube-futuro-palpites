@@ -15,7 +15,7 @@ const RankingRow = ({ participant, index }: RankingRowProps) => {
 
   return (
     <TableRow className={isPrizeWinner ? "bg-yellow-100 dark:bg-yellow-900/20" : ""}>
-      <TableCell className="text-center font-medium">{index + 1}</TableCell>
+      <TableCell className="text-center font-medium">{participant.rank}</TableCell>
       <TableCell>
         <div className="flex items-center gap-2">
           <Avatar className="h-8 w-8">
@@ -29,7 +29,7 @@ const RankingRow = ({ participant, index }: RankingRowProps) => {
         </div>
       </TableCell>
       <TableCell className="text-right font-bold">{participant.points}</TableCell>
-      <TableCell className="hidden md:table-cell text-right">{participant.matchesplayed}</TableCell>
+      <TableCell className="hidden md:table-cell text-right">{participant.scored_matches}</TableCell>
       <TableCell className="hidden md:table-cell text-right">{participant.accuracy}</TableCell>
       <TableCell className="hidden md:table-cell text-right font-semibold text-sm">{participant.prize}</TableCell>
     </TableRow>
