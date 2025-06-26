@@ -2,17 +2,13 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import RankingTable from "@/components/home/RankingTable";
 import NextMatches from "@/components/home/NextMatches";
 import StatsCard from "@/components/home/StatsCard";
-import { Users, Volleyball as SoccerBallIcon, Flag as FlagIcon, Loader2, Settings, BellRing } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Users, Volleyball as SoccerBallIcon, Flag as FlagIcon, Loader2, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Pool } from "@/types/matches";
-import { subscribeUserToPush } from "@/utils/push";
-import { toast } from "sonner";
 import NoticeBoard from "@/components/dashboard/NoticeBoard"; // NOVO
 import PaymentManagement from "@/components/dashboard/PaymentManagement"; // NOVO
 
@@ -26,14 +22,6 @@ const Dashboard = () => {
   });
   const [loading, setLoading] = useState(true);
 
-  const handleSubscribe = async () => {
-    if (!user) {
-        toast.error("Você precisa estar logado para ativar as notificações.");
-        return;
-    }
-    await subscribeUserToPush(user.id);
-  };
-  
   const fetchData = useCallback(async () => {
     if (!user?.pool_id) {
       setLoading(false);
@@ -100,12 +88,14 @@ const Dashboard = () => {
           <h1 className="text-2xl md:text-3xl font-bold text-fifa-blue">
             Dashboard: <span className="text-gray-700 dark:text-gray-300">{pool?.name || 'Meu Bolão'}</span>
           </h1>
-          <Link to="/pool-settings">
-              <Button variant="outline">
-                  <Settings className="mr-2 h-4 w-4" />
-                  Configurações do Bolão
-              </Button>
-          </Link>
+          {isOwner && (
+            <Link to="/pool-settings">
+                <Button variant="outline">
+                    <Settings className="mr-2 h-4 w-4" />
+                    Configurações do Bolão
+                </Button>
+            </Link>
+          )}
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-3 gap-4 md:gap-6 mb-8">
@@ -114,14 +104,18 @@ const Dashboard = () => {
           <StatsCard title="Próxima Partida" value={stats.nextMatch.date} icon={<FlagIcon className="h-5 w-5" />} description={stats.nextMatch.teams} />
       </div>
 
-      {/* NOVO: Inserção do NoticeBoard */}
-      <div className="mb-8">
-        <NoticeBoard />
+      <div className="text-center mb-8">
+        <Link to="/palpites-do-dia">
+          <Button className="bg-fifa-green hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition-colors duration-300">
+            Ver Palpites dos Jogos do Dia
+          </Button>
+        </Link>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2">
-          <RankingTable />
+          {/* ALTERADO: Tabela de ranking foi trocada pelo Mural de Avisos */}
+          <NoticeBoard />
         </div>
         <div className="lg:col-span-1 flex flex-col gap-8">
           <NextMatches />
@@ -130,25 +124,8 @@ const Dashboard = () => {
           {isOwner && pool?.payment_required && (
               <PaymentManagement />
           )}
-
-          <Card className="shadow-lg">
-              <CardHeader className="bg-fifa-blue text-white">
-                <div className="flex items-center gap-2">
-                    <BellRing className="h-5 w-5 text-fifa-gold" />
-                    <CardTitle>Notificações</CardTitle>
-                </div>
-                <CardDescription className="text-gray-300">Seja avisado sobre os resultados</CardDescription>
-              </CardHeader>
-              <CardContent className="p-6 text-center">
-                   <p className="text-sm text-gray-700 dark:text-gray-300 mb-4">
-                     Clique no botão para permitir o envio de notificações e não perder nenhuma atualização de pontos!
-                   </p>
-                   <Button onClick={handleSubscribe} className="w-full bg-fifa-blue hover:bg-opacity-90">
-                     Ativar Notificações
-                   </Button>
-              </CardContent>
-          </Card>
-
+          
+          {/* REMOVIDO: Card de Notificações foi retirado */}
         </div>
       </div>
     </div>
