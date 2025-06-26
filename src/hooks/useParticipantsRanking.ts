@@ -1,21 +1,24 @@
-// src/hooks/useParticipantsRanking.ts - DEPOIS (VERSÃO CORRIGIDA)
+// src/hooks/useParticipantsRanking.ts
 
 import { useEffect, useState, useCallback } from "react";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/integrations/supabase/client"; // 1. IMPORTE O CLIENTE SUPABASE
+import { supabase } from "@/integrations/supabase/client";
 
+// Interface atualizada para incluir todos os campos necessários
 export interface Participant {
-  id: string; // O SQL já foi corrigido para retornar 'id'
+  id: string;
   name: string;
   username: string;
   avatar_url: string | null;
-  points: number;
+  points: number; // Este campo vem como 'total_points' do DB, mas vamos usar o alias 'points'
+  is_admin: boolean;
   matchesplayed: number;
   accuracy: string;
   exactscores: number;
   correctwinners: number;
   createdat: string;
-  prize: string | null;
+  prize?: string | null; // Opcional, será adicionado no frontend
+  rank?: number; // Opcional, será adicionado no frontend
 }
 
 const useParticipantsRanking = () => {
@@ -24,10 +27,8 @@ const useParticipantsRanking = () => {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
-  // 2. USAMOS O useCallback PARA MEMORIZAR A FUNÇÃO
   const fetchRanking = useCallback(async () => {
     if (!pool?.id) {
-      // Se não há bolão, não há o que buscar.
       setParticipants([]);
       setLoading(false);
       return;
@@ -37,7 +38,6 @@ const useParticipantsRanking = () => {
     setError(null);
 
     try {
-      // 3. FAZ A CHAMADA RPC DIRETAMENTE PARA O SUPABASE
       const { data, error: rpcError } = await supabase.rpc('get_pool_ranking', {
         p_pool_id: pool.id,
       });
@@ -45,19 +45,22 @@ const useParticipantsRanking = () => {
       if (rpcError) {
         throw rpcError;
       }
+      
+      // Mapeia total_points para points para consistência
+      const formattedData = data.map((p: any) => ({...p, points: p.total_points}));
 
-      setParticipants(data as Participant[]);
+      setParticipants(formattedData as Participant[]);
     } catch (err: any) {
       setError(err.message);
       console.error("Erro ao buscar ranking via RPC:", err);
     } finally {
       setLoading(false);
     }
-  }, [pool?.id]); // A função será recriada se o ID do bolão mudar
+  }, [pool?.id]);
 
   useEffect(() => {
     fetchRanking();
-  }, [fetchRanking]); // O useEffect agora apenas chama a função memorizada
+  }, [fetchRanking]);
 
   return { participants, loading, error };
 };

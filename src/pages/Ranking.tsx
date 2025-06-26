@@ -1,4 +1,4 @@
-// src/pages/Ranking.tsx
+// src/pages/Ranking.tsx (VERSÃO FINAL COM CÁLCULO NO FRONTEND)
 
 import { useAuth } from "@/contexts/AuthContext";
 import useParticipantsRanking from "@/hooks/useParticipantsRanking";
@@ -14,10 +14,52 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2, Trophy, AlertTriangle } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { useMemo } from "react";
+import { Participant } from "@/hooks/useParticipantsRanking";
+import { isAIParticipant } from "@/lib/utils";
+
+// Função para calcular o prêmio de um participante
+const calculatePrize = (participant: Participant, rank: number, totalParticipants: number, pool: any): string => {
+  if (!pool || isAIParticipant(participant) || participant.is_admin) {
+    return "";
+  }
+  
+  const totalPot = (pool.entry_fee || 0) * totalParticipants;
+
+  if (pool.entry_fee > 0) {
+    if (rank === 1 && pool.prize_percent_1st > 0) {
+      return `R$ ${(totalPot * pool.prize_percent_1st / 100).toFixed(2).replace('.', ',')}`;
+    }
+    if (rank === 2 && pool.prize_percent_2nd > 0) {
+      return `R$ ${(totalPot * pool.prize_percent_2nd / 100).toFixed(2).replace('.', ',')}`;
+    }
+    if (rank === 3 && pool.prize_percent_3rd > 0) {
+      return `R$ ${(totalPot * pool.prize_percent_3rd / 100).toFixed(2).replace('.', ',')}`;
+    }
+  }
+
+  if (pool.enable_punishment && rank === totalParticipants && totalParticipants > 3) {
+    return pool.punishment_description || "";
+  }
+
+  return "";
+};
+
 
 const RankingPage = () => {
-  const { pool } = useAuth();
+  const { pool, user } = useAuth();
   const { participants, loading, error } = useParticipantsRanking();
+
+  // Calcula o ranking e os prêmios aqui
+  const rankedParticipants = useMemo(() => {
+    const humanParticipantsCount = participants.filter(p => !isAIParticipant(p) && !p.is_admin).length;
+    
+    return participants.map((participant, index) => {
+      const rank = index + 1;
+      const prize = calculatePrize(participant, rank, humanParticipantsCount, pool);
+      return { ...participant, rank, prize };
+    });
+  }, [participants, pool]);
 
   if (loading) {
     return <div className="flex justify-center items-center h-screen"><Loader2 className="h-8 w-8 animate-spin text-fifa-blue" /></div>;
@@ -60,12 +102,12 @@ const RankingPage = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {participants.length > 0 ? (
-                  participants.map((participant, index) => (
+                {rankedParticipants.length > 0 ? (
+                  rankedParticipants.map((participant) => (
                     <RankingRow
                       key={participant.id}
                       participant={participant}
-                      index={index}
+                      index={participant.rank - 1} // O index continua sendo usado para zebra
                     />
                   ))
                 ) : (
