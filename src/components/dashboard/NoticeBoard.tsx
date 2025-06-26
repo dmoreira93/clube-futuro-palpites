@@ -1,4 +1,4 @@
-// src/components/dashboard/NoticeBoard.tsx (VERSÃO FINAL COM CORREÇÃO NO MURAL)
+// src/components/dashboard/NoticeBoard.tsx (VERSÃO FINAL COM CORREÇÃO NO MURAL E RANKING)
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -37,7 +37,6 @@ const NoticeBoard = () => {
     queryKey: ['poolMessages', pool?.id],
     queryFn: async () => {
       if (!pool?.id) return null;
-      // CORREÇÃO: Trocado .single() por .maybeSingle() para evitar o erro 406
       const { data, error } = await supabase.from('pool_messages').select('message').eq('pool_id', pool.id).order('created_at', { ascending: false }).limit(1).maybeSingle();
       if (error) throw error;
       return data;
@@ -55,20 +54,19 @@ const NoticeBoard = () => {
         if (!pool?.id) return [];
         const { data, error } = await supabase.rpc('get_pool_ranking', { p_pool_id: pool.id });
         if (error) throw new Error("Não foi possível carregar o ranking para prêmios.");
-        return (data || []).sort((a: Participant, b: Participant) => b.points - a.points);
+        return data || [];
     },
     enabled: !!pool,
   });
 
+  // ALTERADO: A mutação agora chama a nova função RPC
   const upsertMessage = useMutation({
     mutationFn: async (messageText: string) => {
-      if (!pool?.id || !user?.id) throw new Error("Usuário ou bolão não encontrado.");
-      // CORREÇÃO: O onConflict agora vai funcionar por causa do script SQL acima
-      const { error } = await supabase.from('pool_messages').upsert({
-        pool_id: pool.id,
-        user_id: user.id,
-        message: messageText,
-      }, { onConflict: 'pool_id, user_id' }); 
+      if (!pool?.id) throw new Error("Bolão não encontrado.");
+      const { error } = await supabase.rpc('upsert_pool_message', {
+        p_pool_id: pool.id,
+        p_message: messageText
+      });
       if (error) throw error;
     },
     onSuccess: () => {
