@@ -1,6 +1,6 @@
-// src/components/dashboard/NoticeBoard.tsx (VERSÃO FINAL COM TODAS AS CORREÇÕES)
+// src/components/dashboard/NoticeBoard.tsx (VERSÃO FINAL E CORRIGIDA)
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -14,26 +14,25 @@ import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Separator } from '../ui/separator';
 import { Badge } from '../ui/badge';
 import { cn } from '@/lib/utils';
+import { isAIParticipant } from '@/lib/utils';
 
 // Função para formatar o prêmio para duas casas decimais
 const formatPrize = (prizeString: string | null | undefined): string | null => {
-    if (!prizeString) return null;
-    if (prizeString.startsWith('R$ ')) {
-        const value = parseFloat(prizeString.replace('R$ ', '').replace(',', '.'));
-        if (!isNaN(value)) {
-            return `R$ ${value.toFixed(2).replace('.', ',')}`;
-        }
+    if (!prizeString || !prizeString.startsWith('R$ ')) {
+        return prizeString;
+    }
+    const value = parseFloat(prizeString.replace('R$ ', '').replace('.', '').replace(',', '.'));
+    if (!isNaN(value)) {
+        return `R$ ${value.toFixed(2).replace('.', ',')}`;
     }
     return prizeString;
 };
-
 
 const NoticeBoard = () => {
   const { user, pool } = useAuth();
   const queryClient = useQueryClient();
   const [newMessage, setNewMessage] = useState('');
 
-  // Define uma chave de query única para os recados, que depende do ID do bolão
   const poolMessagesQueryKey = ['poolMessages', pool?.id];
 
   // Busca as estatísticas principais
@@ -63,7 +62,7 @@ const NoticeBoard = () => {
     }
   });
   
-  // Busca o ranking completo para exibir o pódio
+  // Busca o ranking completo
   const { data: rankingData, isLoading: isLoadingRanking } = useQuery<Participant[]>({
     queryKey: ['poolRankingForPrizes', pool?.id],
     queryFn: async () => {
@@ -75,7 +74,6 @@ const NoticeBoard = () => {
     enabled: !!pool,
   });
 
-  // Mutação para salvar/atualizar o recado
   const upsertMessage = useMutation({
     mutationFn: async (messageText: string) => {
       if (!pool?.id) throw new Error("Bolão não encontrado.");
@@ -87,7 +85,6 @@ const NoticeBoard = () => {
     },
     onSuccess: () => {
       toast.success("Recado do bolão atualizado!");
-      // CORREÇÃO: Invalidando a chave de query correta
       queryClient.invalidateQueries({ queryKey: poolMessagesQueryKey });
     },
     onError: (error: any) => {
@@ -95,7 +92,6 @@ const NoticeBoard = () => {
     }
   });
 
-  // Mutação para deletar o recado
   const deleteMessage = useMutation({
     mutationFn: async () => {
         if (!pool?.id) throw new Error("Bolão não encontrado.");
@@ -114,8 +110,14 @@ const NoticeBoard = () => {
 
   const isOwner = user?.id === pool?.owner_id;
   
-  const topThree = rankingData?.slice(0, 3) || [];
-  const lastPlace = rankingData && rankingData.length > 3 ? rankingData[rankingData.length - 1] : null;
+  // Filtra apenas os participantes humanos para o pódio do dashboard
+  const humanParticipants = useMemo(() => {
+    if (!rankingData) return [];
+    return rankingData.filter(p => !isAIParticipant(p) && !p.is_admin);
+  }, [rankingData]);
+
+  const topThree = humanParticipants.slice(0, 3);
+  const lastPlace = humanParticipants.length > 3 ? humanParticipants[humanParticipants.length - 1] : null;
 
   return (
     <Card className="shadow-lg">
@@ -137,7 +139,7 @@ const NoticeBoard = () => {
                 {upsertMessage.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Salvar Recado
                 </Button>
-                {message && (
+                {message?.message && (
                     <Button variant="destructive" onClick={() => deleteMessage.mutate()} disabled={deleteMessage.isPending}>
                         {deleteMessage.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4"/>}
                         Remover Recado
@@ -233,7 +235,7 @@ const NoticeBoard = () => {
                                         </Avatar>
                                         <div>
                                             <p className="font-bold flex items-center gap-2">
-                                                <Badge variant="destructive">{rankingData?.length}º</Badge>
+                                                <Badge variant="destructive">{lastPlace.rank}º</Badge>
                                                 {lastPlace.name}
                                             </p>
                                             {lastPlace.prize && <p className="text-xs text-red-700 dark:text-red-400 font-semibold">{formatPrize(lastPlace.prize)}</p>}
