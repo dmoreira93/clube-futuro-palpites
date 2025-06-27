@@ -36,7 +36,7 @@ const useParticipantsRanking = () => {
 
     try {
       // Volta a chamar a função RPC que calcula tudo no banco
-      const { data, error: rpcError } = await supabase.rpc('get_pool_ranking_with_details', {
+      const { data, error: rpcError } = await supabase.rpc('get_pool_ranking', {
         p_pool_id: pool.id,
       });
 
