@@ -1,61 +1,116 @@
-// src/hooks/useParticipantsRanking.ts (VERSÃO DE RESTAURAÇÃO FINAL)
+// src/contexts/AuthContext.tsx (VERSÃO DE RESTAURAÇÃO COMPLETA E ESTÁVEL)
 
-import { useEffect, useState, useCallback } from "react";
-import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/integrations/supabase/client";
+import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import { User } from '@supabase/supabase-js';
+import { toast } from 'sonner';
+import { Pool } from '@/types/matches';
 
-export interface Participant {
-  id: string;
-  name: string;
-  username: string;
-  avatar_url: string | null;
-  points: number;
-  matchesplayed: number;
-  accuracy: string;
-  exactscores: number;
-  prize: string | null;
-  rank: number;
-  is_admin: boolean;
-}
-
-const useParticipantsRanking = () => {
-  const { pool } = useAuth();
-  const [participants, setParticipants] = useState<Participant[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const fetchRanking = useCallback(async () => {
-    if (!pool?.id) {
-      setParticipants([]);
-      setLoading(false);
-      return;
-    }
-    
-    setLoading(true);
-    setError(null);
-
-    try {
-      // Volta a chamar a função RPC que calcula tudo no banco
-      const { data, error: rpcError } = await supabase.rpc('get_pool_ranking', {
-        p_pool_id: pool.id,
-      });
-
-      if (rpcError) throw rpcError;
-      
-      setParticipants(data as Participant[]);
-    } catch (err: any) {
-      setError(err.message);
-      console.error("Erro ao buscar ranking via RPC:", err);
-    } finally {
-      setLoading(false);
-    }
-  }, [pool?.id]);
-
-  useEffect(() => {
-    fetchRanking();
-  }, [fetchRanking]);
-
-  return { participants, loading, error };
+export type AppUser = User & {
+  username?: string;
+  name?: string;
+  is_admin?: boolean;
+  pool_id?: string | null;
+  first_login?: boolean;
 };
 
-export default useParticipantsRanking;
+interface AuthContextType {
+  user: AppUser | null;
+  pool: Pool | null;
+  loading: boolean;
+  isAuthenticated: boolean;
+  isOwner: boolean;
+  isAdmin: boolean;
+  login: (email: string, password: string) => Promise<{ success: boolean; error: any | null }>;
+  signOut: () => Promise<void>;
+  updateUserProfile: (updates: Partial<Pick<AppUser, 'first_login' | 'pool_id'>>) => Promise<void>;
+  fetchAndSyncProfile: (sessionUser: User) => Promise<AppUser | null>;
+}
+
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+export const useAuth = () => {
+  const context = useContext(AuthContext);
+  if (context === undefined) throw new Error('useAuth must be used within an AuthProvider');
+  return context;
+};
+
+export const AuthProvider = ({ children }: { children: ReactNode }) => {
+  const [user, setUser] = useState<AppUser | null>(null);
+  const [pool, setPool] = useState<Pool | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const isAuthenticated = !!user;
+  const isAdmin = user?.is_admin ?? false;
+  const isOwner = !!user && !!pool && user.id === pool.owner_id;
+
+  const signOut = useCallback(async () => {
+    await supabase.auth.signOut();
+    setUser(null);
+    setPool(null);
+  }, []);
+
+  const fetchAndSyncProfile = useCallback(async (sessionUser: User): Promise<AppUser | null> => {
+    try {
+      const { data: profile, error } = await supabase.from('users_custom').select('*').eq('id', sessionUser.id).single();
+      if (error && error.code !== 'PGRST116') throw error;
+      const combinedUser: AppUser = { ...sessionUser, ...profile };
+      setUser(combinedUser);
+      if (combinedUser.pool_id) {
+        const { data: poolData, error: poolError } = await supabase.from('pools').select('*').eq('id', combinedUser.pool_id).single();
+        if (poolError) {
+          toast.error("Não foi possível carregar os dados do seu bolão.");
+          setPool(null);
+        } else {
+          setPool(poolData as Pool);
+        }
+      } else {
+        setPool(null);
+      }
+      return combinedUser;
+    } catch (error: any) {
+      console.error("Erro ao buscar perfil/bolão:", error);
+      await signOut();
+      return null;
+    }
+  }, [signOut]);
+  
+  useEffect(() => {
+    setLoading(true);
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        fetchAndSyncProfile(session.user).finally(() => setLoading(false));
+      } else {
+        setLoading(false);
+      }
+    });
+
+    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
+        const sessionUser = session?.user;
+        if (sessionUser) {
+            fetchAndSyncProfile(sessionUser);
+        } else {
+            setUser(null);
+            setPool(null);
+        }
+    });
+    return () => { authListener.subscription.unsubscribe(); };
+  }, [fetchAndSyncProfile]);
+  
+  const login = async (email: string, password: string) => {
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) toast.error(error.message || "Email ou senha inválidos.");
+    return { success: !error, error };
+  };
+
+  const updateUserProfile = async (updates: Partial<Pick<AppUser, 'first_login' | 'pool_id'>>) => {
+    if (!user) throw new Error("Usuário não autenticado.");
+    const { error } = await supabase.from('users_custom').update(updates).eq('id', user.id);
+    if (error) { toast.error("Erro ao atualizar perfil."); throw error; };
+    await fetchAndSyncProfile(user);
+  };
+  
+  const value = { user, pool, loading, isAuthenticated, isOwner, isAdmin, login, signOut, updateUserProfile, fetchAndSyncProfile };
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+};

@@ -1,4 +1,4 @@
-// src/pages/RankingPage.tsx (VERSÃO DE RESTAURAÇÃO FINAL)
+// src/pages/RankingPage.tsx (VERSÃO DE RESTAURAÇÃO ESTÁVEL)
 
 import { useAuth } from "@/contexts/AuthContext";
 import useParticipantsRanking from "@/hooks/useParticipantsRanking";
@@ -13,13 +13,12 @@ const RankingPage = () => {
   const { pool } = useAuth();
   const { participants, loading, error } = useParticipantsRanking();
   
-  // Filtra os admins da lista de exibição final
   const displayParticipants = useMemo(() => {
     return participants.filter(p => !p.is_admin);
   }, [participants]);
 
   if (loading) return <div className="flex justify-center items-center h-screen"><Loader2 className="h-8 w-8 animate-spin text-fifa-blue" /></div>;
-  if (error) return <div className="container mx-auto p-4 text-center"><Alert variant="destructive"><AlertTriangle className="h-4 w-4" /><AlertTitle>Erro ao Carregar</AlertTitle><AlertDescription>{error}</AlertDescription></Alert></div>;
+  if (error) return <div className="container mx-auto p-4 text-center"><Alert variant="destructive"><AlertTriangle className="h-4 w-4" /><AlertTitle>Erro ao Carregar o Ranking</AlertTitle><AlertDescription>{error}</AlertDescription></Alert></div>;
 
   return (
     <div className="container mx-auto px-2 sm:px-4 py-8">
@@ -37,7 +36,7 @@ const RankingPage = () => {
                   <TableHead className="w-[50px] text-center">Pos.</TableHead>
                   <TableHead>Participante</TableHead>
                   <TableHead className="text-right">Pontos</TableHead>
-                  <TableHead className="hidden md:table-cell text-right">Jogos Pontuados</TableHead>
+                  <TableHead className="hidden md:table-cell text-right">Jogos Pont.</TableHead>
                   <TableHead className="hidden md:table-cell text-right">Precisão</TableHead>
                   <TableHead className="hidden md:table-cell text-right">Prêmio/Punição</TableHead>
                 </TableRow>
@@ -45,7 +44,7 @@ const RankingPage = () => {
               <TableBody>
                 {displayParticipants.length > 0 ? (
                   displayParticipants.map((participant, index) => (
-                    <RankingRow key={participant.id} participant={{...participant, rank: index + 1}} index={index} />
+                    <RankingRow key={participant.id} participant={participant} index={index} />
                   ))
                 ) : (
                   <TableRow><TableCell colSpan={6} className="h-24 text-center">Ainda não há participantes no ranking.</TableCell></TableRow>
