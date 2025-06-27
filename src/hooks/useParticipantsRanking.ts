@@ -1,4 +1,4 @@
-// src/hooks/useParticipantsRanking.ts (VERSÃO DE RESTAURAÇÃO ESTÁVEL)
+// src/hooks/useParticipantsRanking.ts
 
 import { useEffect, useState, useCallback } from "react";
 import { useAuth } from "@/contexts/AuthContext";
@@ -10,12 +10,14 @@ export interface Participant {
   username: string;
   avatar_url: string | null;
   points: number;
-  matchesplayed: number;
-  accuracy: string;
-  exactscores: number;
-  prize: string | null;
-  rank: number;
   is_admin: boolean;
+  matchesplayed: number; // Total de palpites
+  scored_matches: number; // Jogos com pontuação > 0
+  exactscores: number;
+  // Campos calculados no frontend
+  rank?: number;
+  accuracy?: string;
+  prize?: string | null;
 }
 
 const useParticipantsRanking = () => {
@@ -35,14 +37,17 @@ const useParticipantsRanking = () => {
     setError(null);
 
     try {
-      // Chamando a função SQL correta e estável
-      const { data, error: rpcError } = await supabase.rpc('get_pool_ranking_with_details', {
+      const { data, error: rpcError } = await supabase.rpc('get_pool_ranking', {
         p_pool_id: pool.id,
       });
 
-      if (rpcError) throw rpcError;
+      if (rpcError) {
+        throw rpcError;
+      }
       
-      setParticipants(data as Participant[]);
+      const formattedData = data.map((p: any) => ({...p, points: p.total_points || 0}));
+
+      setParticipants(formattedData as Participant[]);
     } catch (err: any) {
       setError(err.message);
       console.error("Erro ao buscar ranking via RPC:", err);
