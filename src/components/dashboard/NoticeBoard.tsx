@@ -50,9 +50,10 @@ const NoticeBoard = () => {
     queryKey: ['dashboardStats', pool?.id],
     queryFn: async () => {
       if (!pool?.id) return null;
+      // A chamada RPC retorna um array, então pegamos o primeiro elemento.
       const { data, error } = await supabase.rpc('get_pool_dashboard_stats', { p_pool_id: pool.id });
       if (error) throw new Error("Não foi possível carregar as estatísticas do bolão.");
-      return data;
+      return data[0]; // Pegamos o primeiro (e único) item do array.
     },
     enabled: !!pool,
   });
@@ -138,10 +139,28 @@ const NoticeBoard = () => {
         {isLoadingMessages ? <Loader2 className="animate-spin" /> : message?.message && !isOwner && (<blockquote className="mt-6 border-l-2 pl-6 italic">"{message.message}"</blockquote>)}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
           {isLoadingStats ? <div className="col-span-full flex justify-center"><Loader2 className="animate-spin"/></div> : stats && ( <>
-              <div className="flex flex-col items-center justify-center p-2 bg-slate-50 rounded-lg"><Trophy className="text-yellow-500 mb-1"/><span className="font-bold text-sm">{stats.top_scorer?.name || 'N/A'}</span><span className="text-xs text-muted-foreground">{stats.top_scorer?.points || 0} pts</span><span className="text-xs font-semibold text-gray-500 mt-1">Maior Pontuador</span></div>
-              <div className="flex flex-col items-center justify-center p-2 bg-slate-50 rounded-lg"><Star className="text-blue-500 mb-1"/><span className="font-bold text-sm">{stats.most_exact?.name || 'N/A'}</span><span className="text-xs text-muted-foreground">{stats.most_exact?.exact_scores || 0} exatos</span><span className="text-xs font-semibold text-gray-500 mt-1">Mais Acertos Exatos</span></div>
-              <div className="flex flex-col items-center justify-center p-2 bg-slate-50 rounded-lg"><UserX className="text-red-500 mb-1"/><span className="font-bold text-sm">{stats.last_place?.name || 'N/A'}</span><span className="text-xs text-muted-foreground">{stats.last_place?.points || 0} pts</span><span className="text-xs font-semibold text-gray-500 mt-1">Menor Pontuador</span></div>
-              <div className="flex flex-col items-center justify-center p-2 bg-slate-50 rounded-lg"><span className="font-bold text-lg">{stats.points_gap || 0}</span><span className="text-xs font-semibold text-gray-500">Diferença 1º/Últ.</span></div>
+              <div className="flex flex-col items-center justify-center p-2 bg-slate-50 rounded-lg">
+                  <Trophy className="text-yellow-500 mb-1"/>
+                  <span className="font-bold text-sm">{stats.top_scorer?.name || 'N/A'}</span>
+                  <span className="text-xs text-muted-foreground">{stats.top_scorer?.points || 0} pts</span>
+                  <span className="text-xs font-semibold text-gray-500 mt-1">Maior Pontuador</span>
+              </div>
+              <div className="flex flex-col items-center justify-center p-2 bg-slate-50 rounded-lg">
+                  <Star className="text-blue-500 mb-1"/>
+                  <span className="font-bold text-sm">{stats.most_exact?.name || 'N/A'}</span>
+                  <span className="text-xs text-muted-foreground">{stats.most_exact?.exact_scores || 0} exatos</span>
+                  <span className="text-xs font-semibold text-gray-500 mt-1">Mais Acertos Exatos</span>
+              </div>
+              <div className="flex flex-col items-center justify-center p-2 bg-slate-50 rounded-lg">
+                  <UserX className="text-red-500 mb-1"/>
+                  <span className="font-bold text-sm">{stats.last_place?.name || 'N/A'}</span>
+                  <span className="text-xs text-muted-foreground">{stats.last_place?.points || 0} pts</span>
+                  <span className="text-xs font-semibold text-gray-500 mt-1">Menor Pontuador</span>
+              </div>
+              <div className="flex flex-col items-center justify-center p-2 bg-slate-50 rounded-lg">
+                  <span className="font-bold text-lg">{stats.points_gap || 0}</span>
+                  <span className="text-xs font-semibold text-gray-500">Diferença 1º/Últ.</span>
+              </div>
           </>)}
         </div>
         {(isLoadingRanking || topThree.length > 0 || lastPlace) && <Separator />}
