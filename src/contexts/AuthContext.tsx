@@ -1,4 +1,4 @@
-// src/contexts/AuthContext.tsx (VERSÃO DE RESTAURAÇÃO ESTÁVEL)
+// src/contexts/AuthContext.tsx (VERSÃO DE RESTAURAÇÃO FINAL)
 
 import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
@@ -22,6 +22,7 @@ interface AuthContextType {
   isAdmin: boolean;
   login: (email: string, password: string) => Promise<{ success: boolean; error: any | null }>;
   signOut: () => Promise<void>;
+  updateUserProfile: (updates: Partial<Pick<AppUser, 'pool_id'>>) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -77,9 +78,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setLoading(true);
       if (session?.user) {
         await fetchAndSyncProfile(session.user);
-      } else {
-        setUser(null);
-        setPool(null);
       }
       setLoading(false);
     };
@@ -93,8 +91,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     if (error) toast.error(error.message || "Email ou senha inválidos.");
     return { success: !error, error };
   };
+
+  const updateUserProfile = async (updates: Partial<Pick<AppUser, 'pool_id'>>) => {
+    if (!user) throw new Error("Usuário não autenticado.");
+    const { error } = await supabase.from('users_custom').update(updates).eq('id', user.id);
+    if (error) { toast.error("Erro ao atualizar perfil."); throw error; };
+    await fetchAndSyncProfile(user);
+  };
   
-  const value = { user, pool, loading, isAuthenticated, isOwner, isAdmin, login, signOut };
+  const value = { user, pool, loading, isAuthenticated, isOwner, isAdmin, login, signOut, updateUserProfile };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
