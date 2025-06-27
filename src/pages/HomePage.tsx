@@ -1,4 +1,4 @@
-// src/pages/HomePage.tsx (VERSÃO FINAL COM AJUSTES NO PWA)
+// src/pages/HomePage.tsx (VERSÃO FINAL COM CORREÇÃO DO PWA)
 
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -8,25 +8,15 @@ import StatsCard from '@/components/home/StatsCard';
 import { Users, Shield, ArrowRight, Gamepad2, UserPlus, Award, Loader2, PlusCircle, LogIn, BarChart3 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { PublicPoolCard, PublicPool } from '@/components/home/PublicPoolCard';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Label } from '@/components/ui/label';
+import PublicPoolsList from '@/components/pools/PublicPoolsList'; // Importando o componente correto
 import { usePwaDisplayMode } from '@/hooks/usePwaDisplayMode';
 import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import PublicPoolsList from '@/components/pools/PublicPoolsList'; // Importe o novo componente
-
-interface Championship {
-  id: string;
-  name: string;
-}
 
 // ===================================================================
-//  LAYOUT PARA DESKTOP
+//  LAYOUT PARA DESKTOP (Sem alterações)
 // ===================================================================
-// Substitua a função DesktopHomePage inteira por esta em src/pages/HomePage.tsx
-
 const DesktopHomePage = () => {
   const [stats, setStats] = useState({ totalUsers: 0, totalPools: 0 });
   const [loadingStats, setLoadingStats] = useState(true);
@@ -50,7 +40,6 @@ const DesktopHomePage = () => {
   }, []);
 
   return (
-    // CORREÇÃO: Adicionado um <div> principal para envolver todo o conteúdo
     <div className="w-full space-y-16">
       <section className="text-center py-12">
         <h1 className="text-4xl md:text-6xl font-bold text-fifa-blue">Clube Futuro Palpites</h1>
@@ -68,7 +57,6 @@ const DesktopHomePage = () => {
         </div>
       </section>
 
-      {/* CORREÇÃO: A seção de Bolões Públicos agora fica aqui, e a chamada duplicada foi removida */}
       <section className="py-12">
         <div className="container mx-auto">
             <div className="text-center mb-8">
@@ -89,8 +77,9 @@ const DesktopHomePage = () => {
   );
 };
 
+
 // ===================================================================
-//  LAYOUT PARA PWA (VERSÃO COM AJUSTES)
+//  LAYOUT PARA PWA (Com a correção)
 // ===================================================================
 const Stat = ({ icon: Icon, value, label }: { icon: React.ElementType, value: string, label: string }) => (
   <div className="flex items-center gap-4"><div className="bg-fifa-gold/20 p-3 rounded-lg"><Icon className="h-6 w-6 text-fifa-gold" /></div><div className="flex flex-col"><span className="text-2xl font-bold text-fifa-blue">{value}</span><span className="text-sm text-muted-foreground">{label}</span></div></div>
@@ -112,13 +101,11 @@ const PwaHomePage = () => {
 
     return (
         <div className="flex flex-col min-h-screen bg-gray-50 text-fifa-blue">
-            {/* Cabeçalho Ajustado */}
             <header className="bg-fifa-blue p-4 shadow-md flex items-center justify-center gap-3">
                 <BarChart3 className="w-7 h-7 text-fifa-gold" />
                 <h1 className="text-xl font-bold text-fifa-gold">Futuro Palpites</h1>
             </header>
 
-            {/* Conteúdo Principal */}
             <main className="flex-grow flex flex-col gap-8 p-4">
                 <StatBanner />
                 <div className="grid grid-cols-3 gap-4">
@@ -127,11 +114,13 @@ const PwaHomePage = () => {
                     <ActionButton icon={Award} label="Critérios" onClick={() => navigate('/criterios')} />
                 </div>
                 <div className='w-full'>
-                    <PublicPoolsSection />
+                    {/* ===== A CORREÇÃO ESTÁ AQUI ===== */}
+                    <h2 className="text-lg font-bold mb-4 text-center">Bolões Públicos</h2>
+                    <PublicPoolsList /> 
+                    {/* ===== FIM DA CORREÇÃO ===== */}
                 </div>
             </main>
 
-            {/* Rodapé Simplificado */}
             <footer className="bg-fifa-blue text-center p-4">
                 <p className="text-xs text-gray-300">&copy; {currentYear} Clube do Futuro Palpites. Todos os direitos reservados.</p>
             </footer>
@@ -139,9 +128,8 @@ const PwaHomePage = () => {
     );
 };
 
-
 // ===================================================================
-//  COMPONENTE PRINCIPAL (ROTEADOR DE LAYOUT)
+//  COMPONENTE PRINCIPAL (Sem alterações)
 // ===================================================================
 const HomePage = () => {
   const { isAuthenticated, loading } = useAuth();
