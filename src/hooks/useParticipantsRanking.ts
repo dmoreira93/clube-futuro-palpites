@@ -1,4 +1,4 @@
-// src/hooks/useParticipantsRanking.ts (VERSÃO FINAL E CORRETA)
+// src/hooks/useParticipantsRanking.ts (VERSÃO DE RESTAURAÇÃO)
 
 import { useEffect, useState, useCallback } from "react";
 import { useAuth } from "@/contexts/AuthContext";
@@ -10,13 +10,12 @@ export interface Participant {
   username: string;
   avatar_url: string | null;
   points: number;
-  is_admin: boolean;
   matchesplayed: number;
-  scored_matches: number; 
+  accuracy: string;
   exactscores: number;
-  rank?: number;
-  accuracy?: string;
-  prize?: string | null;
+  prize: string | null;
+  rank: number;
+  is_admin: boolean;
 }
 
 const useParticipantsRanking = () => {
@@ -36,36 +35,17 @@ const useParticipantsRanking = () => {
     setError(null);
 
     try {
-      // Busca os usuários e faz um join para buscar os tipos de pontos de cada um
-      const { data, error: fetchError } = await supabase
-        .from('users_custom')
-        .select(`
-          id, name, username, avatar_url, total_points, is_admin,
-          user_points ( points, points_type )
-        `)
-        .eq('pool_id', pool.id)
-        .order('total_points', { ascending: false })
-        .order('name', { ascending: true });
+      // Volta a chamar a função RPC que calcula tudo no banco
+      const { data, error: rpcError } = await supabase.rpc('get_pool_ranking', {
+        p_pool_id: pool.id,
+      });
 
-      if (fetchError) throw fetchError;
+      if (rpcError) throw rpcError;
       
-      // Mapeia os dados e calcula as estatísticas no frontend
-      const formattedData = data.map((p: any) => ({
-        id: p.id,
-        name: p.name,
-        username: p.username,
-        avatar_url: p.avatar_url,
-        is_admin: p.is_admin,
-        points: p.total_points || 0,
-        matchesplayed: p.user_points.length,
-        scored_matches: p.user_points.filter((up: any) => up.points > 0).length,
-        exactscores: p.user_points.filter((up: any) => up.points_type === 'EXACT_SCORE').length,
-      }));
-
-      setParticipants(formattedData as Participant[]);
+      setParticipants(data as Participant[]);
     } catch (err: any) {
       setError(err.message);
-      console.error("Erro ao buscar ranking:", err);
+      console.error("Erro ao buscar ranking via RPC:", err);
     } finally {
       setLoading(false);
     }

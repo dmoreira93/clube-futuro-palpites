@@ -1,4 +1,4 @@
-// src/contexts/AuthContext.tsx (VERSÃO FINAL COM PERMISSÃO DE DONO CORRIGIDA)
+// src/contexts/AuthContext.tsx (VERSÃO DE RESTAURAÇÃO ESTÁVEL)
 
 import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
@@ -18,7 +18,7 @@ interface AuthContextType {
   pool: Pool | null;
   loading: boolean;
   isAuthenticated: boolean;
-  isOwner: boolean; // <-- Garantindo que a propriedade está aqui
+  isOwner: boolean;
   isAdmin: boolean;
   login: (email: string, password: string) => Promise<{ success: boolean; error: any | null }>;
   signOut: () => Promise<void>;
@@ -39,9 +39,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const isAuthenticated = !!user;
   const isAdmin = user?.is_admin ?? false;
-
-  // LÓGICA CORRIGIDA: A verificação de dono é calculada aqui
   const isOwner = !!user && !!pool && user.id === pool.owner_id;
+
+  const signOut = useCallback(async () => {
+    await supabase.auth.signOut();
+    setUser(null);
+    setPool(null);
+  }, []);
 
   const fetchAndSyncProfile = useCallback(async (sessionUser: User) => {
     try {
@@ -64,10 +68,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       }
     } catch (error: any) {
       console.error("Erro ao buscar perfil/bolão:", error);
-      setUser(null); // Limpa o usuário em caso de erro
-      setPool(null);
+      await signOut();
     }
-  }, []);
+  }, [signOut]);
 
   useEffect(() => {
     const processSession = async (session: any) => {
@@ -80,25 +83,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       }
       setLoading(false);
     };
-
     supabase.auth.getSession().then(({ data: { session } }) => processSession(session));
     const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => processSession(session));
     return () => { authListener.subscription.unsubscribe(); };
   }, [fetchAndSyncProfile]);
 
-  const signOut = useCallback(async () => {
-    await supabase.auth.signOut();
-    setUser(null);
-    setPool(null);
-  }, []);
-  
   const login = async (email: string, password: string) => {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) toast.error(error.message || "Email ou senha inválidos.");
     return { success: !error, error };
   };
   
-  // LÓGICA CORRIGIDA: Adicionando 'isOwner' e 'signOut' ao valor do contexto
   const value = { user, pool, loading, isAuthenticated, isOwner, isAdmin, login, signOut };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
