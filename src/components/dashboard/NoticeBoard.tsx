@@ -19,12 +19,12 @@ import { isAIParticipant } from '@/lib/utils';
 
 // Função para formatar o prêmio para duas casas decimais
 const formatPrize = (prizeString: string | null | undefined): string | null => {
-    if (!prizeString || !prizeString.startsWith('R$ ')) {
-        return prizeString;
-    }
-    const value = parseFloat(prizeString.replace('R$ ', '').replace('.', '').replace(',', '.'));
-    if (!isNaN(value)) {
-        return `R$ ${value.toFixed(2).replace('.', ',')}`;
+    if (!prizeString) return prizeString;
+    if (prizeString.startsWith('R$ ')) {
+        const value = parseFloat(prizeString.replace('R$ ', '').replace('.', '').replace(',', '.'));
+        if (!isNaN(value)) {
+            return `R$ ${value.toFixed(2).replace('.', ',')}`;
+        }
     }
     return prizeString;
 };
@@ -45,11 +45,9 @@ const calculatePrize = (rank: number, participant: Participant, totalHumanPartic
 };
 
 const NoticeBoard = () => {
-  const { user, pool, isOwner } = useAuth(); // Usando 'pool' e 'isOwner' do contexto
+  const { user, pool, isOwner } = useAuth();
   const queryClient = useQueryClient();
   const [newMessage, setNewMessage] = useState('');
-
-  // Usando o hook que já busca todos os dados de ranking
   const { participants: rankingData, loading: isLoadingRanking } = useParticipantsRanking();
   
   const poolId = pool?.id;
@@ -61,7 +59,7 @@ const NoticeBoard = () => {
     queryFn: async () => {
       if (!poolId) return null;
       const { data, error } = await supabase.from('pool_messages').select('message').eq('pool_id', poolId).order('created_at', { ascending: false }).limit(1).maybeSingle();
-      if (error) throw error;
+      if (error && error.code !== 'PGRST116') throw error;
       return data;
     },
     enabled: !!poolId,
@@ -73,8 +71,8 @@ const NoticeBoard = () => {
   // Mutação para salvar/atualizar o recado
   const upsertMessage = useMutation({
     mutationFn: async (messageText: string) => {
-      if (!poolId || !user?.id) throw new Error("Usuário ou bolão não encontrado.");
-      const { error } = await supabase.from('pool_messages').upsert({ pool_id: poolId, user_id: user.id, message: messageText }, { onConflict: 'pool_id' });
+      if (!poolId) throw new Error("Bolão não encontrado.");
+      const { error } = await supabase.rpc('upsert_pool_message', { p_pool_id: poolId, p_message: messageText });
       if (error) throw error;
     },
     onSuccess: () => {
@@ -90,7 +88,7 @@ const NoticeBoard = () => {
   const deleteMessage = useMutation({
     mutationFn: async () => {
       if (!poolId) throw new Error("Bolão não encontrado.");
-      const { error } = await supabase.from('pool_messages').delete().eq('pool_id', poolId);
+      const { error } = await supabase.rpc('delete_pool_message', { p_pool_id: poolId });
       if (error) throw error;
     },
     onSuccess: () => {
@@ -106,6 +104,7 @@ const NoticeBoard = () => {
   // Calcula todas as estatísticas e pódio a partir do rankingData
   const { stats, topThree, lastPlace } = useMemo(() => {
     const humanParticipants = rankingData.filter(p => !isAIParticipant(p) && !p.is_admin);
+
     if (humanParticipants.length === 0) {
         return { stats: null, topThree: [], lastPlace: null };
     }
@@ -122,8 +121,9 @@ const NoticeBoard = () => {
         points_gap: pointsGap
     };
 
-    const topThreePodium = humanParticipants.slice(0, 3).map((p, i) => ({ ...p, rank: i + 1, prize: calculatePrize(i + 1, p, humanParticipants.length, pool) }));
-    const lastPlacePodium = humanParticipants.length > 3 ? { ...lastScorer, rank: humanParticipants.length, prize: calculatePrize(humanParticipants.length, lastScorer, humanParticipants.length, pool) } : null;
+    const humanRankMap = new Map(humanParticipants.map((p, i) => [p.id, i + 1]));
+    const topThreePodium = humanParticipants.slice(0, 3).map(p => ({ ...p, rank: humanRankMap.get(p.id)!, prize: calculatePrize(humanRankMap.get(p.id)!, p, humanParticipants.length, pool) }));
+    const lastPlacePodium = humanParticipants.length > 3 ? { ...lastScorer, rank: humanRankMap.get(lastScorer.id)!, prize: calculatePrize(humanRankMap.get(lastScorer.id)!, lastScorer, humanParticipants.length, pool) } : null;
 
     return { stats: calculatedStats, topThree: topThreePodium, lastPlace: lastPlacePodium };
   }, [rankingData, pool]);
@@ -139,7 +139,7 @@ const NoticeBoard = () => {
           <div className="space-y-2">
             <Textarea placeholder="Deixe um recado para os participantes..." value={newMessage} onChange={(e) => setNewMessage(e.target.value)} rows={3}/>
             <div className="flex gap-2">
-              <Button onClick={() => upsertMessage.mutate(newMessage)} disabled={upsertMessage.isPending}>{upsertMessage.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Salvar</Button>
+              <Button onClick={() => upsertMessage.mutate(newMessage)} disabled={upsertMessage.isPending}>{upsertMessage.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Salvar</Button>
               {message?.message && <Button variant="destructive" onClick={() => deleteMessage.mutate()} disabled={deleteMessage.isPending}>{deleteMessage.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4"/>} Remover</Button>}
             </div>
           </div>
@@ -147,20 +147,20 @@ const NoticeBoard = () => {
         {isLoadingMessages ? <Loader2 className="animate-spin" /> : message?.message && !isOwner && <blockquote className="mt-6 border-l-2 pl-6 italic">"{message.message}"</blockquote>}
         
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
-          {isLoadingRanking ? <div className="col-span-full flex justify-center"><Loader2 className="animate-spin"/></div> : stats && (
+          {isLoadingRanking ? <div className="col-span-full flex justify-center py-8"><Loader2 className="animate-spin"/></div> : stats ? (
             <>
-              <div className="flex flex-col items-center justify-center p-2 bg-slate-50 rounded-lg"><Trophy className="text-yellow-500 mb-1"/><span className="font-bold text-sm">{stats.top_scorer?.name || 'N/A'}</span><span className="text-xs text-muted-foreground">{stats.top_scorer?.points || 0} pts</span><span className="text-xs font-semibold text-gray-500 mt-1">Maior Pontuador</span></div>
-              <div className="flex flex-col items-center justify-center p-2 bg-slate-50 rounded-lg"><Star className="text-blue-500 mb-1"/><span className="font-bold text-sm">{stats.most_exact?.name || 'N/A'}</span><span className="text-xs text-muted-foreground">{stats.most_exact?.exact_scores || 0} exatos</span><span className="text-xs font-semibold text-gray-500 mt-1">Mais Acertos Exatos</span></div>
-              <div className="flex flex-col items-center justify-center p-2 bg-slate-50 rounded-lg"><UserX className="text-red-500 mb-1"/><span className="font-bold text-sm">{stats.last_place?.name || 'N/A'}</span><span className="text-xs text-muted-foreground">{stats.last_place?.points || 0} pts</span><span className="text-xs font-semibold text-gray-500 mt-1">Menor Pontuador</span></div>
-              <div className="flex flex-col items-center justify-center p-2 bg-slate-50 rounded-lg"><span className="font-bold text-lg">{stats.points_gap || 0}</span><span className="text-xs font-semibold text-gray-500">Diferença 1º/Últ.</span></div>
+              <div className="flex flex-col items-center justify-center p-2 bg-slate-50 rounded-lg"><Trophy className="text-yellow-500 mb-1"/><span className="font-bold text-sm">{stats.top_scorer?.name}</span><span className="text-xs text-muted-foreground">{stats.top_scorer?.points} pts</span><span className="text-xs font-semibold text-gray-500 mt-1">Maior Pontuador</span></div>
+              <div className="flex flex-col items-center justify-center p-2 bg-slate-50 rounded-lg"><Star className="text-blue-500 mb-1"/><span className="font-bold text-sm">{stats.most_exact?.name}</span><span className="text-xs text-muted-foreground">{stats.most_exact?.exact_scores} exatos</span><span className="text-xs font-semibold text-gray-500 mt-1">Mais Acertos Exatos</span></div>
+              <div className="flex flex-col items-center justify-center p-2 bg-slate-50 rounded-lg"><UserX className="text-red-500 mb-1"/><span className="font-bold text-sm">{stats.last_place?.name}</span><span className="text-xs text-muted-foreground">{stats.last_place?.points} pts</span><span className="text-xs font-semibold text-gray-500 mt-1">Menor Pontuador</span></div>
+              <div className="flex flex-col items-center justify-center p-2 bg-slate-50 rounded-lg"><span className="font-bold text-lg">{stats.points_gap}</span><span className="text-xs font-semibold text-gray-500">Diferença 1º/Últ.</span></div>
             </>
-          )}
+          ) : <div className="col-span-full text-center text-muted-foreground py-8">Não há dados de estatísticas.</div>}
         </div>
         
         {(isLoadingRanking || topThree.length > 0 || lastPlace) && <Separator />}
         
         <div>
-          {isLoadingRanking ? <div className="flex justify-center"><Loader2 className="animate-spin" /></div> : (topThree.length > 0 || lastPlace) && (
+          {isLoadingRanking ? <div className="flex justify-center py-8"><Loader2 className="animate-spin" /></div> : (topThree.length > 0 || lastPlace) && (
             <div className="space-y-4">
               {topThree.length > 0 && (
                 <div className="space-y-2">
