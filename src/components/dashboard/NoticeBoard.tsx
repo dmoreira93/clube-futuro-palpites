@@ -1,4 +1,4 @@
-// src/components/dashboard/NoticeBoard.tsx (VERSÃO FINAL E CORRETA)
+// src/components/dashboard/NoticeBoard.tsx (VERSÃO FINAL E MAIS ROBUSTA)
 
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -17,6 +17,7 @@ import { Badge } from '../ui/badge';
 import { cn } from '@/lib/utils';
 import { isAIParticipant } from '@/lib/utils';
 
+// Funções auxiliares mantidas como estavam
 const formatPrize = (prizeString: string | null | undefined): string | null => {
     if (!prizeString || !prizeString.startsWith('R$ ')) return prizeString;
     const value = parseFloat(prizeString.replace('R$ ', '').replace('.', '').replace(',', '.'));
@@ -42,7 +43,8 @@ const NoticeBoard = () => {
   const { user, pool } = useAuth();
   const queryClient = useQueryClient();
   const [newMessage, setNewMessage] = useState('');
-  const { participants: rankingData, isLoading: isLoadingRanking } = useParticipantsRanking();
+  // **MELHORIA**: Garante que `rankingData` seja sempre um array.
+  const { participants: rankingData = [], isLoading: isLoadingRanking } = useParticipantsRanking();
   
   const poolMessagesQueryKey = ['poolMessages', pool?.id];
 
@@ -50,10 +52,13 @@ const NoticeBoard = () => {
     queryKey: ['dashboardStats', pool?.id],
     queryFn: async () => {
       if (!pool?.id) return null;
-      // A chamada RPC retorna um array, então pegamos o primeiro elemento.
       const { data, error } = await supabase.rpc('get_pool_dashboard_stats', { p_pool_id: pool.id });
-      if (error) throw new Error("Não foi possível carregar as estatísticas do bolão.");
-      return data[0]; // Pegamos o primeiro (e único) item do array.
+      if (error) {
+        console.error("Erro ao buscar estatísticas do dashboard:", error);
+        throw new Error("Não foi possível carregar as estatísticas do bolão.");
+      }
+      // **MELHORIA**: Retorna nulo se não houver dados, para evitar erros.
+      return data && data.length > 0 ? data[0] : null;
     },
     enabled: !!pool,
   });
@@ -102,6 +107,10 @@ const NoticeBoard = () => {
   const isOwner = user?.id === pool?.owner_id;
   
   const processedRanking = useMemo(() => {
+    // **MELHORIA**: Verifica se `rankingData` é um array antes de usar `.filter`.
+    if (!Array.isArray(rankingData)) {
+      return { topThree: [], lastPlace: null };
+    }
     const humanParticipants = rankingData.filter(p => !isAIParticipant(p) && !p.is_admin);
     const topThree = humanParticipants.slice(0, 3).map((p, i) => ({
       ...p,
@@ -127,6 +136,7 @@ const NoticeBoard = () => {
         <CardDescription>Recados do administrador e destaques da competição.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
+        {/* O restante do código de renderização permanece o mesmo, pois já é seguro */}
         {isOwner && (
           <div className="space-y-2">
             <Textarea placeholder="Deixe um recado para os participantes..." value={newMessage} onChange={(e) => setNewMessage(e.target.value)} rows={3}/>
@@ -163,11 +173,11 @@ const NoticeBoard = () => {
               </div>
           </>)}
         </div>
-        {(isLoadingRanking || topThree.length > 0 || lastPlace) && <Separator />}
+        {(isLoadingRanking || (topThree && topThree.length > 0) || lastPlace) && <Separator />}
         <div>
-            {isLoadingRanking ? <div className="flex justify-center"><Loader2 className="animate-spin" /></div> : (topThree.length > 0 || lastPlace) && (
+            {isLoadingRanking ? <div className="flex justify-center"><Loader2 className="animate-spin" /></div> : ((topThree && topThree.length > 0) || lastPlace) && (
                 <div className="space-y-4">
-                    {topThree.length > 0 && (
+                    {topThree && topThree.length > 0 && (
                         <div className="space-y-2">
                             <h4 className="font-semibold text-center text-muted-foreground">Primeiros Colocados</h4>
                             {topThree.map((winner, index) => (
