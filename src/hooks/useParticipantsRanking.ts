@@ -1,4 +1,4 @@
-// src/hooks/useParticipantsRanking.ts
+// src/hooks/useParticipantsRanking.ts (VERSÃO FINAL E CORRETA)
 
 import { useEffect, useState, useCallback } from "react";
 import { useAuth } from "@/contexts/AuthContext";
@@ -11,10 +11,9 @@ export interface Participant {
   avatar_url: string | null;
   points: number;
   is_admin: boolean;
-  matchesplayed: number; // Total de palpites
-  scored_matches: number; // Jogos com pontuação > 0
+  matchesplayed: number;
+  scored_matches: number; 
   exactscores: number;
-  // Campos calculados no frontend
   rank?: number;
   accuracy?: string;
   prize?: string | null;
@@ -37,20 +36,36 @@ const useParticipantsRanking = () => {
     setError(null);
 
     try {
-      const { data, error: rpcError } = await supabase.rpc('get_pool_ranking', {
-        p_pool_id: pool.id,
-      });
+      // Busca os usuários e faz um join para buscar os tipos de pontos de cada um
+      const { data, error: fetchError } = await supabase
+        .from('users_custom')
+        .select(`
+          id, name, username, avatar_url, total_points, is_admin,
+          user_points ( points, points_type )
+        `)
+        .eq('pool_id', pool.id)
+        .order('total_points', { ascending: false })
+        .order('name', { ascending: true });
 
-      if (rpcError) {
-        throw rpcError;
-      }
+      if (fetchError) throw fetchError;
       
-      const formattedData = data.map((p: any) => ({...p, points: p.total_points || 0}));
+      // Mapeia os dados e calcula as estatísticas no frontend
+      const formattedData = data.map((p: any) => ({
+        id: p.id,
+        name: p.name,
+        username: p.username,
+        avatar_url: p.avatar_url,
+        is_admin: p.is_admin,
+        points: p.total_points || 0,
+        matchesplayed: p.user_points.length,
+        scored_matches: p.user_points.filter((up: any) => up.points > 0).length,
+        exactscores: p.user_points.filter((up: any) => up.points_type === 'EXACT_SCORE').length,
+      }));
 
       setParticipants(formattedData as Participant[]);
     } catch (err: any) {
       setError(err.message);
-      console.error("Erro ao buscar ranking via RPC:", err);
+      console.error("Erro ao buscar ranking:", err);
     } finally {
       setLoading(false);
     }

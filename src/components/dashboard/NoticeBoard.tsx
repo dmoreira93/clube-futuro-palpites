@@ -1,6 +1,6 @@
-// src/components/dashboard/NoticeBoard.tsx (VERSÃO FINAL E CORRETA)
+// src/components/dashboard/NoticeBoard.tsx (VERSÃO COMPLETA E FINAL)
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -17,13 +17,19 @@ import { Badge } from '../ui/badge';
 import { cn } from '@/lib/utils';
 import { isAIParticipant } from '@/lib/utils';
 
+// Função para formatar o prêmio para duas casas decimais
 const formatPrize = (prizeString: string | null | undefined): string | null => {
-    if (!prizeString || !prizeString.startsWith('R$ ')) return prizeString;
+    if (!prizeString || !prizeString.startsWith('R$ ')) {
+        return prizeString;
+    }
     const value = parseFloat(prizeString.replace('R$ ', '').replace('.', '').replace(',', '.'));
-    if (!isNaN(value)) return `R$ ${value.toFixed(2).replace('.', ',')}`;
+    if (!isNaN(value)) {
+        return `R$ ${value.toFixed(2).replace('.', ',')}`;
+    }
     return prizeString;
 };
 
+// Lógica de cálculo de prêmio/punição
 const calculatePrize = (rank: number, participant: Participant, totalHumanParticipants: number, pool: any): string => {
     if (!pool || isAIParticipant(participant) || participant.is_admin) return "";
     const totalPot = (pool.entry_fee || 0) * totalHumanParticipants;
@@ -39,85 +45,88 @@ const calculatePrize = (rank: number, participant: Participant, totalHumanPartic
 };
 
 const NoticeBoard = () => {
-  const { user, pool } = useAuth();
+  const { user, pool, isOwner } = useAuth(); // Usando 'pool' e 'isOwner' do contexto
   const queryClient = useQueryClient();
   const [newMessage, setNewMessage] = useState('');
-  const { participants: rankingData, isLoading: isLoadingRanking } = useParticipantsRanking();
+
+  // Usando o hook que já busca todos os dados de ranking
+  const { participants: rankingData, loading: isLoadingRanking } = useParticipantsRanking();
   
-  const poolMessagesQueryKey = ['poolMessages', pool?.id];
+  const poolId = pool?.id;
+  const poolMessagesQueryKey = ['poolMessages', poolId];
 
-  const { data: stats, isLoading: isLoadingStats } = useQuery({
-    queryKey: ['dashboardStats', pool?.id],
-    queryFn: async () => {
-      if (!pool?.id) return null;
-      const { data, error } = await supabase.rpc('get_pool_dashboard_stats', { p_pool_id: pool.id });
-      if (error) throw new Error("Não foi possível carregar as estatísticas do bolão.");
-      return data;
-    },
-    enabled: !!pool,
-  });
-
+  // Busca o recado mais recente
   const { data: message, isLoading: isLoadingMessages } = useQuery({
     queryKey: poolMessagesQueryKey,
     queryFn: async () => {
-      if (!pool?.id) return null;
-      const { data, error } = await supabase.from('pool_messages').select('message').eq('pool_id', pool.id).order('created_at', { ascending: false }).limit(1).maybeSingle();
+      if (!poolId) return null;
+      const { data, error } = await supabase.from('pool_messages').select('message').eq('pool_id', poolId).order('created_at', { ascending: false }).limit(1).maybeSingle();
       if (error) throw error;
       return data;
     },
-    enabled: !!pool,
+    enabled: !!poolId,
     onSuccess: (data) => {
       setNewMessage(data?.message || '');
     }
   });
 
+  // Mutação para salvar/atualizar o recado
   const upsertMessage = useMutation({
     mutationFn: async (messageText: string) => {
-      if (!pool?.id) throw new Error("Bolão não encontrado.");
-      const { error } = await supabase.rpc('upsert_pool_message', { p_pool_id: pool.id, p_message: messageText });
+      if (!poolId || !user?.id) throw new Error("Usuário ou bolão não encontrado.");
+      const { error } = await supabase.from('pool_messages').upsert({ pool_id: poolId, user_id: user.id, message: messageText }, { onConflict: 'pool_id' });
       if (error) throw error;
     },
     onSuccess: () => {
-      toast.success("Recado do bolão atualizado!");
+      toast.success("Recado atualizado!");
       queryClient.invalidateQueries({ queryKey: poolMessagesQueryKey });
     },
-    onError: (error: any) => { toast.error("Falha ao salvar o recado.", { description: error.message }); }
+    onError: (error: any) => {
+      toast.error("Falha ao salvar o recado.", { description: error.message });
+    }
   });
 
+  // Mutação para deletar o recado
   const deleteMessage = useMutation({
     mutationFn: async () => {
-        if (!pool?.id) throw new Error("Bolão não encontrado.");
-        const { error } = await supabase.rpc('delete_pool_message', { p_pool_id: pool.id });
-        if (error) throw error;
+      if (!poolId) throw new Error("Bolão não encontrado.");
+      const { error } = await supabase.from('pool_messages').delete().eq('pool_id', poolId);
+      if (error) throw error;
     },
     onSuccess: () => {
-        toast.success("Recado removido!");
-        setNewMessage(''); 
-        queryClient.invalidateQueries({ queryKey: poolMessagesQueryKey });
+      toast.success("Recado removido!");
+      setNewMessage(''); 
+      queryClient.invalidateQueries({ queryKey: poolMessagesQueryKey });
     },
-    onError: (error: any) => { toast.error("Falha ao remover o recado.", { description: error.message }); }
+    onError: (error: any) => {
+      toast.error("Falha ao remover o recado.", { description: error.message });
+    }
   });
-
-  const isOwner = user?.id === pool?.owner_id;
   
-  const processedRanking = useMemo(() => {
+  // Calcula todas as estatísticas e pódio a partir do rankingData
+  const { stats, topThree, lastPlace } = useMemo(() => {
     const humanParticipants = rankingData.filter(p => !isAIParticipant(p) && !p.is_admin);
-    const topThree = humanParticipants.slice(0, 3).map((p, i) => ({
-      ...p,
-      rank: i + 1,
-      prize: calculatePrize(i + 1, p, humanParticipants.length, pool)
-    }));
-    const lastPlace = humanParticipants.length > 3 
-      ? { 
-          ...humanParticipants[humanParticipants.length - 1], 
-          rank: humanParticipants.length, 
-          prize: calculatePrize(humanParticipants.length, humanParticipants[humanParticipants.length - 1], humanParticipants.length, pool) 
-        } 
-      : null;
-    return { topThree, lastPlace };
+    if (humanParticipants.length === 0) {
+        return { stats: null, topThree: [], lastPlace: null };
+    }
+    
+    const topScorer = humanParticipants[0];
+    const lastScorer = humanParticipants[humanParticipants.length - 1];
+    const mostExact = [...humanParticipants].sort((a,b) => b.exactscores - a.exactscores)[0];
+    const pointsGap = (topScorer?.points || 0) - (lastScorer?.points || 0);
+
+    const calculatedStats = {
+        top_scorer: { name: topScorer.name, points: topScorer.points },
+        most_exact: { name: mostExact.name, exact_scores: mostExact.exactscores },
+        last_place: { name: lastScorer.name, points: lastScorer.points },
+        points_gap: pointsGap
+    };
+
+    const topThreePodium = humanParticipants.slice(0, 3).map((p, i) => ({ ...p, rank: i + 1, prize: calculatePrize(i + 1, p, humanParticipants.length, pool) }));
+    const lastPlacePodium = humanParticipants.length > 3 ? { ...lastScorer, rank: humanParticipants.length, prize: calculatePrize(humanParticipants.length, lastScorer, humanParticipants.length, pool) } : null;
+
+    return { stats: calculatedStats, topThree: topThreePodium, lastPlace: lastPlacePodium };
   }, [rankingData, pool]);
-  
-  const { topThree, lastPlace } = processedRanking;
 
   return (
     <Card className="shadow-lg">
@@ -130,61 +139,63 @@ const NoticeBoard = () => {
           <div className="space-y-2">
             <Textarea placeholder="Deixe um recado para os participantes..." value={newMessage} onChange={(e) => setNewMessage(e.target.value)} rows={3}/>
             <div className="flex gap-2">
-                <Button onClick={() => upsertMessage.mutate(newMessage)} disabled={upsertMessage.isPending}>{upsertMessage.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Salvar Recado</Button>
-                {message?.message && (<Button variant="destructive" onClick={() => deleteMessage.mutate()} disabled={deleteMessage.isPending}>{deleteMessage.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4"/>} Remover Recado</Button>)}
+              <Button onClick={() => upsertMessage.mutate(newMessage)} disabled={upsertMessage.isPending}>{upsertMessage.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Salvar</Button>
+              {message?.message && <Button variant="destructive" onClick={() => deleteMessage.mutate()} disabled={deleteMessage.isPending}>{deleteMessage.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4"/>} Remover</Button>}
             </div>
           </div>
         )}
-        {isLoadingMessages ? <Loader2 className="animate-spin" /> : message?.message && !isOwner && (<blockquote className="mt-6 border-l-2 pl-6 italic">"{message.message}"</blockquote>)}
+        {isLoadingMessages ? <Loader2 className="animate-spin" /> : message?.message && !isOwner && <blockquote className="mt-6 border-l-2 pl-6 italic">"{message.message}"</blockquote>}
+        
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
-          {isLoadingStats ? <div className="col-span-full flex justify-center"><Loader2 className="animate-spin"/></div> : stats && ( <>
+          {isLoadingRanking ? <div className="col-span-full flex justify-center"><Loader2 className="animate-spin"/></div> : stats && (
+            <>
               <div className="flex flex-col items-center justify-center p-2 bg-slate-50 rounded-lg"><Trophy className="text-yellow-500 mb-1"/><span className="font-bold text-sm">{stats.top_scorer?.name || 'N/A'}</span><span className="text-xs text-muted-foreground">{stats.top_scorer?.points || 0} pts</span><span className="text-xs font-semibold text-gray-500 mt-1">Maior Pontuador</span></div>
               <div className="flex flex-col items-center justify-center p-2 bg-slate-50 rounded-lg"><Star className="text-blue-500 mb-1"/><span className="font-bold text-sm">{stats.most_exact?.name || 'N/A'}</span><span className="text-xs text-muted-foreground">{stats.most_exact?.exact_scores || 0} exatos</span><span className="text-xs font-semibold text-gray-500 mt-1">Mais Acertos Exatos</span></div>
               <div className="flex flex-col items-center justify-center p-2 bg-slate-50 rounded-lg"><UserX className="text-red-500 mb-1"/><span className="font-bold text-sm">{stats.last_place?.name || 'N/A'}</span><span className="text-xs text-muted-foreground">{stats.last_place?.points || 0} pts</span><span className="text-xs font-semibold text-gray-500 mt-1">Menor Pontuador</span></div>
               <div className="flex flex-col items-center justify-center p-2 bg-slate-50 rounded-lg"><span className="font-bold text-lg">{stats.points_gap || 0}</span><span className="text-xs font-semibold text-gray-500">Diferença 1º/Últ.</span></div>
-          </>)}
+            </>
+          )}
         </div>
+        
         {(isLoadingRanking || topThree.length > 0 || lastPlace) && <Separator />}
+        
         <div>
-            {isLoadingRanking ? <div className="flex justify-center"><Loader2 className="animate-spin" /></div> : (topThree.length > 0 || lastPlace) && (
-                <div className="space-y-4">
-                    {topThree.length > 0 && (
-                        <div className="space-y-2">
-                            <h4 className="font-semibold text-center text-muted-foreground">Primeiros Colocados</h4>
-                            {topThree.map((winner, index) => (
-                                <div key={winner.id} className={cn("flex items-center justify-between p-3 rounded-md border-l-4", index === 0 && "bg-blue-50 dark:bg-blue-900/30 border-blue-500", index === 1 && "bg-green-50 dark:bg-green-900/20 border-green-500", index === 2 && "bg-green-50/50 dark:bg-green-900/10 border-green-400")}>
-                                    <div className="flex items-center gap-3">
-                                        <Avatar className="h-8 w-8"><AvatarImage src={winner.avatar_url || ''} /><AvatarFallback>{winner.name.substring(0,1)}</AvatarFallback></Avatar>
-                                        <div>
-                                            <p className="font-bold flex items-center gap-2">
-                                                <Badge variant="secondary" className={cn("font-bold", index === 0 && "bg-blue-600 text-white", index === 1 && "bg-green-600 text-white", index === 2 && "bg-green-500 text-white")}>{winner.rank}º</Badge>
-                                                {winner.name}
-                                            </p>
-                                            {winner.prize && <p className="text-xs text-gray-600 dark:text-gray-400 font-semibold">{formatPrize(winner.prize)}</p>}
-                                        </div>
-                                    </div>
-                                    <span className="font-mono text-sm font-bold">{winner.points} pts</span>
-                                </div>
-                            ))}
+          {isLoadingRanking ? <div className="flex justify-center"><Loader2 className="animate-spin" /></div> : (topThree.length > 0 || lastPlace) && (
+            <div className="space-y-4">
+              {topThree.length > 0 && (
+                <div className="space-y-2">
+                  <h4 className="font-semibold text-center text-muted-foreground">Primeiros Colocados</h4>
+                  {topThree.map((winner, index) => (
+                    <div key={winner.id} className={cn("flex items-center justify-between p-3 rounded-md border-l-4", index === 0 && "bg-blue-50 dark:bg-blue-900/30 border-blue-500", index === 1 && "bg-green-50 dark:bg-green-900/20 border-green-500", index === 2 && "bg-green-50/50 dark:bg-green-900/10 border-green-400")}>
+                      <div className="flex items-center gap-3">
+                        <Avatar className="h-8 w-8"><AvatarImage src={winner.avatar_url || ''} /><AvatarFallback>{winner.name.substring(0,1)}</AvatarFallback></Avatar>
+                        <div>
+                          <p className="font-bold flex items-center gap-2"><Badge variant="secondary" className={cn("font-bold", index === 0 && "bg-blue-600 text-white", index === 1 && "bg-green-600 text-white", index === 2 && "bg-green-500 text-white")}>{winner.rank}º</Badge>{winner.name}</p>
+                          {winner.prize && <p className="text-xs text-gray-600 dark:text-gray-400 font-semibold">{formatPrize(winner.prize)}</p>}
                         </div>
-                    )}
-                     {lastPlace && (
-                         <div className="space-y-2 mt-4">
-                            <h4 className="font-semibold text-center text-muted-foreground">Lanterna</h4>
-                            <div className="flex items-center justify-between p-3 rounded-md bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500">
-                                <div className="flex items-center gap-3">
-                                    <Avatar className="h-8 w-8"><AvatarImage src={lastPlace.avatar_url || ''} /><AvatarFallback>{lastPlace.name.substring(0,1)}</AvatarFallback></Avatar>
-                                    <div>
-                                        <p className="font-bold flex items-center gap-2"><Badge variant="destructive">{lastPlace.rank}º</Badge>{lastPlace.name}</p>
-                                        {lastPlace.prize && <p className="text-xs text-red-700 dark:text-red-400 font-semibold">{formatPrize(lastPlace.prize)}</p>}
-                                    </div>
-                                </div>
-                                <span className="font-mono text-sm font-bold">{lastPlace.points} pts</span>
-                            </div>
-                         </div>
-                     )}
+                      </div>
+                      <span className="font-mono text-sm font-bold">{winner.points} pts</span>
+                    </div>
+                  ))}
                 </div>
-            )}
+              )}
+              {lastPlace && (
+                <div className="space-y-2 mt-4">
+                  <h4 className="font-semibold text-center text-muted-foreground">Lanterna</h4>
+                  <div className="flex items-center justify-between p-3 rounded-md bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500">
+                    <div className="flex items-center gap-3">
+                      <Avatar className="h-8 w-8"><AvatarImage src={lastPlace.avatar_url || ''} /><AvatarFallback>{lastPlace.name.substring(0,1)}</AvatarFallback></Avatar>
+                      <div>
+                        <p className="font-bold flex items-center gap-2"><Badge variant="destructive">{lastPlace.rank}º</Badge>{lastPlace.name}</p>
+                        {lastPlace.prize && <p className="text-xs text-red-700 dark:text-red-400 font-semibold">{formatPrize(lastPlace.prize)}</p>}
+                      </div>
+                    </div>
+                    <span className="font-mono text-sm font-bold">{lastPlace.points} pts</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </CardContent>
     </Card>
