@@ -71,8 +71,8 @@ const NoticeBoard = () => {
   // Mutação para salvar/atualizar o recado
   const upsertMessage = useMutation({
     mutationFn: async (messageText: string) => {
-      if (!poolId) throw new Error("Bolão não encontrado.");
-      const { error } = await supabase.rpc('upsert_pool_message', { p_pool_id: poolId, p_message: messageText });
+      if (!poolId || !user?.id) throw new Error("Usuário ou bolão não encontrado.");
+      const { error } = await supabase.from('pool_messages').upsert({ pool_id: poolId, user_id: user.id, message: messageText }, { onConflict: 'pool_id, user_id' });
       if (error) throw error;
     },
     onSuccess: () => {
@@ -88,7 +88,7 @@ const NoticeBoard = () => {
   const deleteMessage = useMutation({
     mutationFn: async () => {
       if (!poolId) throw new Error("Bolão não encontrado.");
-      const { error } = await supabase.rpc('delete_pool_message', { p_pool_id: poolId });
+      const { error } = await supabase.from('pool_messages').delete().eq('pool_id', poolId).eq('user_id', user!.id);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -101,7 +101,7 @@ const NoticeBoard = () => {
     }
   });
   
-  // Calcula todas as estatísticas e pódio a partir do rankingData
+  // Calcula todas as estatísticas e o pódio a partir da lista do ranking
   const { stats, topThree, lastPlace } = useMemo(() => {
     const humanParticipants = rankingData.filter(p => !isAIParticipant(p) && !p.is_admin);
 
@@ -144,7 +144,7 @@ const NoticeBoard = () => {
             </div>
           </div>
         )}
-        {isLoadingMessages ? <Loader2 className="animate-spin" /> : message?.message && !isOwner && <blockquote className="mt-6 border-l-2 pl-6 italic">"{message.message}"</blockquote>}
+        {isLoadingMessages ? <div className="flex justify-center"><Loader2 className="animate-spin h-5 w-5"/></div> : message?.message && !isOwner && <blockquote className="mt-6 border-l-2 pl-6 italic">"{message.message}"</blockquote>}
         
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
           {isLoadingRanking ? <div className="col-span-full flex justify-center py-8"><Loader2 className="animate-spin"/></div> : stats ? (
@@ -157,10 +157,10 @@ const NoticeBoard = () => {
           ) : <div className="col-span-full text-center text-muted-foreground py-8">Não há dados de estatísticas.</div>}
         </div>
         
-        {(isLoadingRanking || topThree.length > 0 || lastPlace) && <Separator />}
+        {(isLoadingRanking || (topThree && topThree.length > 0) || lastPlace) && <Separator />}
         
         <div>
-          {isLoadingRanking ? <div className="flex justify-center py-8"><Loader2 className="animate-spin" /></div> : (topThree.length > 0 || lastPlace) && (
+          {isLoadingRanking ? <div className="flex justify-center py-8"><Loader2 className="animate-spin" /></div> : (topThree && topThree.length > 0 || lastPlace) && (
             <div className="space-y-4">
               {topThree.length > 0 && (
                 <div className="space-y-2">
@@ -171,7 +171,7 @@ const NoticeBoard = () => {
                         <Avatar className="h-8 w-8"><AvatarImage src={winner.avatar_url || ''} /><AvatarFallback>{winner.name.substring(0,1)}</AvatarFallback></Avatar>
                         <div>
                           <p className="font-bold flex items-center gap-2"><Badge variant="secondary" className={cn("font-bold", index === 0 && "bg-blue-600 text-white", index === 1 && "bg-green-600 text-white", index === 2 && "bg-green-500 text-white")}>{winner.rank}º</Badge>{winner.name}</p>
-                          {winner.prize && <p className="text-xs text-gray-600 dark:text-gray-400 font-semibold">{formatPrize(winner.prize)}</p>}
+                          {winner.prize && <p className="text-xs text-gray-600 dark:text-gray-400 font-semibold">{winner.prize}</p>}
                         </div>
                       </div>
                       <span className="font-mono text-sm font-bold">{winner.points} pts</span>
@@ -187,7 +187,7 @@ const NoticeBoard = () => {
                       <Avatar className="h-8 w-8"><AvatarImage src={lastPlace.avatar_url || ''} /><AvatarFallback>{lastPlace.name.substring(0,1)}</AvatarFallback></Avatar>
                       <div>
                         <p className="font-bold flex items-center gap-2"><Badge variant="destructive">{lastPlace.rank}º</Badge>{lastPlace.name}</p>
-                        {lastPlace.prize && <p className="text-xs text-red-700 dark:text-red-400 font-semibold">{formatPrize(lastPlace.prize)}</p>}
+                        {lastPlace.prize && <p className="text-xs text-red-700 dark:text-red-400 font-semibold">{lastPlace.prize}</p>}
                       </div>
                     </div>
                     <span className="font-mono text-sm font-bold">{lastPlace.points} pts</span>
