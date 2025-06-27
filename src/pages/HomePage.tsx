@@ -15,6 +15,7 @@ import { usePwaDisplayMode } from '@/hooks/usePwaDisplayMode';
 import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import PublicPoolsList from '@/components/pools/PublicPoolsList'; // Importe o novo componente
 
 interface Championship {
   id: string;
@@ -22,80 +23,10 @@ interface Championship {
 }
 
 // ===================================================================
-//  COMPONENTE REUTILIZÁVEL PARA OS BOLÕES PÚBLICOS
-// ===================================================================
-const PublicPoolsSection = () => {
-  const [publicPools, setPublicPools] = useState<PublicPool[]>([]);
-  const [championships, setChampionships] = useState<Championship[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [selectedChampionship, setSelectedChampionship] = useState('all');
-
-  useEffect(() => {
-    const fetchPoolData = async () => {
-      setLoading(true);
-      try {
-        const [{ data: champsData, error: champsError }, { data: poolsData, error: poolsError }] = await Promise.all([
-          supabase.from('championships').select('id, name'),
-          supabase.rpc('get_public_pools')
-        ]);
-        if (champsError || poolsError) throw champsError || poolsError;
-        setChampionships(champsData || []);
-        setPublicPools(poolsData || []);
-      } catch (error) {
-        console.error("Erro ao buscar dados dos bolões públicos:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchPoolData();
-  }, []);
-
-  const handleFilterChange = async (championshipId: string) => {
-    setSelectedChampionship(championshipId);
-    setLoading(true);
-    try {
-      const { data, error } = await supabase.rpc('get_public_pools', { p_championship_id: championshipId === 'all' ? null : championshipId });
-      if (error) throw error;
-      setPublicPools(data || []);
-    } catch (error) {
-      console.error("Erro ao filtrar bolões:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <section>
-      <div className="flex flex-col md:flex-row justify-center items-center gap-4 mb-8">
-        <h2 className="text-2xl md:text-3xl font-bold text-center">Bolões Públicos Abertos</h2>
-        <div className="flex items-center gap-2">
-          <Label htmlFor="championship-filter">Filtrar por:</Label>
-          <Select value={selectedChampionship} onValueChange={handleFilterChange}>
-            <SelectTrigger id="championship-filter" className="w-[250px]"><SelectValue placeholder="Campeonato..." /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos os Campeonatos</SelectItem>
-              {championships.map(champ => (<SelectItem key={champ.id} value={champ.id}>{champ.name}</SelectItem>))}
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-      {loading ? (
-        <div className="flex justify-center items-center h-40"><Loader2 className="h-8 w-8 animate-spin text-fifa-blue" /></div>
-      ) : publicPools.length > 0 ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-5xl mx-auto">
-          {publicPools.map(pool => (<PublicPoolCard key={pool.id} pool={pool} />))}
-        </div>
-      ) : (
-        <p className="text-center text-muted-foreground pt-8">Nenhum bolão público encontrado com os filtros selecionados.</p>
-      )}
-    </section>
-  );
-};
-
-
-// ===================================================================
 //  LAYOUT PARA DESKTOP
 // ===================================================================
+// Substitua a função DesktopHomePage inteira por esta em src/pages/HomePage.tsx
+
 const DesktopHomePage = () => {
   const [stats, setStats] = useState({ totalUsers: 0, totalPools: 0 });
   const [loadingStats, setLoadingStats] = useState(true);
@@ -119,10 +50,11 @@ const DesktopHomePage = () => {
   }, []);
 
   return (
+    // CORREÇÃO: Adicionado um <div> principal para envolver todo o conteúdo
     <div className="w-full space-y-16">
       <section className="text-center py-12">
         <h1 className="text-4xl md:text-6xl font-bold text-fifa-blue">Clube Futuro Palpites</h1>
-        <p className="mt-4 text-lg md:text-xl text-muted-foreground max-w-3xl mx-auto">A plataforma definitiva para criar e competir em bolões de futebol. Encontre um bolão público ou crie o seu e convide seus amigos!</p>
+        <p className="mt-4 text-lg md:text-xl text-muted-foreground max-w-3xl mx-auto">A plataforma definitiva para criar e competir em bolões de futebol. Encontre um bolão público ou crie o seu!</p>
         <div className="mt-8 flex flex-col sm:flex-row justify-center gap-4">
           <Link to="/cadastro"><Button size="lg" className="bg-fifa-green hover:bg-green-700 text-white font-bold shadow-lg w-full sm:w-auto">Crie seu Bolão Grátis<ArrowRight className="ml-2 h-5 w-5" /></Button></Link>
           <Link to="/login"><Button size="lg" variant="outline" className="shadow-md w-full sm:w-auto">Acessar meu Bolão</Button></Link>
@@ -136,7 +68,15 @@ const DesktopHomePage = () => {
         </div>
       </section>
 
-      <PublicPoolsSection />
+      {/* CORREÇÃO: A seção de Bolões Públicos agora fica aqui, e a chamada duplicada foi removida */}
+      <section className="py-12">
+        <div className="container mx-auto">
+            <div className="text-center mb-8">
+                <h2 className="text-3xl font-bold">Bolões Públicos Abertos</h2>
+            </div>
+            <PublicPoolsList /> 
+        </div>
+      </section>
 
       <section className="py-16">
         <div className="container mx-auto max-w-5xl"><h2 className="text-3xl font-bold text-center mb-12">É fácil começar!</h2><div className="grid grid-cols-1 md:grid-cols-3 gap-8"><div className="text-center"><div className="flex justify-center items-center mb-4 w-16 h-16 mx-auto bg-fifa-blue text-white rounded-full"><UserPlus className="w-8 h-8" /></div><h3 className="text-xl font-semibold">1. Crie seu Bolão</h3><p className="text-muted-foreground mt-2">Dê um nome ao seu bolão e receba um código de convite exclusivo em segundos.</p></div><div className="text-center"><div className="flex justify-center items-center mb-4 w-16 h-16 mx-auto bg-fifa-blue text-white rounded-full"><Gamepad2 className="w-8 h-8" /></div><h3 className="text-xl font-semibold">2. Convide seus Amigos</h3><p className="text-muted-foreground mt-2">Compartilhe o código ou torne seu bolão público para que outros participem.</p></div><div className="text-center"><div className="flex justify-center items-center mb-4 w-16 h-16 mx-auto bg-fifa-blue text-white rounded-full"><Award className="w-8 h-8" /></div><h3 className="text-xl font-semibold">3. Palpite e Comemore</h3><p className="text-muted-foreground mt-2">Dê seus palpites, acompanhe o ranking e mostre quem entende mais.</p></div></div></div>
@@ -148,7 +88,6 @@ const DesktopHomePage = () => {
     </div>
   );
 };
-
 
 // ===================================================================
 //  LAYOUT PARA PWA (VERSÃO COM AJUSTES)
