@@ -1,4 +1,4 @@
-// src/hooks/useParticipantsRanking.ts (VERSÃO DE RESTAURAÇÃO)
+// src/hooks/useParticipantsRanking.ts (VERSÃO FINAL)
 
 import { useEffect, useState, useCallback } from "react";
 import { useAuth } from "@/contexts/AuthContext";
@@ -35,7 +35,7 @@ const useParticipantsRanking = () => {
     setError(null);
 
     try {
-      // Volta a chamar a função RPC que calcula tudo no banco
+      // Chamando a função SQL correta 'get_pool_ranking'
       const { data, error: rpcError } = await supabase.rpc('get_pool_ranking', {
         p_pool_id: pool.id,
       });
