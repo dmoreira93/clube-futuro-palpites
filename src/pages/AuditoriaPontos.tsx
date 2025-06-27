@@ -1,4 +1,4 @@
-// src/pages/AuditoriaPontos.tsx (VERSÃO FINAL COM DETALHAMENTO DE GRUPOS/FINAIS)
+// src/pages/AuditoriaPontos.tsx (VERSÃO FINAL COM CORREÇÃO NA EXIBIÇÃO DOS CRITÉRIOS)
 
 import { useState, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
@@ -13,7 +13,7 @@ import { Badge } from '@/components/ui/badge';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
-// A função de busca de dados (fetchAllAuditData) permanece a mesma, pois já busca tudo que precisamos.
+// A função de busca de dados permanece a mesma.
 const fetchAllAuditData = async (poolId: string | undefined) => {
   if (!poolId) return null;
   const { data: users, error: usersError } = await supabase.from('users_custom').select('id, name').eq('pool_id', poolId).eq('is_admin', false);
@@ -61,6 +61,34 @@ const AuditoriaPontos = () => {
       const pointType = point.points_type;
       const predictionId = point.prediction_id;
 
+      // ==========================================================
+      // ===== INÍCIO DA CORREÇÃO LÓGICA =====
+      // ==========================================================
+
+      // Mapeia o 'points_type' do banco para um texto amigável
+      switch (pointType) {
+        case 'EXACT_SCORE':
+          reportRow.tipo_pontuacao = "Placar Exato";
+          break;
+        case 'CORRECT_WINNER':
+          reportRow.tipo_pontuacao = "Acertou o Vencedor";
+          break;
+        case 'CORRECT_DRAW':
+          reportRow.tipo_pontuacao = "Acertou o Empate";
+          break;
+        case 'PARTIAL_SCORE':
+          reportRow.tipo_pontuacao = "Acerto Parcial de Gols";
+          break;
+        case 'GROUP_CLASSIFICATION':
+          // A lógica abaixo vai refinar este texto
+          reportRow.tipo_pontuacao = "Classificação de Grupo";
+          break;
+        case 'NO_POINTS':
+          reportRow.tipo_pontuacao = "Sem Pontos";
+          break;
+      }
+
+      // Preenche os detalhes da partida
       if (['EXACT_SCORE', 'CORRECT_WINNER', 'CORRECT_DRAW', 'PARTIAL_SCORE', 'NO_POINTS'].includes(pointType)) {
         const prediction = matchPredictions?.find(p => p.id === predictionId);
         const match = matches?.find(m => m.id === prediction?.match_id);
@@ -69,13 +97,14 @@ const AuditoriaPontos = () => {
             reportRow.resultado = match.is_finished ? `${match.home_score} - ${match.away_score}` : 'Pendente';
             reportRow.palpite = `${prediction.home_score} - ${prediction.away_score}`;
             reportRow.sortDate = parseISO(match.match_date).getTime();
-            if(pointType === 'CORRECT_WINNER' && match.home_score === match.away_score) {
+            // Refina o texto para empates, se necessário (o ideal é que o DB já salve 'CORRECT_DRAW')
+            if (pointType === 'CORRECT_WINNER' && match.home_score === match.away_score) {
               reportRow.tipo_pontuacao = 'Acertou o Empate';
-            } else {
-              reportRow.tipo_pontuacao = 'Acertou o Vencedor';
             }
         }
-      } else if (pointType === 'GROUP_CLASSIFICATION') {
+      } 
+      // Preenche os detalhes da classificação de grupo
+      else if (pointType === 'GROUP_CLASSIFICATION') {
         const prediction = groupPredictions?.find(p => p.user_id === point.user_id && point.related_id === p.group_id);
         const group = groups.find(g => g.id === prediction?.group_id);
         const result = groupsResults?.find(r => r.group_id === prediction?.group_id);
@@ -84,19 +113,21 @@ const AuditoriaPontos = () => {
             reportRow.palpite = `1º ${teamMap.get(prediction.predicted_first_team_id) || 'N/A'}, 2º ${teamMap.get(prediction.predicted_second_team_id) || 'N/A'}`;
             if (result) {
                 reportRow.resultado = `1º ${teamMap.get(result.first_place_team_id) || 'N/A'}, 2º ${teamMap.get(result.second_place_team_id) || 'N/A'}`;
-                // Lógica para traduzir o critério do grupo
+                // Lógica para detalhar o critério do grupo
                 if (prediction.predicted_first_team_id === result.first_place_team_id && prediction.predicted_second_team_id === result.second_place_team_id) {
                     reportRow.tipo_pontuacao = "Classificação Exata";
                 } else if (prediction.predicted_first_team_id === result.second_place_team_id && prediction.predicted_second_team_id === result.first_place_team_id) {
-                    reportRow.tipo_pontuacao = "Classificação Invertida";
+                    reportRow.tipo_pontuacao = "Classificados Invertidos";
                 } else if (prediction.predicted_first_team_id === result.first_place_team_id || prediction.predicted_second_team_id === result.second_place_team_id) {
-                    reportRow.tipo_pontuacao = "Classificação 1 Time";
+                    reportRow.tipo_pontuacao = "Acertou 1 Classificado";
                 }
             } else {
                 reportRow.resultado = 'Pendente';
             }
         }
-      } else if (pointType && pointType.startsWith('final_')) {
+      } 
+      // Preenche os detalhes da fase final
+      else if (pointType && pointType.startsWith('final_')) {
           const prediction = finalPredictions?.find(p => p.user_id === point.user_id);
           const result = tournamentResults?.[0]; 
           if (prediction && result) {
@@ -105,21 +136,27 @@ const AuditoriaPontos = () => {
               switch(pointType) {
                   case 'final_champion': position = 'Campeão'; predTeamId = prediction.champion_id; resTeamId = result.champion_id; break;
                   case 'final_runner_up': position = 'Vice-Campeão'; predTeamId = prediction.runner_up_id; resTeamId = result.runner_up_id; break;
-                  case 'final_third_place': position = '3º Colocado'; predTeamId = prediction.third_place_id; resTeamId = result.third_place_id; break;
-                  case 'final_fourth_place': position = '4º Colocado'; predTeamId = prediction.fourth_place_id; resTeamId = result.fourth_place_id; break;
+                  case 'final_third_place': position = '3º Lugar'; predTeamId = prediction.third_place_id; resTeamId = result.third_place_id; break;
+                  case 'final_fourth_place': position = '4º Lugar'; predTeamId = prediction.fourth_place_id; resTeamId = result.fourth_place_id; break;
                   case 'final_score': position = 'Placar da Final'; break;
               }
               reportRow.jogo = `Fase Final: ${position}`;
               if (pointType === 'final_score') {
                   reportRow.palpite = `${prediction.final_home_score} - ${prediction.final_away_score}`;
                   reportRow.resultado = `${result.final_home_score} - ${result.final_away_score}`;
+                  reportRow.tipo_pontuacao = 'Acertou o Placar da Final';
               } else {
                   reportRow.palpite = teamMap.get(predTeamId) || 'N/A';
                   reportRow.resultado = teamMap.get(resTeamId) || 'N/A';
+                  reportRow.tipo_pontuacao = `Acertou Posição: ${position}`;
               }
-              reportRow.tipo_pontuacao = `Acerto: ${position}`;
           }
       }
+      
+      // ==========================================================
+      // ===== FIM DA CORREÇÃO LÓGICA =====
+      // ==========================================================
+
       return reportRow;
     });
     return reportData.sort((a, b) => b.sortDate - a.sortDate);
@@ -187,14 +224,14 @@ const AuditoriaPontos = () => {
                         <Badge variant={item.pontos > 0 ? 'default' : 'destructive'}>{item.pontos}</Badge>
                       </TableCell>
                       <TableCell className="hidden md:table-cell text-right text-xs">
-                        {format(parseISO(item.data), 'dd/MM/yy HH:mm', { locale: ptBR })}
+                        {item.data ? format(parseISO(item.data), 'dd/MM/yy HH:mm', { locale: ptBR }) : ''}
                       </TableCell>
                     </TableRow>
                   ))
                 ) : (
                   <TableRow>
                     <TableCell colSpan={7} className="h-24 text-center">
-                      Nenhum registro de ponto encontrado.
+                      Nenhum registro de ponto encontrado para o filtro selecionado.
                     </TableCell>
                   </TableRow>
                 )}
