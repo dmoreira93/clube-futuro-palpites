@@ -57,7 +57,7 @@ const Criterios = () => {
                 <div className="bg-purple-500 text-white rounded-full w-8 h-8 flex items-center justify-center font-bold mr-4">7</div>
                 <div>
                   <h3 className="font-semibold">Acertar Empate (sem o placar exato)</h3>
-                  <p className="text-sm text-gray-600">Você acerta que a partida terminaria empatada, mas não acerta o placar exato.</p>
+                  <p className="text-sm text-gray-600">Você acerta que a partida terminaria **empatada**, mas não acerta o placar exato.</p>
                 </div>
               </div>
               
@@ -65,7 +65,7 @@ const Criterios = () => {
                 <div className="bg-blue-500 text-white rounded-full w-8 h-8 flex items-center justify-center font-bold mr-4">5</div>
                 <div>
                   <h3 className="font-semibold">Acertar Vencedor (sem o placar exato)</h3>
-                  <p className="text-sm text-gray-600">Você acerta o time vencedor da partida, mas não acerta o placar exato.</p>
+                  <p className="text-sm text-gray-600">Você acerta o time **vencedor** da partida, mas não acerta o placar exato.</p>
                 </div>
               </div>
               
