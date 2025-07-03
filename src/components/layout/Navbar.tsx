@@ -1,4 +1,4 @@
-// src/components/layout/Navbar.tsx (VERSÃO COM CORREÇÃO DE ESCOPO)
+// src/components/layout/Navbar.tsx (VERSÃO ATUALIZADA)
 
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -21,7 +21,6 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 
-// Componente auxiliar para os links de navegação com estilo
 const NavLink = ({ to, children }: { to: string; children: React.ReactNode }) => (
   <Button variant="ghost" asChild className="text-sm font-semibold text-white hover:bg-white/10 hover:text-white">
     <Link to={to}>{children}</Link>
@@ -32,10 +31,7 @@ const Navbar = () => {
   const { isAuthenticated, isAdmin, user, signOut, loading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const isHomePage = location.pathname === '/';
 
-  // --- CORREÇÃO APLICADA AQUI ---
-  // A função handleLogout foi movida para cima, antes de ser usada.
   const handleLogout = async () => {
     await signOut();
     navigate("/");
@@ -45,9 +41,15 @@ const Navbar = () => {
     if (loading && !user) return <Loader2 className="h-6 w-6 animate-spin text-white" />;
 
     if (!isAuthenticated) {
-      if (isHomePage) {
-        return null;
+      // --- LÓGICA DE OCULTAR BOTÕES APLICADA AQUI ---
+      const noAuthButtonPages = ['/login', '/admin-login', '/criterios'];
+      const shouldHideButtons = noAuthButtonPages.includes(location.pathname) || location.pathname.startsWith('/cadastro') || location.pathname === '/';
+
+      if (shouldHideButtons) {
+        return null; // Não renderiza nada nas páginas especificadas
       }
+      // --- FIM DA LÓGICA ---
+
       return (
         <div className="flex items-center space-x-2">
           <Button variant="outline" size="sm" onClick={() => navigate("/cadastro")} className="border-fifa-gold text-fifa-gold hover:bg-fifa-gold hover:text-white">Cadastrar</Button>

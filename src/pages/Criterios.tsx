@@ -1,12 +1,31 @@
-// src/pages/Criterios.tsx
+// src/pages/Criterios.tsx (VERSÃO ATUALIZADA)
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Trophy as TrophyIcon, Users as UsersIcon, Volleyball as SoccerBallIcon } from "lucide-react";
+import { Trophy as TrophyIcon, Users as UsersIcon, Volleyball as SoccerBallIcon, ArrowLeft } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
+import { useNavigate } from "react-router-dom";
+import { Button } from "@/components/ui/button";
 
 const Criterios = () => {
+  const { isAuthenticated } = useAuth();
+  const navigate = useNavigate();
+
   return (
     <div className="max-w-4xl mx-auto p-4">
-      <div className="text-center mb-8">
+      {/* Container do título com posicionamento relativo */}
+      <div className="relative text-center mb-8">
+        {/* Botão de voltar que só aparece para usuários não logados */}
+        {!isAuthenticated && (
+          <Button 
+            variant="outline" 
+            size="icon" 
+            className="absolute left-0 top-1/2 -translate-y-1/2" // Posiciona o botão
+            onClick={() => navigate('/')}
+            aria-label="Voltar para a página inicial"
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+        )}
         <h1 className="text-3xl font-bold text-fifa-blue">Critérios de Pontuação</h1>
         <p className="text-gray-600 mt-2">
           Entenda como funciona o sistema de pontos do nosso bolão.
@@ -34,7 +53,6 @@ const Criterios = () => {
                 </div>
               </div>
 
-              {/* AJUSTE: Regra de 7 pontos para o empate */}
               <div className="flex items-center p-3 bg-purple-50 rounded-lg border-l-4 border-purple-500">
                 <div className="bg-purple-500 text-white rounded-full w-8 h-8 flex items-center justify-center font-bold mr-4">7</div>
                 <div>
@@ -43,7 +61,6 @@ const Criterios = () => {
                 </div>
               </div>
               
-              {/* AJUSTE: Regra de 5 pontos apenas para o vencedor */}
               <div className="flex items-center p-3 bg-blue-50 rounded-lg border-l-4 border-blue-500">
                 <div className="bg-blue-500 text-white rounded-full w-8 h-8 flex items-center justify-center font-bold mr-4">5</div>
                 <div>
