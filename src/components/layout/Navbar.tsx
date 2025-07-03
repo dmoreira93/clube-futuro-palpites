@@ -41,14 +41,12 @@ const Navbar = () => {
     if (loading && !user) return <Loader2 className="h-6 w-6 animate-spin text-white" />;
 
     if (!isAuthenticated) {
-      // --- LÓGICA DE OCULTAR BOTÕES APLICADA AQUI ---
       const noAuthButtonPages = ['/login', '/admin-login', '/criterios'];
       const shouldHideButtons = noAuthButtonPages.includes(location.pathname) || location.pathname.startsWith('/cadastro') || location.pathname === '/';
 
       if (shouldHideButtons) {
-        return null; // Não renderiza nada nas páginas especificadas
+        return null; 
       }
-      // --- FIM DA LÓGICA ---
 
       return (
         <div className="flex items-center space-x-2">
@@ -73,6 +71,14 @@ const Navbar = () => {
           <DropdownMenuItem onSelect={() => navigate('/profile')}><User className="mr-2 h-4 w-4" /><span>Meu Perfil</span></DropdownMenuItem>
           <DropdownMenuItem onSelect={() => navigate('/palpites')}><ListChecks className="mr-2 h-4 w-4" /><span>Palpites</span></DropdownMenuItem>
           <DropdownMenuItem onSelect={() => navigate('/simulador')}><Calculator className="mr-2 h-4 w-4" /><span>Simulador</span></DropdownMenuItem>
+          
+          {/* --- ITEM ADICIONADO AQUI --- */}
+          <DropdownMenuItem onSelect={() => navigate('/criterios')}>
+            <Trophy className="mr-2 h-4 w-4" />
+            <span>Critérios</span>
+          </DropdownMenuItem>
+          {/* --- FIM DA ADIÇÃO --- */}
+
           <DropdownMenuItem onSelect={() => navigate('/auditoria')}><FileText className="mr-2 h-4 w-4" /><span>Auditoria de Pontos</span></DropdownMenuItem>
           {isAdmin && (<DropdownMenuItem onSelect={() => navigate('/admin')}><Shield className="mr-2 h-4 w-4" /><span>Painel Admin</span></DropdownMenuItem>)}
           <DropdownMenuSeparator />

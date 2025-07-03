@@ -1,59 +1,38 @@
-// src/components/pwa/ReloadPrompt.tsx
+// src/components/pwa/ReloadPrompt.tsx (VERSÃO ATUALIZADA E AUTOMÁTICA)
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useRegisterSW } from 'virtual:pwa-register/react';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { toast } from "@/components/ui/use-toast";
 import { Rocket } from 'lucide-react';
 
 function ReloadPrompt() {
   const {
-    offlineReady: [offlineReady, setOfflineReady],
     needRefresh: [needRefresh, setNeedRefresh],
     updateServiceWorker,
   } = useRegisterSW({
-    onRegistered(r) {
-      console.log('Service Worker registrado:', r);
-    },
-    onRegisterError(error) {
-      console.error('Erro no registro do Service Worker:', error);
-    },
+    // Removido onRegistered e onRegisterError para simplificar
   });
 
-  const close = () => {
-    setOfflineReady(false);
-    setNeedRefresh(false);
-  };
+  useEffect(() => {
+    if (needRefresh) {
+      // Exibe uma notificação toast informando sobre a atualização
+      toast({
+        title: "Atualizando o aplicativo...",
+        description: "Uma nova versão está sendo carregada para você.",
+        action: <Rocket className="h-5 w-5 text-primary" />,
+      });
 
-  if (!needRefresh && !offlineReady) {
-    return null;
-  }
+      // Atraso de 2 segundos para o usuário ver a mensagem
+      // e então força a atualização do Service Worker e recarrega a página.
+      setTimeout(() => {
+        updateServiceWorker(true);
+      }, 2000);
+    }
+  }, [needRefresh, updateServiceWorker]);
 
-  return (
-    <div className="fixed bottom-4 right-4 z-50">
-      <Card className="bg-background shadow-lg border-primary">
-        <CardHeader className="p-4">
-            <CardTitle className="flex items-center gap-2 text-base">
-                <Rocket className="h-5 w-5 text-primary" />
-                <span>Atualização Disponível!</span>
-            </CardTitle>
-        </CardHeader>
-        <CardContent className="p-4 pt-0">
-          <CardDescription>
-            Uma nova versão do aplicativo está pronta. Recarregue para ver as novidades.
-          </CardDescription>
-          <div className="mt-4 flex gap-2">
-            <Button onClick={() => updateServiceWorker(true)} className="w-full">
-              Atualizar Agora
-            </Button>
-            <Button variant="outline" onClick={() => close()} className="w-full">
-              Depois
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
-  );
+  // Este componente agora não renderiza nada visível,
+  // ele apenas contém a lógica de atualização.
+  return null;
 }
 
 export default ReloadPrompt;
