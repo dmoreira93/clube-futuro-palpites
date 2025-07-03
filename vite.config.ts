@@ -1,4 +1,4 @@
-// vite.config.ts (VERSÃO ATUALIZADA)
+// vite.config.ts (VERSÃO FINAL)
 
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
@@ -13,18 +13,14 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      registerType: 'autoUpdate',
+      registerType: 'prompt', // <-- MUDANÇA PRINCIPAL: Nos dá controle total sobre o prompt.
       strategies: 'injectManifest',
       srcDir: 'src',
       filename: 'sw-push-listener.js',
       
-      // --- ADIÇÃO AQUI ---
-      // Garante que a build sempre gere um manifesto com hashes de arquivo
-      // Isso ajuda a detectar mudanças no Service Worker.
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg}']
       },
-      // --- FIM DA ADIÇÃO ---
 
       manifest: {
         name: 'Clube Futuro Palpites',
