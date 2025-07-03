@@ -7,6 +7,7 @@ import Footer from './Footer';
 import { Toaster } from "@/components/ui/toaster";
 import BottomNavbar from './BottomNavbar';
 import { usePwaDisplayMode } from '@/hooks/usePwaDisplayMode';
+import ReloadPrompt from '@/components/pwa/ReloadPrompt'; // <-- IMPORTE AQUI
 
 interface LayoutProps {
   children: React.ReactNode;
