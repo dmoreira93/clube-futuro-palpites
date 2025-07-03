@@ -1,8 +1,21 @@
+// vercel.json (VERSÃO ATUALIZADA)
+
 {
   "rewrites": [
     {
       "source": "/((?!api/|_next/|static/|.*\\.\\w+).*)",
       "destination": "/index.html"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/sw-push-listener.js",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-cache"
+        }
+      ]
     }
   ]
 }
