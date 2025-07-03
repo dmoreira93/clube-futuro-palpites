@@ -49,7 +49,7 @@ const Criterios = () => {
                 <div className="bg-green-500 text-white rounded-full w-8 h-8 flex items-center justify-center font-bold mr-4">10</div>
                 <div>
                   <h3 className="font-semibold">Placar Exato</h3>
-                  <p className="text-sm text-gray-600">Você acerta o **PLACAR** exato da partida.</p>
+                  <p className="text-sm text-gray-600">Você acerta o **placar** exato da partida.</p>
                 </div>
               </div>
 
