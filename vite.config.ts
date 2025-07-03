@@ -1,4 +1,4 @@
-// vite.config.ts - VERSÃO COM PUSH NOTIFICATIONS
+// vite.config.ts (VERSÃO ATUALIZADA)
 
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
@@ -14,15 +14,17 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      // Usando 'injectManifest' para controle total do Service Worker
       strategies: 'injectManifest',
       srcDir: 'src',
-      filename: 'sw-push-listener.js', // Aponta para seu arquivo customizado na pasta src
+      filename: 'sw-push-listener.js',
       
-      // O workbox agora não precisa mais de 'globPatterns' etc.,
-      // pois o manifest de precache será injetado automaticamente.
-      // A configuração do Workbox pode ser mais simples ou até removida
-      // se não precisar de outras regras específicas.
+      // --- ADIÇÃO AQUI ---
+      // Garante que a build sempre gere um manifesto com hashes de arquivo
+      // Isso ajuda a detectar mudanças no Service Worker.
+      workbox: {
+        globPatterns: ['**/*.{js,css,html,ico,png,svg}']
+      },
+      // --- FIM DA ADIÇÃO ---
 
       manifest: {
         name: 'Clube Futuro Palpites',
