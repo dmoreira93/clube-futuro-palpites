@@ -86,6 +86,9 @@ const AuditoriaPontos = () => {
         case 'NO_POINTS':
           reportRow.tipo_pontuacao = "Sem Pontos";
           break;
+        case 'TOURNAMENT_FINAL':
+          reportRow.tipo_pontuacao = "Classificação Final";
+          break;
       }
 
       // Preenche os detalhes da partida
