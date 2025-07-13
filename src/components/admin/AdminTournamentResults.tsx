@@ -1,4 +1,4 @@
-// src/components/admin/AdminTournamentResults.tsx - VERSÃO CORRIGIDA
+// src/components/admin/AdminTournamentResults.tsx - VERSÃO CORRIGIDA E COMPLETA
 
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
@@ -11,16 +11,15 @@ import { toast } from 'sonner';
 import { Loader2, CheckCircle } from 'lucide-react';
 import { Team } from '@/types/matches';
 
-// Interface para o estado local
 interface ResultState {
-  id?: string;
+  id: string;
   champion_id: string | null;
   runner_up_id: string | null;
   third_place_id: string | null;
   fourth_place_id: string | null;
   final_home_score: number | null;
   final_away_score: number | null;
-  is_completed?: boolean;
+  is_completed: boolean;
 }
 
 const AdminTournamentResults = () => {
@@ -40,14 +39,13 @@ const AdminTournamentResults = () => {
       const { data: resultData, error: resultError } = await supabase
         .from('tournament_results')
         .select('*')
-        .maybeSingle(); // .maybeSingle() não dá erro se não encontrar nada
+        .maybeSingle();
 
       if (resultError) throw resultError;
       
       if (resultData) {
         setResult(resultData);
       }
-
     } catch (e: any) {
       toast.error('Erro ao buscar dados.', { description: e.message });
     } finally {
@@ -59,7 +57,9 @@ const AdminTournamentResults = () => {
     fetchInitialData();
   }, [fetchInitialData]);
 
-  const handleSelectChange = (field: keyof ResultState, teamId: string) => {
+  // --- FUNÇÃO CORRIGIDA ---
+  // Corrigido para atualizar o _id diretamente.
+  const handleSelectChange = (field: 'champion' | 'runner_up' | 'third_place' | 'fourth_place', teamId: string) => {
     setResult(prev => ({ ...prev, [`${field}_id`]: teamId }));
   };
 
@@ -71,8 +71,8 @@ const AdminTournamentResults = () => {
   const handleSubmit = async () => {
     // Validações
     const { champion_id, runner_up_id, third_place_id, fourth_place_id, final_home_score, final_away_score } = result;
-    if (!champion_id || !runner_up_id || !third_place_id || !fourth_place_id || final_home_score === null || final_away_score === null) {
-      toast.error("Por favor, preencha todos os campos.");
+    if (!champion_id || !runner_up_id || !third_place_id || !fourth_place_id || final_home_score === null || isNaN(final_home_score) || final_away_score === null || isNaN(final_away_score)) {
+      toast.error("Por favor, preencha todos os campos corretamente.");
       return;
     }
     const finalPositions = [champion_id, runner_up_id, third_place_id, fourth_place_id];
@@ -83,11 +83,11 @@ const AdminTournamentResults = () => {
 
     setIsSaving(true);
     try {
-      // 1. Salva/Atualiza o resultado final do torneio
+      // 1. Salva/Atualiza o resultado final
       const { data: savedResult, error: upsertError } = await supabase
         .from('tournament_results')
         .upsert({
-          id: result.id || undefined, // Envia o ID apenas se ele já existir
+          id: result.id || '1', // Usa o ID fixo '1' para o upsert. Garanta que a tabela tenha uma linha com este ID.
           champion_id: champion_id,
           runner_up_id: runner_up_id,
           third_place_id: third_place_id,
@@ -95,7 +95,7 @@ const AdminTournamentResults = () => {
           final_home_score: final_home_score,
           final_away_score: final_away_score,
           is_completed: true,
-        }, { onConflict: 'id' }) // Usar o 'id' para a lógica de upsert
+        }, { onConflict: 'id' })
         .select()
         .single();
       
@@ -108,8 +108,6 @@ const AdminTournamentResults = () => {
       if (rpcError) throw rpcError;
 
       toast.success("Pontuações dos palpites finais calculadas com sucesso!");
-      
-      // Atualiza o estado local com os dados salvos
       setResult(savedResult);
 
     } catch (e: any) {
@@ -119,9 +117,7 @@ const AdminTournamentResults = () => {
     }
   };
   
-  if (loading) {
-    return <div className="flex justify-center p-8"><Loader2 className="h-6 w-6 animate-spin" /></div>;
-  }
+  if (loading) return <div className="flex justify-center p-8"><Loader2 className="h-6 w-6 animate-spin" /></div>;
 
   return (
     <Card>
@@ -131,34 +127,10 @@ const AdminTournamentResults = () => {
       </CardHeader>
       <CardContent className="space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <Label>Campeão</Label>
-            <Select value={result.champion_id || ''} onValueChange={(value) => handleSelectChange('champion' as any, value)} disabled={isSaving}>
-              <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
-              <SelectContent>{teams.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}</SelectContent>
-            </Select>
-          </div>
-          <div>
-            <Label>Vice-Campeão</Label>
-            <Select value={result.runner_up_id || ''} onValueChange={(value) => handleSelectChange('runner_up' as any, value)} disabled={isSaving}>
-              <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
-              <SelectContent>{teams.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}</SelectContent>
-            </Select>
-          </div>
-          <div>
-            <Label>3º Lugar</Label>
-            <Select value={result.third_place_id || ''} onValueChange={(value) => handleSelectChange('third_place' as any, value)} disabled={isSaving}>
-              <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
-              <SelectContent>{teams.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}</SelectContent>
-            </Select>
-          </div>
-          <div>
-            <Label>4º Lugar</Label>
-            <Select value={result.fourth_place_id || ''} onValueChange={(value) => handleSelectChange('fourth_place' as any, value)} disabled={isSaving}>
-              <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
-              <SelectContent>{teams.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}</SelectContent>
-            </Select>
-          </div>
+          <div><Label>Campeão</Label><Select value={result.champion_id || ''} onValueChange={(value) => handleSelectChange('champion', value)} disabled={isSaving}><SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger><SelectContent>{teams.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}</SelectContent></Select></div>
+          <div><Label>Vice-Campeão</Label><Select value={result.runner_up_id || ''} onValueChange={(value) => handleSelectChange('runner_up', value)} disabled={isSaving}><SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger><SelectContent>{teams.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}</SelectContent></Select></div>
+          <div><Label>3º Lugar</Label><Select value={result.third_place_id || ''} onValueChange={(value) => handleSelectChange('third_place', value)} disabled={isSaving}><SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger><SelectContent>{teams.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}</SelectContent></Select></div>
+          <div><Label>4º Lugar</Label><Select value={result.fourth_place_id || ''} onValueChange={(value) => handleSelectChange('fourth_place', value)} disabled={isSaving}><SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger><SelectContent>{teams.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}</SelectContent></Select></div>
         </div>
         <div>
           <Label>Placar da Final (Campeão x Vice)</Label>
