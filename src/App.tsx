@@ -1,12 +1,13 @@
-// src/App.tsx (VERSÃO FINAL COMPLETA E CORRIGIDA)
+// src/App.tsx
 
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
 import Layout from "./components/layout/Layout";
 
-// Importações das páginas
+// Páginas
 import HomePage from "./pages/HomePage";
 import Dashboard from "./pages/Dashboard";
+import PoolDashboard from "./pages/PoolDashboard";
 import Login from "./pages/Login";
 import Cadastro from "./pages/Cadastro";
 import Palpites from "./pages/Palpites";
@@ -26,7 +27,7 @@ import ProtectedRoute from "./components/auth/ProtectedRoute";
 import PoolSettingsPage from "./pages/PoolSettings";
 import ProfilePage from "./pages/Profile";
 import NoticiasPage from "./pages/Noticias";
-import AuditoriaPontos from "./pages/AuditoriaPontos"; // Rota de auditoria importada
+import AuditoriaPontos from "./pages/AuditoriaPontos";
 
 function App() {
   return (
@@ -42,8 +43,9 @@ function App() {
             <Route path="/criterios" element={<Criterios />} />
             <Route path="*" element={<NotFound />} />
             
-            {/* --- Rotas Protegidas (acessíveis a todos os usuários logados) --- */}
+            {/* --- Rotas Protegidas --- */}
             <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+            <Route path="/pool/:poolId" element={<ProtectedRoute><PoolDashboard /></ProtectedRoute>} />
             <Route path="/palpites" element={<ProtectedRoute><Palpites /></ProtectedRoute>} />
             <Route path="/ranking" element={<ProtectedRoute><RankingPage /></ProtectedRoute>} />
             <Route path="/resultados" element={<ProtectedRoute><Resultados /></ProtectedRoute>} />
@@ -56,8 +58,6 @@ function App() {
             <Route path="/change-password" element={<ProtectedRoute><ChangePassword /></ProtectedRoute>} />
             <Route path="/palpites-usuarios" element={<ProtectedRoute><UserPredictions /></ProtectedRoute>} />
             <Route path="/palpites-do-dia" element={<ProtectedRoute><DailyMatchesAndPredictions /></ProtectedRoute>} />
-            
-            {/* Nova rota de Auditoria para todos os usuários logados */}
             <Route path="/auditoria" element={<ProtectedRoute><AuditoriaPontos /></ProtectedRoute>} />
 
             {/* --- Rotas de Admin --- */}
