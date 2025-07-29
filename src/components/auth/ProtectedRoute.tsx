@@ -1,7 +1,7 @@
 import { Navigate } from 'react-router-dom';
-// Caminhos corrigidos para usar o alias '@' 👇
 import { useAuth } from '@/contexts/AuthContext';
-import Loading from '@/components/Loading';
+// Corrigido o caminho para incluir a extensão .tsx 👇
+import Loading from '@/components/Loading.tsx';
 
 interface ProtectedRouteProps {
   children: JSX.Element;
