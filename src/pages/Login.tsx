@@ -94,12 +94,6 @@ const Login = () => {
           <CardDescription>Acesse sua conta do bolão</CardDescription>
         </CardHeader>
         <CardContent>
-          <Alert className="mb-4 bg-yellow-50 border-yellow-300">
-            <InfoIcon className="h-4 w-4 text-yellow-600" />
-            <AlertDescription className="text-yellow-800">
-              <strong>Usuários predefinidos:</strong>
-            </AlertDescription>
-          </Alert>
           <form onSubmit={handleSubmit} className="grid gap-4 mt-4">
             <div className="grid gap-2">
               <Label htmlFor="email">Email</Label>
