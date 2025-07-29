@@ -1,7 +1,7 @@
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
-// Corrigido o caminho para incluir a extensão .tsx 👇
-import Loading from '@/components/Loading.tsx';
+// Vamos tentar o caminho relativo direto com a extensão 👇
+import Loading from '../Loading.tsx'; 
 
 interface ProtectedRouteProps {
   children: JSX.Element;
