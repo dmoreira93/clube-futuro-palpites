@@ -1,17 +1,17 @@
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
-import { CircleNotch } from '@phosphor-icons/react';
 
-// 1. Componente Loading movido para cá
+// 1. Componente Loading refeito com CSS puro (Tailwind)
+//    Sem nenhuma importação de ícones.
 const Loading = () => {
   return (
     <div className="flex items-center justify-center h-screen bg-gray-900">
-      <CircleNotch size={32} className="text-white animate-spin" />
+      <div className="w-8 h-8 border-4 border-dashed rounded-full animate-spin border-white"></div>
     </div>
   );
 };
 
-// 2. Props e componente principal sem alterações na lógica
+// 2. Componente principal, sem alterações.
 interface ProtectedRouteProps {
   children: JSX.Element;
   adminOnly?: boolean;
@@ -21,7 +21,6 @@ export function ProtectedRoute({ children, adminOnly = false }: ProtectedRoutePr
   const { isAuthenticated, user, loading, isAdmin, userParticipations } = useAuth();
 
   if (loading) {
-    // Usando o componente Loading definido acima
     return <Loading />;
   }
 
