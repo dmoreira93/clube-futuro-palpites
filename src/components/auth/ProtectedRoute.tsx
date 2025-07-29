@@ -1,7 +1,7 @@
 import { Navigate } from 'react-router-dom';
-// Corrigido o caminho da importação aqui 👇
-import { useAuth } from '../../contexts/AuthContext'; 
-import Loading from '../Loading';
+// Caminhos corrigidos para usar o alias '@' 👇
+import { useAuth } from '@/contexts/AuthContext';
+import Loading from '@/components/Loading';
 
 interface ProtectedRouteProps {
   children: JSX.Element;
