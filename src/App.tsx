@@ -23,7 +23,7 @@ import DailyMatchesAndPredictions from "./pages/DailyMatchesAndPredictions";
 import Simulador from "./pages/Simulador";
 import JoinPoolPage from "./pages/JoinPool";
 import CreatePoolPage from "./pages/CreatePool";
-import ProtectedRoute from "./components/auth/ProtectedRoute";
+import { ProtectedRoute } from "./components/auth/ProtectedRoute";
 import PoolSettingsPage from "./pages/PoolSettings";
 import ProfilePage from "./pages/Profile";
 import NoticiasPage from "./pages/Noticias";
