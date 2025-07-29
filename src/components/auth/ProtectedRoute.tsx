@@ -1,6 +1,7 @@
 import { Navigate } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
-import Loading from './Loading';
+// Corrigido o caminho da importação aqui 👇
+import { useAuth } from '../../contexts/AuthContext'; 
+import Loading from '../Loading';
 
 interface ProtectedRouteProps {
   children: JSX.Element;
