@@ -19,7 +19,7 @@ export function useMyPools() {
 
       // 1. Buscar os IDs dos bolões que o usuário participa
       const { data: participationData, error: participationError } = await supabase
-        .from('participants')
+        .from('participations')
         .select('pool_id')
         .eq('user_id', user.id);
 
