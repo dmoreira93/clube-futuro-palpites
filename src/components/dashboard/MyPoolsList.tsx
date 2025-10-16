@@ -1,9 +1,9 @@
-// src/components/dashboard/MyPoolsList.tsx
+// src/components/dashboard/MyPoolsList.tsx (VERSÃO CORRIGIDA)
 import { Link } from 'react-router-dom';
-import { useMyPools } from '../../hooks/useMyPools';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
-import { Skeleton } from '../ui/skeleton';
-import { Button } from '../ui/button';
+import { useMyPools } from '@/hooks/useMyPools'; // Caminho corrigido para usar o alias
+import { Card, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Button } from '@/components/ui/button';
 
 export function MyPoolsList() {
   const { pools, loading, error } = useMyPools();
