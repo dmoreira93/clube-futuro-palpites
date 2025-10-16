@@ -1,194 +1,182 @@
-// src/pages/CreatePool.tsx (VERSÃO ATUALIZADA)
+// src/pages/CreatePool.tsx (VERSÃO CORRIGIDA)
 
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useForm } from 'react-hook-form';
+import { z } from 'zod';
+import { zodResolver } from '@hookform/resolvers/zod';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { toast } from 'sonner';
+import { Textarea } from '@/components/ui/textarea';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from '@/components/ui/form';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { useToast } from '@/components/ui/use-toast';
+import { useQuery } from '@tanstack/react-query';
 import { Loader2 } from 'lucide-react';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Switch } from '@/components/ui/switch';
+import { Championship } from '@/integrations/supabase/types';
 
-interface Championship {
-  id: string;
-  name: string;
-}
+const formSchema = z.object({
+  name: z.string().min(3, { message: 'O nome do bolão deve ter pelo menos 3 caracteres.' }),
+  description: z.string().optional(),
+  championshipId: z.string({ required_error: "Selecione um campeonato." }),
+});
 
-const CreatePoolPage = () => {
-  const { user, fetchAndSyncProfile } = useAuth();
+type FormData = z.infer<typeof formSchema>;
+
+const CreatePool = () => {
+  const { user } = useAuth();
   const navigate = useNavigate();
-  
-  const [championships, setChampionships] = useState<Championship[]>([]);
-  const [loading, setLoading] = useState(false);
+  const { toast } = useToast();
 
-  // Estados para os novos campos do formulário
-  const [poolName, setPoolName] = useState('');
-  const [selectedChampionship, setSelectedChampionship] = useState<string | undefined>();
-  const [entryFee, setEntryFee] = useState('25');
-  const [prize1st, setPrize1st] = useState('70');
-  const [prize2nd, setPrize2nd] = useState('30');
-  const [prize3rd, setPrize3rd] = useState('0');
-  const [adminFee, setAdminFee] = useState('0');
-  const [maxParticipants, setMaxParticipants] = useState('');
-  const [predictionDeadline, setPredictionDeadline] = useState('');
-  const [isPublic, setIsPublic] = useState(false);
-  const [enablePunishment, setEnablePunishment] = useState(false);
-  const [punishmentDescription, setPunishmentDescription] = useState('Paga um café para o campeão!');
-  const [paymentRequired, setPaymentRequired] = useState(false); // NOVO ESTADO
+  const form = useForm<FormData>({
+    resolver: zodResolver(formSchema),
+  });
 
-  useEffect(() => {
-    const fetchChampionships = async () => {
-      const { data, error } = await supabase.from('championships').select('id, name');
-      if (error) {
-        toast.error("Erro ao carregar campeonatos.");
-      } else {
-        setChampionships(data);
-      }
-    };
-    fetchChampionships();
-  }, []);
+  const { data: championships, isLoading: isLoadingChampionships } = useQuery<Championship[]>({
+    queryKey: ['championships'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('championships').select('*');
+      if (error) throw new Error('Não foi possível carregar os campeonatos.');
+      return data;
+    },
+  });
 
-  const handleCreatePool = async () => {
-    if (!poolName.trim() || !selectedChampionship) {
-      toast.error("Nome do Bolão e Campeonato são obrigatórios.");
-      return;
-    }
-    const totalPrizes = parseFloat(prize1st) + parseFloat(prize2nd) + parseFloat(prize3rd) + parseFloat(adminFee);
-    if (totalPrizes !== 100) {
-      toast.error("A soma dos prêmios e da taxa de admin deve ser exatamente 100%.");
+  const onSubmit = async (values: FormData) => {
+    if (!user) {
+      toast({
+        title: 'Erro de autenticação',
+        description: 'Você precisa estar logado para criar um bolão.',
+        variant: 'destructive',
+      });
       return;
     }
 
-    setLoading(true);
     try {
-        // ALTERADO: Adicionado 'p_payment_required' na chamada RPC
+      // --- CORREÇÃO APLICADA AQUI ---
+      // Mapeando os dados do formulário para os parâmetros da função RPC
       const { data, error } = await supabase.rpc('create_pool', {
-        p_pool_name: poolName.trim(),
-        p_owner_id: user.id,
-        p_championship_id: selectedChampionship,
-        p_entry_fee: parseFloat(entryFee) || 0,
-        p_prize_1st: parseFloat(prize1st) || 0,
-        p_prize_2nd: parseFloat(prize2nd) || 0,
-        p_prize_3rd: parseFloat(prize3rd) || 0,
-        p_admin_fee: parseFloat(adminFee) || 0,
-        p_prediction_deadline: predictionDeadline || null,
-        p_max_participants: maxParticipants ? parseInt(maxParticipants) : null,
-        p_is_public: isPublic,
-        p_enable_punishment: enablePunishment,
-        p_punishment_desc: enablePunishment ? punishmentDescription.trim() : null,
-        p_payment_required: paymentRequired // NOVO PARÂMETRO
+        pool_name: values.name,
+        pool_description: values.description,
+        championship_id: values.championshipId,
+        creator_id: user.id,
+      });
+      // --- FIM DA CORREÇÃO ---
+
+      if (error) {
+        throw error;
+      }
+      
+      toast({
+        title: 'Sucesso!',
+        description: `O bolão "${values.name}" foi criado.`,
       });
 
-      if (error) throw error;
-      
-      await fetchAndSyncProfile(user);
-      toast.success('Bolão criado com sucesso! Você será redirecionado.');
-      navigate('/dashboard');
+      // O retorno da RPC deve ser o ID do novo bolão, para podermos redirecionar
+      const newPoolId = data; 
+      if (newPoolId) {
+        navigate(`/pools/${newPoolId}`);
+      } else {
+        navigate('/dashboard'); // Fallback para o dashboard
+      }
 
     } catch (error: any) {
-      toast.error('Erro ao criar o bolão', { description: error.message });
-    } finally {
-      setLoading(false);
+      console.error('Erro ao criar o bolão:', error);
+      toast({
+        title: 'Erro ao criar o bolão',
+        description: error.message || 'Ocorreu um erro inesperado.',
+        variant: 'destructive',
+      });
     }
   };
 
   return (
-    <div className="max-w-2xl mx-auto py-12">
+    <div className="container mx-auto max-w-2xl p-4">
       <Card>
         <CardHeader>
           <CardTitle>Criar Novo Bolão</CardTitle>
-          <CardDescription>
-            Defina um nome e as regras de premiação e punição para o seu bolão.
-          </CardDescription>
+          <CardDescription>Preencha as informações abaixo para começar um novo bolão com seus amigos.</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="pool-name">Nome do Bolão</Label>
-              <Input id="pool-name" placeholder="Ex: Bolão da Galera" value={poolName} onChange={(e) => setPoolName(e.target.value)} />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="championship">Campeonato</Label>
-              <Select value={selectedChampionship} onValueChange={setSelectedChampionship}>
-                <SelectTrigger id="championship"><SelectValue placeholder="Selecione o campeonato..." /></SelectTrigger>
-                <SelectContent>
-                  {championships.map(champ => (
-                    <SelectItem key={champ.id} value={champ.id}>{champ.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
+        <CardContent>
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+              <FormField
+                control={form.control}
+                name="name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Nome do Bolão</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Bolão da Turma" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="entry-fee">Valor da Inscrição (R$)</Label>
-              <Input id="entry-fee" type="number" value={entryFee} onChange={(e) => setEntryFee(e.target.value)} />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="prediction-deadline">Prazo Final para Palpites</Label>
-              <Input id="prediction-deadline" type="datetime-local" value={predictionDeadline} onChange={(e) => setPredictionDeadline(e.target.value)} />
-            </div>
-          </div>
-          
-          <div>
-            <Label>Distribuição dos Prêmios + Taxa (%)</Label>
-            <div className="grid grid-cols-4 gap-2 mt-2">
-              <div><Label htmlFor="prize-1st" className="text-xs text-muted-foreground">1º Lugar</Label><Input id="prize-1st" type="number" value={prize1st} onChange={(e) => setPrize1st(e.target.value)} /></div>
-              <div><Label htmlFor="prize-2nd" className="text-xs text-muted-foreground">2º Lugar</Label><Input id="prize-2nd" type="number" value={prize2nd} onChange={(e) => setPrize2nd(e.target.value)} /></div>
-              <div><Label htmlFor="prize-3rd" className="text-xs text-muted-foreground">3º Lugar</Label><Input id="prize-3rd" type="number" value={prize3rd} onChange={(e) => setPrize3rd(e.target.value)} /></div>
-              <div><Label htmlFor="admin-fee" className="text-xs text-muted-foreground">Taxa Admin</Label><Input id="admin-fee" type="number" value={adminFee} onChange={(e) => setAdminFee(e.target.value)} /></div>
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">A soma de todos os campos deve ser 100.</p>
-          </div>
+              <FormField
+                control={form.control}
+                name="description"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Descrição (Opcional)</FormLabel>
+                    <FormControl>
+                      <Textarea placeholder="Descreva brevemente as regras ou o objetivo do bolão." {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-                <Label htmlFor="max-participants">Nº Máximo de Participantes</Label>
-                <Input id="max-participants" type="number" placeholder="Deixe em branco para ilimitado" value={maxParticipants} onChange={(e) => setMaxParticipants(e.target.value)} />
-            </div>
-            <div className="space-y-2">
-                <Label>Visibilidade do Bolão</Label>
-                <div className="flex items-center space-x-2 h-10">
-                    <Switch id="is-public" checked={isPublic} onCheckedChange={setIsPublic} />
-                    <Label htmlFor="is-public">{isPublic ? "Público (visível na homepage)" : "Privado (somente por convite)"}</Label>
-                </div>
-            </div>
-          </div>
+              <FormField
+                control={form.control}
+                name="championshipId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Campeonato</FormLabel>
+                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <FormControl>
+                        <SelectTrigger disabled={isLoadingChampionships}>
+                          <SelectValue placeholder="Selecione o campeonato base para o bolão..." />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {championships?.map((champ) => (
+                          <SelectItem key={champ.id} value={champ.id}>
+                            {champ.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
-          <div className="space-y-4">
-            <div className="flex items-center space-x-2">
-              <Checkbox id="enable-punishment" checked={enablePunishment} onCheckedChange={(checked) => setEnablePunishment(checked as boolean)} />
-              <Label htmlFor="enable-punishment">Habilitar "punição" para o último colocado?</Label>
-            </div>
-            {enablePunishment && (
-              <div className="space-y-2 animate-in fade-in-0">
-                <Label htmlFor="punishment-description">Descreva a punição</Label>
-                <Input id="punishment-description" value={punishmentDescription} onChange={(e) => setPunishmentDescription(e.target.value)} />
-              </div>
-            )}
-          </div>
-          
-           {/* NOVO CAMPO DE PAGAMENTO */}
-          <div className="space-y-4">
-            <div className="flex items-center space-x-2">
-                <Checkbox id="payment-required" checked={paymentRequired} onCheckedChange={(checked) => setPaymentRequired(checked as boolean)} />
-                <Label htmlFor="payment-required">Exigir confirmação de pagamento para liberar palpites?</Label>
-            </div>
-          </div>
-
-          <Button onClick={handleCreatePool} disabled={loading} className="w-full">
-            {loading ? <Loader2 className="animate-spin" /> : 'Criar Bolão'}
-          </Button>
+              <Button type="submit" disabled={form.formState.isSubmitting} className="w-full">
+                {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Criar Bolão
+              </Button>
+            </form>
+          </Form>
         </CardContent>
       </Card>
     </div>
   );
 };
 
-export default CreatePoolPage;
+export default CreatePool;
