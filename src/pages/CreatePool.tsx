@@ -1,4 +1,4 @@
-// src/pages/CreatePool.tsx (VERSÃO ATUALIZADA)
+// src/pages/CreatePool.tsx (VERSÃO FINAL E CORRIGIDA)
 
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -26,7 +26,6 @@ const CreatePoolPage = () => {
   const [championships, setChampionships] = useState<Championship[]>([]);
   const [loading, setLoading] = useState(false);
 
-  // Estados para os novos campos do formulário
   const [poolName, setPoolName] = useState('');
   const [selectedChampionship, setSelectedChampionship] = useState<string | undefined>();
   const [entryFee, setEntryFee] = useState('25');
@@ -39,7 +38,7 @@ const CreatePoolPage = () => {
   const [isPublic, setIsPublic] = useState(false);
   const [enablePunishment, setEnablePunishment] = useState(false);
   const [punishmentDescription, setPunishmentDescription] = useState('Paga um café para o campeão!');
-  const [paymentRequired, setPaymentRequired] = useState(false); // NOVO ESTADO
+  const [paymentRequired, setPaymentRequired] = useState(false);
 
   useEffect(() => {
     const fetchChampionships = async () => {
@@ -54,6 +53,10 @@ const CreatePoolPage = () => {
   }, []);
 
   const handleCreatePool = async () => {
+    if (!user) {
+      toast.error("Você precisa estar logado para criar um bolão.");
+      return;
+    }
     if (!poolName.trim() || !selectedChampionship) {
       toast.error("Nome do Bolão e Campeonato são obrigatórios.");
       return;
@@ -66,10 +69,10 @@ const CreatePoolPage = () => {
 
     setLoading(true);
     try {
-        // ALTERADO: Adicionado 'p_payment_required' na chamada RPC
+      // Usando os nomes exatos de parâmetros da sua função no Supabase
       const { data, error } = await supabase.rpc('create_pool', {
         p_pool_name: poolName.trim(),
-        p_owner_id: user.id,
+        p_owner_id: user.id, // Corrigido!
         p_championship_id: selectedChampionship,
         p_entry_fee: parseFloat(entryFee) || 0,
         p_prize_1st: parseFloat(prize1st) || 0,
@@ -81,7 +84,7 @@ const CreatePoolPage = () => {
         p_is_public: isPublic,
         p_enable_punishment: enablePunishment,
         p_punishment_desc: enablePunishment ? punishmentDescription.trim() : null,
-        p_payment_required: paymentRequired // NOVO PARÂMETRO
+        p_payment_required: paymentRequired
       });
 
       if (error) throw error;
@@ -92,6 +95,7 @@ const CreatePoolPage = () => {
 
     } catch (error: any) {
       toast.error('Erro ao criar o bolão', { description: error.message });
+      console.error("Detalhe do Erro:", error);
     } finally {
       setLoading(false);
     }
@@ -107,6 +111,7 @@ const CreatePoolPage = () => {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
+          {/* O RESTO DO SEU CÓDIGO JSX PERMANECE IGUAL */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="pool-name">Nome do Bolão</Label>
@@ -174,7 +179,6 @@ const CreatePoolPage = () => {
             )}
           </div>
           
-           {/* NOVO CAMPO DE PAGAMENTO */}
           <div className="space-y-4">
             <div className="flex items-center space-x-2">
                 <Checkbox id="payment-required" checked={paymentRequired} onCheckedChange={(checked) => setPaymentRequired(checked as boolean)} />
