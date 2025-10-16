@@ -8,7 +8,7 @@ import StatsCard from '@/components/home/StatsCard';
 import { Users, Shield, ArrowRight, Gamepad2, UserPlus, Award, Loader2, PlusCircle, LogIn, BarChart3 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import PublicPoolsList from '@/components/pools/PublicPoolsList'; // Importando o componente correto
+import { PublicPoolsList } from '@/components/pools/PublicPoolsList'; // <-- LINHA CORRIGIDA
 import { usePwaDisplayMode } from '@/hooks/usePwaDisplayMode';
 import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
