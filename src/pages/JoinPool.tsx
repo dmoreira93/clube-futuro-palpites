@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/components/ui/use-toast';
 import { Loader2 } from 'lucide-react';
-import PublicPoolsList from '@/components/pools/PublicPoolsList'; // NOVO: Importando o componente
+import { PublicPoolsList } from '@/components/pools/PublicPoolsList'; // <-- LINHA CORRIGIDA
 import { Separator } from '@/components/ui/separator'; // NOVO: Importando o Separator
 
 const JoinPoolPage = () => {
