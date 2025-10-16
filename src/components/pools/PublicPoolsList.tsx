@@ -1,82 +1,88 @@
 // src/components/pools/PublicPoolsList.tsx
-
 import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
-import { Loader2 } from 'lucide-react';
-import { PublicPoolCard, PublicPool } from '@/components/home/PublicPoolCard';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Label } from '@/components/ui/label';
+import { supabase } from '../../integrations/supabase/client';
+import { Pool } from '../../integrations/supabase/types';
+import { Link } from 'react-router-dom';
+import { Button } from '../ui/button';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '../ui/card';
+import { Skeleton } from '../ui/skeleton';
 
-interface Championship {
-  id: string;
-  name: string;
-}
-
-const PublicPoolsList = () => {
-  const [publicPools, setPublicPools] = useState<PublicPool[]>([]);
-  const [championships, setChampionships] = useState<Championship[]>([]);
+export function PublicPoolsList() {
+  const [publicPools, setPublicPools] = useState<Pool[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedChampionship, setSelectedChampionship] = useState('all');
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const fetchPoolData = async () => {
+    const fetchPublicPools = async () => {
       setLoading(true);
-      try {
-        const [{ data: champsData, error: champsError }, { data: poolsData, error: poolsError }] = await Promise.all([
-          supabase.from('championships').select('id, name'),
-          supabase.rpc('get_public_pools')
-        ]);
-        if (champsError || poolsError) throw champsError || poolsError;
-        setChampionships(champsData || []);
-        setPublicPools(poolsData || []);
-      } catch (error) {
-        console.error("Erro ao buscar dados dos bolões públicos:", error);
-      } finally {
-        setLoading(false);
+      const { data, error } = await supabase
+        .from('pools')
+        .select('*')
+        .eq('is_public', true) // Filtra apenas bolões públicos
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        setError('Não foi possível carregar os bolões públicos.');
+        console.error(error);
+      } else {
+        setPublicPools(data);
       }
+      setLoading(false);
     };
-    fetchPoolData();
+
+    fetchPublicPools();
   }, []);
 
-  const handleFilterChange = async (championshipId: string) => {
-    setSelectedChampionship(championshipId);
-    setLoading(true);
-    try {
-      const { data, error } = await supabase.rpc('get_public_pools', { p_championship_id: championshipId === 'all' ? null : championshipId });
-      if (error) throw error;
-      setPublicPools(data || []);
-    } catch (error) {
-      console.error("Erro ao filtrar bolões:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  if (loading) {
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {Array.from({ length: 3 }).map((_, i) => (
+          <Card key={i}>
+            <CardHeader>
+              <Skeleton className="h-6 w-3/4" />
+              <Skeleton className="h-4 w-1/2 mt-2" />
+            </CardHeader>
+            <CardContent>
+              <Skeleton className="h-10 w-full" />
+            </CardContent>
+            <CardFooter>
+              <Skeleton className="h-10 w-24" />
+            </CardFooter>
+          </Card>
+        ))}
+      </div>
+    );
+  }
+
+  if (error) {
+    return <p className="text-red-500 text-center">{error}</p>;
+  }
 
   return (
-    <section className="w-full">
-      <div className="flex flex-col md:flex-row justify-center items-center gap-4 mb-8">
-        <div className="flex items-center gap-2">
-          <Label htmlFor="championship-filter">Filtrar por Campeonato:</Label>
-          <Select value={selectedChampionship} onValueChange={handleFilterChange}>
-            <SelectTrigger id="championship-filter" className="w-[250px]"><SelectValue placeholder="Campeonato..." /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos os Campeonatos</SelectItem>
-              {championships.map(champ => (<SelectItem key={champ.id} value={champ.id}>{champ.name}</SelectItem>))}
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-      {loading ? (
-        <div className="flex justify-center items-center h-40"><Loader2 className="h-8 w-8 animate-spin text-fifa-blue" /></div>
-      ) : publicPools.length > 0 ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {publicPools.map(pool => (<PublicPoolCard key={pool.id} pool={pool} />))}
+    <div className="space-y-4">
+      <h2 className="text-2xl font-bold tracking-tight">Bolões Públicos</h2>
+      {publicPools.length > 0 ? (
+         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {publicPools.map((pool) => (
+            <Card key={pool.id}>
+              <CardHeader>
+                <CardTitle>{pool.name}</CardTitle>
+                <CardDescription>{pool.description || 'Sem descrição'}</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-muted-foreground">Criado em: {new Date(pool.created_at).toLocaleDateString()}</p>
+              </CardContent>
+              <CardFooter>
+                <Button asChild>
+                  <Link to={`/join-pool?code=${pool.join_code}`}>Entrar no Bolão</Link>
+                </Button>
+              </CardFooter>
+            </Card>
+          ))}
         </div>
       ) : (
-        <p className="text-center text-muted-foreground pt-8">Nenhum bolão público encontrado com os filtros selecionados.</p>
+        <p className="text-center text-muted-foreground py-8">Nenhum bolão público encontrado no momento.</p>
       )}
-    </section>
+    </div>
   );
-};
-
-export default PublicPoolsList;
+}
