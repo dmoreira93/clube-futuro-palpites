@@ -50,9 +50,10 @@ serve(async (_req) => {
     });
 
   } catch (err) {
-    return new Response(JSON.stringify({ error: err.message }), {
+    const errorMessage = err instanceof Error ? err.message : 'Erro desconhecido';
+    return new Response(JSON.stringify({ error: errorMessage }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      status: 500, // Agora, erros lógicos também retornarão 500
+      status: 500,
     });
   }
 });
