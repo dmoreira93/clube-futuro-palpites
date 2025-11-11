@@ -29,12 +29,16 @@ export type Pool = {
   name: string;
   owner_id: string;
   invite_code: string;
+  championship_id: string;
   prize_percent_1st: number;
   prize_percent_2nd: number;
   prize_percent_3rd: number;
   enable_punishment: boolean;
   punishment_description: string | null;
   entry_fee: number;
-  payment_required: boolean; // NOVO CAMPO
-  prediction_deadline: string | null; // Adicionado para consistência
+  payment_required: boolean;
+  prediction_deadline: string | null;
+  max_participants: number;
+  admin_fee_percent: number;
+  is_public: boolean;
 };

@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { PlusCircle, LogIn, Award } from 'lucide-react';
 import { StatBanner } from './StatBanner';
-import PublicPoolsList from '@/components/home/PublicPoolsList'; // Vamos reutilizar a lista de bolões
+import { PublicPoolsList } from '@/components/pools/PublicPoolsList';
 
 const ActionButton = ({ icon: Icon, label, onClick }: { icon: React.ElementType, label: string, onClick: () => void }) => (
     <Button
@@ -39,7 +39,7 @@ export const PwaHomePage = () => {
                 
                 <div className='w-full'>
                     <h2 className="text-lg font-bold mb-4 text-center">Bolões Públicos</h2>
-                    <PublicPoolsSection />
+                    <PublicPoolsList />
                 </div>
             </main>
         </div>

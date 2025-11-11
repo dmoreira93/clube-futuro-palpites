@@ -43,7 +43,7 @@ interface FinalPredictionState {
 }
 
 const Palpites = () => {
-    const { user, pool } = useAuth();
+    const { user, activePool } = useAuth();
     const { toast } = useToast();
     const navigate = useNavigate();
 
@@ -65,7 +65,7 @@ const Palpites = () => {
         setLoading(true);
         setError(null);
         try {
-            const { data: matchesData, error: matchesError } = await supabase.from('matches').select('*, home_team:home_team_id(*), away_team:away_team_id(*)').order('match_date', { ascending: true });
+            const { data: matchesData, error: matchesError } = await supabase.from('matches').select('*, home_team:teams!home_team_id(*), away_team:teams!away_team_id(*)').order('match_date', { ascending: true });
             if (matchesError) throw new Error(`Buscando Partidas: ${matchesError.message}`);
             setAllMatches(matchesData || []);
 
@@ -257,11 +257,11 @@ const Palpites = () => {
     if (error) { return <div className="p-4 text-center"><Card><CardHeader><CardTitle>Erro</CardTitle></CardHeader><CardContent>{error}</CardContent></Card></div>; }
 
     // ALTERADO: Lógica de bloqueio combinada
-    const isDeadlineReached = pool?.prediction_deadline ? isAfter(new Date(), new Date(pool.prediction_deadline)) : false;
-    const isPaymentPending = pool?.payment_required && user?.payment_status !== 'paid';
+    const isDeadlineReached = activePool?.prediction_deadline ? isAfter(new Date(), new Date(activePool.prediction_deadline)) : false;
+    const isPaymentPending = activePool?.payment_required && user?.payment_status !== 'paid';
     const isGeneralLock = isDeadlineReached || isPaymentPending;
     
-    const deadlineFormatted = pool?.prediction_deadline ? format(new Date(pool.prediction_deadline), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR }) : "Não definido";
+    const deadlineFormatted = activePool?.prediction_deadline ? format(new Date(activePool.prediction_deadline), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR }) : "Não definido";
     
     return (
         <div className="container mx-auto p-4 sm:p-6 lg:p-8">
