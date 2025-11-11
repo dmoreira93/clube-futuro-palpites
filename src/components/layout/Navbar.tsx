@@ -118,7 +118,7 @@ const Navbar = () => {
                   <DropdownMenuSeparator />
                   {pools.map(pool => (
                     <DropdownMenuItem key={pool.id} asChild>
-                      <Link to={`/pools/${pool.id}`}>{pool.name}</Link>
+                      <Link to={`/pool/${pool.id}`}>{pool.name}</Link>
                     </DropdownMenuItem>
                   ))}
                   <DropdownMenuSeparator />
