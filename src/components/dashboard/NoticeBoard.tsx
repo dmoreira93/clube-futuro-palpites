@@ -40,19 +40,19 @@ const calculatePrize = (rank: number, participant: Participant, totalHumanPartic
 };
 
 const NoticeBoard = () => {
-  const { user, pool } = useAuth();
+  const { user, activePool } = useAuth();
   const queryClient = useQueryClient();
   const [newMessage, setNewMessage] = useState('');
   // **MELHORIA**: Garante que `rankingData` seja sempre um array.
-  const { participants: rankingData = [], isLoading: isLoadingRanking } = useParticipantsRanking();
+  const { participants: rankingData = [], loading: isLoadingRanking } = useParticipantsRanking();
   
-  const poolMessagesQueryKey = ['poolMessages', pool?.id];
+  const poolMessagesQueryKey = ['poolMessages', activePool?.id];
 
   const { data: stats, isLoading: isLoadingStats } = useQuery({
-    queryKey: ['dashboardStats', pool?.id],
+    queryKey: ['dashboardStats', activePool?.id],
     queryFn: async () => {
-      if (!pool?.id) return null;
-      const { data, error } = await supabase.rpc('get_pool_dashboard_stats', { p_pool_id: pool.id });
+      if (!activePool?.id) return null;
+      const { data, error } = await supabase.rpc('get_pool_dashboard_stats', { p_pool_id: activePool.id });
       if (error) {
         console.error("Erro ao buscar estatísticas do dashboard:", error);
         throw new Error("Não foi possível carregar as estatísticas do bolão.");
@@ -60,27 +60,24 @@ const NoticeBoard = () => {
       // **MELHORIA**: Retorna nulo se não houver dados, para evitar erros.
       return data && data.length > 0 ? data[0] : null;
     },
-    enabled: !!pool,
+    enabled: !!activePool,
   });
 
   const { data: message, isLoading: isLoadingMessages } = useQuery({
     queryKey: poolMessagesQueryKey,
     queryFn: async () => {
-      if (!pool?.id) return null;
-      const { data, error } = await supabase.from('pool_messages').select('message').eq('pool_id', pool.id).order('created_at', { ascending: false }).limit(1).maybeSingle();
+      if (!activePool?.id) return null;
+      const { data, error } = await supabase.from('pool_messages').select('message').eq('pool_id', activePool.id).order('created_at', { ascending: false }).limit(1).maybeSingle();
       if (error) throw error;
       return data;
     },
-    enabled: !!pool,
-    onSuccess: (data) => {
-      setNewMessage(data?.message || '');
-    }
+    enabled: !!activePool,
   });
 
   const upsertMessage = useMutation({
     mutationFn: async (messageText: string) => {
-      if (!pool?.id) throw new Error("Bolão não encontrado.");
-      const { error } = await supabase.rpc('upsert_pool_message', { p_pool_id: pool.id, p_message: messageText });
+      if (!activePool?.id) throw new Error("Bolão não encontrado.");
+      const { error } = await supabase.rpc('upsert_pool_message', { p_pool_id: activePool.id, p_message: messageText });
       if (error) throw error;
     },
     onSuccess: () => {
@@ -92,8 +89,10 @@ const NoticeBoard = () => {
 
   const deleteMessage = useMutation({
     mutationFn: async () => {
-        if (!pool?.id) throw new Error("Bolão não encontrado.");
-        const { error } = await supabase.rpc('delete_pool_message', { p_pool_id: pool.id });
+        if (!activePool?.id) throw new Error("Bolão não encontrado.");
+        const messageData = await supabase.from('pool_messages').select('id').eq('pool_id', activePool.id).order('created_at', { ascending: false }).limit(1).maybeSingle();
+        if (messageData.error || !messageData.data) throw new Error("Mensagem não encontrada");
+        const { error } = await supabase.rpc('delete_pool_message', { p_message_id: messageData.data.id });
         if (error) throw error;
     },
     onSuccess: () => {
@@ -104,7 +103,7 @@ const NoticeBoard = () => {
     onError: (error: any) => { toast.error("Falha ao remover o recado.", { description: error.message }); }
   });
 
-  const isOwner = user?.id === pool?.owner_id;
+  const isOwner = user?.id === activePool?.owner_id;
   
   const processedRanking = useMemo(() => {
     // **MELHORIA**: Verifica se `rankingData` é um array antes de usar `.filter`.
@@ -115,17 +114,17 @@ const NoticeBoard = () => {
     const topThree = humanParticipants.slice(0, 3).map((p, i) => ({
       ...p,
       rank: i + 1,
-      prize: calculatePrize(i + 1, p, humanParticipants.length, pool)
+      prize: calculatePrize(i + 1, p, humanParticipants.length, activePool)
     }));
     const lastPlace = humanParticipants.length > 3 
       ? { 
           ...humanParticipants[humanParticipants.length - 1], 
           rank: humanParticipants.length, 
-          prize: calculatePrize(humanParticipants.length, humanParticipants[humanParticipants.length - 1], humanParticipants.length, pool) 
+          prize: calculatePrize(humanParticipants.length, humanParticipants[humanParticipants.length - 1], humanParticipants.length, activePool) 
         } 
       : null;
     return { topThree, lastPlace };
-  }, [rankingData, pool]);
+  }, [rankingData, activePool]);
   
   const { topThree, lastPlace } = processedRanking;
 

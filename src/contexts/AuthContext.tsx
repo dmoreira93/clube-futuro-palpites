@@ -12,6 +12,7 @@ export type AppUser = User & {
   name?: string;
   is_admin?: boolean;
   first_login?: boolean;
+  avatar_url?: string;
   payment_status?: 'paid' | 'pending';
 };
 
@@ -67,7 +68,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       const { data: profile, error } = await supabase.from('users_custom').select('*').eq('id', sessionUser.id).single();
       if (error && error.code !== 'PGRST116') throw error;
       
-      const combinedUser: AppUser = { ...sessionUser, ...profile };
+      const combinedUser: AppUser = {
+        ...sessionUser,
+        username: profile?.username,
+        name: profile?.name,
+        is_admin: profile?.is_admin,
+        first_login: profile?.first_login,
+        avatar_url: profile?.avatar_url,
+        payment_status: (profile?.payment_status === 'paid' || profile?.payment_status === 'pending') 
+          ? profile.payment_status 
+          : 'pending'
+      };
       setUser(combinedUser);
       
       const { data: participationsData, error: participationsError } = await supabase

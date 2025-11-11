@@ -19,23 +19,38 @@ type Participant = {
 };
 
 const PaymentManagement = () => {
-  const { pool } = useAuth();
+  const { activePool } = useAuth();
   const queryClient = useQueryClient();
 
   const { data: participants, isLoading } = useQuery<Participant[]>({
-    queryKey: ['poolParticipants', pool?.id],
+    queryKey: ['poolParticipants', activePool?.id],
     queryFn: async () => {
-      if (!pool?.id) return [];
+      if (!activePool?.id) return [];
+      
+      // Get all participants from the participations table
+      const { data: participationsData, error: participationsError } = await supabase
+        .from('participations')
+        .select('user_id')
+        .eq('pool_id', activePool.id);
+      
+      if (participationsError) throw participationsError;
+      if (!participationsData || participationsData.length === 0) return [];
+      
+      const userIds = participationsData.map(p => p.user_id);
+      
       const { data, error } = await supabase
         .from('users_custom')
         .select('id, name, avatar_url, payment_status')
-        .eq('pool_id', pool.id)
+        .in('id', userIds)
         .eq('is_admin', false)
         .order('name');
       if (error) throw error;
-      return data;
+      return (data || []).map(p => ({
+        ...p,
+        payment_status: (p.payment_status as 'paid' | 'pending') || 'pending'
+      }));
     },
-    enabled: !!pool,
+    enabled: !!activePool,
   });
 
   const updatePaymentStatus = useMutation({
@@ -48,7 +63,7 @@ const PaymentManagement = () => {
     },
     onSuccess: () => {
       toast.success("Status de pagamento atualizado.");
-      queryClient.invalidateQueries({ queryKey: ['poolParticipants', pool?.id] });
+      queryClient.invalidateQueries({ queryKey: ['poolParticipants', activePool?.id] });
     },
     onError: (error: any) => {
       toast.error("Falha ao atualizar status.", { description: error.message });
