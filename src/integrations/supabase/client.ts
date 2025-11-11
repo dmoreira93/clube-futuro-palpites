@@ -2,18 +2,8 @@
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from './types';
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
-
-// --- ADICIONE ESTAS DUAS LINHAS ---
-console.log("DEBUG: SUPABASE_URL lida no client.ts:", SUPABASE_URL);
-console.log("DEBUG: SUPABASE_PUBLISHABLE_KEY lida no client.ts (primeiros 5 chars):", SUPABASE_PUBLISHABLE_KEY ? SUPABASE_PUBLISHABLE_KEY.substring(0, 5) + '...' : 'undefined/null');
-// --- FIM DA ADIÇÃO ---
-
-if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
-  console.error("Variáveis de ambiente SUPABASE_URL ou SUPABASE_ANON_KEY não estão configuradas!");
-  throw new Error("Credenciais do Supabase ausentes. Verifique suas variáveis de ambiente.");
-}
+const SUPABASE_URL = "https://wdbaoomwhuiztjoazagd.supabase.co";
+const SUPABASE_PUBLISHABLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndkYmFvb213aHVpenRqb2F6YWdkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDU5NTI3MzEsImV4cCI6MjA2MTUyODczMX0.iNYeY21EzHT838cxScUgfnYO9h9xSPvJRpMbd0RTHWc";
 
 export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
   auth: {
