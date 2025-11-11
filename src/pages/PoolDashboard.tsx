@@ -1,10 +1,10 @@
-// src/pages/PoolDashboard.tsx (VERSÃO CORRIGIDA)
+// src/pages/PoolDashboard.tsx (VERSÃO COM IMPORT CORRIGIDO)
 
-import { useEffect } from 'react'; // <-- IMPORTAR O useEffect
+import { useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { useAuth } from '@/contexts/AuthContext'; // <-- IMPORTAR O useAuth
-import { usePoolData } from '@/hooks/usePoolData'; // (Seu hook de dados)
-import useParticipantsRanking from '@/hooks/useParticipantsRanking'; // (Seu hook de ranking)
+import { useAuth } from '@/contexts/AuthContext';
+import usePoolData from '@/hooks/usePoolData'; // <-- CORREÇÃO AQUI (sem chaves)
+import useParticipantsRanking from '@/hooks/useParticipantsRanking';
 import { StatsCard } from '@/components/home/StatsCard';
 import { RankingTable } from '@/components/home/RankingTable';
 import { NoticeBoard } from '@/components/dashboard/NoticeBoard';
@@ -14,22 +14,15 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 const PoolDashboard = () => {
   const { poolId } = useParams<{ poolId: string }>();
-  const { switchPool } = useAuth(); // <-- OBTER A FUNÇÃO para trocar de bolão
+  const { switchPool } = useAuth(); 
 
-  // --- ESTA É A CORREÇÃO ---
-  // Este useEffect é executado sempre que a página carrega ou o poolId muda.
-  // Ele diz ao AuthContext qual bolão deve ser o "ativo".
   useEffect(() => {
     if (poolId) {
       switchPool(poolId);
     }
   }, [poolId, switchPool]);
-  // --- FIM DA CORREÇÃO ---
 
-
-  // Agora que o AuthContext sabe qual bolão está ativo,
-  // os hooks abaixo (que dependem dele) vão buscar os dados corretos.
-  const { ranking, loading: rankingLoading, error: rankingError } = useParticipantsRanking();
+  const { ranking, loading: rankingLoading, error: rankingError }_ = useParticipantsRanking();
   const { stats, loading: statsLoading, error: statsError } = usePoolData();
 
   const isLoading = rankingLoading || statsLoading;
@@ -51,7 +44,6 @@ const PoolDashboard = () => {
     );
   }
 
-  // O JSX (layout) da sua página para renderizar os dados
   return (
     <div className="container mx-auto p-4 space-y-8">
       {/* Seção de Estatísticas */}
