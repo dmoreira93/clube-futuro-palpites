@@ -1,9 +1,9 @@
-// src/pages/PoolDashboard.tsx (VERSÃO COM IMPORT CORRIGIDO)
+// src/pages/PoolDashboard.tsx (VERSÃO COM ERRO DE SINTAXE CORRIGIDO)
 
 import { useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
-import usePoolData from '@/hooks/usePoolData'; // <-- CORREÇÃO AQUI (sem chaves)
+import usePoolData from '@/hooks/usePoolData'; 
 import useParticipantsRanking from '@/hooks/useParticipantsRanking';
 import { StatsCard } from '@/components/home/StatsCard';
 import { RankingTable } from '@/components/home/RankingTable';
@@ -22,7 +22,10 @@ const PoolDashboard = () => {
     }
   }, [poolId, switchPool]);
 
-  const { ranking, loading: rankingLoading, error: rankingError }_ = useParticipantsRanking();
+  // --- ESTA É A LINHA CORRIGIDA (O "_" FOI REMOVIDO) ---
+  const { ranking, loading: rankingLoading, error: rankingError } = useParticipantsRanking();
+  // --- FIM DA CORREÇÃO ---
+  
   const { stats, loading: statsLoading, error: statsError } = usePoolData();
 
   const isLoading = rankingLoading || statsLoading;
