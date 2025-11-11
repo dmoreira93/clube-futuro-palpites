@@ -1,4 +1,4 @@
-// src/pages/PoolDashboard.tsx (VERSÃO COM IMPORT DO RankingTable CORRIGIDO)
+// src/pages/PoolDashboard.tsx (VERSÃO COM TODAS AS IMPORTAÇÕES CORRIGIDAS)
 
 import { useEffect } from 'react';
 import { useParams } from 'react-router-dom';
@@ -6,8 +6,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import usePoolData from '@/hooks/usePoolData'; 
 import useParticipantsRanking from '@/hooks/useParticipantsRanking';
 import StatsCard from '@/components/home/StatsCard'; 
-import RankingTable from '@/components/home/RankingTable'; // <-- CORREÇÃO AQUI (sem chaves)
-import { NoticeBoard } from '@/components/dashboard/NoticeBoard';
+import RankingTable from '@/components/home/RankingTable'; 
+import NoticeBoard from '@/components/dashboard/NoticeBoard'; // <-- CORREÇÃO AQUI (sem chaves)
 import { Skeleton } from '@/components/ui/skeleton';
 import { AlertCircle } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
