@@ -33,7 +33,7 @@ const AdminMatches = () => {
     try {
       const { data, error } = await supabase
         .from("matches")
-        .select(`*, home_team:teams!home_team_id(name), away_team:teams!away_team_id(name)`)
+        .select(`*, home_team:home_team_id(name), away_team:away_team_id(name)`)
         .order("match_date", { ascending: true });
 
       if (error) throw error;
@@ -69,9 +69,15 @@ const AdminMatches = () => {
         .eq("id", matchId);
       if (updateError) throw updateError;
       
-      toast.success("Resultado salvo!");
-      
-      // Note: Points calculation will happen automatically via triggers or batch processing
+      toast.success("Resultado salvo! Calculando pontos...");
+
+      // 2. Chama a função SQL para processar os pontos
+      const { error: rpcError } = await supabase.rpc('update_user_points_for_match', {
+        match_id_param: matchId
+      });
+      if (rpcError) throw rpcError;
+
+      toast.success("Pontuações para esta partida foram processadas!");
       await fetchMatches();
       setEditingMatchId(null);
     } catch (error: any) {

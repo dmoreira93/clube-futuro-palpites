@@ -12,7 +12,7 @@ import { Loader2, CheckCircle } from 'lucide-react';
 import { Team } from '@/types/matches';
 
 interface ResultState {
-  id: number;
+  id: string;
   champion_id: string | null;
   runner_up_id: string | null;
   third_place_id: string | null;
@@ -87,7 +87,7 @@ const AdminTournamentResults = () => {
       const { data: savedResult, error: upsertError } = await supabase
         .from('tournament_results')
         .upsert({
-          id: result.id || 1,
+          id: result.id || '1', // Usa o ID fixo '1' para o upsert. Garanta que a tabela tenha uma linha com este ID.
           champion_id: champion_id,
           runner_up_id: runner_up_id,
           third_place_id: third_place_id,

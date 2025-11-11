@@ -3,11 +3,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useAuth } from '@/contexts/AuthContext';
-import { Match } from '@/types/matches';
-import { Prediction } from '@/types/predictions';
+import { MatchWithTeams, Prediction } from '@/types/predictions';
 
 interface DailyPredictionsProps {
-  matches: Match[];
+  matches: MatchWithTeams[];
   matchPredictions: Prediction[];
   onMatchPredictionsChange: (predictions: { [key: string]: Prediction }) => void;
 }
@@ -28,14 +27,13 @@ export function DailyPredictions({
     if (matches && Array.isArray(matches)) {
       matches.forEach((match) => {
         const existingPrediction = matchPredictions.find(
-          (p) => p.match_id === match.id
+          (p) => p.matchId === match.id
         );
         initialPredictions[match.id] = existingPrediction || {
-          id: '',
-          user_id: user?.id || "",
-          match_id: match.id,
-          home_score: 0,
-          away_score: 0,
+          userId: user?.id || "",
+          matchId: match.id,
+          homeScore: null,
+          awayScore: null,
         };
       });
     }
@@ -52,9 +50,9 @@ export function DailyPredictions({
       ...predictions,
       [matchId]: {
         ...predictions[matchId],
-        user_id: user?.id || "",
-        match_id: matchId,
-        [`${team}_score`]: score || 0,
+        userId: user?.id || "",
+        matchId: matchId,
+        [`${team}Score`]: score,
       },
     };
     setPredictions(newPredictions);
@@ -62,7 +60,7 @@ export function DailyPredictions({
   };
 
   const isPredictionComplete = (prediction: Prediction) => {
-    return prediction.home_score !== null && prediction.away_score !== null;
+    return prediction.homeScore !== null && prediction.awayScore !== null;
   };
 
   if (!matches || matches.length === 0) {
@@ -88,7 +86,7 @@ export function DailyPredictions({
           {matches.map((match) => (
             <div key={match.id} className="p-4 border rounded-lg">
               <div className="flex justify-between items-center mb-2">
-                <span className="font-semibold">{match.home_team?.name || 'TBD'} vs {match.away_team?.name || 'TBD'}</span>
+                <span className="font-semibold">{match.home_team.name} vs {match.away_team.name}</span>
                 <span className="text-sm text-gray-500">{new Date(match.match_date).toLocaleTimeString()}</span>
               </div>
               <div className="flex items-center space-x-2">
@@ -96,7 +94,7 @@ export function DailyPredictions({
                   type="number"
                   min="0"
                   className="w-16 text-center"
-                  value={predictions[match.id]?.home_score ?? ''}
+                  value={predictions[match.id]?.homeScore ?? ''}
                   onChange={(e) =>
                     handlePredictionChange(match.id, 'home', e.target.value === '' ? null : parseInt(e.target.value))
                   }
@@ -107,14 +105,14 @@ export function DailyPredictions({
                   type="number"
                   min="0"
                   className="w-16 text-center"
-                  value={predictions[match.id]?.away_score ?? ''}
+                  value={predictions[match.id]?.awayScore ?? ''}
                   onChange={(e) =>
                     handlePredictionChange(match.id, 'away', e.target.value === '' ? null : parseInt(e.target.value))
                   }
                   disabled={!user}
                 />
               </div>
-              {predictions[match.id] && isPredictionComplete(predictions[match.id]) && (
+              {isPredictionComplete(predictions[match.id] || {}) && (
                 <p className="text-green-500 text-xs mt-1">Palpite completo</p>
               )}
             </div>
