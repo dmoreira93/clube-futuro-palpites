@@ -1,4 +1,4 @@
-// src/components/dashboard/MyPoolsList.tsx 
+// src/components/dashboard/MyPoolsList.tsx (VERSÃO CORRIGIDA)
 import { Link } from 'react-router-dom';
 import { useMyPools } from '@/hooks/useMyPools'; // Caminho corrigido para usar o alias
 import { Card, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
