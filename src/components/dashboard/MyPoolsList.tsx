@@ -36,7 +36,7 @@ export function MyPoolsList() {
       {pools.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {pools.map(pool => (
-            <Link to={`/pools/${pool.id}`} key={pool.id} className="block hover:scale-105 transition-transform">
+            <Link to={`/pool/${pool.id}`} key={pool.id} className="block hover:scale-105 transition-transform">
               <Card className="h-full">
                 <CardHeader>
                   <CardTitle>{pool.name}</CardTitle>
