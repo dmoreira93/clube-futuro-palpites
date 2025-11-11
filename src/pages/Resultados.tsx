@@ -44,7 +44,7 @@ const Resultados = () => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('matches')
-        .select(`*, home_team:teams!home_team_id(*), away_team:teams!away_team_id(*)`)
+        .select(`*, home_team:home_team_id(*), away_team:away_team_id(*)`)
         .eq('stage', 'Fase de Grupos')
         .not('home_team_id', 'is', null)
         .not('away_team_id', 'is', null)
@@ -57,7 +57,7 @@ const Resultados = () => {
   const { data: groupResultsData = [], isLoading: isLoadingGroupResults } = useQuery<GroupResult[]>({
     queryKey: ['groupResultsData'],
     queryFn: async () => {
-        const { data, error } = await supabase.from('groups_results').select(`*, groups(name), first_place_team:teams!first_place_team_id(*), second_place_team:teams!second_place_team_id(*)`);
+        const { data, error } = await supabase.from('groups_results').select(`*, groups(name), first_place_team:first_place_team_id(*), second_place_team:second_place_team_id(*)`);
         if (error) throw error;
         return (data || []).map(item => ({
             group_id: item.group_id,
@@ -77,10 +77,10 @@ const Resultados = () => {
         .from('tournament_results')
         .select(`
           id, final_home_score, final_away_score,
-          champion:teams!champion_id(id, name), 
-          runner_up:teams!runner_up_id(id, name), 
-          third_place:teams!third_place_id(id, name), 
-          fourth_place:teams!fourth_place_id(id, name)
+          champion:champion_id(id, name), 
+          runner_up:runner_up_id(id, name), 
+          third_place:third_place_id(id, name), 
+          fourth_place:fourth_place_id(id, name)
         `)
         .limit(1)
         .maybeSingle(); // Usando maybeSingle() em vez de single()

@@ -13,16 +13,16 @@ const fetchPoolData = async (poolId: string | undefined) => {
 };
 
 const usePoolData = () => {
-  const { activePool } = useAuth();
+  const { pool } = useAuth();
   const { data, isLoading, error } = useQuery({
-    queryKey: ['poolData', activePool?.id],
-    queryFn: () => fetchPoolData(activePool?.id),
-    enabled: !!activePool?.id,
+    queryKey: ['poolData', pool?.id],
+    queryFn: () => fetchPoolData(pool?.id),
+    enabled: !!pool?.id,
   });
 
   return {
-    ranking: ((data as any)?.ranking || []) as Participant[],
-    stats: (data as any)?.stats,
+    ranking: (data?.ranking || []) as Participant[],
+    stats: data?.stats,
     loading: isLoading,
     error: error?.message || null,
   };

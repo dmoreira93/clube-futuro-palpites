@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../integrations/supabase/client';
 import { useAuth } from '../contexts/AuthContext';
-import { Pool } from '../types/matches';
+import { Pool } from '../integrations/supabase/types'; // Assumindo que você tem um tipo Pool
 
 export function useMyPools() {
   const { user } = useAuth();

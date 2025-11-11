@@ -1,7 +1,7 @@
 // src/components/pools/PublicPoolsList.tsx
 import { useState, useEffect } from 'react';
 import { supabase } from '../../integrations/supabase/client';
-import { Pool } from '@/types/matches';
+import { Pool } from '../../integrations/supabase/types';
 import { Link } from 'react-router-dom';
 import { Button } from '../ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '../ui/card';

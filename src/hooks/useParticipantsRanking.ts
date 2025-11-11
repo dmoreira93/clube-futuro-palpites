@@ -48,19 +48,19 @@ const fetchRanking = async (poolId: string | undefined): Promise<Participant[]> 
 
 // O hook agora é mais simples e usa useQuery
 const useParticipantsRanking = () => {
-  const { activePool } = useAuth();
+  const { pool } = useAuth();
 
   const { 
     data: participants = [], // Valor padrão para evitar 'undefined'
     isLoading: loading, 
     error 
   } = useQuery<Participant[], Error>({
-    // A chave da query inclui o activePool.id para que os dados sejam recarregados se o bolão mudar
-    queryKey: ['poolRanking', activePool?.id], 
+    // A chave da query inclui o pool.id para que os dados sejam recarregados se o bolão mudar
+    queryKey: ['poolRanking', pool?.id], 
     // A função que será executada
-    queryFn: () => fetchRanking(activePool?.id),
-    // A query só será ativada se activePool.id existir
-    enabled: !!activePool?.id, 
+    queryFn: () => fetchRanking(pool?.id),
+    // A query só será ativada se pool.id existir
+    enabled: !!pool?.id, 
   });
 
   return { participants, loading, error: error ? error.message : null };

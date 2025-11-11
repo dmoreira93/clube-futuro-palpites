@@ -45,7 +45,7 @@ const PoolDashboard = () => {
         // A busca de partidas agora usa o 'championship_id' do bolão ativo
         supabase.from('matches').select('*', { count: 'exact', head: true }).eq('is_finished', true).eq('championship_id', activePool.championship_id),
         supabase.from('matches').select('*', { count: 'exact', head: true }).eq('championship_id', activePool.championship_id),
-        supabase.from('matches').select(`match_date, home_team:teams!home_team_id(name), away_team:teams!away_team_id(name)`).eq('championship_id', activePool.championship_id).gte('match_date', new Date().toISOString()).order('match_date', { ascending: true }).limit(1).maybeSingle()
+        supabase.from('matches').select(`match_date, home_team:home_team_id(name), away_team:away_team_id(name)`).eq('championship_id', activePool.championship_id).gte('match_date', new Date().toISOString()).order('match_date', { ascending: true }).limit(1).maybeSingle()
       ]);
 
       let nextMatchInfo = { date: "N/A", teams: "Aguardando definição" };
