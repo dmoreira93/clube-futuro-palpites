@@ -1,11 +1,11 @@
-// src/pages/PoolDashboard.tsx (VERSÃO COM ERRO DE SINTAXE CORRIGIDO)
+// src/pages/PoolDashboard.tsx (VERSÃO COM IMPORT DO StatsCard CORRIGIDO)
 
 import { useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import usePoolData from '@/hooks/usePoolData'; 
 import useParticipantsRanking from '@/hooks/useParticipantsRanking';
-import { StatsCard } from '@/components/home/StatsCard';
+import StatsCard from '@/components/home/StatsCard'; // <-- CORREÇÃO AQUI (sem chaves)
 import { RankingTable } from '@/components/home/RankingTable';
 import { NoticeBoard } from '@/components/dashboard/NoticeBoard';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -22,10 +22,7 @@ const PoolDashboard = () => {
     }
   }, [poolId, switchPool]);
 
-  // --- ESTA É A LINHA CORRIGIDA (O "_" FOI REMOVIDO) ---
   const { ranking, loading: rankingLoading, error: rankingError } = useParticipantsRanking();
-  // --- FIM DA CORREÇÃO ---
-  
   const { stats, loading: statsLoading, error: statsError } = usePoolData();
 
   const isLoading = rankingLoading || statsLoading;
@@ -47,10 +44,12 @@ const PoolDashboard = () => {
     );
   }
 
+  // O JSX (layout) da sua página para renderizar os dados
   return (
     <div className="container mx-auto p-4 space-y-8">
       {/* Seção de Estatísticas */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        {/* CORREÇÃO AQUI: Removi a prop 'icon' que não existe mais no seu StatsCard.tsx */}
         <StatsCard title="Sua Pontuação" value={stats?.user_points ?? 0} />
         <StatsCard title="Sua Posição" value={`${stats?.user_rank ?? 0}º`} />
         <StatsCard title="Top Scorer" value={stats?.top_scorer?.name ?? 'N/A'} description={`com ${stats?.top_scorer?.points ?? 0} pts`} />
