@@ -1,4 +1,4 @@
-// src/pages/CreatePool.tsx (VERSÃO FINAL E CORRIGIDA)
+// src/pages/CreatePool.tsx (VERSÃO COM CORREÇÃO DE DATA E LOG)
 
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -26,8 +26,9 @@ const CreatePoolPage = () => {
   const [championships, setChampionships] = useState<Championship[]>([]);
   const [loading, setLoading] = useState(false);
 
+  // Estados
   const [poolName, setPoolName] = useState('');
-  const [selectedChampionship, setSelectedChampionship] = useState<string | undefined>();
+  const [selectedChampionship, setSelectedChampionship] = useState<string | undefined>(undefined);
   const [entryFee, setEntryFee] = useState('25');
   const [prize1st, setPrize1st] = useState('70');
   const [prize2nd, setPrize2nd] = useState('30');
@@ -69,17 +70,22 @@ const CreatePoolPage = () => {
 
     setLoading(true);
     try {
-      // Usando os nomes exatos de parâmetros da sua função no Supabase
+      // CORREÇÃO 1: Formatar a data para ISO String (que o banco aceita)
+      let formattedDeadline = null;
+      if (predictionDeadline) {
+        formattedDeadline = new Date(predictionDeadline).toISOString();
+      }
+
       const { data, error } = await supabase.rpc('create_pool', {
         p_pool_name: poolName.trim(),
-        p_owner_id: user.id, // Corrigido!
+        p_owner_id: user.id,
         p_championship_id: selectedChampionship,
         p_entry_fee: parseFloat(entryFee) || 0,
         p_prize_1st: parseFloat(prize1st) || 0,
         p_prize_2nd: parseFloat(prize2nd) || 0,
         p_prize_3rd: parseFloat(prize3rd) || 0,
         p_admin_fee: parseFloat(adminFee) || 0,
-        p_prediction_deadline: predictionDeadline || null,
+        p_prediction_deadline: formattedDeadline, // Usando a data formatada
         p_max_participants: maxParticipants ? parseInt(maxParticipants) : null,
         p_is_public: isPublic,
         p_enable_punishment: enablePunishment,
@@ -91,11 +97,17 @@ const CreatePoolPage = () => {
       
       await fetchAndSyncProfile(user);
       toast.success('Bolão criado com sucesso! Você será redirecionado.');
+      
+      // Se a função retornar o ID, usamos. Se não, dashboard.
+      // Algumas versões da sua função retornavam VOID, outras UUID. 
+      // O código original tentava usar 'data' como ID, mas se for void, data é null.
+      // Redirecionando para dashboard para garantir.
       navigate('/dashboard');
 
     } catch (error: any) {
-      toast.error('Erro ao criar o bolão', { description: error.message });
-      console.error("Detalhe do Erro:", error);
+      // CORREÇÃO 2: Melhorar o log para ver o erro real se acontecer de novo
+      console.error("Detalhe do Erro (JSON):", JSON.stringify(error, null, 2));
+      toast.error('Erro ao criar o bolão', { description: error.message || error.details || "Verifique o console" });
     } finally {
       setLoading(false);
     }
@@ -111,7 +123,6 @@ const CreatePoolPage = () => {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          {/* O RESTO DO SEU CÓDIGO JSX PERMANECE IGUAL */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="pool-name">Nome do Bolão</Label>
@@ -119,6 +130,7 @@ const CreatePoolPage = () => {
             </div>
             <div className="space-y-2">
               <Label htmlFor="championship">Campeonato</Label>
+              {/* value={selectedChampionship || undefined} ajuda a evitar o warning de uncontrolled */}
               <Select value={selectedChampionship} onValueChange={setSelectedChampionship}>
                 <SelectTrigger id="championship"><SelectValue placeholder="Selecione o campeonato..." /></SelectTrigger>
                 <SelectContent>
