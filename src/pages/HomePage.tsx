@@ -1,8 +1,11 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { BarChart3, UserCheck, Users, Trophy, ChevronUp, ChevronDown, MessageSquare, BookOpen } from 'lucide-react';
+import { BarChart3, UserCheck, Users, Trophy, ChevronUp, ChevronDown, MessageSquare, BookOpen, Ticket } from 'lucide-react';
 import { useState } from 'react';
+
+// --- URL do seu Formulário de Contato / Tickets ---
+const SUPPORT_TICKET_URL = "https://docs.google.com/forms/d/e/1FAIpQLSes1345R-Ld4eWwwBD5HuqqMMCs6j3KiexlidDu09rbnApM0w/viewform?usp=dialog";
 
 // --- Componente para Dúvidas Frequentes (FAQ) ---
 const FAQItem = ({ question, answer }: { question: string; answer: string }) => {
@@ -80,17 +83,17 @@ const HomePage = () => {
                     <div className="container mx-auto px-4 grid grid-cols-1 md:grid-cols-3 gap-8 text-center">
                         <Card className="p-6 shadow-lg bg-white">
                             <Trophy className="h-10 w-10 text-primary mx-auto mb-3" />
-                            <CardTitle className="text-3xl font-bold text-fifa-blue">3+</CardTitle>
+                            <CardTitle className="text-3xl font-bold text-fifa-blue">100+</CardTitle>
                             <CardDescription>Bolões Criados</CardDescription>
                         </Card>
                         <Card className="p-6 shadow-lg bg-white">
                             <Users className="h-10 w-10 text-primary mx-auto mb-3" />
-                            <CardTitle className="text-3xl font-bold text-fifa-blue">15+</CardTitle>
+                            <CardTitle className="text-3xl font-bold text-fifa-blue">500+</CardTitle>
                             <CardDescription>Participantes Ativos</CardDescription>
                         </Card>
                         <Card className="p-6 shadow-lg bg-white">
                             <UserCheck className="h-10 w-10 text-primary mx-auto mb-3" />
-                            <CardTitle className="text-3xl font-bold text-fifa-blue">500+</CardTitle>
+                            <CardTitle className="text-3xl font-bold text-fifa-blue">10K+</CardTitle>
                             <CardDescription>Palpites Registrados</CardDescription>
                         </Card>
                     </div>
@@ -146,7 +149,7 @@ const HomePage = () => {
                 </section>
             </main>
 
-            {/* --- RODAPÉ --- */}
+            {/* --- RODAPÉ NOVO E LIMPO --- */}
             <footer className="bg-fifa-blue text-white py-10 border-t border-fifa-gold/20">
                 <div className="container mx-auto px-4">
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
@@ -162,11 +165,11 @@ const HomePage = () => {
                             </p>
                         </div>
                         
-                        {/* Coluna 2: Navegação */}
+                        {/* Coluna 2: Navegação (SÓ LINKS DA LANDING) */}
                         <div>
                             <h5 className="font-semibold mb-3">Navegação</h5>
                             <ul className="space-y-2 text-sm text-gray-400">
-                                <li><a href="#top" onClick={scrollToTop} className="hover:text-fifa-gold transition-colors">Início</a></li>
+                                <li><a href="#top" onClick={scrollToTop} className="hover:text-fifa-gold transition-colors cursor-pointer">Início</a></li>
                                 <li><a href="#como-comecar" className="hover:text-fifa-gold transition-colors">Como Começar</a></li>
                                 <li><a href="#faq" className="hover:text-fifa-gold transition-colors">FAQ</a></li>
                             </ul>
@@ -176,18 +179,24 @@ const HomePage = () => {
                         <div>
                             <h5 className="font-semibold mb-3">Legal</h5>
                             <ul className="space-y-2 text-sm text-gray-400">
-                                <li><a href="/PrivacyPolicy" className="hover:text-fifa-gold transition-colors">Políticas de Privacidade</a></li>
-                                <li><a href="/TermsOfUse" className="hover:text-fifa-gold transition-colors">Termos de Uso</a></li>
+                                <li><a href="/politicas-de-privacidade" className="hover:text-fifa-gold transition-colors">Políticas de Privacidade</a></li>
+                                <li><a href="/termos-de-uso" className="hover:text-fifa-gold transition-colors">Termos de Uso</a></li>
                             </ul>
                         </div>
                         
-                        {/* Coluna 4: Contato */}
+                        {/* Coluna 4: Contato e Critérios */}
                         <div>
                             <h5 className="font-semibold mb-3">Suporte</h5>
                             <ul className="space-y-2 text-sm text-gray-400">
                                 <li>
-                                    <a href="mailto:contato@futuro-palpites.com" className="hover:text-fifa-gold transition-colors flex items-center">
-                                        <MessageSquare className="h-4 w-4 mr-2"/> Fale Conosco
+                                    {/* Link para Formulário Externo (Google Forms) */}
+                                    <a 
+                                        href={SUPPORT_TICKET_URL} 
+                                        target="_blank" 
+                                        rel="noopener noreferrer" 
+                                        className="hover:text-fifa-gold transition-colors flex items-center"
+                                    >
+                                        <Ticket className="h-4 w-4 mr-2"/> Abrir Chamado
                                     </a>
                                 </li>
                                 <li>
