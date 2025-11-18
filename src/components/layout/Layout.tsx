@@ -3,7 +3,7 @@
 import React from 'react';
 import { useLocation } from 'react-router-dom';
 import Navbar from './Navbar';
-import Footer from './Footer';
+//import Footer from './Footer';
 import { Toaster } from "@/components/ui/toaster";
 import BottomNavbar from './BottomNavbar';
 import { usePwaDisplayMode } from '@/hooks/usePwaDisplayMode';
