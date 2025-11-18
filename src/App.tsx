@@ -29,6 +29,7 @@ import ProfilePage from "./pages/Profile";
 import NoticiasPage from "./pages/Noticias";
 import AuditoriaPontos from "./pages/AuditoriaPontos";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
+import TermsOfUse from "./pages/TermsOfUse";
 
 function App() {
   return (
@@ -61,6 +62,7 @@ function App() {
             <Route path="/palpites-do-dia" element={<ProtectedRoute><DailyMatchesAndPredictions /></ProtectedRoute>} />
             <Route path="/auditoria" element={<ProtectedRoute><AuditoriaPontos /></ProtectedRoute>} />
             <Route path="/PrivacyPolicy" element={<PrivacyPolicy />} />
+            <Route path="/TermsOfUse" element={<TermsOfUse />} />
 
 
             {/* --- Rotas de Admin --- */}
