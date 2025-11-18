@@ -46,7 +46,7 @@ const TermsOfUse: React.FC = () => {
 
         <h2>6. Limitação de Responsabilidade</h2>
         <p>
-          Em nenhuma circunstância o Clube Futuro Palpites será responsável por quaisquer danos indiretos, incidentais, especiais, consequenciais ou punitivos... [Consultar advogado para esta cláusula]. O Clube Futuro Palpites não se responsabiliza pelas interações entre usuários ou pela veracidade das informações postadas.
+          Em nenhuma circunstância o Clube Futuro Palpites será responsável por quaisquer danos indiretos, incidentais, especiais, consequenciais ou punitivos. O Clube Futuro Palpites não se responsabiliza pelas interações entre usuários ou pela veracidade das informações postadas.
         </p>
 
         {/* Adicionar seções sobre: Modificações no Serviço, Rescisão, Lei Aplicável, Contato */}
