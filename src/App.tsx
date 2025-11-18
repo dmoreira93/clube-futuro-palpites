@@ -28,6 +28,7 @@ import PoolSettingsPage from "./pages/PoolSettings";
 import ProfilePage from "./pages/Profile";
 import NoticiasPage from "./pages/Noticias";
 import AuditoriaPontos from "./pages/AuditoriaPontos";
+import PrivacyPolicy from "./pages/PrivacyPolicy";
 
 function App() {
   return (
@@ -59,6 +60,8 @@ function App() {
             <Route path="/palpites-usuarios" element={<ProtectedRoute><UserPredictions /></ProtectedRoute>} />
             <Route path="/palpites-do-dia" element={<ProtectedRoute><DailyMatchesAndPredictions /></ProtectedRoute>} />
             <Route path="/auditoria" element={<ProtectedRoute><AuditoriaPontos /></ProtectedRoute>} />
+            <Route path="/PrivacyPolicy" element={<PrivacyPolicy />} />
+
 
             {/* --- Rotas de Admin --- */}
             <Route path="/admin-login" element={<AdminLogin />} />

@@ -176,7 +176,7 @@ const HomePage = () => {
                         <div>
                             <h5 className="font-semibold mb-3">Legal</h5>
                             <ul className="space-y-2 text-sm text-gray-400">
-                                <li><a href="/politicas-de-privacidade" className="hover:text-fifa-gold transition-colors">Políticas de Privacidade</a></li>
+                                <li><a href="/PrivacyPolicy" className="hover:text-fifa-gold transition-colors">Políticas de Privacidade</a></li>
                                 <li><a href="/termos-de-uso" className="hover:text-fifa-gold transition-colors">Termos de Uso</a></li>
                             </ul>
                         </div>
