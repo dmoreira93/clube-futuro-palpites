@@ -45,7 +45,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       <Toaster />
 
       {/* O Footer da aplicação só aparece se NÃO estiver no modo PWA */}
-      {!isPwa && <Footer />}
+      
       
       {/* BottomNavbar continua só para mobile e logado */}
       <BottomNavbar />
