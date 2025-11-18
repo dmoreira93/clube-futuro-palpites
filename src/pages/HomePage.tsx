@@ -80,17 +80,17 @@ const HomePage = () => {
                     <div className="container mx-auto px-4 grid grid-cols-1 md:grid-cols-3 gap-8 text-center">
                         <Card className="p-6 shadow-lg bg-white">
                             <Trophy className="h-10 w-10 text-primary mx-auto mb-3" />
-                            <CardTitle className="text-3xl font-bold text-fifa-blue">100+</CardTitle>
+                            <CardTitle className="text-3xl font-bold text-fifa-blue">3+</CardTitle>
                             <CardDescription>Bolões Criados</CardDescription>
                         </Card>
                         <Card className="p-6 shadow-lg bg-white">
                             <Users className="h-10 w-10 text-primary mx-auto mb-3" />
-                            <CardTitle className="text-3xl font-bold text-fifa-blue">500+</CardTitle>
+                            <CardTitle className="text-3xl font-bold text-fifa-blue">15+</CardTitle>
                             <CardDescription>Participantes Ativos</CardDescription>
                         </Card>
                         <Card className="p-6 shadow-lg bg-white">
                             <UserCheck className="h-10 w-10 text-primary mx-auto mb-3" />
-                            <CardTitle className="text-3xl font-bold text-fifa-blue">10K+</CardTitle>
+                            <CardTitle className="text-3xl font-bold text-fifa-blue">500+</CardTitle>
                             <CardDescription>Palpites Registrados</CardDescription>
                         </Card>
                     </div>
