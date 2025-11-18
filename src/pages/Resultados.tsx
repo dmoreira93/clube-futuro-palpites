@@ -1,4 +1,4 @@
-// src/pages/Resultados.tsx (VERSÃO FINAL CORRIGIDA)
+// src/pages/Resultados.tsx (VERSÃO ATUALIZADA COM FILTRO DE CAMPEONATO)
 
 import React, { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -34,24 +34,31 @@ interface FinalResult {
 }
 
 const Resultados = () => {
-  const { isAdmin } = useAuth();
+  const { isAdmin, pool } = useAuth(); // <-- ADICIONADO: pool
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [selectedMatch, setSelectedMatch] = useState<FetchedMatch | null>(null);
 
   const { data: matches = [], isLoading: isLoadingMatches } = useQuery<FetchedMatch[]>({
-    queryKey: ['matchesResultsGroupStage'],
+    // <-- ATUALIZADO: Adicionado pool?.championship_id na chave
+    queryKey: ['matchesResultsGroupStage', pool?.championship_id],
     queryFn: async () => {
+      // <-- ADICIONADO: Proteção contra bolão sem campeonato
+      if (!pool?.championship_id) return [];
+
       const { data, error } = await supabase
         .from('matches')
         .select(`*, home_team:home_team_id(*), away_team:away_team_id(*)`)
         .eq('stage', 'Fase de Grupos')
+        .eq('championship_id', pool.championship_id) // <-- ADICIONADO: Filtro mágico
         .not('home_team_id', 'is', null)
         .not('away_team_id', 'is', null)
         .order('match_date', { ascending: true });
+      
       if (error) throw error;
       return data as FetchedMatch[];
     },
+    enabled: !!pool?.championship_id, // Só executa se tiver campeonato
   });
 
   const { data: groupResultsData = [], isLoading: isLoadingGroupResults } = useQuery<GroupResult[]>({
@@ -71,8 +78,6 @@ const Resultados = () => {
   const { data: finalResultData, isLoading: isLoadingFinalResult } = useQuery<FinalResult | null>({
     queryKey: ['finalResultData'],
     queryFn: async () => {
-      // --- CORREÇÃO APLICADA AQUI ---
-      // Trocamos .single() por .limit(1).maybeSingle() para ser mais tolerante
       const { data, error } = await supabase
         .from('tournament_results')
         .select(`
@@ -83,7 +88,7 @@ const Resultados = () => {
           fourth_place:fourth_place_id(id, name)
         `)
         .limit(1)
-        .maybeSingle(); // Usando maybeSingle() em vez de single()
+        .maybeSingle(); 
       
       if (error) throw error;
       return data as FinalResult | null;

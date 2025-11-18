@@ -1,4 +1,4 @@
-// src/pages/Palpites.tsx (VERSÃO ATUALIZADA COM GESTÃO DE PAGAMENTO)
+// src/pages/Palpites.tsx (VERSÃO ATUALIZADA COM FILTRO DE CAMPEONATO)
 
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/components/ui/use-toast";
 import { Label } from "@/components/ui/label";
-import { Loader2, Printer, AlertTriangle } from "lucide-react"; // NOVO: Adicionado AlertTriangle
+import { Loader2, Printer, AlertTriangle } from "lucide-react"; 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
@@ -61,30 +61,60 @@ const Palpites = () => {
     });
 
     const fetchInitialData = useCallback(async () => {
-        if (!user) { setLoading(false); return; }
+        // <-- ATUALIZADO: Verificação do pool e championship_id
+        if (!user || !pool?.championship_id) { 
+            setLoading(false); 
+            return; 
+        }
+
         setLoading(true);
         setError(null);
         try {
-            const { data: matchesData, error: matchesError } = await supabase.from('matches').select('*, home_team:home_team_id(*), away_team:away_team_id(*)').order('match_date', { ascending: true });
+            // Buscando Partidas (COM FILTRO)
+            const { data: matchesData, error: matchesError } = await supabase
+                .from('matches')
+                .select('*, home_team:home_team_id(*), away_team:away_team_id(*)')
+                .eq('championship_id', pool.championship_id) // <-- FILTRO ADICIONADO
+                .order('match_date', { ascending: true });
+            
             if (matchesError) throw new Error(`Buscando Partidas: ${matchesError.message}`);
             setAllMatches(matchesData || []);
 
-            const { data: predictionsData, error: predictionsError } = await supabase.from('match_predictions').select('*').eq('user_id', user.id);
+            // Buscando Palpites de Partida (Filtra por usuário, independe do campeonato)
+            const { data: predictionsData, error: predictionsError } = await supabase
+                .from('match_predictions')
+                .select('*')
+                .eq('user_id', user.id);
+            
             if (predictionsError) throw new Error(`Buscando Palpites de Partida: ${predictionsError.message}`);
+            
             const loadedPredictions: { [matchId: string]: LocalPrediction } = {};
             (predictionsData || []).forEach(p => {
                 loadedPredictions[p.match_id] = { match_id: p.match_id, home_score: p.home_score !== null ? String(p.home_score) : '', away_score: p.away_score !== null ? String(p.away_score) : '', prediction_id: p.id };
             });
             setDailyPredictions(loadedPredictions);
 
-            const { data: teamsData, error: teamsError } = await supabase.from('teams').select('*').order('name', { ascending: true });
+            // Buscando Times (COM FILTRO)
+            const { data: teamsData, error: teamsError } = await supabase
+                .from('teams')
+                .select('*')
+                .eq('championship_id', pool.championship_id) // <-- FILTRO ADICIONADO
+                .order('name', { ascending: true });
+            
             if (teamsError) throw new Error(`Buscando Times: ${teamsError.message}`);
             setTeams(teamsData || []);
 
-            const { data: groupsData, error: groupsError } = await supabase.from('groups').select('id, name').order('name', { ascending: true });
+            // Buscando Grupos (COM FILTRO)
+            const { data: groupsData, error: groupsError } = await supabase
+                .from('groups')
+                .select('id, name')
+                .eq('championship_id', pool.championship_id) // <-- FILTRO ADICIONADO
+                .order('name', { ascending: true });
+            
             if (groupsError) throw new Error(`Buscando Grupos: ${groupsError.message}`);
             setGroups(groupsData || []);
 
+            // Buscando Palpites de Grupo e Finais (Filtra por usuário)
             const { data: groupPredData, error: groupPredError } = await supabase.from('group_predictions').select('*').eq('user_id', user.id);
             if (groupPredError) throw new Error(`Buscando Palpites de Grupo: ${groupPredError.message}`);
             const loadedGroupPredictions: { [groupId: string]: GroupPredictionState } = {};
@@ -102,7 +132,7 @@ const Palpites = () => {
         } finally {
             setLoading(false);
         }
-    }, [user, toast]);
+    }, [user, pool, toast]); // <-- ADICIONADO pool nas dependências
     
     useEffect(() => {
         fetchInitialData();
@@ -269,7 +299,6 @@ const Palpites = () => {
               <h1 className="text-3xl font-bold text-fifa-blue">Meus Palpites</h1>
             </div>
             
-            {/* NOVO: Alerta de pagamento pendente */}
             {isPaymentPending && !isDeadlineReached && (
               <Alert variant="destructive" className="mb-6">
                 <AlertTriangle className="h-4 w-4" />
@@ -302,25 +331,30 @@ const Palpites = () => {
                           <CardDescription>Salve individualmente. O prazo geral é {deadlineFormatted}, mas cada jogo trava no seu horário de início.</CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-4">
-                            {groupStageMatches.map(match => {
-                                // ALTERADO: Condição de bloqueio simplificada
-                                const isMatchLocked = isGeneralLock || (parseISO(match.match_date).getTime() <= Date.now());
-                                const prediction = dailyPredictions[match.id] || { home_score: '', away_score: '' };
-                                return (
-                                    <Card key={match.id} className={`p-4 ${isMatchLocked ? 'bg-gray-100 opacity-70' : ''}`}>
-                                        <div className="flex justify-between items-center mb-2">
-                                            <p className="font-semibold">{match.home_team?.name} vs {match.away_team?.name}</p>
-                                            <p className="text-sm text-gray-500">{format(parseISO(match.match_date), 'dd/MM HH:mm', { locale: ptBR })}</p>
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                            <Input type="number" min="0" className="w-20 text-center" value={prediction.home_score ?? ''} onChange={e => handleScoreChange(match.id, 'home', e.target.value)} disabled={isMatchLocked || submittingMatchId === match.id} />
-                                            <span>x</span>
-                                            <Input type="number" min="0" className="w-20 text-center" value={prediction.away_score ?? ''} onChange={e => handleScoreChange(match.id, 'away', e.target.value)} disabled={isMatchLocked || submittingMatchId === match.id} />
-                                            {!isMatchLocked && <Button size="sm" className="ml-auto" onClick={() => handleSaveDailyPrediction(match.id)} disabled={submittingMatchId === match.id}>{submittingMatchId === match.id ? <Loader2 className="animate-spin" /> : (prediction.prediction_id ? 'Atualizar' : 'Salvar')}</Button>}
-                                        </div>
-                                    </Card>
-                                );
-                            })}
+                            {groupStageMatches.length > 0 ? (
+                                groupStageMatches.map(match => {
+                                    const isMatchLocked = isGeneralLock || (parseISO(match.match_date).getTime() <= Date.now());
+                                    const prediction = dailyPredictions[match.id] || { home_score: '', away_score: '' };
+                                    return (
+                                        <Card key={match.id} className={`p-4 ${isMatchLocked ? 'bg-gray-100 opacity-70' : ''}`}>
+                                            <div className="flex justify-between items-center mb-2">
+                                                <p className="font-semibold">{match.home_team?.name} vs {match.away_team?.name}</p>
+                                                <p className="text-sm text-gray-500">{format(parseISO(match.match_date), 'dd/MM HH:mm', { locale: ptBR })}</p>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <Input type="number" min="0" className="w-20 text-center" value={prediction.home_score ?? ''} onChange={e => handleScoreChange(match.id, 'home', e.target.value)} disabled={isMatchLocked || submittingMatchId === match.id} />
+                                                <span>x</span>
+                                                <Input type="number" min="0" className="w-20 text-center" value={prediction.away_score ?? ''} onChange={e => handleScoreChange(match.id, 'away', e.target.value)} disabled={isMatchLocked || submittingMatchId === match.id} />
+                                                {!isMatchLocked && <Button size="sm" className="ml-auto" onClick={() => handleSaveDailyPrediction(match.id)} disabled={submittingMatchId === match.id}>{submittingMatchId === match.id ? <Loader2 className="animate-spin" /> : (prediction.prediction_id ? 'Atualizar' : 'Salvar')}</Button>}
+                                            </div>
+                                        </Card>
+                                    );
+                                })
+                            ) : (
+                                <div className="text-center text-gray-500 py-4">
+                                    Nenhuma partida encontrada para este campeonato.
+                                </div>
+                            )}
                         </CardContent>
                     </Card>
                 </TabsContent>
@@ -329,25 +363,31 @@ const Palpites = () => {
                     <Card>
                          <CardHeader><CardTitle className="text-xl">Palpites dos Grupos</CardTitle><CardDescription>Selecione os classificados de cada grupo. Prazo final: {deadlineFormatted}.</CardDescription></CardHeader>
                          <CardContent className="space-y-6">
-                             {groups.map(group => {
-                                const prediction = groupPredictions[group.id] || {};
-                                return (
-                                    <Card key={group.id} className={`p-4 ${isGeneralLock ? 'bg-gray-100' : ''}`}>
-                                        <h3 className="text-lg font-semibold mb-3">Grupo {group.name}</h3>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                            <div>
-                                                <Label>1º Lugar</Label>
-                                                <Select onValueChange={(value) => handleGroupTeamChange(group.id, 'first', value)} value={prediction.predicted_first_team_id || ''} disabled={isGeneralLock || submittingMatchId === group.id}><SelectTrigger><SelectValue placeholder="Selecione..."/></SelectTrigger><SelectContent>{teams.filter(t => t.group_id === group.id).map(team => <SelectItem key={team.id} value={team.id}>{team.name}</SelectItem>)}</SelectContent></Select>
+                             {groups.length > 0 ? (
+                                 groups.map(group => {
+                                    const prediction = groupPredictions[group.id] || {};
+                                    return (
+                                        <Card key={group.id} className={`p-4 ${isGeneralLock ? 'bg-gray-100' : ''}`}>
+                                            <h3 className="text-lg font-semibold mb-3">Grupo {group.name}</h3>
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                <div>
+                                                    <Label>1º Lugar</Label>
+                                                    <Select onValueChange={(value) => handleGroupTeamChange(group.id, 'first', value)} value={prediction.predicted_first_team_id || ''} disabled={isGeneralLock || submittingMatchId === group.id}><SelectTrigger><SelectValue placeholder="Selecione..."/></SelectTrigger><SelectContent>{teams.filter(t => t.group_id === group.id).map(team => <SelectItem key={team.id} value={team.id}>{team.name}</SelectItem>)}</SelectContent></Select>
+                                                </div>
+                                                <div>
+                                                    <Label>2º Lugar</Label>
+                                                    <Select onValueChange={(value) => handleGroupTeamChange(group.id, 'second', value)} value={prediction.predicted_second_team_id || ''} disabled={isGeneralLock || submittingMatchId === group.id}><SelectTrigger><SelectValue placeholder="Selecione..."/></SelectTrigger><SelectContent>{teams.filter(t => t.group_id === group.id).map(team => <SelectItem key={team.id} value={team.id}>{team.name}</SelectItem>)}</SelectContent></Select>
+                                                </div>
                                             </div>
-                                            <div>
-                                                <Label>2º Lugar</Label>
-                                                <Select onValueChange={(value) => handleGroupTeamChange(group.id, 'second', value)} value={prediction.predicted_second_team_id || ''} disabled={isGeneralLock || submittingMatchId === group.id}><SelectTrigger><SelectValue placeholder="Selecione..."/></SelectTrigger><SelectContent>{teams.filter(t => t.group_id === group.id).map(team => <SelectItem key={team.id} value={team.id}>{team.name}</SelectItem>)}</SelectContent></Select>
-                                            </div>
-                                        </div>
-                                        {!isGeneralLock && <Button className="mt-4" onClick={() => handleSaveGroupPrediction(group.id)} disabled={submittingMatchId === group.id}>{submittingMatchId === group.id ? <Loader2 className="animate-spin" /> : (prediction.prediction_id ? `Atualizar Grupo ${group.name}` : `Salvar Grupo ${group.name}`)}</Button>}
-                                    </Card>
-                                );
-                             })}
+                                            {!isGeneralLock && <Button className="mt-4" onClick={() => handleSaveGroupPrediction(group.id)} disabled={submittingMatchId === group.id}>{submittingMatchId === group.id ? <Loader2 className="animate-spin" /> : (prediction.prediction_id ? `Atualizar Grupo ${group.name}` : `Salvar Grupo ${group.name}`)}</Button>}
+                                        </Card>
+                                    );
+                                 })
+                             ) : (
+                                 <div className="text-center text-gray-500 py-4">
+                                     Nenhum grupo encontrado para este campeonato.
+                                 </div>
+                             )}
                          </CardContent>
                      </Card>
                 </TabsContent>
@@ -356,21 +396,29 @@ const Palpites = () => {
                     <Card>
                         <CardHeader><CardTitle className="text-xl">Palpite da Fase Final</CardTitle><CardDescription>Defina os finalistas e o placar da grande final. Prazo final: {deadlineFormatted}.</CardDescription></CardHeader>
                         <CardContent className="space-y-4">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div><Label>Campeão</Label><Select onValueChange={v => handleFinalPredictionChange('champion_id', v)} value={finalPrediction.champion_id || ''} disabled={isGeneralLock}><SelectTrigger><SelectValue placeholder="Selecione..."/></SelectTrigger><SelectContent>{teams.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}</SelectContent></Select></div>
-                                <div><Label>Vice-Campeão</Label><Select onValueChange={v => handleFinalPredictionChange('runner_up_id', v)} value={finalPrediction.runner_up_id || ''} disabled={isGeneralLock}><SelectTrigger><SelectValue placeholder="Selecione..."/></SelectTrigger><SelectContent>{teams.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}</SelectContent></Select></div>
-                                <div><Label>3º Lugar</Label><Select onValueChange={v => handleFinalPredictionChange('third_place_id', v)} value={finalPrediction.third_place_id || ''} disabled={isGeneralLock}><SelectTrigger><SelectValue placeholder="Selecione..."/></SelectTrigger><SelectContent>{teams.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}</SelectContent></Select></div>
-                                <div><Label>4º Lugar</Label><Select onValueChange={v => handleFinalPredictionChange('fourth_place_id', v)} value={finalPrediction.fourth_place_id || ''} disabled={isGeneralLock}><SelectTrigger><SelectValue placeholder="Selecione..."/></SelectTrigger><SelectContent>{teams.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}</SelectContent></Select></div>
-                            </div>
-                            <div>
-                                <Label>Placar da Final (Campeão x Vice)</Label>
-                                <div className="flex items-center gap-2">
-                                    <Input type="number" min="0" className="w-24 text-center" value={finalPrediction.final_home_score ?? ''} onChange={e => handleFinalPredictionChange('final_home_score', e.target.value === '' ? null : parseInt(e.target.value))} disabled={isGeneralLock} />
-                                    <span>x</span>
-                                    <Input type="number" min="0" className="w-24 text-center" value={finalPrediction.final_away_score ?? ''} onChange={e => handleFinalPredictionChange('final_away_score', e.target.value === '' ? null : parseInt(e.target.value))} disabled={isGeneralLock} />
+                            {teams.length > 0 ? (
+                                <>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div><Label>Campeão</Label><Select onValueChange={v => handleFinalPredictionChange('champion_id', v)} value={finalPrediction.champion_id || ''} disabled={isGeneralLock}><SelectTrigger><SelectValue placeholder="Selecione..."/></SelectTrigger><SelectContent>{teams.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}</SelectContent></Select></div>
+                                        <div><Label>Vice-Campeão</Label><Select onValueChange={v => handleFinalPredictionChange('runner_up_id', v)} value={finalPrediction.runner_up_id || ''} disabled={isGeneralLock}><SelectTrigger><SelectValue placeholder="Selecione..."/></SelectTrigger><SelectContent>{teams.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}</SelectContent></Select></div>
+                                        <div><Label>3º Lugar</Label><Select onValueChange={v => handleFinalPredictionChange('third_place_id', v)} value={finalPrediction.third_place_id || ''} disabled={isGeneralLock}><SelectTrigger><SelectValue placeholder="Selecione..."/></SelectTrigger><SelectContent>{teams.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}</SelectContent></Select></div>
+                                        <div><Label>4º Lugar</Label><Select onValueChange={v => handleFinalPredictionChange('fourth_place_id', v)} value={finalPrediction.fourth_place_id || ''} disabled={isGeneralLock}><SelectTrigger><SelectValue placeholder="Selecione..."/></SelectTrigger><SelectContent>{teams.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}</SelectContent></Select></div>
+                                    </div>
+                                    <div>
+                                        <Label>Placar da Final (Campeão x Vice)</Label>
+                                        <div className="flex items-center gap-2">
+                                            <Input type="number" min="0" className="w-24 text-center" value={finalPrediction.final_home_score ?? ''} onChange={e => handleFinalPredictionChange('final_home_score', e.target.value === '' ? null : parseInt(e.target.value))} disabled={isGeneralLock} />
+                                            <span>x</span>
+                                            <Input type="number" min="0" className="w-24 text-center" value={finalPrediction.final_away_score ?? ''} onChange={e => handleFinalPredictionChange('final_away_score', e.target.value === '' ? null : parseInt(e.target.value))} disabled={isGeneralLock} />
+                                        </div>
+                                    </div>
+                                    {!isGeneralLock && <Button onClick={handleSaveFinalPrediction} disabled={submittingMatchId === 'final'}>{submittingMatchId === 'final' ? <Loader2 className="animate-spin mr-2"/> : null} {finalPrediction.prediction_id ? 'Atualizar Palpite Final' : 'Salvar Palpite Final'}</Button>}
+                                </>
+                            ) : (
+                                <div className="text-center text-gray-500 py-4">
+                                    Nenhum time disponível para palpites finais.
                                 </div>
-                            </div>
-                            {!isGeneralLock && <Button onClick={handleSaveFinalPrediction} disabled={submittingMatchId === 'final'}>{submittingMatchId === 'final' ? <Loader2 className="animate-spin mr-2"/> : null} {finalPrediction.prediction_id ? 'Atualizar Palpite Final' : 'Salvar Palpite Final'}</Button>}
+                            )}
                         </CardContent>
                     </Card>
                 </TabsContent>

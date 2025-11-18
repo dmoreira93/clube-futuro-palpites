@@ -1,15 +1,18 @@
-// src/hooks/usePoolData.ts
+// src/hooks/usePoolData.ts (VERSÃO CORRIGIDA)
 
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import { Participant } from '@/hooks/useParticipantsRanking'; // Reutilizaremos este tipo
 
 const fetchPoolData = async (poolId: string | undefined) => {
   if (!poolId) return null;
+  
   const { data, error } = await supabase.rpc('get_pool_data', { p_pool_id: poolId });
+  
   if (error) throw new Error(error.message);
-  return data;
+  
+  // Retorna o objeto completo (que contém 'stats' e 'ranking')
+  return (data && data.length > 0) ? data[0] : null;
 };
 
 const usePoolData = () => {
@@ -21,8 +24,9 @@ const usePoolData = () => {
   });
 
   return {
-    ranking: (data?.ranking || []) as Participant[],
-    stats: data?.stats,
+    // AQUI ESTÁ A CORREÇÃO:
+    // Acessamos a propriedade .stats de dentro do objeto retornado
+    stats: data?.stats || null, 
     loading: isLoading,
     error: error?.message || null,
   };
