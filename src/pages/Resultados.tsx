@@ -1,4 +1,4 @@
-// src/pages/Resultados.tsx (VERSÃO ATUALIZADA COM FILTRO DE CAMPEONATO)
+// src/pages/Resultados.tsx (VERSÃO COM FILTROS DE CAMPEONATO)
 
 import React, { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -11,7 +11,6 @@ import { Match as MatchType, Team } from "@/types/matches";
 import { Loader2, Trophy, Users as UsersIcon } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
-// Interfaces para os dados
 type FetchedMatch = MatchType & {
   home_team: Team | null;
   away_team: Team | null;
@@ -34,23 +33,22 @@ interface FinalResult {
 }
 
 const Resultados = () => {
-  const { isAdmin, pool } = useAuth(); // <-- ADICIONADO: pool
+  const { isAdmin, pool } = useAuth(); // Pegamos o pool ativo aqui
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [selectedMatch, setSelectedMatch] = useState<FetchedMatch | null>(null);
 
+  // Busca de Partidas (Filtrada pelo Campeonato do Bolão)
   const { data: matches = [], isLoading: isLoadingMatches } = useQuery<FetchedMatch[]>({
-    // <-- ATUALIZADO: Adicionado pool?.championship_id na chave
-    queryKey: ['matchesResultsGroupStage', pool?.championship_id],
+    queryKey: ['matchesResultsGroupStage', pool?.championship_id], // Chave reage à mudança de bolão
     queryFn: async () => {
-      // <-- ADICIONADO: Proteção contra bolão sem campeonato
       if (!pool?.championship_id) return [];
 
       const { data, error } = await supabase
         .from('matches')
         .select(`*, home_team:home_team_id(*), away_team:away_team_id(*)`)
         .eq('stage', 'Fase de Grupos')
-        .eq('championship_id', pool.championship_id) // <-- ADICIONADO: Filtro mágico
+        .eq('championship_id', pool.championship_id) // <--- O FILTRO IMPORTANTE
         .not('home_team_id', 'is', null)
         .not('away_team_id', 'is', null)
         .order('match_date', { ascending: true });
@@ -58,26 +56,38 @@ const Resultados = () => {
       if (error) throw error;
       return data as FetchedMatch[];
     },
-    enabled: !!pool?.championship_id, // Só executa se tiver campeonato
+    enabled: !!pool?.championship_id,
   });
 
+  // Busca de Resultados de Grupos (Filtrada pelos grupos do campeonato)
   const { data: groupResultsData = [], isLoading: isLoadingGroupResults } = useQuery<GroupResult[]>({
-    queryKey: ['groupResultsData'],
+    queryKey: ['groupResultsData', pool?.championship_id],
     queryFn: async () => {
-        const { data, error } = await supabase.from('groups_results').select(`*, groups(name), first_place_team:first_place_team_id(*), second_place_team:second_place_team_id(*)`);
+        if (!pool?.championship_id) return [];
+
+        // Usamos !inner na relação com groups para filtrar apenas grupos deste campeonato
+        const { data, error } = await supabase
+            .from('groups_results')
+            .select(`*, groups!inner(name, championship_id), first_place_team:first_place_team_id(*), second_place_team:second_place_team_id(*)`)
+            .eq('groups.championship_id', pool.championship_id); // <--- FILTRO NO GRUPO
+
         if (error) throw error;
         return (data || []).map(item => ({
             group_id: item.group_id,
-            group_name: (item.groups as { name: string })?.name || 'N/A',
+            group_name: (item.groups as any)?.name || 'N/A',
             first_place_team: item.first_place_team,
             second_place_team: item.second_place_team,
         })) as GroupResult[];
     },
+    enabled: !!pool?.championship_id,
   });
 
+  // Busca de Resultados Finais (Filtrada pelo campeonato)
   const { data: finalResultData, isLoading: isLoadingFinalResult } = useQuery<FinalResult | null>({
-    queryKey: ['finalResultData'],
+    queryKey: ['finalResultData', pool?.championship_id],
     queryFn: async () => {
+      if (!pool?.championship_id) return null;
+
       const { data, error } = await supabase
         .from('tournament_results')
         .select(`
@@ -87,12 +97,13 @@ const Resultados = () => {
           third_place:third_place_id(id, name), 
           fourth_place:fourth_place_id(id, name)
         `)
-        .limit(1)
-        .maybeSingle(); 
+        .eq('championship_id', pool.championship_id) // <--- FILTRO NA FINAL
+        .maybeSingle(); // Retorna null se não tiver resultado para este campeonato ainda
       
       if (error) throw error;
       return data as FinalResult | null;
     },
+    enabled: !!pool?.championship_id,
   });
 
   const handleSelectMatch = (matchId: string) => {
@@ -102,7 +113,7 @@ const Resultados = () => {
   };
 
   const handleFormComplete = () => {
-    toast({ title: "Sucesso!", description: "O resultado foi salvo e os pontos serão reprocessados." });
+    toast({ title: "Sucesso!", description: "O resultado foi salvo." });
     setSelectedMatch(null);
     queryClient.invalidateQueries({ queryKey: ['matchesResultsGroupStage'] });
   };
@@ -118,15 +129,15 @@ const Resultados = () => {
       )}
 
       {isLoadingMatches ? (
-        <div className="flex justify-center mt-10">
-          <Loader2 className="h-12 w-12 animate-spin text-fifa-blue" />
-        </div>
-      ) : (
+        <div className="flex justify-center mt-10"><Loader2 className="h-12 w-12 animate-spin text-fifa-blue" /></div>
+      ) : matches.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-6">
           {matches.map(match => (
             <MatchCard key={match.id} match={match} selected={selectedMatch?.id === match.id} onClick={isAdmin ? handleSelectMatch : undefined} />
           ))}
         </div>
+      ) : (
+        <p className="text-center text-muted-foreground mt-6">Nenhuma partida encontrada para este campeonato.</p>
       )}
       
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mt-12">
@@ -141,7 +152,7 @@ const Resultados = () => {
                               <li><strong>3º Lugar:</strong> {finalResultData.third_place?.name || 'A definir'}</li>
                               <li><strong>4º Lugar:</strong> {finalResultData.fourth_place?.name || 'A definir'}</li>
                           </ul>
-                      ) : <p>Resultados finais ainda não definidos.</p>
+                      ) : <p>Resultados finais ainda não definidos para este campeonato.</p>
                   }
               </CardContent>
           </Card>
