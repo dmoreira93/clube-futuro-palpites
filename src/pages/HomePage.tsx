@@ -7,6 +7,9 @@ import { useState } from 'react';
 // --- URL do seu Formulário de Contato / Tickets ---
 const SUPPORT_TICKET_URL = "https://docs.google.com/forms/d/e/1FAIpQLSes1345R-Ld4eWwwBD5HuqqMMCs6j3KiexlidDu09rbnApM0w/viewform?usp=dialog";
 
+// --- URL da Imagem de Fundo (Substitua pelo arquivo local quando salvar na pasta public) ---
+const HERO_BG_IMAGE = "http://googleusercontent.com/image_generation_content/0"; // Ou "/hero-bg.png"
+
 // --- Componente para Dúvidas Frequentes (FAQ) ---
 const FAQItem = ({ question, answer }: { question: string; answer: string }) => {
     const [isOpen, setIsOpen] = useState(false);
@@ -63,13 +66,21 @@ const HomePage = () => {
 
             <main className="flex-grow">
                 
-                {/* --- SEÇÃO 1: HERO / APRESENTAÇÃO --- */}
-                <section className="bg-gradient-to-r from-fifa-blue to-blue-900 text-white py-20 md:py-32">
-                    <div className="container mx-auto px-4 text-center">
+                {/* --- SEÇÃO 1: HERO / APRESENTAÇÃO (COM IMAGEM DE FUNDO) --- */}
+                <section 
+                    className="relative bg-cover bg-center text-white py-20 md:py-32"
+                    style={{ 
+                        backgroundImage: `url('${HERO_BG_IMAGE}')`,
+                    }}
+                >
+                    {/* Overlay escuro para melhorar leitura do texto */}
+                    <div className="absolute inset-0 bg-black/60"></div>
+
+                    <div className="container mx-auto px-4 text-center relative z-10">
                         <h1 className="text-4xl md:text-6xl font-extrabold mb-4 drop-shadow-lg">
                             Crie seu Bolão de Futebol Personalizado.
                         </h1>
-                        <p className="text-xl md:text-2xl mb-8 font-light max-w-3xl mx-auto">
+                        <p className="text-xl md:text-2xl mb-8 font-light max-w-3xl mx-auto drop-shadow-md">
                             Organize campeonatos com seus amigos, defina as regras de pontuação, premiação e punição de forma simples e transparente.
                         </p>
                         <Button size="lg" onClick={() => navigate("/cadastro")} className="bg-fifa-gold text-fifa-blue hover:bg-yellow-400 font-bold shadow-xl animate-pulse-slow">
