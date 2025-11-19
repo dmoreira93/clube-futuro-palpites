@@ -7,8 +7,9 @@ import { useState } from 'react';
 // --- URL do seu Formulário de Contato / Tickets ---
 const SUPPORT_TICKET_URL = "https://docs.google.com/forms/d/e/1FAIpQLSes1345R-Ld4eWwwBD5HuqqMMCs6j3KiexlidDu09rbnApM0w/viewform?usp=dialog";
 
-// --- URL da Imagem de Fundo (Substitua pelo arquivo local quando salvar na pasta public) ---
-const HERO_BG_IMAGE = "http://googleusercontent.com/image_generation_content/0"; // Ou "/hero-bg.png"
+// --- URL da Imagem de Fundo (Assumindo que está na pasta public) ---
+// Certifique-se de ter salvo a imagem 'hero-bg.png' na pasta 'public' do seu projeto.
+const HERO_BG_IMAGE = "/hero-bg.png"; 
 
 // --- Componente para Dúvidas Frequentes (FAQ) ---
 const FAQItem = ({ question, answer }: { question: string; answer: string }) => {
@@ -42,7 +43,7 @@ const HomePage = () => {
     return (
         <div className="flex flex-col min-h-screen bg-background" id="top">
             
-            {/* --- CABEÇALHO (MANTIDO SIMPLIFICADO) --- */}
+            {/* --- CABEÇALHO --- */}
             <header className="bg-fifa-blue text-white shadow-lg sticky top-0 z-40">
                 <div className="container mx-auto px-4">
                     <div className="flex justify-between items-center py-3 h-16">
@@ -51,12 +52,23 @@ const HomePage = () => {
                             <span className="font-bold text-lg text-fifa-gold">Futuro Palpites</span>
                         </Link>
                         
-                        {/* BOTÕES DE AÇÃO */}
+                        {/* BOTÕES DE AÇÃO NO CABEÇALHO */}
                         <div className="flex items-center space-x-3">
-                            <Button variant="outline" size="sm" onClick={() => navigate("/cadastro")} className="border-fifa-gold text-fifa-gold bg-transparent hover:bg-fifa-gold hover:text-white">
+                            <Button 
+                                variant="outline" 
+                                size="sm" 
+                                onClick={() => navigate("/cadastro")} 
+                                // Estilo do botão Cadastrar para parecer com o da imagem
+                                className="border-fifa-gold text-fifa-gold bg-transparent hover:bg-fifa-gold hover:text-fifa-blue transition-colors duration-200"
+                            >
                                 Cadastrar
                             </Button>
-                            <Button size="sm" onClick={() => navigate("/login")} className="bg-fifa-gold text-fifa-blue hover:bg-opacity-90">
+                            <Button 
+                                size="sm" 
+                                onClick={() => navigate("/login")} 
+                                // Estilo do botão Entrar para parecer com o da imagem
+                                className="bg-fifa-gold text-fifa-blue hover:bg-yellow-400 font-bold shadow-md transition-colors duration-200"
+                            >
                                 Entrar
                             </Button>
                         </div>
@@ -83,7 +95,13 @@ const HomePage = () => {
                         <p className="text-xl md:text-2xl mb-8 font-light max-w-3xl mx-auto drop-shadow-md">
                             Organize campeonatos com seus amigos, defina as regras de pontuação, premiação e punição de forma simples e transparente.
                         </p>
-                        <Button size="lg" onClick={() => navigate("/cadastro")} className="bg-fifa-gold text-fifa-blue hover:bg-yellow-400 font-bold shadow-xl animate-pulse-slow">
+                        {/* BOTÃO DA SEÇÃO HERO */}
+                        <Button 
+                            size="lg" 
+                            onClick={() => navigate("/cadastro")} 
+                            // Estilo do botão "Comece a Criar Seu Bolão!" com animação de pulso
+                            className="bg-fifa-gold text-fifa-blue hover:bg-yellow-400 font-bold shadow-xl animate-pulse-slow transition-all duration-200"
+                        >
                             Comece a Criar Seu Bolão!
                         </Button>
                     </div>
@@ -94,17 +112,17 @@ const HomePage = () => {
                     <div className="container mx-auto px-4 grid grid-cols-1 md:grid-cols-3 gap-8 text-center">
                         <Card className="p-6 shadow-lg bg-white">
                             <Trophy className="h-10 w-10 text-primary mx-auto mb-3" />
-                            <CardTitle className="text-3xl font-bold text-fifa-blue">100+</CardTitle>
+                            <CardTitle className="text-3xl font-bold text-fifa-blue">2+</CardTitle>
                             <CardDescription>Bolões Criados</CardDescription>
                         </Card>
                         <Card className="p-6 shadow-lg bg-white">
                             <Users className="h-10 w-10 text-primary mx-auto mb-3" />
-                            <CardTitle className="text-3xl font-bold text-fifa-blue">500+</CardTitle>
+                            <CardTitle className="text-3xl font-bold text-fifa-blue">15+</CardTitle>
                             <CardDescription>Participantes Ativos</CardDescription>
                         </Card>
                         <Card className="p-6 shadow-lg bg-white">
                             <UserCheck className="h-10 w-10 text-primary mx-auto mb-3" />
-                            <CardTitle className="text-3xl font-bold text-fifa-blue">10K+</CardTitle>
+                            <CardTitle className="text-3xl font-bold text-fifa-blue">500+</CardTitle>
                             <CardDescription>Palpites Registrados</CardDescription>
                         </Card>
                     </div>
@@ -127,7 +145,7 @@ const HomePage = () => {
                             </Card>
                             <Card className="text-center p-6 shadow-2xl hover:shadow-primary/50 transition-shadow">
                                 <div className="text-5xl font-extrabold text-fifa-gold mb-4">3</div>
-                                <CardTitle className="mb-2">Convide e Palpite!</CardTitle>
+                                <CardTitle className="mb-2">Convide e Palpite!</Card-Title>
                                 <CardDescription>Compartilhe o código de convite e comece a pontuar em tempo real.</CardDescription>
                             </Card>
                         </div>
@@ -160,7 +178,7 @@ const HomePage = () => {
                 </section>
             </main>
 
-            {/* --- RODAPÉ NOVO E LIMPO --- */}
+            {/* --- RODAPÉ --- */}
             <footer className="bg-fifa-blue text-white py-10 border-t border-fifa-gold/20">
                 <div className="container mx-auto px-4">
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
