@@ -58,7 +58,7 @@ const HomePage = () => {
                                 variant="outline" 
                                 size="sm" 
                                 onClick={() => navigate("/cadastro")} 
-                                // Estilo do botão Cadastrar para parecer com o da imagem
+                                // Estilo do botão Cadastrar
                                 className="border-fifa-gold text-fifa-gold bg-transparent hover:bg-fifa-gold hover:text-fifa-blue transition-colors duration-200"
                             >
                                 Cadastrar
@@ -66,7 +66,7 @@ const HomePage = () => {
                             <Button 
                                 size="sm" 
                                 onClick={() => navigate("/login")} 
-                                // Estilo do botão Entrar para parecer com o da imagem
+                                // Estilo do botão Entrar
                                 className="bg-fifa-gold text-fifa-blue hover:bg-yellow-400 font-bold shadow-md transition-colors duration-200"
                             >
                                 Entrar
@@ -99,7 +99,7 @@ const HomePage = () => {
                         <Button 
                             size="lg" 
                             onClick={() => navigate("/cadastro")} 
-                            // Estilo do botão "Comece a Criar Seu Bolão!" com animação de pulso
+                            // Estilo do botão "Comece a Criar Seu Bolão!"
                             className="bg-fifa-gold text-fifa-blue hover:bg-yellow-400 font-bold shadow-xl animate-pulse-slow transition-all duration-200"
                         >
                             Comece a Criar Seu Bolão!
@@ -145,7 +145,7 @@ const HomePage = () => {
                             </Card>
                             <Card className="text-center p-6 shadow-2xl hover:shadow-primary/50 transition-shadow">
                                 <div className="text-5xl font-extrabold text-fifa-gold mb-4">3</div>
-                                <CardTitle className="mb-2">Convide e Palpite!</Card-Title>
+                                <CardTitle className="mb-2">Convide e Palpite!</CardTitle>
                                 <CardDescription>Compartilhe o código de convite e comece a pontuar em tempo real.</CardDescription>
                             </Card>
                         </div>
@@ -194,7 +194,7 @@ const HomePage = () => {
                             </p>
                         </div>
                         
-                        {/* Coluna 2: Navegação (SÓ LINKS DA LANDING) */}
+                        {/* Coluna 2: Navegação */}
                         <div>
                             <h5 className="font-semibold mb-3">Navegação</h5>
                             <ul className="space-y-2 text-sm text-gray-400">
@@ -213,12 +213,11 @@ const HomePage = () => {
                             </ul>
                         </div>
                         
-                        {/* Coluna 4: Contato e Critérios */}
+                        {/* Coluna 4: Contato */}
                         <div>
                             <h5 className="font-semibold mb-3">Suporte</h5>
                             <ul className="space-y-2 text-sm text-gray-400">
                                 <li>
-                                    {/* Link para Formulário Externo (Google Forms) */}
                                     <a 
                                         href={SUPPORT_TICKET_URL} 
                                         target="_blank" 
