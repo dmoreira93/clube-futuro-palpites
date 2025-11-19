@@ -58,7 +58,7 @@ const HomePage = () => {
                                 variant="outline" 
                                 size="sm" 
                                 onClick={() => navigate("/cadastro")} 
-                                // Estilo do botão Cadastrar
+                                // Estilo do botão Cadastrar para parecer com o da imagem
                                 className="border-fifa-gold text-fifa-gold bg-transparent hover:bg-fifa-gold hover:text-fifa-blue transition-colors duration-200"
                             >
                                 Cadastrar
@@ -66,7 +66,7 @@ const HomePage = () => {
                             <Button 
                                 size="sm" 
                                 onClick={() => navigate("/login")} 
-                                // Estilo do botão Entrar
+                                // Estilo do botão Entrar para parecer com o da imagem
                                 className="bg-fifa-gold text-fifa-blue hover:bg-yellow-400 font-bold shadow-md transition-colors duration-200"
                             >
                                 Entrar
@@ -99,7 +99,7 @@ const HomePage = () => {
                         <Button 
                             size="lg" 
                             onClick={() => navigate("/cadastro")} 
-                            // Estilo do botão "Comece a Criar Seu Bolão!"
+                            // Estilo do botão "Comece a Criar Seu Bolão!" com animação de pulso
                             className="bg-fifa-gold text-fifa-blue hover:bg-yellow-400 font-bold shadow-xl animate-pulse-slow transition-all duration-200"
                         >
                             Comece a Criar Seu Bolão!
@@ -112,17 +112,17 @@ const HomePage = () => {
                     <div className="container mx-auto px-4 grid grid-cols-1 md:grid-cols-3 gap-8 text-center">
                         <Card className="p-6 shadow-lg bg-white">
                             <Trophy className="h-10 w-10 text-primary mx-auto mb-3" />
-                            <CardTitle className="text-3xl font-bold text-fifa-blue">2+</CardTitle>
+                            <CardTitle className="text-3xl font-bold text-fifa-blue">100+</CardTitle>
                             <CardDescription>Bolões Criados</CardDescription>
                         </Card>
                         <Card className="p-6 shadow-lg bg-white">
                             <Users className="h-10 w-10 text-primary mx-auto mb-3" />
-                            <CardTitle className="text-3xl font-bold text-fifa-blue">15+</CardTitle>
+                            <CardTitle className="text-3xl font-bold text-fifa-blue">500+</CardTitle>
                             <CardDescription>Participantes Ativos</CardDescription>
                         </Card>
                         <Card className="p-6 shadow-lg bg-white">
                             <UserCheck className="h-10 w-10 text-primary mx-auto mb-3" />
-                            <CardTitle className="text-3xl font-bold text-fifa-blue">500+</CardTitle>
+                            <CardTitle className="text-3xl font-bold text-fifa-blue">10K+</CardTitle>
                             <CardDescription>Palpites Registrados</CardDescription>
                         </Card>
                     </div>
@@ -194,7 +194,7 @@ const HomePage = () => {
                             </p>
                         </div>
                         
-                        {/* Coluna 2: Navegação */}
+                        {/* Coluna 2: Navegação (SÓ LINKS DA LANDING) */}
                         <div>
                             <h5 className="font-semibold mb-3">Navegação</h5>
                             <ul className="space-y-2 text-sm text-gray-400">
@@ -213,11 +213,12 @@ const HomePage = () => {
                             </ul>
                         </div>
                         
-                        {/* Coluna 4: Contato */}
+                        {/* Coluna 4: Contato e Critérios */}
                         <div>
                             <h5 className="font-semibold mb-3">Suporte</h5>
                             <ul className="space-y-2 text-sm text-gray-400">
                                 <li>
+                                    {/* Link para Formulário Externo (Google Forms) */}
                                     <a 
                                         href={SUPPORT_TICKET_URL} 
                                         target="_blank" 
