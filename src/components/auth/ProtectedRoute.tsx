@@ -1,8 +1,7 @@
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 
-// 1. Componente Loading refeito com CSS puro (Tailwind)
-//    Sem nenhuma importação de ícones.
+// Componente Loading
 const Loading = () => {
   return (
     <div className="flex items-center justify-center h-screen bg-gray-900">
@@ -11,14 +10,13 @@ const Loading = () => {
   );
 };
 
-// 2. Componente principal, sem alterações.
 interface ProtectedRouteProps {
   children: JSX.Element;
   adminOnly?: boolean;
 }
 
 export function ProtectedRoute({ children, adminOnly = false }: ProtectedRouteProps) {
-  const { isAuthenticated, user, loading, isAdmin, userParticipations } = useAuth();
+  const { isAuthenticated, loading, isAdmin } = useAuth();
 
   if (loading) {
     return <Loading />;
@@ -32,9 +30,9 @@ export function ProtectedRoute({ children, adminOnly = false }: ProtectedRoutePr
     return <Navigate to="/" />;
   }
 
-  if (user && user.id && userParticipations.length === 0 && !window.location.pathname.includes('/join-pool') && !window.location.pathname.includes('/create-pool')) {
-    return <Navigate to="/join-pool" />;
-  }
-
+  // --- REMOVIDO ---
+  // O bloco que forçava o redirecionamento para '/join-pool' foi retirado.
+  // Agora o usuário novo vai direto para o Dashboard, onde verá as opções de boas-vindas.
+  
   return children;
 }
