@@ -6,10 +6,13 @@ import usePoolData from '@/hooks/usePoolData';
 import useParticipantsRanking from '@/hooks/useParticipantsRanking';
 import NoticeBoard from '@/components/dashboard/NoticeBoard';
 import { Skeleton } from '@/components/ui/skeleton';
-import { AlertCircle, Copy, Check, Trophy, Medal, Target, AlertTriangle, Calculator, ListChecks, BarChart2, Users } from 'lucide-react'; 
+import { 
+    AlertCircle, Copy, Check, Trophy, Target, AlertTriangle, 
+    Calculator, ListChecks, BarChart2, Users, Info, Eye 
+} from 'lucide-react'; 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -131,11 +134,51 @@ const PoolDashboard = () => {
 
         {/* --- ÁREA DE AÇÃO RÁPIDA (BOTÕES) --- */}
         <div className="flex flex-wrap gap-3">
-            <ActionButton icon={<ListChecks />} label="Meus Palpites" onClick={() => navigate(`/pool/${poolId}/palpites`)} primary />
-            <ActionButton icon={<BarChart2 />} label="Resultados" onClick={() => navigate(`/pool/${poolId}/resultados`)} />
-            <ActionButton icon={<Trophy />} label="Ranking Completo" onClick={() => navigate(`/pool/${poolId}/ranking`)} />
-            <ActionButton icon={<Calculator />} label="Simulador" onClick={() => navigate(`/pool/${poolId}/simulador`)} />
-            <ActionButton icon={<AlertTriangle />} label="Auditoria" onClick={() => navigate(`/auditoria`)} />
+            {/* Botão Principal: Meus Palpites */}
+            <ActionButton 
+                icon={<ListChecks />} 
+                label="Meus Palpites" 
+                onClick={() => navigate(`/pool/${poolId}/palpites`)} 
+                primary 
+            />
+            
+            {/* Novos Botões Solicitados */}
+            <ActionButton 
+                icon={<Eye />} 
+                label="Palpites da Galera" 
+                onClick={() => navigate(`/pool/${poolId}/palpites-galera`)} 
+            />
+            
+            <ActionButton 
+                icon={<BarChart2 />} 
+                label="Resultados" 
+                onClick={() => navigate(`/pool/${poolId}/resultados`)} 
+            />
+            
+            <ActionButton 
+                icon={<Trophy />} 
+                label="Ranking" 
+                onClick={() => navigate(`/pool/${poolId}/ranking`)} 
+            />
+            
+            <ActionButton 
+                icon={<Calculator />} 
+                label="Simulador" 
+                onClick={() => navigate(`/pool/${poolId}/simulador`)} 
+            />
+            
+             <ActionButton 
+                icon={<Info />} 
+                label="Info. Participantes" 
+                onClick={() => navigate(`/pool/${poolId}/info-participantes`)} 
+            />
+
+            <ActionButton 
+                icon={<AlertTriangle />} 
+                label="Auditoria" 
+                onClick={() => navigate(`/auditoria`)} 
+                variant="ghost" // Estilo mais discreto para auditoria
+            />
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -213,7 +256,7 @@ const PoolDashboard = () => {
                     </CardContent>
                 </Card>
 
-                {/* Próximos Jogos (Placeholder - Idealmente viria do useMatchResults ou similar) */}
+                {/* Próximos Jogos (Placeholder) */}
                 <Card className="bg-blue-50/50 border-blue-100">
                     <CardHeader>
                         <CardTitle className="text-lg text-fifa-blue">Próximas Partidas</CardTitle>
@@ -248,28 +291,28 @@ const StatCard = ({ title, value, icon, subtext, highlight = false }: any) => (
     </Card>
 );
 
-const ActionButton = ({ icon, label, onClick, primary = false }: any) => (
+const ActionButton = ({ icon, label, onClick, primary = false, variant = "outline" }: any) => (
     <Button 
-        variant={primary ? "default" : "outline"} 
-        className={`flex-1 min-w-[140px] h-12 ${primary ? 'bg-fifa-blue hover:bg-blue-900' : 'border-gray-200 text-gray-700 hover:bg-gray-50'}`}
+        variant={primary ? "default" : variant} 
+        className={`flex-1 min-w-[130px] h-12 ${primary ? 'bg-fifa-blue hover:bg-blue-900 shadow-sm' : 'border-gray-200 text-gray-700 hover:bg-gray-50'} ${variant === 'ghost' ? 'border-none text-gray-500 hover:text-gray-700' : ''}`}
         onClick={onClick}
     >
-        {icon} <span className="ml-2">{label}</span>
+        {icon} <span className="ml-2 text-sm font-medium">{label}</span>
     </Button>
 );
 
 const PodiumStep = ({ participant, place, color, height, isFirst = false }: any) => (
-    <div className="flex flex-col items-center">
+    <div className="flex flex-col items-center group cursor-pointer hover:-translate-y-1 transition-transform duration-300">
         <div className="mb-2 flex flex-col items-center">
-            <Avatar className={`${isFirst ? 'w-16 h-16 border-4 border-fifa-gold' : 'w-12 h-12 border-2 border-gray-200'}`}>
+            <Avatar className={`${isFirst ? 'w-16 h-16 border-4 border-fifa-gold shadow-md' : 'w-12 h-12 border-2 border-gray-200'}`}>
                 <AvatarImage src={participant.avatar_url} />
-                <AvatarFallback>{participant.name.substring(0, 2).toUpperCase()}</AvatarFallback>
+                <AvatarFallback className="bg-gray-100 text-gray-600 font-bold">{participant.name.substring(0, 2).toUpperCase()}</AvatarFallback>
             </Avatar>
-            <span className={`text-xs font-bold mt-1 ${isFirst ? 'text-base' : ''} text-center max-w-[80px] truncate`}>{participant.name}</span>
-            <span className="text-xs text-gray-500">{participant.points} pts</span>
+            <span className={`text-xs font-bold mt-2 ${isFirst ? 'text-base text-fifa-blue' : 'text-gray-700'} text-center max-w-[90px] truncate`}>{participant.name}</span>
+            <Badge variant="secondary" className="mt-1 text-[10px] h-5 px-2 bg-gray-100 text-gray-600">{participant.points} pts</Badge>
         </div>
-        <div className={`${color} ${height} w-16 md:w-24 rounded-t-lg flex items-start justify-center pt-2 shadow-inner relative`}>
-            <span className={`font-bold ${isFirst ? 'text-3xl text-white drop-shadow-md' : 'text-xl text-gray-600'}`}>{place}º</span>
+        <div className={`${color} ${height} w-16 md:w-24 rounded-t-lg flex items-start justify-center pt-2 shadow-inner relative opacity-90 group-hover:opacity-100 transition-opacity`}>
+            <span className={`font-black ${isFirst ? 'text-3xl text-white drop-shadow-md' : 'text-xl text-gray-600/50'}`}>{place}º</span>
         </div>
     </div>
 );
