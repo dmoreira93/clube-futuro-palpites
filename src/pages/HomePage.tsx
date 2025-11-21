@@ -125,21 +125,21 @@ const HomePage = () => {
                                 <div className="bg-blue-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
                                     <Trophy className="h-8 w-8 text-fifa-blue" />
                                 </div>
-                                <h3 className="text-4xl font-black text-fifa-blue mb-1">100+</h3>
+                                <h3 className="text-4xl font-black text-fifa-blue mb-1">2+</h3>
                                 <p className="text-gray-600 font-medium">Bolões Criados</p>
                             </div>
                             <div className="bg-white p-8 rounded-2xl shadow-sm hover:shadow-md transition-all duration-300 border border-gray-100">
                                 <div className="bg-blue-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
                                     <Users className="h-8 w-8 text-fifa-blue" />
                                 </div>
-                                <h3 className="text-4xl font-black text-fifa-blue mb-1">500+</h3>
+                                <h3 className="text-4xl font-black text-fifa-blue mb-1">15+</h3>
                                 <p className="text-gray-600 font-medium">Participantes Ativos</p>
                             </div>
                             <div className="bg-white p-8 rounded-2xl shadow-sm hover:shadow-md transition-all duration-300 border border-gray-100">
                                 <div className="bg-blue-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
                                     <UserCheck className="h-8 w-8 text-fifa-blue" />
                                 </div>
-                                <h3 className="text-4xl font-black text-fifa-blue mb-1">10K+</h3>
+                                <h3 className="text-4xl font-black text-fifa-blue mb-1">500+</h3>
                                 <p className="text-gray-600 font-medium">Palpites Registrados</p>
                             </div>
                         </div>
