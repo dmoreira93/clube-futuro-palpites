@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/avatar";
 import {
   LogOut, User, Loader2, FileText,
-  ListChecks, Shield, Trophy, Calculator, BarChart3, ChevronDown, Newspaper
+  ListChecks, Shield, Trophy, Calculator, BarChart3, ChevronDown
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useMyPools } from "@/hooks/useMyPools";
@@ -25,11 +25,9 @@ const Navbar = () => {
   const { isAuthenticated, isAdmin, user, signOut, loading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const { poolId } = useParams<{ poolId: string }>(); // Tenta pegar o poolId da URL
+  const { poolId } = useParams<{ poolId: string }>(); 
   const { pools, loading: poolsLoading } = useMyPools();
 
-  // Tenta encontrar o bolão atual, seja pela URL ou pelo estado global (se implementado)
-  // Se a rota for /pool/:id/..., o poolId estará disponível.
   const currentPool = pools.find(p => p.id === poolId);
 
   const handleLogout = async () => {
@@ -41,7 +39,6 @@ const Navbar = () => {
     if (loading && !user) return <Loader2 className="h-6 w-6 animate-spin text-white" />;
 
     if (!isAuthenticated) {
-       // Lógica para esconder botões em páginas específicas (login, cadastro, etc)
        const noAuthButtonPages = ['/login', '/admin-login'];
        const shouldHideButtons = noAuthButtonPages.includes(location.pathname) || location.pathname.startsWith('/cadastro');
 
@@ -69,8 +66,7 @@ const Navbar = () => {
           <DropdownMenuSeparator />
           <DropdownMenuItem onSelect={() => navigate('/profile')}><User className="mr-2 h-4 w-4" /><span>Meu Perfil</span></DropdownMenuItem>
           
-          {/* Links gerais que não dependem de bolão específico */}
-          <DropdownMenuItem onSelect={() => navigate('/noticias')}><Newspaper className="mr-2 h-4 w-4" /><span>Notícias</span></DropdownMenuItem>
+          {/* REMOVIDO: Item de menu 'Notícias' foi retirado daqui pois agora está no Dashboard */}
           <DropdownMenuItem onSelect={() => navigate('/auditoria')}><FileText className="mr-2 h-4 w-4" /><span>Auditoria de Pontos</span></DropdownMenuItem>
           
           {isAdmin && (<DropdownMenuItem onSelect={() => navigate('/admin')}><Shield className="mr-2 h-4 w-4" /><span>Painel Admin</span></DropdownMenuItem>)}
@@ -143,27 +139,27 @@ const Navbar = () => {
                             Visão Geral
                         </Link>
                         <Link 
-                            to={`/pool/${currentPool.id}/palpites`} // Assumindo rota aninhada ou você ajustará a rota
+                            to={`/pool/${currentPool.id}/palpites`} 
                             className={`px-3 py-2 text-sm font-medium rounded-md transition-colors whitespace-nowrap ${location.pathname.includes('/palpites') ? 'bg-gray-100 text-fifa-blue' : 'text-gray-600 hover:text-fifa-blue hover:bg-gray-50'}`}
                         >
                             <ListChecks className="inline-block w-4 h-4 mr-1 mb-0.5"/>
                             Meus Palpites
                         </Link>
                         <Link 
-                            to={`/pool/${currentPool.id}/ranking`} // Ajuste a rota conforme necessário
+                            to={`/pool/${currentPool.id}/ranking`} 
                             className={`px-3 py-2 text-sm font-medium rounded-md transition-colors whitespace-nowrap ${location.pathname.includes('/ranking') ? 'bg-gray-100 text-fifa-blue' : 'text-gray-600 hover:text-fifa-blue hover:bg-gray-50'}`}
                         >
                              <Trophy className="inline-block w-4 h-4 mr-1 mb-0.5"/>
                             Ranking
                         </Link>
                         <Link 
-                            to={`/pool/${currentPool.id}/resultados`} // Ajuste a rota
+                            to={`/pool/${currentPool.id}/resultados`} 
                             className={`px-3 py-2 text-sm font-medium rounded-md transition-colors whitespace-nowrap ${location.pathname.includes('/resultados') ? 'bg-gray-100 text-fifa-blue' : 'text-gray-600 hover:text-fifa-blue hover:bg-gray-50'}`}
                         >
                             Resultados
                         </Link>
                          <Link 
-                            to={`/pool/${currentPool.id}/simulador`} // Ajuste a rota
+                            to={`/pool/${currentPool.id}/simulador`} 
                             className={`px-3 py-2 text-sm font-medium rounded-md transition-colors whitespace-nowrap ${location.pathname.includes('/simulador') ? 'bg-gray-100 text-fifa-blue' : 'text-gray-600 hover:text-fifa-blue hover:bg-gray-50'}`}
                         >
                             <Calculator className="inline-block w-4 h-4 mr-1 mb-0.5"/>
