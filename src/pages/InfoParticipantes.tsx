@@ -164,13 +164,16 @@ const InfoParticipantes = () => {
                                 <div className="flex flex-wrap gap-4">
                                     {punished.map(user => (
                                         <div key={user.user_id} className="flex items-center gap-2 bg-white p-2 pr-4 rounded-full border border-red-100 shadow-sm">
-                                            <Avatar className="h-8 w-8">
-                                                <AvatarImage src={user.avatar_url || undefined} />
-                                                <AvatarFallback className="bg-red-100 text-red-600">{user.name.substring(0, 2).toUpperCase()}</AvatarFallback>
+                                        <Avatar className="h-8 w-8">
+                                            <AvatarImage src={user.avatar_url || undefined} />
+                                            <AvatarFallback className="bg-red-100 text-red-600 font-bold">
+                                        {user.name ? user.name.substring(0, 2).toUpperCase() : "??"}
+                                            </AvatarFallback>
                                             </Avatar>
-                                            <div className="flex flex-col leading-none">
-                                                <span className="text-sm font-bold text-gray-700">{user.name}</span>
-                                                <span className="text-[10px] text-red-500 font-medium">{user.total_last_place}x Lanterninha</span>
+                                        <div className="flex flex-col leading-none">
+                                        {/* Garante cor escura para o nome */}
+                                            <span className="text-sm font-bold text-gray-800">{user.name}</span>
+                                            <span className="text-[10px] text-red-500 font-medium">{user.total_last_place}x Lanterninha</span>
                                             </div>
                                         </div>
                                     ))}
