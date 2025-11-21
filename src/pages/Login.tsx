@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2, BarChart3 } from "lucide-react";
+import { Loader2, BarChart3, ShieldCheck } from "lucide-react";
 
 const HERO_BG_IMAGE = "/hero-bg.png";
 
@@ -26,7 +26,6 @@ const Login = () => {
     password: "",
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
-  // Novo estado para controlar o sucesso imediato antes do redirecionamento
   const [loginSuccess, setLoginSuccess] = useState(false);
 
   useEffect(() => {
@@ -55,7 +54,6 @@ const Login = () => {
       if (!success) {
         throw error || new Error("Ocorreu um erro desconhecido durante o login.");
       }
-      // Se sucesso, ativamos o estado visual de "Redirecionando"
       setLoginSuccess(true);
     } catch (error: any) {
       toast({
@@ -63,11 +61,10 @@ const Login = () => {
         description: error.message || "Email ou senha inválidos. Tente novamente.",
         variant: "destructive",
       });
-      setIsSubmitting(false); // Só para o loading se der erro
+      setIsSubmitting(false);
     }
   };
 
-  // Se estiver carregando a auth inicial OU se o login foi sucesso (aguardando redirect)
   if (isLoadingAuth || loginSuccess) {
     return (
       <div className="flex flex-col justify-center items-center h-screen bg-fifa-blue text-white gap-4">
@@ -140,13 +137,18 @@ const Login = () => {
             </Button>
           </form>
         </CardContent>
-        <CardFooter className="flex-col items-center gap-2">
+        <CardFooter className="flex flex-col gap-4 items-center">
           <div className="text-center text-sm text-gray-600">
             Ainda não tem conta?{" "}
             <Link to="/cadastro" className="text-fifa-blue font-bold hover:underline">
               Cadastre-se grátis
             </Link>
           </div>
+          
+          {/* Link para Admin Login (Discreto) */}
+          <Link to="/admin-login" className="flex items-center gap-2 text-xs text-gray-400 hover:text-gray-600 transition-colors mt-2">
+            <ShieldCheck className="h-3 w-3" /> Acesso Administrativo
+          </Link>
         </CardFooter>
       </Card>
     </div>
