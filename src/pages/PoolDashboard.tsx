@@ -40,7 +40,7 @@ const PoolDashboard = () => {
         try {
             const { data, error } = await supabase
             .from('pools')
-            .select('name, invite_code, description')
+            .select('name, invite_code ')
             .eq('id', poolId)
             .single();
             
