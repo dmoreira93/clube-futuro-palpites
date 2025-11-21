@@ -1,35 +1,41 @@
 // src/App.tsx
 
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
 import Layout from "./components/layout/Layout";
 
-// Páginas
+// Páginas Públicas
 import HomePage from "./pages/HomePage";
-import Dashboard from "./pages/Dashboard";
-import PoolDashboard from "./pages/PoolDashboard";
 import Login from "./pages/Login";
 import Cadastro from "./pages/Cadastro";
-import Palpites from "./pages/Palpites";
-import RankingPage from "./pages/Ranking";
-import Resultados from "./pages/Resultados";
 import Criterios from "./pages/Criterios";
-import Admin from "./pages/Admin";
-import AdminLogin from "./pages/AdminLogin";
 import NotFound from "./pages/NotFound";
-import ChangePassword from "./pages/ChangePassword";
-import UserPredictions from "./pages/UserPredictions";
-import DailyMatchesAndPredictions from "./pages/DailyMatchesAndPredictions";
-import Simulador from "./pages/Simulador";
+import PrivacyPolicy from "./pages/PrivacyPolicy";
+import TermsOfUse from "./pages/TermsOfUse";
+
+// Páginas Protegidas (Dashboard Geral)
+import Dashboard from "./pages/Dashboard";
 import JoinPoolPage from "./pages/JoinPool";
 import CreatePoolPage from "./pages/CreatePool";
-import { ProtectedRoute } from "./components/auth/ProtectedRoute";
 import PoolSettingsPage from "./pages/PoolSettings";
 import ProfilePage from "./pages/Profile";
 import NoticiasPage from "./pages/Noticias";
+import ChangePassword from "./pages/ChangePassword";
 import AuditoriaPontos from "./pages/AuditoriaPontos";
-import PrivacyPolicy from "./pages/PrivacyPolicy";
-import TermsOfUse from "./pages/TermsOfUse";
+
+// Páginas Específicas do Bolão (Contexto do Bolão)
+import PoolDashboard from "./pages/PoolDashboard";
+import Palpites from "./pages/Palpites";
+import RankingPage from "./pages/Ranking";
+import Resultados from "./pages/Resultados";
+import Simulador from "./pages/Simulador";
+
+// Admin
+import Admin from "./pages/Admin";
+import AdminLogin from "./pages/AdminLogin";
+
+// Componentes de Proteção
+import { ProtectedRoute } from "./components/auth/ProtectedRoute";
 
 function App() {
   return (
@@ -43,31 +49,42 @@ function App() {
             <Route path="/cadastro" element={<Cadastro />} />
             <Route path="/cadastro/:inviteCode" element={<Cadastro />} />
             <Route path="/criterios" element={<Criterios />} />
-            <Route path="*" element={<NotFound />} />
-            
-            {/* --- Rotas Protegidas --- */}
-            <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-            <Route path="/pool/:poolId" element={<ProtectedRoute><PoolDashboard /></ProtectedRoute>} />
-            <Route path="/palpites" element={<ProtectedRoute><Palpites /></ProtectedRoute>} />
-            <Route path="/ranking" element={<ProtectedRoute><RankingPage /></ProtectedRoute>} />
-            <Route path="/resultados" element={<ProtectedRoute><Resultados /></ProtectedRoute>} />
-            <Route path="/simulador" element={<ProtectedRoute><Simulador /></ProtectedRoute>} />
-            <Route path="/noticias" element={<ProtectedRoute><NoticiasPage /></ProtectedRoute>} />
-            <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
-            <Route path="/join-pool" element={<ProtectedRoute><JoinPoolPage /></ProtectedRoute>} />
-            <Route path="/create-pool" element={<ProtectedRoute><CreatePoolPage /></ProtectedRoute>} />
-            <Route path="/pool-settings" element={<ProtectedRoute><PoolSettingsPage /></ProtectedRoute>} />
-            <Route path="/change-password" element={<ProtectedRoute><ChangePassword /></ProtectedRoute>} />
-            <Route path="/palpites-usuarios" element={<ProtectedRoute><UserPredictions /></ProtectedRoute>} />
-            <Route path="/palpites-do-dia" element={<ProtectedRoute><DailyMatchesAndPredictions /></ProtectedRoute>} />
-            <Route path="/auditoria" element={<ProtectedRoute><AuditoriaPontos /></ProtectedRoute>} />
             <Route path="/PrivacyPolicy" element={<PrivacyPolicy />} />
             <Route path="/TermsOfUse" element={<TermsOfUse />} />
+            
+            {/* --- Rotas Protegidas (Gerais) --- */}
+            <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+            <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
+            <Route path="/noticias" element={<ProtectedRoute><NoticiasPage /></ProtectedRoute>} />
+            <Route path="/auditoria" element={<ProtectedRoute><AuditoriaPontos /></ProtectedRoute>} />
+            <Route path="/join-pool" element={<ProtectedRoute><JoinPoolPage /></ProtectedRoute>} />
+            <Route path="/create-pool" element={<ProtectedRoute><CreatePoolPage /></ProtectedRoute>} />
+            <Route path="/change-password" element={<ProtectedRoute><ChangePassword /></ProtectedRoute>} />
+            
+            {/* --- Rotas de Contexto do Bolão (Aninhadas) --- */}
+            {/* A rota base /pool/:poolId leva ao Dashboard do Bolão */}
+            <Route path="/pool/:poolId" element={<ProtectedRoute><PoolDashboard /></ProtectedRoute>} />
+            
+            {/* As sub-rotas mantêm o ID na URL, permitindo que a Navbar saiba onde estamos */}
+            <Route path="/pool/:poolId/palpites" element={<ProtectedRoute><Palpites /></ProtectedRoute>} />
+            <Route path="/pool/:poolId/ranking" element={<ProtectedRoute><RankingPage /></ProtectedRoute>} />
+            <Route path="/pool/:poolId/resultados" element={<ProtectedRoute><Resultados /></ProtectedRoute>} />
+            <Route path="/pool/:poolId/simulador" element={<ProtectedRoute><Simulador /></ProtectedRoute>} />
+            <Route path="/pool/:poolId/settings" element={<ProtectedRoute><PoolSettingsPage /></ProtectedRoute>} />
+
+            {/* Redirecionamentos de compatibilidade (caso alguém tente acessar as rotas antigas) */}
+            <Route path="/palpites" element={<Navigate to="/dashboard" replace />} />
+            <Route path="/ranking" element={<Navigate to="/dashboard" replace />} />
+            <Route path="/resultados" element={<Navigate to="/dashboard" replace />} />
+            <Route path="/simulador" element={<Navigate to="/dashboard" replace />} />
 
 
             {/* --- Rotas de Admin --- */}
             <Route path="/admin-login" element={<AdminLogin />} />
             <Route path="/admin" element={<ProtectedRoute adminOnly={true}><Admin /></ProtectedRoute>} />
+
+            {/* --- 404 --- */}
+            <Route path="*" element={<NotFound />} />
           </Routes>
         </Layout>
       </BrowserRouter>

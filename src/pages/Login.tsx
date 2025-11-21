@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { LogInIcon, Loader2, BarChart3 } from "lucide-react";
+import { Loader2, BarChart3 } from "lucide-react";
 
 const HERO_BG_IMAGE = "/hero-bg.png";
 

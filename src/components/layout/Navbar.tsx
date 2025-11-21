@@ -14,30 +14,23 @@ import {
   AvatarImage,
 } from "@/components/ui/avatar";
 import {
-  LogOut, User, Loader2, Newspaper, FileText,
-  ListChecks, Shield, Trophy, Medal, Calculator, BarChart3, ChevronDown
+  LogOut, User, Loader2, FileText,
+  ListChecks, Shield, Trophy, Calculator, BarChart3, ChevronDown, Newspaper
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useMyPools } from "@/hooks/useMyPools";
 import { Skeleton } from "../ui/skeleton";
 
-const NavLink = ({ to, children }: { to: string; children: React.ReactNode }) => (
-  <Button variant="ghost" asChild className="text-sm font-semibold text-white hover:bg-white/10 hover:text-white">
-    <Link to={to}>{children}</Link>
-  </Button>
-);
-
 const Navbar = () => {
   const { isAuthenticated, isAdmin, user, signOut, loading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-
-  // --- LÓGICA PARA O SELETOR DE BOLÃO ---
-  const { poolId } = useParams<{ poolId: string }>();
+  const { poolId } = useParams<{ poolId: string }>(); // Tenta pegar o poolId da URL
   const { pools, loading: poolsLoading } = useMyPools();
-  const currentPool = pools.find(p => p.id === poolId);
-  // --- FIM DA LÓGICA ---
 
+  // Tenta encontrar o bolão atual, seja pela URL ou pelo estado global (se implementado)
+  // Se a rota for /pool/:id/..., o poolId estará disponível.
+  const currentPool = pools.find(p => p.id === poolId);
 
   const handleLogout = async () => {
     await signOut();
@@ -48,14 +41,13 @@ const Navbar = () => {
     if (loading && !user) return <Loader2 className="h-6 w-6 animate-spin text-white" />;
 
     if (!isAuthenticated) {
-      const noAuthButtonPages = ['/login', '/admin-login', '/criterios'];
-      const shouldHideButtons = noAuthButtonPages.includes(location.pathname) || location.pathname.startsWith('/cadastro') || location.pathname === '/';
+       // Lógica para esconder botões em páginas específicas (login, cadastro, etc)
+       const noAuthButtonPages = ['/login', '/admin-login'];
+       const shouldHideButtons = noAuthButtonPages.includes(location.pathname) || location.pathname.startsWith('/cadastro');
 
-      if (shouldHideButtons) {
-        return null;
-      }
+       if (shouldHideButtons) return null;
 
-      return (
+       return (
         <div className="flex items-center space-x-2">
           <Button variant="outline" size="sm" onClick={() => navigate("/cadastro")} className="border-fifa-gold text-fifa-gold hover:bg-fifa-gold hover:text-white">Cadastrar</Button>
           <Button size="sm" onClick={() => navigate("/login")} className="bg-fifa-gold text-fifa-blue hover:bg-opacity-90">Entrar</Button>
@@ -76,13 +68,11 @@ const Navbar = () => {
           </DropdownMenuLabel>
           <DropdownMenuSeparator />
           <DropdownMenuItem onSelect={() => navigate('/profile')}><User className="mr-2 h-4 w-4" /><span>Meu Perfil</span></DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => navigate('/palpites')}><ListChecks className="mr-2 h-4 w-4" /><span>Palpites</span></DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => navigate('/simulador')}><Calculator className="mr-2 h-4 w-4" /><span>Simulador</span></DropdownMenuItem>
-          {/* REMOVIDO: Item de menu 'Critérios' duplicado foi retirado daqui também, se existir, ou mantido apenas aqui se preferir. 
-              Na sua solicitação, você pediu para remover do cabeçalho. 
-              Vou manter no menu do usuário pois é útil, mas remover da barra principal abaixo. */}
-          <DropdownMenuItem onSelect={() => navigate('/criterios')}><Trophy className="mr-2 h-4 w-4" /><span>Critérios</span></DropdownMenuItem>
+          
+          {/* Links gerais que não dependem de bolão específico */}
+          <DropdownMenuItem onSelect={() => navigate('/noticias')}><Newspaper className="mr-2 h-4 w-4" /><span>Notícias</span></DropdownMenuItem>
           <DropdownMenuItem onSelect={() => navigate('/auditoria')}><FileText className="mr-2 h-4 w-4" /><span>Auditoria de Pontos</span></DropdownMenuItem>
+          
           {isAdmin && (<DropdownMenuItem onSelect={() => navigate('/admin')}><Shield className="mr-2 h-4 w-4" /><span>Painel Admin</span></DropdownMenuItem>)}
           <DropdownMenuSeparator />
           <DropdownMenuItem onSelect={handleLogout}><LogOut className="mr-2 h-4 w-4" /><span>Sair</span></DropdownMenuItem>
@@ -92,59 +82,98 @@ const Navbar = () => {
   };
 
   return (
-    <nav className="bg-fifa-blue text-white shadow-lg sticky top-0 z-40">
-      <div className="container mx-auto px-4">
-        <div className="flex justify-between items-center py-2 h-16">
-          <div className="flex items-center space-x-4">
-            <Link to={isAuthenticated ? "/dashboard" : "/"} className="flex items-center space-x-2">
-              <BarChart3 className="w-8 h-8 text-fifa-gold" />
-              <span className="font-bold text-lg hidden sm:inline text-fifa-gold">Futuro Palpites</span>
-            </Link>
+    <div className="flex flex-col sticky top-0 z-40 shadow-lg">
+        {/* BARRA SUPERIOR PRINCIPAL (AZUL) */}
+        <nav className="bg-fifa-blue text-white">
+        <div className="container mx-auto px-4">
+            <div className="flex justify-between items-center py-2 h-16">
+            <div className="flex items-center space-x-4">
+                <Link to={isAuthenticated ? "/dashboard" : "/"} className="flex items-center space-x-2">
+                <BarChart3 className="w-8 h-8 text-fifa-gold" />
+                <span className="font-bold text-lg hidden sm:inline text-fifa-gold">Futuro Palpites</span>
+                </Link>
 
-            {isAuthenticated && (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" className="flex items-center gap-2 bg-transparent border-fifa-gold text-fifa-gold hover:bg-fifa-gold hover:text-fifa-blue">
-                    {poolsLoading ? (
-                      <Skeleton className="h-5 w-24 bg-white/20" />
-                    ) : (
-                      <span className="truncate max-w-[150px]">{currentPool?.name || 'Meus Bolões'}</span>
-                    )}
-                    <ChevronDown className="h-4 w-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start">
-                  <DropdownMenuLabel>Trocar de Bolão</DropdownMenuLabel>
-                  <DropdownMenuSeparator />
-                  {pools.map(pool => (
-                    <DropdownMenuItem key={pool.id} asChild>
-                      <Link to={`/pool/${pool.id}`}>{pool.name}</Link>
+                {/* SELETOR DE BOLÃO (Só aparece se logado) */}
+                {isAuthenticated && (
+                <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                    <Button variant="outline" className="flex items-center gap-2 bg-transparent border-fifa-gold text-fifa-gold hover:bg-fifa-gold hover:text-fifa-blue h-9">
+                        {poolsLoading ? (
+                        <Skeleton className="h-5 w-24 bg-white/20" />
+                        ) : (
+                        <span className="truncate max-w-[150px]">{currentPool ? currentPool.name : 'Meus Bolões'}</span>
+                        )}
+                        <ChevronDown className="h-4 w-4" />
+                    </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start">
+                    <DropdownMenuLabel>Selecione um Bolão</DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    {pools.map(pool => (
+                        <DropdownMenuItem key={pool.id} asChild>
+                        <Link to={`/pool/${pool.id}`} className="cursor-pointer w-full block">
+                            {pool.name}
+                        </Link>
+                        </DropdownMenuItem>
+                    ))}
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem asChild>
+                        <Link to="/dashboard" className="cursor-pointer">Ver todos / Início</Link>
                     </DropdownMenuItem>
-                  ))}
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem asChild>
-                    <Link to="/dashboard">Ver todos</Link>
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            )}
-          </div>
+                    </DropdownMenuContent>
+                </DropdownMenu>
+                )}
+            </div>
 
-          <div className="hidden md:flex items-center space-x-1">
-            {/* REMOVIDO: O link <NavLink to="/criterios">Critérios</NavLink> foi excluído daqui */}
-            {isAuthenticated && (
-              <>
-                <NavLink to="/ranking">Ranking</NavLink>
-                <NavLink to="/resultados">Resultados</NavLink>
-                <NavLink to="/noticias">Notícias</NavLink>
-              </>
-            )}
-          </div>
-
-          <div className="flex items-center">{renderUserActions()}</div>
+            {/* LADO DIREITO: MENU DO USUÁRIO */}
+            <div className="flex items-center">{renderUserActions()}</div>
+            </div>
         </div>
-      </div>
-    </nav>
+        </nav>
+
+        {/* SUBMENU DO BOLÃO (SÓ APARECE SE TIVER UM BOLÃO SELECIONADO) */}
+        {isAuthenticated && currentPool && (
+            <div className="bg-white border-b border-gray-200 shadow-sm">
+                <div className="container mx-auto px-4 overflow-x-auto">
+                    <div className="flex space-x-1 h-10 items-center">
+                        <Link 
+                            to={`/pool/${currentPool.id}`} 
+                            className={`px-3 py-2 text-sm font-medium rounded-md transition-colors whitespace-nowrap ${location.pathname === `/pool/${currentPool.id}` ? 'bg-gray-100 text-fifa-blue' : 'text-gray-600 hover:text-fifa-blue hover:bg-gray-50'}`}
+                        >
+                            Visão Geral
+                        </Link>
+                        <Link 
+                            to={`/pool/${currentPool.id}/palpites`} // Assumindo rota aninhada ou você ajustará a rota
+                            className={`px-3 py-2 text-sm font-medium rounded-md transition-colors whitespace-nowrap ${location.pathname.includes('/palpites') ? 'bg-gray-100 text-fifa-blue' : 'text-gray-600 hover:text-fifa-blue hover:bg-gray-50'}`}
+                        >
+                            <ListChecks className="inline-block w-4 h-4 mr-1 mb-0.5"/>
+                            Meus Palpites
+                        </Link>
+                        <Link 
+                            to={`/pool/${currentPool.id}/ranking`} // Ajuste a rota conforme necessário
+                            className={`px-3 py-2 text-sm font-medium rounded-md transition-colors whitespace-nowrap ${location.pathname.includes('/ranking') ? 'bg-gray-100 text-fifa-blue' : 'text-gray-600 hover:text-fifa-blue hover:bg-gray-50'}`}
+                        >
+                             <Trophy className="inline-block w-4 h-4 mr-1 mb-0.5"/>
+                            Ranking
+                        </Link>
+                        <Link 
+                            to={`/pool/${currentPool.id}/resultados`} // Ajuste a rota
+                            className={`px-3 py-2 text-sm font-medium rounded-md transition-colors whitespace-nowrap ${location.pathname.includes('/resultados') ? 'bg-gray-100 text-fifa-blue' : 'text-gray-600 hover:text-fifa-blue hover:bg-gray-50'}`}
+                        >
+                            Resultados
+                        </Link>
+                         <Link 
+                            to={`/pool/${currentPool.id}/simulador`} // Ajuste a rota
+                            className={`px-3 py-2 text-sm font-medium rounded-md transition-colors whitespace-nowrap ${location.pathname.includes('/simulador') ? 'bg-gray-100 text-fifa-blue' : 'text-gray-600 hover:text-fifa-blue hover:bg-gray-50'}`}
+                        >
+                            <Calculator className="inline-block w-4 h-4 mr-1 mb-0.5"/>
+                            Simulador
+                        </Link>
+                    </div>
+                </div>
+            </div>
+        )}
+    </div>
   );
 };
 
