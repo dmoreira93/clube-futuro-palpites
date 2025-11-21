@@ -20,7 +20,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 interface PoolHeaderData {
   name: string;
   invite_code: string;
-  description?: string;
+  //description?: string;
 }
 
 const PoolDashboard = () => {
