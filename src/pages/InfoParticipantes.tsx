@@ -10,14 +10,16 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Trophy, Target, AlertTriangle, Coffee, ArrowLeft, Crown, Medal, Info } from 'lucide-react';
 
 // Tipos para as estatísticas retornadas pela RPC
+// Interface atualizada para bater com a nova função SQL
 interface ParticipantStats {
   user_id: string;
   name: string;
   avatar_url: string | null;
-  total_wins: number;        // Vezes que foi campeão em bolões finalizados
-  total_last_place: number;  // Vezes que foi lanterninha em bolões finalizados
-  total_exact_scores: number;// Total de cravadas na história (em todos os bolões)
-  is_cafe_com_leite: boolean;// Se nunca ganhou nem perdeu
+  total_wins: number;
+  total_last_place: number;
+  total_exact_scores: number;
+  is_cafe_com_leite?: boolean; // Opcional, pois calculamos no front
+  is_admin: boolean; // Nova coluna
 }
 
 const InfoParticipantes = () => {
