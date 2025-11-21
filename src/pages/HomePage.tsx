@@ -222,8 +222,8 @@ const HomePage = () => {
                         <div>
                             <h5 className="font-bold text-fifa-gold mb-4 uppercase text-sm tracking-wider">Legal</h5>
                             <ul className="space-y-2 text-sm text-gray-300">
-                                <li><a href="/politicas-de-privacidade" className="hover:text-white transition-colors">Políticas de Privacidade</a></li>
-                                <li><a href="/termos-de-uso" className="hover:text-white transition-colors">Termos de Uso</a></li>
+                                <li><a href="/PrivacyPolicy" className="hover:text-white transition-colors">Políticas de Privacidade</a></li>
+                                <li><a href="/TermsOfUse" className="hover:text-white transition-colors">Termos de Uso</a></li>
                             </ul>
                         </div>
                         
