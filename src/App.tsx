@@ -29,6 +29,7 @@ import Palpites from "./pages/Palpites";
 import RankingPage from "./pages/Ranking";
 import Resultados from "./pages/Resultados";
 import Simulador from "./pages/Simulador";
+import InfoParticipantes from "./pages/InfoParticipantes";
 
 // Admin
 import Admin from "./pages/Admin";
@@ -71,6 +72,7 @@ function App() {
             <Route path="/pool/:poolId/resultados" element={<ProtectedRoute><Resultados /></ProtectedRoute>} />
             <Route path="/pool/:poolId/simulador" element={<ProtectedRoute><Simulador /></ProtectedRoute>} />
             <Route path="/pool/:poolId/settings" element={<ProtectedRoute><PoolSettingsPage /></ProtectedRoute>} />
+            <Route path="/pool/:poolId/info-participantes" element={<ProtectedRoute><InfoParticipantes /></ProtectedRoute>} />
 
             {/* Redirecionamentos de compatibilidade (caso alguém tente acessar as rotas antigas) */}
             <Route path="/palpites" element={<Navigate to="/dashboard" replace />} />
