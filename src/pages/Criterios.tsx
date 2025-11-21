@@ -1,175 +1,119 @@
-// src/pages/Criterios.tsx (VERSÃO ATUALIZADA)
-
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Trophy as TrophyIcon, Users as UsersIcon, Volleyball as SoccerBallIcon, ArrowLeft } from "lucide-react";
-import { useAuth } from "@/contexts/AuthContext";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Trophy, Star, AlertCircle } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import { ArrowLeft } from "lucide-react";
 
 const Criterios = () => {
-  const { isAuthenticated } = useAuth();
   const navigate = useNavigate();
 
   return (
-    <div className="max-w-4xl mx-auto p-4">
-      {/* Container do título com posicionamento relativo */}
-      <div className="relative text-center mb-8">
-        {/* Botão de voltar que só aparece para usuários não logados */}
-        {!isAuthenticated && (
-          <Button 
-            variant="outline" 
-            size="icon" 
-            className="absolute left-0 top-1/2 -translate-y-1/2" // Posiciona o botão
-            onClick={() => navigate('/')}
-            aria-label="Voltar para a página inicial"
-          >
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
-        )}
-        <h1 className="text-3xl font-bold text-fifa-blue">Critérios de Pontuação</h1>
-        <p className="text-gray-600 mt-2">
-          Entenda como funciona o sistema de pontos do nosso bolão.
-          <br/>
-          <strong>Para cada categoria (Partidas, Grupos, Finais), os pontos são aplicados de forma independente.</strong>
-        </p>
+    <div className="min-h-screen bg-gray-50 flex flex-col">
+      {/* Cabeçalho Simples da Página */}
+      <div className="bg-fifa-blue text-white py-8 px-4 text-center shadow-md">
+        <div className="container mx-auto relative">
+            {/* Botão Voltar */}
+            <Button 
+                variant="ghost" 
+                className="absolute left-0 top-1/2 -translate-y-1/2 text-white hover:bg-white/10"
+                onClick={() => navigate(-1)}
+            >
+                <ArrowLeft className="h-5 w-5 mr-2" /> Voltar
+            </Button>
+            <h1 className="text-3xl font-bold text-fifa-gold">Critérios de Pontuação</h1>
+            <p className="text-gray-300 mt-2">Entenda como seus pontos são calculados.</p>
+        </div>
       </div>
 
-      <div className="space-y-8">
-        {/* Pontuação por Partida */}
-        <Card className="shadow-lg">
-          <CardHeader className="bg-fifa-blue text-white">
-            <CardTitle className="flex items-center gap-2">
-              <SoccerBallIcon className="h-5 w-5 text-fifa-gold" />
-              Pontuação por Partida (Apenas a maior pontuação é aplicada)
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-6">
-            <div className="space-y-4">
-              <div className="flex items-center p-3 bg-green-50 rounded-lg border-l-4 border-green-500">
-                <div className="bg-green-500 text-white rounded-full w-8 h-8 flex items-center justify-center font-bold mr-4">10</div>
-                <div>
-                  <h3 className="font-semibold">Placar Exato</h3>
-                  <p className="text-sm text-gray-600">Você acerta o **placar** exato da partida.</p>
-                </div>
-              </div>
+      <div className="container mx-auto px-4 py-8 max-w-4xl flex-grow">
+        
+        <div className="grid gap-6">
+            {/* CARD 1: PLACAR EXATO */}
+            <Card className="border-l-4 border-l-fifa-gold shadow-sm hover:shadow-md transition-shadow">
+                <CardHeader className="flex flex-row items-center gap-4 pb-2">
+                    <div className="bg-yellow-100 p-3 rounded-full">
+                        <Trophy className="h-6 w-6 text-yellow-600" />
+                    </div>
+                    <div>
+                        <CardTitle className="text-xl text-fifa-blue">Placar Exato (Cravada)</CardTitle>
+                        <CardDescription>Acertou o vencedor e o número exato de gols de ambos.</CardDescription>
+                    </div>
+                    <div className="ml-auto text-2xl font-bold text-fifa-blue">25 pts</div>
+                </CardHeader>
+                <CardContent>
+                    <p className="text-gray-600 text-sm">Exemplo: Você apostou 2x1 e o jogo foi 2x1.</p>
+                </CardContent>
+            </Card>
 
-              <div className="flex items-center p-3 bg-purple-50 rounded-lg border-l-4 border-purple-500">
-                <div className="bg-purple-500 text-white rounded-full w-8 h-8 flex items-center justify-center font-bold mr-4">7</div>
-                <div>
-                  <h3 className="font-semibold">Acertar Empate (sem o placar exato)</h3>
-                  <p className="text-sm text-gray-600">Você acerta que a partida terminaria **empatada**, mas não acerta o placar exato.</p>
-                </div>
-              </div>
-              
-              <div className="flex items-center p-3 bg-blue-50 rounded-lg border-l-4 border-blue-500">
-                <div className="bg-blue-500 text-white rounded-full w-8 h-8 flex items-center justify-center font-bold mr-4">5</div>
-                <div>
-                  <h3 className="font-semibold">Acertar Vencedor (sem o placar exato)</h3>
-                  <p className="text-sm text-gray-600">Você acerta o time **vencedor** da partida, mas não acerta o placar exato.</p>
-                </div>
-              </div>
-              
-              <div className="flex items-center p-3 bg-yellow-50 rounded-lg border-l-4 border-yellow-500">
-                <div className="bg-yellow-500 text-white rounded-full w-8 h-8 flex items-center justify-center font-bold mr-4">3</div>
-                <div>
-                  <h3 className="font-semibold">Acerto Parcial de Gols</h3>
-                  <p className="text-sm text-gray-600">Você acerta o número de gols de **apenas um** dos times.</p>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+            {/* CARD 2: RESULTADO E GOLS DE UM TIME */}
+            <Card className="border-l-4 border-l-blue-500 shadow-sm hover:shadow-md transition-shadow">
+                <CardHeader className="flex flex-row items-center gap-4 pb-2">
+                    <div className="bg-blue-100 p-3 rounded-full">
+                        <Star className="h-6 w-6 text-blue-600" />
+                    </div>
+                    <div>
+                        <CardTitle className="text-xl text-fifa-blue">Resultado + Gols de um Time</CardTitle>
+                        <CardDescription>Acertou quem ganhou (ou empate) e os gols de uma das equipes.</CardDescription>
+                    </div>
+                    <div className="ml-auto text-2xl font-bold text-fifa-blue">18 pts</div>
+                </CardHeader>
+                <CardContent>
+                    <p className="text-gray-600 text-sm">Exemplo: Apostou 2x1 (Vitória Casa). O jogo foi 2x0. Acertou vitória e gols do mandante.</p>
+                </CardContent>
+            </Card>
 
-        {/* Classificação na Fase de Grupos */}
-        <Card className="shadow-lg">
-          <CardHeader className="bg-fifa-blue text-white">
-            <CardTitle className="flex items-center gap-2">
-              <UsersIcon className="h-5 w-5 text-fifa-gold" />
-              Classificação da Fase de Grupos (Apenas a maior pontuação é aplicada por grupo)
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-6">
-              <div className="space-y-4">
-                  <div className="flex items-center p-3 bg-green-50 rounded-lg border-l-4 border-green-500">
-                      <div className="bg-green-500 text-white rounded-full w-8 h-8 flex items-center justify-center font-bold mr-4">10</div>
-                      <div>
-                          <h3 className="font-semibold">Classificação Exata</h3>
-                          <p className="text-sm text-gray-600">Acerta o 1º e o 2º colocado na ordem exata.</p>
-                      </div>
-                  </div>
-                  <div className="flex items-center p-3 bg-blue-50 rounded-lg border-l-4 border-blue-500">
-                      <div className="bg-blue-500 text-white rounded-full w-8 h-8 flex items-center justify-center font-bold mr-4">5</div>
-                      <div>
-                          <h3 className="font-semibold">Apenas Um Classificado</h3>
-                          <p className="text-sm text-gray-600">Acerta apenas o 1º ou apenas o 2º colocado na sua posição correta.</p>
-                      </div>
-                  </div>
-                  <div className="flex items-center p-3 bg-yellow-50 rounded-lg border-l-4 border-yellow-500">
-                      <div className="bg-yellow-500 text-white rounded-full w-8 h-8 flex items-center justify-center font-bold mr-4">4</div>
-                      <div>
-                          <h3 className="font-semibold">Classificados Invertidos</h3>
-                          <p className="text-sm text-gray-600">Acerta os dois times que se classificaram, mas em posições invertidas.</p>
-                      </div>
-                  </div>
-               </div>
-          </CardContent>
-        </Card>
+            {/* CARD 3: SALDO DE GOLS */}
+            <Card className="border-l-4 border-l-green-500 shadow-sm hover:shadow-md transition-shadow">
+                <CardHeader className="flex flex-row items-center gap-4 pb-2">
+                    <div className="bg-green-100 p-3 rounded-full">
+                        <Star className="h-6 w-6 text-green-600" />
+                    </div>
+                    <div>
+                        <CardTitle className="text-xl text-fifa-blue">Saldo de Gols</CardTitle>
+                        <CardDescription>Acertou o vencedor e a diferença de gols.</CardDescription>
+                    </div>
+                    <div className="ml-auto text-2xl font-bold text-fifa-blue">15 pts</div>
+                </CardHeader>
+                <CardContent>
+                    <p className="text-gray-600 text-sm">Exemplo: Apostou 3x1 (Diferença 2). O jogo foi 2x0 (Diferença 2). </p>
+                </CardContent>
+            </Card>
 
-        {/* Classificação Final */}
-        <Card className="shadow-lg">
-          <CardHeader className="bg-fifa-blue text-white">
-            <CardTitle className="flex items-center gap-2">
-              <TrophyIcon className="h-5 w-5 text-fifa-gold" />
-              Classificação Final do Torneio (Pontos CUMULATIVOS)
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-6">
-            <div className="space-y-4">
-              <div className="flex items-center p-3 bg-amber-50 rounded-lg border-l-4 border-amber-500">
-                <div className="bg-amber-500 text-white rounded-full w-8 h-8 flex items-center justify-center font-bold mr-4">50</div>
-                <div>
-                  <h3 className="font-semibold">Campeão</h3>
-                  <p className="text-sm text-gray-600">Você acerta o time que será o Campeão.</p>
-                </div>
-              </div>
-              <div className="flex items-center p-3 bg-gray-50 rounded-lg border-l-4 border-gray-400">
-                <div className="bg-gray-400 text-white rounded-full w-8 h-8 flex items-center justify-center font-bold mr-4">25</div>
-                <div>
-                  <h3 className="font-semibold">Vice-Campeão</h3>
-                  <p className="text-sm text-gray-600">Você acerta o time que será o Vice-Campeão.</p>
-                </div>
-              </div>
-              <div className="flex items-center p-3 bg-green-50 rounded-lg border-l-4 border-green-700">
-                <div className="bg-green-700 text-white rounded-full w-8 h-8 flex items-center justify-center font-bold mr-4">15</div>
-                <div>
-                  <h3 className="font-semibold">Terceiro Lugar</h3>
-                  <p className="text-sm text-gray-600">Você acerta o time que ficará em Terceiro Lugar.</p>
-                </div>
-              </div>
-              <div className="flex items-center p-3 bg-red-50 rounded-lg border-l-4 border-red-600">
-                <div className="bg-red-600 text-white rounded-full w-8 h-8 flex items-center justify-center font-bold mr-4">10</div>
-                <div>
-                  <h3 className="font-semibold">Quarto Lugar</h3>
-                  <p className="text-sm text-gray-600">Você acerta o time que ficará em Quarto Lugar.</p>
-                </div>
-              </div>
-              <div className="flex items-center p-3 bg-blue-50 rounded-lg border-l-4 border-blue-600">
-                <div className="bg-blue-600 text-white rounded-full w-8 h-8 flex items-center justify-center font-bold mr-4">20</div>
-                <div>
-                  <h3 className="font-semibold">Placar da Final</h3>
-                  <p className="text-sm text-gray-600">Você acerta o placar exato da partida final.</p>
-                </div>
-              </div>
-              <div className="flex items-center p-3 bg-yellow-50 rounded-lg border-l-4 border-yellow-700">
-                <div className="bg-yellow-700 text-white rounded-full w-8 h-8 flex items-center justify-center font-bold mr-4">+35</div>
-                <div>
-                  <h3 className="font-semibold">Bônus: Top 4 Exato</h3>
-                  <p className="text-sm text-gray-600">Pontos adicionais por acertar Campeão, Vice, 3º e 4º na ordem exata.</p>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+             {/* CARD 4: APENAS RESULTADO */}
+             <Card className="border-l-4 border-l-gray-400 shadow-sm hover:shadow-md transition-shadow">
+                <CardHeader className="flex flex-row items-center gap-4 pb-2">
+                    <div className="bg-gray-100 p-3 rounded-full">
+                        <Star className="h-6 w-6 text-gray-600" />
+                    </div>
+                    <div>
+                        <CardTitle className="text-xl text-fifa-blue">Apenas Resultado</CardTitle>
+                        <CardDescription>Acertou apenas quem ganhou ou se deu empate.</CardDescription>
+                    </div>
+                    <div className="ml-auto text-2xl font-bold text-fifa-blue">10 pts</div>
+                </CardHeader>
+                <CardContent>
+                    <p className="text-gray-600 text-sm">Exemplo: Apostou 1x0. O jogo foi 4x2. O vencedor é o mesmo.</p>
+                </CardContent>
+            </Card>
+
+             {/* CARD 5: GOL DE UM TIME (Consolo) */}
+             <Card className="border-l-4 border-l-orange-400 shadow-sm hover:shadow-md transition-shadow">
+                <CardHeader className="flex flex-row items-center gap-4 pb-2">
+                    <div className="bg-orange-100 p-3 rounded-full">
+                        <AlertCircle className="h-6 w-6 text-orange-600" />
+                    </div>
+                    <div>
+                        <CardTitle className="text-xl text-fifa-blue">Apenas Gols de um Time</CardTitle>
+                        <CardDescription>Errou o resultado, mas acertou a quantidade de gols de uma equipe.</CardDescription>
+                    </div>
+                    <div className="ml-auto text-2xl font-bold text-fifa-blue">2 pts</div>
+                </CardHeader>
+                <CardContent>
+                    <p className="text-gray-600 text-sm">Exemplo: Apostou 1x1. O jogo foi 1x2. Acertou o gol do mandante.</p>
+                </CardContent>
+            </Card>
+
+        </div>
       </div>
     </div>
   );

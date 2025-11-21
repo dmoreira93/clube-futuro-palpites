@@ -1,5 +1,3 @@
-// src/components/layout/Navbar.tsx (EDITADO COM SELETOR DE BOLÕES)
-
 import { Link, useNavigate, useLocation, useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import {
@@ -80,6 +78,9 @@ const Navbar = () => {
           <DropdownMenuItem onSelect={() => navigate('/profile')}><User className="mr-2 h-4 w-4" /><span>Meu Perfil</span></DropdownMenuItem>
           <DropdownMenuItem onSelect={() => navigate('/palpites')}><ListChecks className="mr-2 h-4 w-4" /><span>Palpites</span></DropdownMenuItem>
           <DropdownMenuItem onSelect={() => navigate('/simulador')}><Calculator className="mr-2 h-4 w-4" /><span>Simulador</span></DropdownMenuItem>
+          {/* REMOVIDO: Item de menu 'Critérios' duplicado foi retirado daqui também, se existir, ou mantido apenas aqui se preferir. 
+              Na sua solicitação, você pediu para remover do cabeçalho. 
+              Vou manter no menu do usuário pois é útil, mas remover da barra principal abaixo. */}
           <DropdownMenuItem onSelect={() => navigate('/criterios')}><Trophy className="mr-2 h-4 w-4" /><span>Critérios</span></DropdownMenuItem>
           <DropdownMenuItem onSelect={() => navigate('/auditoria')}><FileText className="mr-2 h-4 w-4" /><span>Auditoria de Pontos</span></DropdownMenuItem>
           {isAdmin && (<DropdownMenuItem onSelect={() => navigate('/admin')}><Shield className="mr-2 h-4 w-4" /><span>Painel Admin</span></DropdownMenuItem>)}
@@ -100,7 +101,6 @@ const Navbar = () => {
               <span className="font-bold text-lg hidden sm:inline text-fifa-gold">Futuro Palpites</span>
             </Link>
 
-            {/* --- SELETOR DE BOLÕES ADICIONADO AQUI --- */}
             {isAuthenticated && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -128,11 +128,10 @@ const Navbar = () => {
                 </DropdownMenuContent>
               </DropdownMenu>
             )}
-            {/* --- FIM DO SELETOR --- */}
           </div>
 
           <div className="hidden md:flex items-center space-x-1">
-            <NavLink to="/criterios">Critérios</NavLink>
+            {/* REMOVIDO: O link <NavLink to="/criterios">Critérios</NavLink> foi excluído daqui */}
             {isAuthenticated && (
               <>
                 <NavLink to="/ranking">Ranking</NavLink>

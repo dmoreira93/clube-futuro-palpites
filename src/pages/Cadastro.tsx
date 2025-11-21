@@ -1,7 +1,5 @@
-// src/pages/Cadastro.tsx - VERSÃO ATUALIZADA
-
 import { useState, useEffect } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom"; // Importa useNavigate e useParams
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
@@ -12,17 +10,18 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { useToast } from "@/hooks/use-toast"; // Verifique se o caminho está correto
+import { useToast } from "@/components/ui/use-toast"; // Verifique se o caminho está correto, se for 'sonner', mude para 'sonner'
 import { Label } from "@/components/ui/label";
-import { UserIcon } from "lucide-react";
+import { UserIcon, Loader2, BarChart3 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { Loader2 } from "lucide-react";
 
+// Reutilizando a imagem da Home
+const HERO_BG_IMAGE = "/hero-bg.png";
 
 const Cadastro = () => {
   const { toast } = useToast();
-  const navigate = useNavigate(); // Hook para navegação
-  const { inviteCode } = useParams(); // Pega o código de convite da URL, se existir
+  const navigate = useNavigate();
+  const { inviteCode } = useParams();
 
   const [formData, setFormData] = useState({
     name: "",
@@ -41,7 +40,6 @@ const Cadastro = () => {
       });
     }
   }, [inviteCode, toast]);
-
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -132,109 +130,120 @@ const Cadastro = () => {
   };
 
   return (
-    <div className="max-w-md mx-auto py-12">
-      <div className="text-center mb-8">
-        <h1 className="text-3xl font-bold text-fifa-blue">Cadastro de Participante</h1>
-        <p className="text-gray-600 mt-2">
-          Junte-se ao nosso bolão da Copa Mundial de Clubes FIFA 2025
-        </p>
-      </div>
+    <div 
+        className="min-h-screen flex items-center justify-center bg-cover bg-center py-12 px-4 sm:px-6 lg:px-8 relative"
+        style={{ 
+            backgroundImage: `url('${HERO_BG_IMAGE}')`,
+            backgroundPosition: 'center top'
+        }}
+    >
+      {/* Overlay escuro */}
+      <div className="absolute inset-0 bg-gradient-to-b from-fifa-blue/80 via-fifa-blue/70 to-fifa-blue/90"></div>
 
-      <Card className="shadow-lg">
-        <CardHeader>
-          <div className="flex justify-center mb-2">
-            <div className="bg-fifa-blue rounded-full p-3">
-              <UserIcon className="h-6 w-6 text-white" />
-            </div>
+      <Card className="w-full max-w-md relative z-10 shadow-2xl bg-white/95 backdrop-blur-sm border-none">
+        <CardHeader className="space-y-1 text-center">
+          <div className="flex justify-center mb-4">
+             <div className="bg-fifa-blue p-3 rounded-full">
+                <UserIcon className="h-8 w-8 text-fifa-gold" />
+             </div>
           </div>
-          <CardTitle className="text-center">Crie sua conta</CardTitle>
-          <CardDescription className="text-center">
-            Preencha seus dados para participar
+          <CardTitle className="text-2xl font-bold text-fifa-blue">Crie sua conta</CardTitle>
+          <CardDescription>
+             {inviteCode ? "Complete seu cadastro para participar do bolão." : "Junte-se ao Futuro Palpites e comece a jogar."}
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSubmit}>
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="name">Nome Completo</Label>
-                <Input
-                  id="name"
-                  name="name"
-                  placeholder="Digite seu nome completo"
-                  value={formData.name}
-                  onChange={handleChange}
-                  required
-                />
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="nickname">Apelido</Label>
-                <Input
-                  id="nickname"
-                  name="nickname"
-                  placeholder="Como você quer ser chamado no ranking"
-                  value={formData.nickname}
-                  onChange={handleChange}
-                  required
-                />
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="email">E-mail</Label>
-                <Input
-                  id="email"
-                  name="email"
-                  type="email"
-                  placeholder="Digite seu e-mail"
-                  value={formData.email}
-                  onChange={handleChange}
-                  required
-                />
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="password">Senha</Label>
-                <Input
-                  id="password"
-                  name="password"
-                  type="password"
-                  placeholder="Crie uma senha"
-                  value={formData.password}
-                  onChange={handleChange}
-                  required
-                />
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="confirmPassword">Confirmar Senha</Label>
-                <Input
-                  id="confirmPassword"
-                  name="confirmPassword"
-                  type="password"
-                  placeholder="Confirme sua senha"
-                  value={formData.confirmPassword}
-                  onChange={handleChange}
-                  required
-                />
-              </div>
-              
-              <Button 
-                type="submit" 
-                className="w-full bg-fifa-blue hover:bg-opacity-90"
-                disabled={isSubmitting}
-              >
-                {isSubmitting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Cadastrando...</> : "Cadastrar"}
-              </Button>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="name">Nome Completo</Label>
+              <Input
+                id="name"
+                name="name"
+                placeholder="Seu Nome"
+                value={formData.name}
+                onChange={handleChange}
+                required
+                className="border-gray-300 focus:border-fifa-blue focus:ring-fifa-blue"
+              />
             </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="nickname">Apelido</Label>
+              <Input
+                id="nickname"
+                name="nickname"
+                placeholder="Como aparecerá no ranking"
+                value={formData.nickname}
+                onChange={handleChange}
+                required
+                className="border-gray-300 focus:border-fifa-blue focus:ring-fifa-blue"
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="email">E-mail</Label>
+              <Input
+                id="email"
+                name="email"
+                type="email"
+                placeholder="seu@email.com"
+                value={formData.email}
+                onChange={handleChange}
+                required
+                className="border-gray-300 focus:border-fifa-blue focus:ring-fifa-blue"
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="password">Senha</Label>
+              <Input
+                id="password"
+                name="password"
+                type="password"
+                placeholder="******"
+                value={formData.password}
+                onChange={handleChange}
+                required
+                className="border-gray-300 focus:border-fifa-blue focus:ring-fifa-blue"
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="confirmPassword">Confirmar Senha</Label>
+              <Input
+                id="confirmPassword"
+                name="confirmPassword"
+                type="password"
+                placeholder="******"
+                value={formData.confirmPassword}
+                onChange={handleChange}
+                required
+                className="border-gray-300 focus:border-fifa-blue focus:ring-fifa-blue"
+              />
+            </div>
+            
+            <Button 
+              type="submit" 
+              className="w-full bg-fifa-blue text-white hover:bg-blue-900 font-bold py-2 transition-all duration-200 shadow-md hover:shadow-lg" 
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Cadastrando...
+                </>
+              ) : (
+                "Cadastrar"
+              )}
+            </Button>
           </form>
         </CardContent>
-        <CardFooter>
-          <div className="text-center w-full text-sm">
-            Já tem uma conta?{" "}
-            <Link to="/login" className="text-fifa-blue hover:underline font-medium">
+        <CardFooter className="flex justify-center">
+          <p className="text-sm text-gray-600">
+            Já tem uma conta?{' '}
+            <Link to="/login" className="text-fifa-blue font-bold hover:underline">
               Faça login
             </Link>
-          </div>
+          </p>
         </CardFooter>
       </Card>
     </div>
