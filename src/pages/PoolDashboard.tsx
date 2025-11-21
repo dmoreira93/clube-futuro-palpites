@@ -12,7 +12,6 @@ import {
 } from 'lucide-react'; 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
-// CORREÇÃO AQUI: Adicionado CardDescription na importação
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
@@ -28,19 +27,32 @@ const PoolDashboard = () => {
   const { poolId } = useParams<{ poolId: string }>();
   const { switchPool, user } = useAuth(); 
   const navigate = useNavigate();
+  
+  // Estado inicial null para mostrar loading, mas vamos garantir que ele seja preenchido
   const [poolDetails, setPoolDetails] = useState<PoolHeaderData | null>(null);
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     if (poolId) {
       switchPool(poolId);
+      
       const fetchPoolDetails = async () => {
-        const { data, error } = await supabase
-          .from('pools')
-          .select('name, invite_code, description')
-          .eq('id', poolId)
-          .single();
-        if (!error && data) setPoolDetails(data);
+        try {
+            const { data, error } = await supabase
+            .from('pools')
+            .select('name, invite_code, description')
+            .eq('id', poolId)
+            .single();
+            
+            if (error) throw error;
+            
+            if (data) {
+                setPoolDetails(data);
+            }
+        } catch (error) {
+            console.error("Erro ao buscar detalhes do bolão:", error);
+            // Em caso de erro, podemos tentar pegar o nome do cache ou mostrar erro
+        }
       };
       fetchPoolDetails();
     }
@@ -71,7 +83,9 @@ const PoolDashboard = () => {
   const top3 = ranking.slice(0, 3);
   const lastPlace = ranking.length > 1 ? ranking[ranking.length - 1] : null;
 
-  if (isLoading) return <PoolDashboardSkeleton />;
+  // Se estiver carregando TUDO, mostra esqueleto
+  if (isLoading && !poolDetails) return <PoolDashboardSkeleton />;
+  
   if (combinedError) return <ErrorAlert message={combinedError.message} />;
 
   return (
@@ -86,7 +100,10 @@ const PoolDashboard = () => {
                         <Badge variant="outline" className="text-fifa-blue border-fifa-blue bg-blue-50">Bolão Ativo</Badge>
                         {poolDetails?.description && <span className="text-xs text-gray-500 truncate max-w-xs">{poolDetails.description}</span>}
                     </div>
-                    <h1 className="text-3xl md:text-4xl font-bold text-fifa-blue">{poolDetails?.name || 'Carregando...'}</h1>
+                    {/* Aqui verificamos se temos o nome, senão mostramos um placeholder mais bonito */}
+                    <h1 className="text-3xl md:text-4xl font-bold text-fifa-blue">
+                        {poolDetails ? poolDetails.name : <Skeleton className="h-10 w-64 bg-gray-200" />}
+                    </h1>
                 </div>
 
                 {poolDetails?.invite_code && (
@@ -135,7 +152,6 @@ const PoolDashboard = () => {
 
         {/* --- ÁREA DE AÇÃO RÁPIDA (BOTÕES) --- */}
         <div className="flex flex-wrap gap-3">
-            {/* Botão Principal: Meus Palpites */}
             <ActionButton 
                 icon={<ListChecks />} 
                 label="Meus Palpites" 
@@ -143,7 +159,6 @@ const PoolDashboard = () => {
                 primary 
             />
             
-            {/* Novos Botões Solicitados */}
             <ActionButton 
                 icon={<Eye />} 
                 label="Palpites da Galera" 
@@ -178,7 +193,7 @@ const PoolDashboard = () => {
                 icon={<AlertTriangle />} 
                 label="Auditoria" 
                 onClick={() => navigate(`/auditoria`)} 
-                variant="ghost" // Estilo mais discreto para auditoria
+                variant="ghost" 
             />
         </div>
 
