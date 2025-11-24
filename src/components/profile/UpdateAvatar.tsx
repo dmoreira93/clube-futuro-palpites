@@ -1,4 +1,4 @@
-// src/components/profile/UpdateAvatar.tsx (VERSÃO CORRIGIDA E MELHORADA)
+// src/components/profile/UpdateAvatar.tsx
 
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
 import { Loader2, Upload } from 'lucide-react';
 
-export const UpdateAvatar = () => {
+const UpdateAvatar = () => {
   const { user, fetchAndSyncProfile } = useAuth();
   const [uploading, setUploading] = useState(false);
 
@@ -78,3 +78,5 @@ export const UpdateAvatar = () => {
     </div>
   );
 };
+
+export default UpdateAvatar; // <--- ADICIONADO AQUI

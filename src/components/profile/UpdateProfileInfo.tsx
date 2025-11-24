@@ -10,7 +10,7 @@ import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
-export const UpdateProfileInfo = () => {
+const UpdateProfileInfo = () => {
   const { user, fetchAndSyncProfile } = useAuth();
   const [name, setName] = useState(user?.name || '');
   const [username, setUsername] = useState(user?.username || '');
@@ -65,3 +65,5 @@ export const UpdateProfileInfo = () => {
     </Card>
   );
 };
+
+export default UpdateProfileInfo; // <--- A MÁGICA ESTÁ AQUI

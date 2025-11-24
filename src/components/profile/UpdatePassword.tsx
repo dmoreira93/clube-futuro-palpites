@@ -9,7 +9,7 @@ import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
-export const UpdatePassword = () => {
+const UpdatePassword = () => {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -63,3 +63,5 @@ export const UpdatePassword = () => {
     </Card>
   );
 };
+
+export default UpdatePassword; // <--- CORREÇÃO FINAL
