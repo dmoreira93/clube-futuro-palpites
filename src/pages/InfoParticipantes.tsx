@@ -2,15 +2,14 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Trophy, Target, AlertTriangle, Coffee, ArrowLeft, Crown, Medal, Info } from 'lucide-react';
 
-// Tipos para as estatísticas retornadas pela RPC
-// Interface atualizada para bater com a nova função SQL
+// Tipos alinhados com a nova RPC SQL
 interface ParticipantStats {
   user_id: string;
   name: string;
@@ -18,51 +17,76 @@ interface ParticipantStats {
   total_wins: number;
   total_last_place: number;
   total_exact_scores: number;
-  is_cafe_com_leite?: boolean; // Opcional, pois calculamos no front
-  is_admin: boolean; // Nova coluna
+  is_admin: boolean;
 }
 
 const InfoParticipantes = () => {
   const { poolId } = useParams<{ poolId: string }>();
-  const { switchPool } = useAuth();
+  const { switchPool, activePool } = useAuth();
   const navigate = useNavigate();
+  
   const [stats, setStats] = useState<ParticipantStats[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (poolId) {
-      switchPool(poolId);
+      // Se o bolão da URL for diferente do ativo, tenta trocar
+      if (activePool?.id !== poolId) {
+          switchPool(poolId);
+      }
       fetchStats();
     }
-  }, [poolId, switchPool]);
+  }, [poolId]);
 
   const fetchStats = async () => {
     setLoading(true);
     try {
-      // Chama a função RPC que calcula as estatísticas
+      if (!poolId) return;
+
+      // Chama a nova RPC criada no banco
       const { data, error } = await supabase.rpc('get_pool_participants_stats', { p_pool_id: poolId });
 
       if (error) throw error;
       
-      // Se a função ainda não existir ou retornar nulo, usamos um array vazio para não quebrar a tela
-      setStats(data || []);
+      // Garante que os números venham como number (Supabase às vezes manda bigint como string ou number)
+      const formattedData = (data || []).map((item: any) => ({
+          ...item,
+          total_wins: Number(item.total_wins),
+          total_last_place: Number(item.total_last_place),
+          total_exact_scores: Number(item.total_exact_scores)
+      }));
+
+      setStats(formattedData);
 
     } catch (error) {
       console.error("Erro ao buscar estatísticas:", error);
-      // Em caso de erro (ex: função não criada), não mostramos nada ou dados vazios
       setStats([]);
     } finally {
       setLoading(false);
     }
   };
 
-  // Filtros para as categorias
-  const champions = stats.filter(s => s.total_wins > 0).sort((a, b) => b.total_wins - a.total_wins);
-  const sharpshooters = stats.filter(s => s.total_exact_scores > 0).sort((a, b) => b.total_exact_scores - a.total_exact_scores).slice(0, 5); // Top 5
-  const punished = stats.filter(s => s.total_last_place > 0).sort((a, b) => b.total_last_place - a.total_last_place);
+  // --- Lógica de Filtros (Frontend) ---
   
-  // Café com leite: quem tem 0 vitórias E 0 derrotas E participa do bolão
-  const cafeComLeite = stats.filter(s => s.total_wins === 0 && s.total_last_place === 0);
+  // Campeões: Quem tem pelo menos 1 vitória
+  const champions = stats
+    .filter(s => s.total_wins > 0)
+    .sort((a, b) => b.total_wins - a.total_wins);
+
+  // Reis da Cravada: Ordena por placares exatos (Top 5)
+  const sharpshooters = stats
+    .filter(s => s.total_exact_scores > 0)
+    .sort((a, b) => b.total_exact_scores - a.total_exact_scores)
+    .slice(0, 5); 
+
+  // Lanterna: Quem tem derrotas registradas
+  const punished = stats
+    .filter(s => s.total_last_place > 0)
+    .sort((a, b) => b.total_last_place - a.total_last_place);
+  
+  // Café com Leite: Quem não ganhou nada, não perdeu nada, mas está lá
+  const cafeComLeite = stats
+    .filter(s => s.total_wins === 0 && s.total_last_place === 0);
 
   if (loading) return <InfoSkeleton />;
 
@@ -76,9 +100,9 @@ const InfoParticipantes = () => {
                 </Button>
                 <div className="text-center">
                     <h1 className="text-3xl font-bold text-fifa-blue flex items-center justify-center gap-3">
-                        <Info className="h-8 w-8 text-fifa-gold" /> Hall da Fama (e da Vergonha)
+                        <Info className="h-8 w-8 text-fifa-gold" /> Hall da Fama
                     </h1>
-                    <p className="text-gray-500 mt-2">Curiosidades históricas sobre os participantes deste bolão.</p>
+                    <p className="text-gray-500 mt-2">Curiosidades e estatísticas históricas dos participantes.</p>
                 </div>
             </div>
         </div>
@@ -100,7 +124,7 @@ const InfoParticipantes = () => {
                                     </div>
                                     <Avatar className="h-20 w-20 border-4 border-yellow-100 mb-3 shadow-sm group-hover:border-yellow-300 transition-colors">
                                         <AvatarImage src={user.avatar_url || undefined} />
-                                        <AvatarFallback className="bg-yellow-50 text-yellow-700 font-bold text-xl">{user.name.substring(0, 2).toUpperCase()}</AvatarFallback>
+                                        <AvatarFallback className="bg-yellow-50 text-yellow-700 font-bold text-xl">{user.name?.substring(0, 2).toUpperCase()}</AvatarFallback>
                                     </Avatar>
                                     <h3 className="font-bold text-gray-800 truncate w-full px-2">{user.name}</h3>
                                     <Badge variant="secondary" className="mt-2 bg-yellow-100 text-yellow-800 hover:bg-yellow-200">
@@ -136,7 +160,7 @@ const InfoParticipantes = () => {
                                                 <div className="flex items-center gap-3">
                                                     <Avatar className="h-10 w-10">
                                                         <AvatarImage src={user.avatar_url || undefined} />
-                                                        <AvatarFallback className="bg-gray-100 text-gray-500">{user.name.substring(0, 2).toUpperCase()}</AvatarFallback>
+                                                        <AvatarFallback className="bg-gray-100 text-gray-500">{user.name?.substring(0, 2).toUpperCase()}</AvatarFallback>
                                                     </Avatar>
                                                     <span className="font-medium text-gray-700">{user.name}</span>
                                                 </div>
@@ -169,11 +193,10 @@ const InfoParticipantes = () => {
                                         <Avatar className="h-8 w-8">
                                             <AvatarImage src={user.avatar_url || undefined} />
                                             <AvatarFallback className="bg-red-100 text-red-600 font-bold">
-                                        {user.name ? user.name.substring(0, 2).toUpperCase() : "??"}
+                                                {user.name ? user.name.substring(0, 2).toUpperCase() : "??"}
                                             </AvatarFallback>
                                             </Avatar>
                                         <div className="flex flex-col leading-none">
-                                        {/* Garante cor escura para o nome */}
                                             <span className="text-sm font-bold text-gray-800">{user.name}</span>
                                             <span className="text-[10px] text-red-500 font-medium">{user.total_last_place}x Lanterninha</span>
                                             </div>
@@ -196,7 +219,7 @@ const InfoParticipantes = () => {
                 <Card className="bg-gray-50 border-dashed border-2 border-gray-200">
                     <CardContent className="p-6 text-center">
                         <p className="text-gray-500 mb-6 max-w-2xl mx-auto">
-                            Estes participantes nunca sentiram o gosto da vitória (1º lugar), mas também nunca amargaram a lanterna. Estão ali, no meio da tabela, vivendo perigosamente na mediocridade.
+                            Estes participantes nunca sentiram o gosto da vitória, mas também nunca amargaram a lanterna.
                         </p>
                         {cafeComLeite.length > 0 ? (
                             <div className="flex flex-wrap justify-center gap-3">
