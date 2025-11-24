@@ -30,6 +30,7 @@ import RankingPage from "./pages/Ranking";
 import Resultados from "./pages/Resultados";
 import Simulador from "./pages/Simulador";
 import InfoParticipantes from "./pages/InfoParticipantes";
+import PoolCriteriaSetup from "./pages/PoolCriteriaSetup";
 
 // Admin
 import Admin from "./pages/Admin";
@@ -79,7 +80,7 @@ function App() {
             <Route path="/ranking" element={<Navigate to="/dashboard" replace />} />
             <Route path="/resultados" element={<Navigate to="/dashboard" replace />} />
             <Route path="/simulador" element={<Navigate to="/dashboard" replace />} />
-
+            <Route path="/pool/:poolId/criteria-setup" element={<ProtectedRoute><PoolCriteriaSetup /></ProtectedRoute>} />
 
             {/* --- Rotas de Admin --- */}
             <Route path="/admin-login" element={<AdminLogin />} />

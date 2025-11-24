@@ -20,7 +20,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 interface PoolHeaderData {
   name: string;
   invite_code: string;
-  //description?: string;
+  description?: string | null; // Agora incluído no schema
 }
 
 const PoolDashboard = () => {
@@ -28,9 +28,13 @@ const PoolDashboard = () => {
   const { switchPool, user } = useAuth(); 
   const navigate = useNavigate();
   
-  // Estado inicial null para mostrar loading, mas vamos garantir que ele seja preenchido
+  // Estado inicial null para mostrar loading
   const [poolDetails, setPoolDetails] = useState<PoolHeaderData | null>(null);
   const [copied, setCopied] = useState(false);
+
+  // 1. Atualização dos Hooks: Passando poolId explicitamente para garantir dados rápidos
+  const { participants: ranking, loading: rankingLoading, error: rankingError } = useParticipantsRanking(poolId);
+  const { stats, loading: statsLoading, error: statsError } = usePoolData(poolId);
 
   useEffect(() => {
     if (poolId) {
@@ -38,9 +42,10 @@ const PoolDashboard = () => {
       
       const fetchPoolDetails = async () => {
         try {
+            // 2. Busca ajustada para incluir descrição
             const { data, error } = await supabase
             .from('pools')
-            .select('name, invite_code ')
+            .select('name, invite_code, description')
             .eq('id', poolId)
             .single();
             
@@ -51,15 +56,11 @@ const PoolDashboard = () => {
             }
         } catch (error) {
             console.error("Erro ao buscar detalhes do bolão:", error);
-            // Em caso de erro, podemos tentar pegar o nome do cache ou mostrar erro
         }
       };
       fetchPoolDetails();
     }
   }, [poolId, switchPool]);
-
-  const { participants: ranking, loading: rankingLoading, error: rankingError } = useParticipantsRanking();
-  const { stats, loading: statsLoading, error: statsError } = usePoolData();
 
   const isLoading = rankingLoading || statsLoading;
   const combinedError = rankingError || statsError;
@@ -86,7 +87,7 @@ const PoolDashboard = () => {
   // Se estiver carregando TUDO, mostra esqueleto
   if (isLoading && !poolDetails) return <PoolDashboardSkeleton />;
   
-  if (combinedError) return <ErrorAlert message={combinedError.message} />;
+  if (combinedError) return <ErrorAlert message={combinedError} />;
 
   return (
     <div className="min-h-screen bg-gray-50/50 pb-12">
@@ -100,7 +101,7 @@ const PoolDashboard = () => {
                         <Badge variant="outline" className="text-fifa-blue border-fifa-blue bg-blue-50">Bolão Ativo</Badge>
                         {poolDetails?.description && <span className="text-xs text-gray-500 truncate max-w-xs">{poolDetails.description}</span>}
                     </div>
-                    {/* Aqui verificamos se temos o nome, senão mostramos um placeholder mais bonito */}
+                    {/* Nome do Bolão */}
                     <h1 className="text-3xl md:text-4xl font-bold text-fifa-blue">
                         {poolDetails ? poolDetails.name : <Skeleton className="h-10 w-64 bg-gray-200" />}
                     </h1>
@@ -321,8 +322,8 @@ const PodiumStep = ({ participant, place, color, height, isFirst = false }: any)
     <div className="flex flex-col items-center group cursor-pointer hover:-translate-y-1 transition-transform duration-300">
         <div className="mb-2 flex flex-col items-center">
             <Avatar className={`${isFirst ? 'w-16 h-16 border-4 border-fifa-gold shadow-md' : 'w-12 h-12 border-2 border-gray-200'}`}>
-                <AvatarImage src={participant.avatar_url} />
-                <AvatarFallback className="bg-gray-100 text-gray-600 font-bold">{participant.name.substring(0, 2).toUpperCase()}</AvatarFallback>
+                <AvatarImage src={participant.avatar_url || undefined} />
+                <AvatarFallback className="bg-gray-100 text-gray-600 font-bold">{participant.name?.substring(0, 2).toUpperCase()}</AvatarFallback>
             </Avatar>
             <span className={`text-xs font-bold mt-2 ${isFirst ? 'text-base text-fifa-blue' : 'text-gray-700'} text-center max-w-[90px] truncate`}>{participant.name}</span>
             <Badge variant="secondary" className="mt-1 text-[10px] h-5 px-2 bg-gray-100 text-gray-600">{participant.points} pts</Badge>
