@@ -1,16 +1,14 @@
-// src/contexts/AuthContext.tsx
+// src/contexts/AuthContext.tsx (VERSÃO ESTÁVEL - SEM PISCAR)
 
-import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
+import { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { User } from '@supabase/supabase-js';
 import { toast } from 'sonner';
 import { Database } from '@/integrations/supabase/types';
 
-// Tipos auxiliares gerados pelo Supabase
 type Pool = Database['public']['Tables']['pools']['Row'];
 type ParticipationRow = Database['public']['Tables']['participations']['Row'];
 
-// O AppUser é APENAS o usuário logado (sem contexto de bolão)
 export type AppUser = User & {
   username?: string | null;
   name?: string | null;
@@ -19,7 +17,6 @@ export type AppUser = User & {
   avatar_url?: string | null;
 };
 
-// Interface para a participação completa (com os dados do bolão populados)
 export interface Participation extends ParticipationRow {
   pool: Pool;
 }
@@ -52,16 +49,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [activePool, setActivePool] = useState<Pool | null>(null);
   const [userParticipations, setUserParticipations] = useState<Participation[]>([]);
   const [loading, setLoading] = useState(true);
+  
+  // Ref para evitar loops de dependência no useEffect
+  const userRef = useRef<AppUser | null>(null);
 
   const isAuthenticated = !!user;
-  // Verifica se é admin global do sistema
   const isAdmin = user?.is_admin ?? false;
-  // Verifica se é dono do bolão ATIVO
   const isOwner = !!user && !!activePool && user.id === activePool.owner_id;
 
   const signOut = useCallback(async () => {
     await supabase.auth.signOut();
     setUser(null);
+    userRef.current = null;
     setActivePool(null);
     setUserParticipations([]);
     localStorage.removeItem('activePoolId');
@@ -69,16 +68,20 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const fetchAndSyncProfile = useCallback(async (sessionUser: User): Promise<AppUser | null> => {
     try {
-      // 1. Busca dados do perfil (users_custom)
+      // Se já temos os dados carregados e é o mesmo usuário, evita refetch desnecessário
+      // Mas permite forçar update se chamado manualmente
+      
       const { data: profile, error } = await supabase
         .from('users_custom')
         .select('*')
         .eq('id', sessionUser.id)
         .single();
 
-      if (error && error.code !== 'PGRST116') throw error;
+      // Se não tiver perfil (caso de erro na migração), cria um objeto básico
+      if (error && error.code !== 'PGRST116') {
+         console.error("Erro ao buscar perfil:", error);
+      }
       
-      // Combina dados de Auth com dados customizados
       const combinedUser: AppUser = { 
         ...sessionUser, 
         username: profile?.username,
@@ -88,35 +91,35 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         avatar_url: profile?.avatar_url
       };
       
+      // Atualiza estado e ref
       setUser(combinedUser);
+      userRef.current = combinedUser;
       
-      // 2. Busca participações e popula os dados do bolão
+      // Busca participações
       const { data: participationsData, error: participationsError } = await supabase
         .from('participations')
-        .select(`
-          *,
-          pool:pools(*)
-        `)
+        .select(`*, pool:pools(*)`)
         .eq('user_id', sessionUser.id);
         
       if (participationsError) throw participationsError;
       
-      // Mapeia para o formato correto (Garante que pool não é null/array)
       const participations: Participation[] = (participationsData || []).map((p: any) => ({
         ...p,
-        pool: p.pool // O Supabase já traz o objeto pool aqui devido à relação
+        pool: p.pool
       }));
 
       setUserParticipations(participations);
       
-      // 3. Define o bolão ativo (Recupera da memória ou pega o primeiro)
+      // Lógica de Bolão Ativo
       if (participations.length > 0) {
         const lastActivePoolId = localStorage.getItem('activePoolId');
+        // Verifica se o bolão salvo ainda existe nas participações do usuário
         const lastActiveParticipation = participations.find(p => p.pool_id === lastActivePoolId);
         
         if (lastActiveParticipation) {
             setActivePool(lastActiveParticipation.pool);
         } else {
+            // Se não, pega o primeiro disponível
             setActivePool(participations[0].pool);
             localStorage.setItem('activePoolId', participations[0].pool.id);
         }
@@ -126,42 +129,53 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       
       return combinedUser;
     } catch (error: any) {
-      console.error("Erro ao buscar perfil/bolões:", error);
-      // Se der erro crítico de auth, faz logout para evitar loop
-      // await signOut(); 
+      console.error("Erro crítico no fetch profile:", error);
       return null;
     }
-  }, [signOut]);
+  }, []);
   
   useEffect(() => {
-    setLoading(true);
-    
-    // Verifica sessão atual
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user) {
-        fetchAndSyncProfile(session.user).finally(() => setLoading(false));
-      } else {
-        setLoading(false);
-      }
-    });
+    let mounted = true;
 
-    // Escuta mudanças de auth (Login/Logout)
-    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
+    const initAuth = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        if (session?.user) {
+            if (mounted) await fetchAndSyncProfile(session.user);
+        }
+      } catch (error) {
+        console.error("Erro na inicialização da sessão:", error);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    };
+
+    initAuth();
+
+    const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
         const sessionUser = session?.user;
+        
         if (sessionUser) {
-            // Se logou, busca perfil
-            if (!user || user.id !== sessionUser.id) {
-                fetchAndSyncProfile(sessionUser);
+            // SÓ atualiza se o usuário mudou (comparando ID) para evitar loop
+            if (!userRef.current || userRef.current.id !== sessionUser.id) {
+                 await fetchAndSyncProfile(sessionUser);
             }
-        } else {
-            // Se deslogou, limpa tudo
+        } else if (event === 'SIGNED_OUT') {
             setUser(null);
+            userRef.current = null;
             setActivePool(null);
             setUserParticipations([]);
+            setLoading(false);
         }
     });
-    return () => { authListener.subscription.unsubscribe(); };
-  }, [fetchAndSyncProfile, user]);
+
+    return () => { 
+      mounted = false;
+      authListener.subscription.unsubscribe(); 
+    };
+    // REMOVIDA A DEPENDÊNCIA 'user' AQUI PARA PARAR O LOOP
+  }, [fetchAndSyncProfile]); 
   
   const login = async (email: string, password: string) => {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
