@@ -20,7 +20,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 interface PoolHeaderData {
   name: string;
   invite_code: string;
-  description?: string | null; // Agora incluído no schema
+  description?: string | null;
 }
 
 const PoolDashboard = () => {
@@ -28,11 +28,9 @@ const PoolDashboard = () => {
   const { switchPool, user } = useAuth(); 
   const navigate = useNavigate();
   
-  // Estado inicial null para mostrar loading
   const [poolDetails, setPoolDetails] = useState<PoolHeaderData | null>(null);
   const [copied, setCopied] = useState(false);
 
-  // 1. Atualização dos Hooks: Passando poolId explicitamente para garantir dados rápidos
   const { participants: ranking, loading: rankingLoading, error: rankingError } = useParticipantsRanking(poolId);
   const { stats, loading: statsLoading, error: statsError } = usePoolData(poolId);
 
@@ -42,7 +40,6 @@ const PoolDashboard = () => {
       
       const fetchPoolDetails = async () => {
         try {
-            // 2. Busca ajustada para incluir descrição
             const { data, error } = await supabase
             .from('pools')
             .select('name, invite_code, description')
@@ -74,17 +71,22 @@ const PoolDashboard = () => {
     }
   };
 
-  // Cálculos de Estatísticas Extras
+  // Cálculos de Estatísticas Pessoais
   const myRankData = ranking.find(p => p.id === user?.id);
   const leaderPoints = ranking.length > 0 ? ranking[0].points : 0;
   const myPoints = myRankData?.points || 0;
   const pointsToLeader = leaderPoints - myPoints;
   
-  // Pódio (Top 3) e Último
-  const top3 = ranking.slice(0, 3);
-  const lastPlace = ranking.length > 1 ? ranking[ranking.length - 1] : null;
+  // --- CORREÇÃO AQUI: Filtra IAs e Admins para Pódio e Lanterna ---
+  const humanParticipants = ranking.filter(p => !p.is_ai && !p.is_admin);
 
-  // Se estiver carregando TUDO, mostra esqueleto
+  // Pódio (Top 3 Humanos)
+  const top3 = humanParticipants.slice(0, 3);
+  
+  // Último Colocado (Lanterna Humano)
+  // Só mostra se houver mais de 1 participante humano
+  const lastPlace = humanParticipants.length > 1 ? humanParticipants[humanParticipants.length - 1] : null;
+
   if (isLoading && !poolDetails) return <PoolDashboardSkeleton />;
   
   if (combinedError) return <ErrorAlert message={combinedError} />;
@@ -101,7 +103,6 @@ const PoolDashboard = () => {
                         <Badge variant="outline" className="text-fifa-blue border-fifa-blue bg-blue-50">Bolão Ativo</Badge>
                         {poolDetails?.description && <span className="text-xs text-gray-500 truncate max-w-xs">{poolDetails.description}</span>}
                     </div>
-                    {/* Nome do Bolão */}
                     <h1 className="text-3xl md:text-4xl font-bold text-fifa-blue">
                         {poolDetails ? poolDetails.name : <Skeleton className="h-10 w-64 bg-gray-200" />}
                     </h1>
@@ -203,13 +204,13 @@ const PoolDashboard = () => {
             {/* --- COLUNA ESQUERDA: PÓDIO E MURAL --- */}
             <div className="lg:col-span-2 space-y-8">
                 
-                {/* PÓDIO (TOP 3) */}
+                {/* PÓDIO (TOP 3 HUMANOS) */}
                 <Card className="border-t-4 border-t-fifa-gold shadow-md">
                     <CardHeader>
                         <CardTitle className="flex items-center gap-2 text-xl"><Trophy className="text-fifa-gold"/> Pódio do Bolão</CardTitle>
                     </CardHeader>
                     <CardContent>
-                        {ranking.length > 0 ? (
+                        {humanParticipants.length > 0 ? (
                             <div className="flex flex-col md:flex-row justify-center items-end gap-4 pt-4 pb-2">
                                 {/* 2º Lugar */}
                                 {top3[1] && <PodiumStep participant={top3[1]} place={2} color="bg-gray-300" height="h-24" />}
@@ -222,8 +223,8 @@ const PoolDashboard = () => {
                             <div className="text-center py-8 text-gray-500">Ainda não há ranking disponível.</div>
                         )}
 
-                        {/* Lanterna */}
-                        {lastPlace && ranking.length > 3 && (
+                        {/* Lanterna Humano */}
+                        {lastPlace && humanParticipants.length > 3 && (
                             <div className="mt-6 pt-4 border-t flex items-center justify-between bg-red-50 p-3 rounded-lg">
                                 <div className="flex items-center gap-3">
                                     <span className="text-2xl">🐢</span>
@@ -246,7 +247,7 @@ const PoolDashboard = () => {
 
             {/* --- COLUNA DIREITA: DESTAQUES E PRÓXIMOS JOGOS --- */}
             <div className="space-y-8">
-                 {/* Card de Destaques (Top Scorer / Mais Exatos) */}
+                 {/* Card de Destaques */}
                 <Card>
                     <CardHeader><CardTitle className="text-lg flex items-center gap-2"><Users className="w-5 h-5 text-fifa-blue"/> Destaques</CardTitle></CardHeader>
                     <CardContent className="space-y-4">

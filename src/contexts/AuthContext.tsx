@@ -1,5 +1,3 @@
-// src/contexts/AuthContext.tsx
-
 import { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { User } from '@supabase/supabase-js';
@@ -56,13 +54,22 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const isAdmin = user?.is_admin ?? false;
   const isOwner = !!user && !!activePool && user.id === activePool.owner_id;
 
+  // Função FORTE de limpeza
   const signOut = useCallback(async () => {
+    console.log("Executando limpeza completa de sessão...");
     setUser(null);
     userRef.current = null;
     setActivePool(null);
     setUserParticipations([]);
+    
+    // Limpa TUDO do navegador relacionado a sessão
     localStorage.removeItem('activePoolId');
     localStorage.removeItem('sb-wdbaoomwhuiztjoazagd-auth-token');
+    sessionStorage.clear();
+    
+    // Garante que o loading pare
+    setLoading(false);
+
     await supabase.auth.signOut();
   }, []);
 
@@ -75,9 +82,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         .eq('id', sessionUser.id)
         .single();
 
-      // AUTO-LIMPEZA: Se o perfil não existe, força logout para limpar o cache do navegador
+      // SE FALHAR AQUI: É porque o usuário tem token mas não tem dados no banco novo.
+      // AÇÃO: Logout imediato.
       if (error || !profile) {
-         console.error("Perfil não encontrado. Logout de segurança.", error);
+         console.error("Perfil inconsistente. Forçando logout.", error);
          await signOut();
          return null;
       }
@@ -94,28 +102,21 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setUser(combinedUser);
       userRef.current = combinedUser;
       
-      // 2. Busca Participações (Sem apelido/alias para evitar confusão no Supabase)
-      const { data: participationsData, error: participationsError } = await supabase
+      // 2. Busca Participações
+      const { data: participationsData } = await supabase
         .from('participations')
         .select(`*, pools(*)`) 
         .eq('user_id', sessionUser.id);
         
-      if (participationsError) throw participationsError;
-      
-      // 3. Mapeamento Robusto (A CORREÇÃO QUE VOCÊ PEDIU)
-      // O Supabase pode devolver 'pools' (plural) ou 'pool' (singular). Aceitamos os dois.
+      // Mapeamento seguro
       const participations: Participation[] = (participationsData || []).map((p: any) => {
-        const poolData = p.pools || p.pool; // <--- AQUI ESTÁ A LÓGICA BLINDADA
-        
-        return {
-          ...p,
-          pool: poolData 
-        };
-      }).filter(p => p.pool); // Remove participações quebradas/sem bolão
+        const poolData = p.pools || p.pool;
+        return { ...p, pool: poolData };
+      }).filter(p => p.pool);
 
       setUserParticipations(participations);
       
-      // 4. Define Bolão Ativo
+      // 3. Define Bolão Ativo
       if (participations.length > 0) {
         const lastActivePoolId = localStorage.getItem('activePoolId');
         const lastActiveParticipation = participations.find(p => p.pool.id === lastActivePoolId);
@@ -134,6 +135,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     } catch (error: any) {
       console.error("Erro crítico no AuthContext:", error);
+      await signOut();
       return null;
     }
   }, [signOut]);
@@ -141,9 +143,23 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     let mounted = true;
 
+    // --- DISJUNTOR DE SEGURANÇA ---
+    // Se o loading ficar preso por mais de 3 segundos, destrava a tela
+    const safetyTimer = setTimeout(() => {
+        if (loading) {
+            console.warn("⚠️ Timeout de carregamento atingido. Forçando liberação da tela.");
+            setLoading(false);
+            // Se não temos utilizador carregado, garante que estamos deslogados
+            if (!userRef.current) {
+                signOut();
+            }
+        }
+    }, 3000); // 3 segundos de tolerância máxima
+
     const initAuth = async () => {
       try {
         const { data: { session }, error } = await supabase.auth.getSession();
+        
         if (error) {
             await signOut();
         } else if (session?.user) {
@@ -151,8 +167,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         }
       } catch (error) {
         console.error("Erro na inicialização:", error);
+        await signOut();
       } finally {
         if (mounted) setLoading(false);
+        clearTimeout(safetyTimer); // Cancela o timer se carregou rápido
       }
     };
 
@@ -166,7 +184,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             setUserParticipations([]);
             setLoading(false);
         } else if (session?.user) {
-            // Só recarrega se o usuário mudou de verdade (Evita loop infinito)
             const currentUser = userRef.current;
             if (!currentUser || currentUser.id !== session.user.id) {
                  await fetchAndSyncProfile(session.user);
@@ -176,9 +193,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     return () => { 
       mounted = false;
+      clearTimeout(safetyTimer);
       authListener.subscription.unsubscribe(); 
     };
-  }, [fetchAndSyncProfile, signOut]);
+  }, [fetchAndSyncProfile, signOut]); // Removi 'loading' das dependências para evitar loop do timer
   
   const login = async (email: string, password: string) => {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
