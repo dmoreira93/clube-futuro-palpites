@@ -54,28 +54,34 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const isAdmin = user?.is_admin ?? false;
   const isOwner = !!user && !!activePool && user.id === activePool.owner_id;
 
+  // Função centralizada de Logout e Limpeza
   const signOut = useCallback(async () => {
+    // 1. Limpa estado do React
     setUser(null);
     userRef.current = null;
     setActivePool(null);
     setUserParticipations([]);
+    
+    // 2. Limpa LocalStorage (Remove lixo antigo)
     localStorage.removeItem('activePoolId');
-    localStorage.removeItem('sb-wdbaoomwhuiztjoazagd-auth-token');
+    localStorage.removeItem('sb-wdbaoomwhuiztjoazagd-auth-token'); // Remove token do Supabase se necessário
+    
+    // 3. Limpa Sessão no Backend
     await supabase.auth.signOut();
   }, []);
 
   const fetchAndSyncProfile = useCallback(async (sessionUser: User): Promise<AppUser | null> => {
     try {
-      // 1. Busca Perfil
       const { data: profile, error } = await supabase
         .from('users_custom')
         .select('*')
         .eq('id', sessionUser.id)
         .single();
 
+      // AUTO-LIMPEZA: Se o usuário existe no Auth mas NÃO na tabela custom (ex: deletado), forçar logout.
       if (error || !profile) {
-         console.error("Perfil não encontrado. Logout de segurança.", error);
-         await signOut();
+         console.error("Perfil não encontrado. Forçando logout de limpeza.", error);
+         await signOut(); // <--- ISSO CORRIGE O PROBLEMA
          return null;
       }
       
@@ -91,32 +97,24 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setUser(combinedUser);
       userRef.current = combinedUser;
       
-      // 2. Busca Participações (CORREÇÃO AQUI: Sem apelido para ser mais seguro)
       const { data: participationsData, error: participationsError } = await supabase
         .from('participations')
-        .select(`*, pools(*)`) // Removemos o 'pool:' para evitar erro de alias
+        .select(`*, pool:pools(*)`)
         .eq('user_id', sessionUser.id);
         
       if (participationsError) throw participationsError;
       
-      // 3. Mapeamento Robusto (Aceita 'pool' ou 'pools')
-      const participations: Participation[] = (participationsData || []).map((p: any) => {
-        // O Supabase pode retornar como 'pools' (nome da tabela) ou 'pool' (se fosse inferido singular)
-        // Aqui garantimos que pegamos o objeto correto, não importa o nome.
-        const poolData = p.pools || p.pool;
-        
-        return {
-          ...p,
-          pool: poolData // Garante que a propriedade 'pool' sempre existe
-        };
-      }).filter(p => p.pool); // Remove participações órfãs (sem bolão)
+      const participations: Participation[] = (participationsData || []).map((p: any) => ({
+        ...p,
+        pool: p.pool
+      }));
 
       setUserParticipations(participations);
       
-      // 4. Define Bolão Ativo
+      // Validação de Bolão Ativo
       if (participations.length > 0) {
         const lastActivePoolId = localStorage.getItem('activePoolId');
-        const lastActiveParticipation = participations.find(p => p.pool.id === lastActivePoolId);
+        const lastActiveParticipation = participations.find(p => p.pool_id === lastActivePoolId);
         
         if (lastActiveParticipation) {
             setActivePool(lastActiveParticipation.pool);
@@ -126,13 +124,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         }
       } else {
         setActivePool(null);
+        localStorage.removeItem('activePoolId'); // Se não tem bolões, limpa o storage
       }
       
       return combinedUser;
 
     } catch (error: any) {
-      console.error("Erro crítico no AuthContext:", error);
-      // Não forçamos logout aqui para permitir debug se for erro de rede temporário
+      console.error("Erro crítico no fetch profile:", error);
+      await signOut(); // Segurança extra: qualquer erro crítico mata a sessão ruim
       return null;
     }
   }, [signOut]);
@@ -143,13 +142,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const initAuth = async () => {
       try {
         const { data: { session }, error } = await supabase.auth.getSession();
+        
         if (error) {
+            // Se o token for inválido, limpa tudo
             await signOut();
         } else if (session?.user) {
             if (mounted) await fetchAndSyncProfile(session.user);
         }
       } catch (error) {
         console.error("Erro na inicialização:", error);
+        await signOut();
       } finally {
         if (mounted) setLoading(false);
       }
@@ -166,6 +168,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             setLoading(false);
         } else if (session?.user) {
             const currentUser = userRef.current;
+            // Só recarrega se o usuário mudou de verdade
             if (!currentUser || currentUser.id !== session.user.id) {
                  await fetchAndSyncProfile(session.user);
             }
