@@ -17,6 +17,7 @@ export interface Participant {
   rank: number;
   accuracy: string;
   prize?: string | null;
+  is_ai: boolean;
 }
 
 const fetchRanking = async (poolId: string): Promise<Participant[]> => {
@@ -28,6 +29,7 @@ const fetchRanking = async (poolId: string): Promise<Participant[]> => {
         exact_scores,
         matches_played,
         is_admin,
+        is_ai,
         user:users_custom (
           id,
           name,
@@ -59,6 +61,7 @@ const fetchRanking = async (poolId: string): Promise<Participant[]> => {
         avatar_url: user?.avatar_url || null,
         points: entry.points || 0,
         is_admin: entry.is_admin || false,
+        is_ai: user?.is_ai || false,
         matchesplayed: matches,
         scored_matches: matches, // Mantendo compatibilidade
         exactscores: exacts,
