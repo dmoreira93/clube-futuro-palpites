@@ -1,3 +1,5 @@
+// src/contexts/AuthContext.tsx (VERSÃO ESTÁVEL - SEM PISCAR)
+
 import { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { User } from '@supabase/supabase-js';
@@ -48,55 +50,52 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [userParticipations, setUserParticipations] = useState<Participation[]>([]);
   const [loading, setLoading] = useState(true);
   
+  // Ref para evitar loops de dependência no useEffect
   const userRef = useRef<AppUser | null>(null);
 
   const isAuthenticated = !!user;
   const isAdmin = user?.is_admin ?? false;
   const isOwner = !!user && !!activePool && user.id === activePool.owner_id;
 
-  // Função centralizada de Logout e Limpeza
   const signOut = useCallback(async () => {
-    // 1. Limpa estado do React
+    await supabase.auth.signOut();
     setUser(null);
     userRef.current = null;
     setActivePool(null);
     setUserParticipations([]);
-    
-    // 2. Limpa LocalStorage (Remove lixo antigo)
     localStorage.removeItem('activePoolId');
-    localStorage.removeItem('sb-wdbaoomwhuiztjoazagd-auth-token'); // Remove token do Supabase se necessário
-    
-    // 3. Limpa Sessão no Backend
-    await supabase.auth.signOut();
   }, []);
 
   const fetchAndSyncProfile = useCallback(async (sessionUser: User): Promise<AppUser | null> => {
     try {
+      // Se já temos os dados carregados e é o mesmo usuário, evita refetch desnecessário
+      // Mas permite forçar update se chamado manualmente
+      
       const { data: profile, error } = await supabase
         .from('users_custom')
         .select('*')
         .eq('id', sessionUser.id)
         .single();
 
-      // AUTO-LIMPEZA: Se o usuário existe no Auth mas NÃO na tabela custom (ex: deletado), forçar logout.
-      if (error || !profile) {
-         console.error("Perfil não encontrado. Forçando logout de limpeza.", error);
-         await signOut(); // <--- ISSO CORRIGE O PROBLEMA
-         return null;
+      // Se não tiver perfil (caso de erro na migração), cria um objeto básico
+      if (error && error.code !== 'PGRST116') {
+         console.error("Erro ao buscar perfil:", error);
       }
       
       const combinedUser: AppUser = { 
         ...sessionUser, 
-        username: profile.username,
-        name: profile.name,
-        is_admin: profile.is_admin,
-        first_login: profile.first_login,
-        avatar_url: profile.avatar_url
+        username: profile?.username,
+        name: profile?.name,
+        is_admin: profile?.is_admin,
+        first_login: profile?.first_login,
+        avatar_url: profile?.avatar_url
       };
       
+      // Atualiza estado e ref
       setUser(combinedUser);
       userRef.current = combinedUser;
       
+      // Busca participações
       const { data: participationsData, error: participationsError } = await supabase
         .from('participations')
         .select(`*, pool:pools(*)`)
@@ -111,47 +110,42 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
       setUserParticipations(participations);
       
-      // Validação de Bolão Ativo
+      // Lógica de Bolão Ativo
       if (participations.length > 0) {
         const lastActivePoolId = localStorage.getItem('activePoolId');
+        // Verifica se o bolão salvo ainda existe nas participações do usuário
         const lastActiveParticipation = participations.find(p => p.pool_id === lastActivePoolId);
         
         if (lastActiveParticipation) {
             setActivePool(lastActiveParticipation.pool);
         } else {
+            // Se não, pega o primeiro disponível
             setActivePool(participations[0].pool);
             localStorage.setItem('activePoolId', participations[0].pool.id);
         }
       } else {
         setActivePool(null);
-        localStorage.removeItem('activePoolId'); // Se não tem bolões, limpa o storage
       }
       
       return combinedUser;
-
     } catch (error: any) {
       console.error("Erro crítico no fetch profile:", error);
-      await signOut(); // Segurança extra: qualquer erro crítico mata a sessão ruim
       return null;
     }
-  }, [signOut]);
+  }, []);
   
   useEffect(() => {
     let mounted = true;
 
     const initAuth = async () => {
       try {
-        const { data: { session }, error } = await supabase.auth.getSession();
+        const { data: { session } } = await supabase.auth.getSession();
         
-        if (error) {
-            // Se o token for inválido, limpa tudo
-            await signOut();
-        } else if (session?.user) {
+        if (session?.user) {
             if (mounted) await fetchAndSyncProfile(session.user);
         }
       } catch (error) {
-        console.error("Erro na inicialização:", error);
-        await signOut();
+        console.error("Erro na inicialização da sessão:", error);
       } finally {
         if (mounted) setLoading(false);
       }
@@ -160,18 +154,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     initAuth();
 
     const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
-        if (event === 'SIGNED_OUT' || !session) {
+        const sessionUser = session?.user;
+        
+        if (sessionUser) {
+            // SÓ atualiza se o usuário mudou (comparando ID) para evitar loop
+            if (!userRef.current || userRef.current.id !== sessionUser.id) {
+                 await fetchAndSyncProfile(sessionUser);
+            }
+        } else if (event === 'SIGNED_OUT') {
             setUser(null);
             userRef.current = null;
             setActivePool(null);
             setUserParticipations([]);
             setLoading(false);
-        } else if (session?.user) {
-            const currentUser = userRef.current;
-            // Só recarrega se o usuário mudou de verdade
-            if (!currentUser || currentUser.id !== session.user.id) {
-                 await fetchAndSyncProfile(session.user);
-            }
         }
     });
 
@@ -179,15 +174,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       mounted = false;
       authListener.subscription.unsubscribe(); 
     };
-  }, [fetchAndSyncProfile, signOut]);
+    // REMOVIDA A DEPENDÊNCIA 'user' AQUI PARA PARAR O LOOP
+  }, [fetchAndSyncProfile]); 
   
   const login = async (email: string, password: string) => {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) {
-        toast.error(error.message || "Email ou senha inválidos.");
-        return { success: false, error };
-    }
-    return { success: true, error: null };
+    if (error) toast.error(error.message || "Email ou senha inválidos.");
+    return { success: !error, error };
   };
 
   const updateUserProfile = async (updates: Partial<Pick<AppUser, 'first_login'>>) => {
