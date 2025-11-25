@@ -19,20 +19,22 @@ const HERO_BG_IMAGE = "/hero-bg.png";
 
 const Login = () => {
   const navigate = useNavigate();
-  const { login, isAuthenticated, isLoadingAuth, isFirstLogin } = useAuth();
+  // Atualizado para usar 'loading' do novo contexto
+  const { login, isAuthenticated, loading, user } = useAuth(); 
   const { toast } = useToast();
+  
   const [formData, setFormData] = useState({
     email: "",
     password: "",
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [loginSuccess, setLoginSuccess] = useState(false);
 
   useEffect(() => {
-    if (!isLoadingAuth && isAuthenticated) {
-      navigate(isFirstLogin ? "/change-password" : "/dashboard");
+    // Só redireciona se o loading acabou E temos um utilizador válido
+    if (!loading && isAuthenticated && user) {
+      navigate(user.first_login ? "/change-password" : "/dashboard");
     }
-  }, [isAuthenticated, isLoadingAuth, isFirstLogin, navigate]);
+  }, [isAuthenticated, loading, user, navigate]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -48,28 +50,33 @@ const Login = () => {
       });
       return;
     }
+    
     setIsSubmitting(true);
     try {
       const { success, error } = await login(formData.email, formData.password);
+      
       if (!success) {
         throw error || new Error("Ocorreu um erro desconhecido durante o login.");
       }
-      setLoginSuccess(true);
+      // Não precisamos de setLoginSuccess aqui, o useEffect vai tratar do redirecionamento
+      // quando o AuthContext atualizar o estado 'user'.
+      
     } catch (error: any) {
       toast({
         title: "Erro no Login",
-        description: error.message || "Email ou senha inválidos. Tente novamente.",
+        description: error.message || "Email ou senha inválidos.",
         variant: "destructive",
       });
       setIsSubmitting(false);
     }
   };
 
-  if (isLoadingAuth || loginSuccess) {
+  // Mostra loading se o AuthContext estiver a inicializar ou se estivermos a submeter
+  if (loading) {
     return (
       <div className="flex flex-col justify-center items-center h-screen bg-fifa-blue text-white gap-4">
         <Loader2 className="h-12 w-12 animate-spin text-fifa-gold" />
-        <p className="text-lg animate-pulse">Entrando no campo...</p>
+        <p className="text-lg animate-pulse">A carregar o estádio...</p>
       </div>
     );
   }
@@ -132,7 +139,7 @@ const Login = () => {
                 disabled={isSubmitting}
             >
               {isSubmitting ? (
-                <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Entrando...</>
+                <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> A entrar...</>
               ) : ( "Entrar" )}
             </Button>
           </form>
@@ -145,7 +152,6 @@ const Login = () => {
             </Link>
           </div>
           
-          {/* Link para Admin Login (Discreto) */}
           <Link to="/admin-login" className="flex items-center gap-2 text-xs text-gray-400 hover:text-gray-600 transition-colors mt-2">
             <ShieldCheck className="h-3 w-3" /> Acesso Administrativo
           </Link>
