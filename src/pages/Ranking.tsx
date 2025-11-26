@@ -16,25 +16,22 @@ import { Loader2, Trophy, AlertTriangle } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useMemo } from "react";
 
-// Função auxiliar para verificar se é IA (pode mover para utils se preferir)
+// Função auxiliar para verificar se é IA
 const isAIParticipant = (p: Participant) => p.name?.startsWith('IA ') || p.username?.startsWith('GPT');
 
 const calculatePrize = (rank: number, participant: Participant, totalHumanParticipants: number, pool: any): string => {
-  // Regra de segurança: IAs e Admins não ganham prêmio
   if (!pool || isAIParticipant(participant) || participant.is_admin) {
     return "";
   }
   
   const totalPot = (pool.entry_fee || 0) * totalHumanParticipants;
 
-  // Se o bolão tem taxa de entrada, calcula prêmio em dinheiro
   if (pool.entry_fee > 0) {
     if (rank === 1 && pool.prize_percent_1st > 0) return `R$ ${(totalPot * pool.prize_percent_1st / 100).toFixed(2).replace('.', ',')}`;
     if (rank === 2 && pool.prize_percent_2nd > 0) return `R$ ${(totalPot * pool.prize_percent_2nd / 100).toFixed(2).replace('.', ',')}`;
     if (rank === 3 && pool.prize_percent_3rd > 0) return `R$ ${(totalPot * pool.prize_percent_3rd / 100).toFixed(2).replace('.', ',')}`;
   }
   
-  // Punição para o lanterna (apenas se houver mais de 3 humanos)
   if (pool.enable_punishment && rank === totalHumanParticipants && totalHumanParticipants > 3) {
     return pool.punishment_description || "Pagar a prenda!";
   }
@@ -42,25 +39,17 @@ const calculatePrize = (rank: number, participant: Participant, totalHumanPartic
 };
 
 const RankingPage = () => {
-  const { activePool: pool } = useAuth(); // Nome corrigido para bater com o contexto
+  const { activePool: pool } = useAuth(); 
   const { participants, loading, error } = useParticipantsRanking();
 
   const rankedParticipants = useMemo(() => {
     if (!participants || !pool) return [];
 
-    // 1. Filtra admins (eles aparecem na tabela, mas não no cálculo de prêmios)
-    // Dependendo da regra, você pode querer removê-los da lista visual também.
-    // Aqui assumo que eles aparecem no ranking visualmente.
-    
-    // 2. Lista apenas humanos para calcular a "base" do prêmio
     const humanParticipants = participants.filter(p => !p.is_admin && !isAIParticipant(p));
     
     return participants.map((participant) => {
-      // O rank visual já vem calculado do banco/hook
       const rank = participant.rank; 
       
-      // O rank para prêmio ignora admins/IAs que estejam na frente
-      // Ex: Se 1º é Admin, o 2º lugar (humano) recebe o prêmio de 1º.
       let humanRank = 0;
       if (!participant.is_admin && !isAIParticipant(participant)) {
           humanRank = humanParticipants.findIndex(h => h.id === participant.id) + 1;
@@ -91,7 +80,8 @@ const RankingPage = () => {
                     <TableHead className="w-[50px] text-center">Pos.</TableHead>
                     <TableHead>Participante</TableHead>
                     <TableHead className="text-right">Pontos</TableHead>
-                    <TableHead className="hidden md:table-cell text-right">Jogos</TableHead>
+                    {/* ALTERADO: De 'Jogos' para 'Cravadas' */}
+                    <TableHead className="hidden md:table-cell text-right">Cravadas</TableHead>
                     <TableHead className="hidden md:table-cell text-right">Precisão</TableHead>
                     <TableHead className="hidden md:table-cell text-right">Prêmio/Punição</TableHead>
                 </TableRow>

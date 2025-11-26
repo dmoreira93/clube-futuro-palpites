@@ -31,7 +31,8 @@ const RankingTable = () => {
             <TableHead className="w-12 text-center">#</TableHead>
             <TableHead>Participante</TableHead>
             <TableHead className="text-right">Pontos</TableHead>
-            <TableHead className="hidden md:table-cell text-right">Jogos</TableHead>
+            {/* ALTERADO: De 'Jogos' para 'Cravadas' */}
+            <TableHead className="hidden md:table-cell text-right">Cravadas</TableHead>
             <TableHead className="hidden md:table-cell text-right">Precisão</TableHead>
             <TableHead className="hidden md:table-cell text-right">Prêmio/Punição</TableHead>
           </TableRow>

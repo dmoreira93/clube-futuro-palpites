@@ -29,7 +29,12 @@ const RankingRow = ({ participant, index }: RankingRowProps) => {
         </div>
       </TableCell>
       <TableCell className="text-right font-bold">{participant.points}</TableCell>
-      <TableCell className="hidden md:table-cell text-right">{participant.scored_matches}</TableCell>
+      
+      {/* ALTERADO: De 'scored_matches' (Jogos) para 'exactscores' (Cravadas) */}
+      <TableCell className="hidden md:table-cell text-right font-semibold text-blue-600">
+        {participant.exactscores}
+      </TableCell>
+      
       <TableCell className="hidden md:table-cell text-right">{participant.accuracy}</TableCell>
       <TableCell className="hidden md:table-cell text-right font-semibold text-sm">{participant.prize}</TableCell>
     </TableRow>
