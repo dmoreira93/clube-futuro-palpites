@@ -18,6 +18,7 @@ interface ParticipantStats {
   total_last_place: number;
   total_exact_scores: number;
   is_admin: boolean;
+  is_ai?: boolean; // Adicionado para tipagem
 }
 
 const InfoParticipantes = () => {
@@ -42,7 +43,8 @@ const InfoParticipantes = () => {
     try {
       if (!poolId) return;
 
-      // 1. Busca os participantes do bolão ATUAL (quem vamos exibir na tela)
+      // 1. Busca os participantes do bolão ATUAL
+      // ADICIONADO: 'is_ai' na query para podermos filtrar
       const { data: currentPoolData, error: currentError } = await supabase
         .from('participations')
         .select(`
@@ -52,15 +54,15 @@ const InfoParticipantes = () => {
             name,
             username,
             avatar_url,
-            is_admin
+            is_admin,
+            is_ai
           )
         `)
         .eq('pool_id', poolId);
 
       if (currentError) throw currentError;
 
-      // 2. Busca DADOS GERAIS de participações para calcular histórico
-      // Precisamos saber se o campeonato do bolão está finalizado para contar vitórias/derrotas
+      // 2. Busca DADOS GERAIS de participações (Histórico)
       const { data: allHistoryData, error: historyError } = await supabase
         .from('participations')
         .select(`
@@ -74,49 +76,59 @@ const InfoParticipantes = () => {
             championship:championships (
               is_finished
             )
+          ),
+          user:users_custom (
+            is_admin,
+            is_ai
           )
         `);
 
       if (historyError) throw historyError;
 
-      // --- PROCESSAMENTO DOS DADOS (Cálculo de Campeões e Lanternas) ---
+      // --- FILTRAGEM DE SEGURANÇA (GLOBAL) ---
+      // Removemos Admins e IAs dos dados brutos ANTES de processar
+      // Isso garante que eles não entrem em NENHUM cálculo (Vitória, Derrota, Cravada, Café)
+      const validHistoryData = (allHistoryData || []).filter((p: any) => {
+          return p.user && p.user.is_admin !== true && p.user.is_ai !== true;
+      });
+
+      // --- PROCESSAMENTO DOS DADOS ---
       
       const winsMap: Record<string, number> = {};
       const lastPlaceMap: Record<string, number> = {};
       const totalExactScoresMap: Record<string, number> = {};
 
-      // Agrupa participações por bolão para descobrir quem ganhou cada um
+      // Agrupa participações VÁLIDAS por bolão
       const participationsByPool: Record<string, any[]> = {};
 
-      (allHistoryData || []).forEach((p: any) => {
-        // Acumula Cravadas (Placares Exatos) de TODOS os bolões
+      validHistoryData.forEach((p: any) => {
+        // Soma Cravadas
         totalExactScoresMap[p.user_id] = (totalExactScoresMap[p.user_id] || 0) + (p.exact_scores || 0);
 
-        // Agrupamento para ranking
         if (!participationsByPool[p.pool_id]) {
             participationsByPool[p.pool_id] = [];
         }
         participationsByPool[p.pool_id].push(p);
       });
 
-      // Para cada bolão, verifica se está finalizado e define 1º e último
+      // Calcula Campeões e Lanternas para cada bolão FINALIZADO
       Object.keys(participationsByPool).forEach(pId => {
           const poolParts = participationsByPool[pId];
           const isFinished = poolParts[0]?.pool?.championship?.is_finished === true;
 
-          if (isFinished && poolParts.length > 1) { // Só conta se tiver finalizado e tiver competidores
-              // Ordena: Mais pontos > Mais cravadas
+          if (isFinished && poolParts.length > 1) {
+              // Ordena do maior para o menor ponto
               poolParts.sort((a, b) => {
                   if (b.points !== a.points) return b.points - a.points;
-                  return b.exact_scores - a.exact_scores;
+                  return b.exact_scores - a.exact_scores; // Desempate por cravadas
               });
 
-              // Campeão (1º lugar)
+              // Campeão (1º da lista filtrada)
               const winnerId = poolParts[0].user_id;
               winsMap[winnerId] = (winsMap[winnerId] || 0) + 1;
 
-              // Lanterna (Último lugar com jogos jogados)
-              // Filtramos quem jogou pelo menos 1 jogo para não punir quem entrou e saiu ou nunca jogou
+              // Lanterna (Último da lista filtrada que jogou algo)
+              // Como já removemos IA/Admin, o último aqui É o humano com pior nota
               const activePlayers = poolParts.filter((p: any) => p.matches_played > 0);
               if (activePlayers.length > 0) {
                   const loserId = activePlayers[activePlayers.length - 1].user_id;
@@ -125,8 +137,13 @@ const InfoParticipantes = () => {
           }
       });
 
-      // 3. Monta o objeto final combinando os participantes atuais com o histórico calculado
-      const formattedData: ParticipantStats[] = (currentPoolData || []).map((item: any) => {
+      // 3. Monta lista final APENAS com participantes humanos do bolão atual
+      const formattedData: ParticipantStats[] = (currentPoolData || [])
+        .filter((item: any) => {
+             // Aplica o filtro também na lista de exibição atual
+             return item.user && item.user.is_admin !== true && item.user.is_ai !== true;
+        })
+        .map((item: any) => {
           const userId = item.user?.id;
           return {
             user_id: userId || 'unknown',
@@ -134,8 +151,9 @@ const InfoParticipantes = () => {
             avatar_url: item.user?.avatar_url,
             total_wins: winsMap[userId] || 0,
             total_last_place: lastPlaceMap[userId] || 0,
-            total_exact_scores: totalExactScoresMap[userId] || 0, // Soma total de cravadas na carreira
-            is_admin: item.user?.is_admin || false
+            total_exact_scores: totalExactScoresMap[userId] || 0,
+            is_admin: false, // Forçamos false pois já filtramos os true
+            is_ai: false
           };
       });
 
@@ -182,7 +200,7 @@ const InfoParticipantes = () => {
                     <h1 className="text-3xl font-bold text-fifa-blue flex items-center justify-center gap-3">
                         <Info className="h-8 w-8 text-fifa-gold" /> Hall da Fama
                     </h1>
-                    <p className="text-gray-500 mt-2">Curiosidades e estatísticas históricas.</p>
+                    <p className="text-gray-500 mt-2">Curiosidades e estatísticas históricas (Humanos apenas).</p>
                 </div>
             </div>
         </div>
