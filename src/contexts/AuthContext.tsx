@@ -74,6 +74,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   const fetchAndSyncProfile = useCallback(async (sessionUser: User): Promise<AppUser | null> => {
+    console.log("Iniciando sincronização de perfil para:", sessionUser.id);
     try {
       // 1. Busca Perfil
       const { data: profile, error } = await supabase
@@ -82,14 +83,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         .eq('id', sessionUser.id)
         .single();
 
-      // SE FALHAR AQUI: É porque o usuário tem token mas não tem dados no banco novo.
-      // AÇÃO: Logout imediato.
-      if (error || !profile) {
-         console.error("Perfil inconsistente. Forçando logout.", error);
-         await signOut();
+      if (error) {
+         console.error("Erro ao buscar users_custom:", error);
+         // Não fazemos signOut automático aqui para permitir debug, a menos que seja crítico
+         if (error.code === 'PGRST116') {
+             console.error("Perfil não encontrado na tabela users_custom.");
+         }
+         await signOut(); // Mantemos o signOut se o perfil não existir, pois a app precisa dele
          return null;
       }
       
+      console.log("Perfil carregado com sucesso:", profile.id);
+
       const combinedUser: AppUser = { 
         ...sessionUser, 
         username: profile.username,
@@ -103,10 +108,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       userRef.current = combinedUser;
       
       // 2. Busca Participações
-      const { data: participationsData } = await supabase
+      const { data: participationsData, error: partError } = await supabase
         .from('participations')
         .select(`*, pools(*)`) 
         .eq('user_id', sessionUser.id);
+
+      if (partError) console.error("Erro ao buscar participações:", partError);
         
       // Mapeamento seguro
       const participations: Participation[] = (participationsData || []).map((p: any) => {
@@ -134,7 +141,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       return combinedUser;
 
     } catch (error: any) {
-      console.error("Erro crítico no AuthContext:", error);
+      console.error("Erro crítico no AuthContext (fetchAndSyncProfile):", error);
       await signOut();
       return null;
     }
@@ -143,40 +150,43 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     let mounted = true;
 
-    // --- DISJUNTOR DE SEGURANÇA ---
-    // Se o loading ficar preso por mais de 3 segundos, destrava a tela
+    // --- DISJUNTOR DE SEGURANÇA (ATUALIZADO) ---
+    // Aumentado para 10 segundos e REMOVIDO o signOut automático
     const safetyTimer = setTimeout(() => {
         if (loading) {
-            console.warn("⚠️ Timeout de carregamento atingido. Forçando liberação da tela.");
+            console.warn("⚠️ Timeout de carregamento atingido (10s). Liberando tela sem logout.");
             setLoading(false);
-            // Se não temos utilizador carregado, garante que estamos deslogados
-            if (!userRef.current) {
-                signOut();
-            }
+            // NOTA: Removemos o signOut() daqui. Se o DB estiver lento, apenas liberamos a UI.
         }
-    }, 3000); // 3 segundos de tolerância máxima
+    }, 10000); 
 
     const initAuth = async () => {
       try {
+        console.log("Verificando sessão inicial...");
         const { data: { session }, error } = await supabase.auth.getSession();
         
         if (error) {
+            console.error("Erro na sessão inicial:", error);
             await signOut();
         } else if (session?.user) {
+            console.log("Sessão encontrada, buscando perfil...");
             if (mounted) await fetchAndSyncProfile(session.user);
+        } else {
+            console.log("Nenhuma sessão ativa.");
         }
       } catch (error) {
         console.error("Erro na inicialização:", error);
         await signOut();
       } finally {
         if (mounted) setLoading(false);
-        clearTimeout(safetyTimer); // Cancela o timer se carregou rápido
+        clearTimeout(safetyTimer); 
       }
     };
 
     initAuth();
 
     const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
+        console.log("Mudança de estado Auth:", event);
         if (event === 'SIGNED_OUT' || !session) {
             setUser(null);
             userRef.current = null;
@@ -196,28 +206,27 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       clearTimeout(safetyTimer);
       authListener.subscription.unsubscribe(); 
     };
-  }, [fetchAndSyncProfile, signOut]); // Removi 'loading' das dependências para evitar loop do timer
+  }, [fetchAndSyncProfile, signOut]); 
   
-  // --- FUNÇÃO LOGIN ATUALIZADA ---
   const login = async (email: string, password: string) => {
-    // 1. Tenta autenticar no Supabase Auth
+    console.log("Tentando login...");
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     
     if (error) {
+        console.error("Erro no signInWithPassword:", error);
         toast.error(error.message || "Email ou senha inválidos.");
         return { success: false, error };
     }
 
-    // 2. Se autenticou, força e AGUARDA o carregamento do perfil e das participações
     if (data.session?.user) {
         try {
+            // Forçamos a busca do perfil e aguardamos
             const profile = await fetchAndSyncProfile(data.session.user);
             
-            // Se o perfil retornou null (erro ao buscar ou não existe), geramos erro
             if (!profile) {
                 return { 
                     success: false, 
-                    error: new Error("Erro ao carregar o perfil do utilizador. Tente novamente.") 
+                    error: new Error("Utilizador autenticado, mas perfil não encontrado.") 
                 };
             }
         } catch (err) {
@@ -228,7 +237,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         }
     }
     
-    // Só retorna sucesso se tivermos Auth E Perfil carregados corretamente
     return { success: true, error: null };
   };
 
