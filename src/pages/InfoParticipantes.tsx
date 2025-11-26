@@ -8,8 +8,8 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Trophy, Target, AlertTriangle, Coffee, ArrowLeft, Crown, Medal, Info } from 'lucide-react';
+import { toast } from 'sonner';
 
-// Tipos alinhados com a nova RPC SQL
 interface ParticipantStats {
   user_id: string;
   name: string;
@@ -30,7 +30,6 @@ const InfoParticipantes = () => {
 
   useEffect(() => {
     if (poolId) {
-      // Se o bolão da URL for diferente do ativo, tenta trocar
       if (activePool?.id !== poolId) {
           switchPool(poolId);
       }
@@ -43,48 +42,129 @@ const InfoParticipantes = () => {
     try {
       if (!poolId) return;
 
-      // Chama a nova RPC criada no banco
-      const { data, error } = await supabase.rpc('get_pool_participants_stats', { p_pool_id: poolId });
+      // 1. Busca os participantes do bolão ATUAL (quem vamos exibir na tela)
+      const { data: currentPoolData, error: currentError } = await supabase
+        .from('participations')
+        .select(`
+          user_id,
+          user:users_custom (
+            id,
+            name,
+            username,
+            avatar_url,
+            is_admin
+          )
+        `)
+        .eq('pool_id', poolId);
 
-      if (error) throw error;
+      if (currentError) throw currentError;
+
+      // 2. Busca DADOS GERAIS de participações para calcular histórico
+      // Precisamos saber se o campeonato do bolão está finalizado para contar vitórias/derrotas
+      const { data: allHistoryData, error: historyError } = await supabase
+        .from('participations')
+        .select(`
+          user_id,
+          pool_id,
+          points,
+          exact_scores,
+          matches_played,
+          pool:pools (
+            id,
+            championship:championships (
+              is_finished
+            )
+          )
+        `);
+
+      if (historyError) throw historyError;
+
+      // --- PROCESSAMENTO DOS DADOS (Cálculo de Campeões e Lanternas) ---
       
-      // Garante que os números venham como number (Supabase às vezes manda bigint como string ou number)
-      const formattedData = (data || []).map((item: any) => ({
-          ...item,
-          total_wins: Number(item.total_wins),
-          total_last_place: Number(item.total_last_place),
-          total_exact_scores: Number(item.total_exact_scores)
-      }));
+      const winsMap: Record<string, number> = {};
+      const lastPlaceMap: Record<string, number> = {};
+      const totalExactScoresMap: Record<string, number> = {};
+
+      // Agrupa participações por bolão para descobrir quem ganhou cada um
+      const participationsByPool: Record<string, any[]> = {};
+
+      (allHistoryData || []).forEach((p: any) => {
+        // Acumula Cravadas (Placares Exatos) de TODOS os bolões
+        totalExactScoresMap[p.user_id] = (totalExactScoresMap[p.user_id] || 0) + (p.exact_scores || 0);
+
+        // Agrupamento para ranking
+        if (!participationsByPool[p.pool_id]) {
+            participationsByPool[p.pool_id] = [];
+        }
+        participationsByPool[p.pool_id].push(p);
+      });
+
+      // Para cada bolão, verifica se está finalizado e define 1º e último
+      Object.keys(participationsByPool).forEach(pId => {
+          const poolParts = participationsByPool[pId];
+          const isFinished = poolParts[0]?.pool?.championship?.is_finished === true;
+
+          if (isFinished && poolParts.length > 1) { // Só conta se tiver finalizado e tiver competidores
+              // Ordena: Mais pontos > Mais cravadas
+              poolParts.sort((a, b) => {
+                  if (b.points !== a.points) return b.points - a.points;
+                  return b.exact_scores - a.exact_scores;
+              });
+
+              // Campeão (1º lugar)
+              const winnerId = poolParts[0].user_id;
+              winsMap[winnerId] = (winsMap[winnerId] || 0) + 1;
+
+              // Lanterna (Último lugar com jogos jogados)
+              // Filtramos quem jogou pelo menos 1 jogo para não punir quem entrou e saiu ou nunca jogou
+              const activePlayers = poolParts.filter((p: any) => p.matches_played > 0);
+              if (activePlayers.length > 0) {
+                  const loserId = activePlayers[activePlayers.length - 1].user_id;
+                  lastPlaceMap[loserId] = (lastPlaceMap[loserId] || 0) + 1;
+              }
+          }
+      });
+
+      // 3. Monta o objeto final combinando os participantes atuais com o histórico calculado
+      const formattedData: ParticipantStats[] = (currentPoolData || []).map((item: any) => {
+          const userId = item.user?.id;
+          return {
+            user_id: userId || 'unknown',
+            name: item.user?.name || 'Participante',
+            avatar_url: item.user?.avatar_url,
+            total_wins: winsMap[userId] || 0,
+            total_last_place: lastPlaceMap[userId] || 0,
+            total_exact_scores: totalExactScoresMap[userId] || 0, // Soma total de cravadas na carreira
+            is_admin: item.user?.is_admin || false
+          };
+      });
 
       setStats(formattedData);
 
-    } catch (error) {
-      console.error("Erro ao buscar estatísticas:", error);
+    } catch (error: any) {
+      console.error("Erro ao processar estatísticas:", error);
+      toast.error("Não foi possível carregar o histórico.");
       setStats([]);
     } finally {
       setLoading(false);
     }
   };
 
-  // --- Lógica de Filtros (Frontend) ---
+  // --- Filtros de Exibição ---
   
-  // Campeões: Quem tem pelo menos 1 vitória
   const champions = stats
     .filter(s => s.total_wins > 0)
     .sort((a, b) => b.total_wins - a.total_wins);
 
-  // Reis da Cravada: Ordena por placares exatos (Top 5)
   const sharpshooters = stats
     .filter(s => s.total_exact_scores > 0)
     .sort((a, b) => b.total_exact_scores - a.total_exact_scores)
     .slice(0, 5); 
 
-  // Lanterna: Quem tem derrotas registradas
   const punished = stats
     .filter(s => s.total_last_place > 0)
     .sort((a, b) => b.total_last_place - a.total_last_place);
   
-  // Café com Leite: Quem não ganhou nada, não perdeu nada, mas está lá
   const cafeComLeite = stats
     .filter(s => s.total_wins === 0 && s.total_last_place === 0);
 
@@ -102,7 +182,7 @@ const InfoParticipantes = () => {
                     <h1 className="text-3xl font-bold text-fifa-blue flex items-center justify-center gap-3">
                         <Info className="h-8 w-8 text-fifa-gold" /> Hall da Fama
                     </h1>
-                    <p className="text-gray-500 mt-2">Curiosidades e estatísticas históricas dos participantes.</p>
+                    <p className="text-gray-500 mt-2">Curiosidades e estatísticas históricas.</p>
                 </div>
             </div>
         </div>
@@ -135,7 +215,7 @@ const InfoParticipantes = () => {
                         ))}
                     </div>
                 ) : (
-                    <EmptyState message="Ninguém aqui ganhou um bolão ainda. A chance é agora!" icon={<Trophy className="h-10 w-10 text-gray-300"/>} />
+                    <EmptyState message="Ninguém ganhou títulos históricos ainda." icon={<Trophy className="h-10 w-10 text-gray-300"/>} />
                 )}
             </section>
 
@@ -173,7 +253,7 @@ const InfoParticipantes = () => {
                                     ))}
                                 </div>
                             ) : (
-                                <div className="p-8 text-center text-gray-500">Nenhum dado de placar exato encontrado.</div>
+                                <div className="p-8 text-center text-gray-500">Nenhum placar exato encontrado no histórico.</div>
                             )}
                         </CardContent>
                     </Card>
@@ -190,15 +270,15 @@ const InfoParticipantes = () => {
                                 <div className="flex flex-wrap gap-4">
                                     {punished.map(user => (
                                         <div key={user.user_id} className="flex items-center gap-2 bg-white p-2 pr-4 rounded-full border border-red-100 shadow-sm">
-                                        <Avatar className="h-8 w-8">
-                                            <AvatarImage src={user.avatar_url || undefined} />
-                                            <AvatarFallback className="bg-red-100 text-red-600 font-bold">
-                                                {user.name ? user.name.substring(0, 2).toUpperCase() : "??"}
-                                            </AvatarFallback>
+                                            <Avatar className="h-8 w-8">
+                                                <AvatarImage src={user.avatar_url || undefined} />
+                                                <AvatarFallback className="bg-red-100 text-red-600 font-bold">
+                                                    {user.name ? user.name.substring(0, 2).toUpperCase() : "??"}
+                                                </AvatarFallback>
                                             </Avatar>
-                                        <div className="flex flex-col leading-none">
-                                            <span className="text-sm font-bold text-gray-800">{user.name}</span>
-                                            <span className="text-[10px] text-red-500 font-medium">{user.total_last_place}x Lanterninha</span>
+                                            <div className="flex flex-col leading-none">
+                                                <span className="text-sm font-bold text-gray-800">{user.name}</span>
+                                                <span className="text-[10px] text-red-500 font-medium">{user.total_last_place}x Lanterna</span>
                                             </div>
                                         </div>
                                     ))}
@@ -219,7 +299,7 @@ const InfoParticipantes = () => {
                 <Card className="bg-gray-50 border-dashed border-2 border-gray-200">
                     <CardContent className="p-6 text-center">
                         <p className="text-gray-500 mb-6 max-w-2xl mx-auto">
-                            Estes participantes nunca sentiram o gosto da vitória, mas também nunca amargaram a lanterna.
+                            Estes participantes ainda não ganharam bolões e nem ficaram em último lugar nos campeonatos finalizados.
                         </p>
                         {cafeComLeite.length > 0 ? (
                             <div className="flex flex-wrap justify-center gap-3">
@@ -230,7 +310,7 @@ const InfoParticipantes = () => {
                                 ))}
                             </div>
                         ) : (
-                            <p className="text-sm text-gray-400">Todos aqui têm história pra contar (ou não há dados suficientes).</p>
+                            <p className="text-sm text-gray-400">Todos aqui têm história pra contar.</p>
                         )}
                     </CardContent>
                 </Card>
@@ -241,7 +321,6 @@ const InfoParticipantes = () => {
   );
 };
 
-// Componentes Auxiliares
 const EmptyState = ({ message, icon }: { message: string, icon: React.ReactNode }) => (
     <div className="bg-white rounded-lg border border-dashed border-gray-200 p-8 text-center flex flex-col items-center justify-center h-full">
         <div className="bg-gray-50 p-3 rounded-full mb-3">{icon}</div>
