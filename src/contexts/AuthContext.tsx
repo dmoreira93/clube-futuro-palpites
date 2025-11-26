@@ -198,12 +198,37 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     };
   }, [fetchAndSyncProfile, signOut]); // Removi 'loading' das dependências para evitar loop do timer
   
+  // --- FUNÇÃO LOGIN ATUALIZADA ---
   const login = async (email: string, password: string) => {
+    // 1. Tenta autenticar no Supabase Auth
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    
     if (error) {
         toast.error(error.message || "Email ou senha inválidos.");
         return { success: false, error };
     }
+
+    // 2. Se autenticou, força e AGUARDA o carregamento do perfil e das participações
+    if (data.session?.user) {
+        try {
+            const profile = await fetchAndSyncProfile(data.session.user);
+            
+            // Se o perfil retornou null (erro ao buscar ou não existe), geramos erro
+            if (!profile) {
+                return { 
+                    success: false, 
+                    error: new Error("Erro ao carregar o perfil do utilizador. Tente novamente.") 
+                };
+            }
+        } catch (err) {
+            return { 
+                success: false, 
+                error: err 
+            };
+        }
+    }
+    
+    // Só retorna sucesso se tivermos Auth E Perfil carregados corretamente
     return { success: true, error: null };
   };
 
