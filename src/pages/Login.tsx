@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/components/ui/use-toast";
 import { Button } from "@/components/ui/button";
+import { supabase } from "@/integrations/supabase/client"; // Importação adicionada
 import {
   Card,
   CardContent,
@@ -19,8 +20,8 @@ const HERO_BG_IMAGE = "/hero-bg.png";
 
 const Login = () => {
   const navigate = useNavigate();
-  // Atualizado para usar 'loading' do novo contexto
-  const { login, isAuthenticated, loading, user } = useAuth(); 
+  // Extraímos também 'fetchAndSyncProfile' para garantir a atualização manual se necessário
+  const { login, isAuthenticated, loading, user, fetchAndSyncProfile } = useAuth(); 
   const { toast } = useToast();
   
   const [formData, setFormData] = useState({
@@ -30,7 +31,7 @@ const Login = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
-    // Só redireciona se o loading acabou E temos um utilizador válido
+    // Redirecionamento automático caso o utilizador já esteja carregado (ex: refresh da página)
     if (!loading && isAuthenticated && user) {
       navigate(user.first_login ? "/change-password" : "/dashboard");
     }
@@ -58,10 +59,25 @@ const Login = () => {
       if (!success) {
         throw error || new Error("Ocorreu um erro desconhecido durante o login.");
       }
-      // Não precisamos de setLoginSuccess aqui, o useEffect vai tratar do redirecionamento
-      // quando o AuthContext atualizar o estado 'user'.
+
+      // CORREÇÃO: Força a verificação e navegação imediata
+      // Não ficamos à espera que o Context atualize sozinho (o que causava o loading infinito)
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (session?.user) {
+          // Força a sincronização do perfil para garantir que temos os dados (como first_login)
+          const profile = await fetchAndSyncProfile(session.user);
+          
+          if (profile) {
+              navigate(profile.first_login ? "/change-password" : "/dashboard");
+              return; // Sucesso! Sai da função para evitar que o catch/finally execute erradamente
+          }
+      }
+      
+      // Se chegou aqui com sucesso mas sem sessão, algo estranho aconteceu, mas o useEffect pode tentar salvar
       
     } catch (error: any) {
+      console.error("Erro no login:", error);
       toast({
         title: "Erro no Login",
         description: error.message || "Email ou senha inválidos.",
@@ -71,7 +87,6 @@ const Login = () => {
     }
   };
 
-  // Mostra loading se o AuthContext estiver a inicializar ou se estivermos a submeter
   if (loading) {
     return (
       <div className="flex flex-col justify-center items-center h-screen bg-fifa-blue text-white gap-4">

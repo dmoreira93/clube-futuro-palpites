@@ -1,7 +1,7 @@
-// src/pages/ChangePassword.tsx - VERSÃO ATUALIZADA
+// src/pages/ChangePassword.tsx - CORRIGIDO
 
 import { useState } from "react";
-import { useNavigate } from "react-router-dom"; // Importa useNavigate
+import { useNavigate } from "react-router-dom"; 
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,7 +13,7 @@ import { supabase } from "@/integrations/supabase/client";
 
 const ChangePassword = () => {
   const { updateUserProfile } = useAuth();
-  const navigate = useNavigate(); // Hook para fazer o redirecionamento
+  const navigate = useNavigate(); 
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -37,16 +37,16 @@ const ChangePassword = () => {
         throw updateError;
       }
       
-      // Marca o primeiro login como concluído
-      await updateUserProfile({ first_login: true });
+      // CORREÇÃO AQUI: Mudamos para 'false' para indicar que NÃO é mais o primeiro login
+      await updateUserProfile({ first_login: false });
 
       toast.success("Senha alterada com sucesso!");
       
-      // --- REDIRECIONAMENTO ADICIONADO AQUI ---
-      // Após o sucesso, envia o usuário para a página de entrar/criar bolão.
+      // Redireciona para entrar no bolão ou dashboard
       navigate("/join-pool"); 
 
     } catch (error: any) {
+      console.error(error);
       toast.error(`Erro ao alterar a senha: ${error.message}`);
     } finally {
       setLoading(false);
