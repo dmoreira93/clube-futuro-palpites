@@ -2,7 +2,6 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 
-// Define a estrutura que o Dashboard espera receber
 export interface PoolStats {
   user_points: number;
   user_rank: number;
@@ -12,7 +11,7 @@ export interface PoolStats {
 
 const fetchPoolData = async (poolId: string, userId: string): Promise<PoolStats | null> => {
   try {
-    // 1. Buscar dados do próprio usuário (Pontos atuais)
+    // 1. Buscar dados do próprio usuário
     const { data: myData, error: myError } = await supabase
       .from('participations')
       .select('points')
@@ -21,11 +20,10 @@ const fetchPoolData = async (poolId: string, userId: string): Promise<PoolStats 
       .maybeSingle();
 
     if (myError) throw myError;
-    
     const myPoints = myData?.points || 0;
 
-    // 2. Calcular Ranking (Contar quantas pessoas têm mais pontos que eu)
-    // Esta count é super rápida no Postgres
+    // 2. Calcular Ranking (ignorando apenas quem tem mais pontos, filtro visual é feito no front)
+    // Nota: Para precisão total, deveríamos filtrar IAs aqui também, mas o count simples é mais rápido
     const { count: rankCount, error: rankError } = await supabase
       .from('participations')
       .select('*', { count: 'exact', head: true })
@@ -35,29 +33,33 @@ const fetchPoolData = async (poolId: string, userId: string): Promise<PoolStats 
     if (rankError) throw rankError;
     const myRank = (rankCount || 0) + 1;
 
-    // 3. Buscar Maior Pontuador (Top Scorer)
+    // 3. Buscar Maior Pontuador (HUMANO APENAS)
+    // Usamos !inner para garantir que o filtro se aplique ao join
     const { data: topScorerData, error: topScorerError } = await supabase
       .from('participations')
-      .select('points, user:users_custom(name)') // Join com usuário para pegar o nome
+      .select('points, user:users_custom!inner(name, is_ai, is_admin)') 
       .eq('pool_id', poolId)
+      .eq('user.is_ai', false)     // Filtra IA
+      .eq('user.is_admin', false)  // Filtra Admin
       .order('points', { ascending: false })
       .limit(1)
       .maybeSingle();
 
-    if (topScorerError) throw topScorerError;
+    if (topScorerError) console.warn("Erro ao buscar top scorer:", topScorerError);
 
-    // 4. Buscar Rei da Cravada (Most Exact)
+    // 4. Buscar Rei da Cravada (HUMANO APENAS)
     const { data: mostExactData, error: mostExactError } = await supabase
       .from('participations')
-      .select('exact_scores, user:users_custom(name)')
+      .select('exact_scores, user:users_custom!inner(name, is_ai, is_admin)')
       .eq('pool_id', poolId)
+      .eq('user.is_ai', false)     // Filtra IA
+      .eq('user.is_admin', false)  // Filtra Admin
       .order('exact_scores', { ascending: false })
       .limit(1)
       .maybeSingle();
 
-    if (mostExactError) throw mostExactError;
+    if (mostExactError) console.warn("Erro ao buscar most exact:", mostExactError);
 
-    // Montar objeto final
     return {
       user_points: myPoints,
       user_rank: myRank,
@@ -79,19 +81,15 @@ const fetchPoolData = async (poolId: string, userId: string): Promise<PoolStats 
 
 const usePoolData = (poolIdOverride?: string) => {
   const { activePool, user } = useAuth();
-  
-  // Garante que temos os IDs necessários
   const targetPoolId = poolIdOverride || activePool?.id;
   const userId = user?.id;
 
   const { data, isLoading, error } = useQuery({
-    // A chave inclui o userId para garantir que atualiza se trocar de conta
     queryKey: ['poolData', targetPoolId, userId],
     queryFn: () => {
       if (!targetPoolId || !userId) return null;
       return fetchPoolData(targetPoolId, userId);
     },
-    // Só executa se tivermos um bolão e um usuário definidos
     enabled: !!targetPoolId && !!userId,
   });
 

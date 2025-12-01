@@ -54,47 +54,65 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const isAdmin = user?.is_admin ?? false;
   const isOwner = !!user && !!activePool && user.id === activePool.owner_id;
 
-  // Função FORTE de limpeza
+  // Função FORTE de limpeza - Limpa TUDO para evitar loops
   const signOut = useCallback(async () => {
-    console.log("Executando limpeza completa de sessão...");
+    console.log("🛑 Logout forçado/solicitado. Limpando sessão...");
+    
+    // 1. Limpa estados React
     setUser(null);
     userRef.current = null;
     setActivePool(null);
     setUserParticipations([]);
     
-    // Limpa TUDO do navegador relacionado a sessão
+    // 2. Limpa Storage IMEDIATAMENTE (antes de chamar o supabase)
+    // Isso evita que, se o supabase falhar, o token continue lá no F5
     localStorage.removeItem('activePoolId');
-    localStorage.removeItem('sb-wdbaoomwhuiztjoazagd-auth-token');
-    sessionStorage.clear();
+    localStorage.removeItem('sb-wdbaoomwhuiztjoazagd-auth-token'); // Nome padrão do token Supabase
     
-    // Garante que o loading pare
+    // Limpa qualquer chave que comece com sb-
+    Object.keys(localStorage).forEach(key => {
+        if (key.startsWith('sb-')) localStorage.removeItem(key);
+    });
+    
+    sessionStorage.clear();
     setLoading(false);
 
-    await supabase.auth.signOut();
+    // 3. Avisa o Supabase (pode falhar se a rede estiver off, mas o storage já foi limpo)
+    try {
+        await supabase.auth.signOut();
+    } catch (e) {
+        console.warn("Erro ao notificar Supabase do logout (ignorado):", e);
+    }
   }, []);
 
   const fetchAndSyncProfile = useCallback(async (sessionUser: User): Promise<AppUser | null> => {
-    console.log("Iniciando sincronização de perfil para:", sessionUser.id);
+    // Se já estivermos carregando o mesmo usuário, retorna o atual para evitar chamadas duplas
+    if (userRef.current?.id === sessionUser.id) {
+        return userRef.current;
+    }
+
     try {
+      console.log("🔄 Sincronizando perfil:", sessionUser.email);
+      
       // 1. Busca Perfil
       const { data: profile, error } = await supabase
         .from('users_custom')
         .select('*')
         .eq('id', sessionUser.id)
-        .single();
+        .maybeSingle(); // Usamos maybeSingle para não gerar erro de exceção se não existir
 
       if (error) {
          console.error("Erro ao buscar users_custom:", error);
-         // Não fazemos signOut automático aqui para permitir debug, a menos que seja crítico
-         if (error.code === 'PGRST116') {
-             console.error("Perfil não encontrado na tabela users_custom.");
-         }
-         await signOut(); // Mantemos o signOut se o perfil não existir, pois a app precisa dele
-         return null;
+         throw error;
+      }
+
+      // Se não tem perfil, é uma "Sessão Fantasma". Logout nela.
+      if (!profile) {
+          console.warn("⚠️ Usuário autenticado mas sem perfil. Logout.");
+          await signOut();
+          return null;
       }
       
-      console.log("Perfil carregado com sucesso:", profile.id);
-
       const combinedUser: AppUser = { 
         ...sessionUser, 
         username: profile.username,
@@ -104,18 +122,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         avatar_url: profile.avatar_url
       };
       
+      // Atualiza estado
       setUser(combinedUser);
       userRef.current = combinedUser;
       
-      // 2. Busca Participações
-      const { data: participationsData, error: partError } = await supabase
+      // 2. Busca Participações (em paralelo se possível, mas sequencial é mais seguro aqui)
+      const { data: participationsData } = await supabase
         .from('participations')
         .select(`*, pools(*)`) 
         .eq('user_id', sessionUser.id);
-
-      if (partError) console.error("Erro ao buscar participações:", partError);
         
-      // Mapeamento seguro
       const participations: Participation[] = (participationsData || []).map((p: any) => {
         const poolData = p.pools || p.pool;
         return { ...p, pool: poolData };
@@ -141,8 +157,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       return combinedUser;
 
     } catch (error: any) {
-      console.error("Erro crítico no AuthContext (fetchAndSyncProfile):", error);
-      await signOut();
+      console.error("❌ Erro crítico no fetchAndSyncProfile:", error);
+      // Se deu erro de rede ou banco, NÃO faz logout imediatamente, apenas retorna null.
+      // Isso evita o loop de "Erro -> Logout -> Login Automático -> Erro".
       return null;
     }
   }, [signOut]);
@@ -150,54 +167,65 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     let mounted = true;
 
-    // --- DISJUNTOR DE SEGURANÇA (ATUALIZADO) ---
-    // Aumentado para 10 segundos e REMOVIDO o signOut automático
+    // --- DISJUNTOR DE SEGURANÇA (TIMEOUT) ---
+    // Aumentado para 8s e APENAS para o loading visual
     const safetyTimer = setTimeout(() => {
         if (loading) {
-            console.warn("⚠️ Timeout de carregamento atingido (10s). Liberando tela sem logout.");
+            console.warn("⚠️ Timeout de inicialização (8s). Liberando interface.");
             setLoading(false);
-            // NOTA: Removemos o signOut() daqui. Se o DB estiver lento, apenas liberamos a UI.
         }
-    }, 10000); 
+    }, 8000);
 
     const initAuth = async () => {
       try {
-        console.log("Verificando sessão inicial...");
+        // Tenta pegar a sessão do storage
         const { data: { session }, error } = await supabase.auth.getSession();
         
         if (error) {
             console.error("Erro na sessão inicial:", error);
-            await signOut();
-        } else if (session?.user) {
-            console.log("Sessão encontrada, buscando perfil...");
-            if (mounted) await fetchAndSyncProfile(session.user);
-        } else {
-            console.log("Nenhuma sessão ativa.");
+            if (mounted) setLoading(false);
+            return;
+        }
+
+        if (session?.user) {
+            console.log("✅ Sessão recuperada. Carregando dados...");
+            if (mounted) {
+                const profile = await fetchAndSyncProfile(session.user);
+                // Se falhou ao carregar perfil (ex: erro de rede), o loading vira false 
+                // e o usuário fica na tela de login (ou onde estiver), sem loop.
+            }
         }
       } catch (error) {
-        console.error("Erro na inicialização:", error);
-        await signOut();
+        console.error("Exceção na inicialização:", error);
       } finally {
         if (mounted) setLoading(false);
-        clearTimeout(safetyTimer); 
+        clearTimeout(safetyTimer);
       }
     };
 
     initAuth();
 
+    // Listener de eventos do Supabase
     const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
-        console.log("Mudança de estado Auth:", event);
-        if (event === 'SIGNED_OUT' || !session) {
+        console.log(`🔔 Auth Event: ${event}`);
+        
+        if (event === 'SIGNED_OUT') {
             setUser(null);
             userRef.current = null;
             setActivePool(null);
             setUserParticipations([]);
             setLoading(false);
-        } else if (session?.user) {
-            const currentUser = userRef.current;
-            if (!currentUser || currentUser.id !== session.user.id) {
+        } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+            if (session?.user) {
+                 await fetchAndSyncProfile(session.user);
+                 setLoading(false); // Garante que o loading pare após login
+            }
+        } else if (event === 'INITIAL_SESSION') {
+            // Já tratado no initAuth, mas serve de backup
+            if (session?.user) {
                  await fetchAndSyncProfile(session.user);
             }
+            setLoading(false);
         }
     });
 
@@ -206,42 +234,36 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       clearTimeout(safetyTimer);
       authListener.subscription.unsubscribe(); 
     };
-  }, [fetchAndSyncProfile, signOut]); 
+  }, [fetchAndSyncProfile]); // Removido 'signOut' das dependências para evitar recriação
   
   const login = async (email: string, password: string) => {
-    console.log("Tentando login...");
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-    
-    if (error) {
-        console.error("Erro no signInWithPassword:", error);
-        toast.error(error.message || "Email ou senha inválidos.");
-        return { success: false, error };
-    }
-
-    if (data.session?.user) {
-        try {
-            // Forçamos a busca do perfil e aguardamos
-            const profile = await fetchAndSyncProfile(data.session.user);
-            
-            if (!profile) {
-                return { 
-                    success: false, 
-                    error: new Error("Utilizador autenticado, mas perfil não encontrado.") 
-                };
-            }
-        } catch (err) {
-            return { 
-                success: false, 
-                error: err 
-            };
+    setLoading(true);
+    try {
+        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+        
+        if (error) {
+            setLoading(false);
+            return { success: false, error };
         }
+
+        if (data.session?.user) {
+            const profile = await fetchAndSyncProfile(data.session.user);
+            if (!profile) {
+                setLoading(false);
+                return { success: false, error: new Error("Falha ao carregar perfil.") };
+            }
+        }
+        
+        // Sucesso total
+        return { success: true, error: null };
+    } catch (err) {
+        setLoading(false);
+        return { success: false, error: err };
     }
-    
-    return { success: true, error: null };
   };
 
   const updateUserProfile = async (updates: Partial<Pick<AppUser, 'first_login'>>) => {
-    if (!user) throw new Error("Usuário não autenticado.");
+    if (!user) return;
     const { error } = await supabase.from('users_custom').update(updates).eq('id', user.id);
     if (error) { toast.error("Erro ao atualizar perfil."); throw error; };
     await fetchAndSyncProfile(user);
@@ -252,7 +274,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (participation) {
           setActivePool(participation.pool);
           localStorage.setItem('activePoolId', poolId);
-          toast.success(`Bolão alterado para: ${participation.pool.name}`);
+          toast.success(`Bolão: ${participation.pool.name}`);
       }
   };
   
