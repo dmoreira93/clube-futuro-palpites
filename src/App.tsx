@@ -31,6 +31,7 @@ import Resultados from "./pages/Resultados";
 import Simulador from "./pages/Simulador";
 import InfoParticipantes from "./pages/InfoParticipantes";
 import PoolCriteriaSetup from "./pages/PoolCriteriaSetup";
+import DailyMatchesAndPredictions from "./pages/DailyMatchesAndPredictions"; // Importe este arquivo
 
 // Admin
 import Admin from "./pages/Admin";
@@ -65,8 +66,8 @@ function App() {
             
             {/* --- Rotas de Contexto do Bolão (Aninhadas) --- */}
             {/* A rota base /pool/:poolId leva ao Dashboard do Bolão */}
-            <Route path="/pool/:poolId" element={<ProtectedRoute><PoolDashboard /></ProtectedRoute>} />
-            
+            <Route path="/pool/:poolId/palpites-galera" element={<ProtectedRoute><DailyMatchesAndPredictions /></ProtectedRoute>}/>            
+                        
             {/* As sub-rotas mantêm o ID na URL, permitindo que a Navbar saiba onde estamos */}
             <Route path="/pool/:poolId/palpites" element={<ProtectedRoute><Palpites /></ProtectedRoute>} />
             <Route path="/pool/:poolId/ranking" element={<ProtectedRoute><RankingPage /></ProtectedRoute>} />
