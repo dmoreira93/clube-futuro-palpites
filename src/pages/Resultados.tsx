@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/components/ui/use-toast";
-import { MatchCard } from "@/components/results/MatchCard";
-import { ResultForm } from "@/components/results/ResultForm";
+// Ajuste de importação: removidas as chaves se forem exportações padrão (default)
+import MatchCard from "@/components/results/MatchCard";
+import ResultForm from "@/components/results/ResultForm";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Match as MatchType, Team } from "@/types/matches";
@@ -33,7 +34,8 @@ interface FinalResult {
 }
 
 const Resultados = () => {
-  const { isAdmin, pool, userParticipations, switchPool } = useAuth();
+  // CORREÇÃO: Mapeamos 'activePool' (do contexto) para 'pool' (usado neste código)
+  const { isAdmin, activePool: pool, userParticipations, switchPool } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [selectedMatch, setSelectedMatch] = useState<FetchedMatch | null>(null);
@@ -63,7 +65,7 @@ const Resultados = () => {
         .from('matches')
         .select(`*, home_team:home_team_id(*), away_team:away_team_id(*)`)
         .eq('stage', 'Fase de Grupos')
-        .eq('championship_id', championshipId) // <--- FILTRO DO CAMPEONATO
+        .eq('championship_id', championshipId)
         .not('home_team_id', 'is', null)
         .not('away_team_id', 'is', null)
         .order('match_date', { ascending: true });
@@ -88,7 +90,7 @@ const Resultados = () => {
                 first_place_team:first_place_team_id(*), 
                 second_place_team:second_place_team_id(*)
             `)
-            .eq('groups.championship_id', championshipId); // <--- FILTRO DO CAMPEONATO VIA TABELA DE GRUPOS
+            .eq('groups.championship_id', championshipId);
 
         if (error) throw error;
         return (data || []).map(item => ({
@@ -115,7 +117,7 @@ const Resultados = () => {
           third_place:third_place_id(id, name), 
           fourth_place:fourth_place_id(id, name)
         `)
-        .eq('championship_id', championshipId) // <--- FILTRO DO CAMPEONATO
+        .eq('championship_id', championshipId)
         .maybeSingle();
       
       if (error) throw error;

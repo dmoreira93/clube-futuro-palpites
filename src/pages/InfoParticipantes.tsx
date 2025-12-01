@@ -18,7 +18,7 @@ interface ParticipantStats {
   total_last_place: number;
   total_exact_scores: number;
   is_admin: boolean;
-  is_ai?: boolean; // Adicionado para tipagem
+  is_ai?: boolean;
 }
 
 const InfoParticipantes = () => {
@@ -44,7 +44,6 @@ const InfoParticipantes = () => {
       if (!poolId) return;
 
       // 1. Busca os participantes do bolão ATUAL
-      // ADICIONADO: 'is_ai' na query para podermos filtrar
       const { data: currentPoolData, error: currentError } = await supabase
         .from('participations')
         .select(`
@@ -73,6 +72,7 @@ const InfoParticipantes = () => {
           matches_played,
           pool:pools (
             id,
+            name,
             championship:championships (
               is_finished
             )
@@ -86,8 +86,7 @@ const InfoParticipantes = () => {
       if (historyError) throw historyError;
 
       // --- FILTRAGEM DE SEGURANÇA (GLOBAL) ---
-      // Removemos Admins e IAs dos dados brutos ANTES de processar
-      // Isso garante que eles não entrem em NENHUM cálculo (Vitória, Derrota, Cravada, Café)
+      // Removemos Admins e IAs para não "sujar" o histórico
       const validHistoryData = (allHistoryData || []).filter((p: any) => {
           return p.user && p.user.is_admin !== true && p.user.is_ai !== true;
       });
@@ -98,11 +97,11 @@ const InfoParticipantes = () => {
       const lastPlaceMap: Record<string, number> = {};
       const totalExactScoresMap: Record<string, number> = {};
 
-      // Agrupa participações VÁLIDAS por bolão
+      // Agrupa participações por bolão
       const participationsByPool: Record<string, any[]> = {};
 
       validHistoryData.forEach((p: any) => {
-        // Soma Cravadas
+        // Soma Cravadas (acumulativo de carreira)
         totalExactScoresMap[p.user_id] = (totalExactScoresMap[p.user_id] || 0) + (p.exact_scores || 0);
 
         if (!participationsByPool[p.pool_id]) {
@@ -114,7 +113,14 @@ const InfoParticipantes = () => {
       // Calcula Campeões e Lanternas para cada bolão FINALIZADO
       Object.keys(participationsByPool).forEach(pId => {
           const poolParts = participationsByPool[pId];
-          const isFinished = poolParts[0]?.pool?.championship?.is_finished === true;
+          const poolName = poolParts[0]?.pool?.name || "Desconhecido";
+          
+          // Verificação Robusta de Finalizado
+          const champData = poolParts[0]?.pool?.championship;
+          const isFinished = champData?.is_finished === true;
+
+          // LOG DE DEBUG PARA VOCÊ VER NO CONSOLE (F12)
+          console.log(`Bolão: ${poolName} | Finalizado: ${isFinished} | Participantes Válidos: ${poolParts.length}`);
 
           if (isFinished && poolParts.length > 1) {
               // Ordena do maior para o menor ponto
@@ -123,24 +129,34 @@ const InfoParticipantes = () => {
                   return b.exact_scores - a.exact_scores; // Desempate por cravadas
               });
 
-              // Campeão (1º da lista filtrada)
-              const winnerId = poolParts[0].user_id;
-              winsMap[winnerId] = (winsMap[winnerId] || 0) + 1;
+              // --- CAMPEÃO (1º lugar) ---
+              // Se houver empate no 1º lugar, ambos ganham título
+              const maxPoints = poolParts[0].points;
+              const maxExact = poolParts[0].exact_scores;
+              
+              const winners = poolParts.filter((p: any) => p.points === maxPoints && p.exact_scores === maxExact);
+              winners.forEach((w: any) => {
+                  winsMap[w.user_id] = (winsMap[w.user_id] || 0) + 1;
+              });
 
-              // Lanterna (Último da lista filtrada que jogou algo)
-              // Como já removemos IA/Admin, o último aqui É o humano com pior nota
-              const activePlayers = poolParts.filter((p: any) => p.matches_played > 0);
-              if (activePlayers.length > 0) {
-                  const loserId = activePlayers[activePlayers.length - 1].user_id;
-                  lastPlaceMap[loserId] = (lastPlaceMap[loserId] || 0) + 1;
-              }
+              // --- LANTERNA (Último lugar) ---
+              // CORREÇÃO: Pega TODOS que estão empatados em último
+              const lastIndex = poolParts.length - 1;
+              const minPoints = poolParts[lastIndex].points;
+              const minExact = poolParts[lastIndex].exact_scores;
+
+              const losers = poolParts.filter((p: any) => p.points === minPoints && p.exact_scores === minExact);
+              
+              losers.forEach((l: any) => {
+                  console.log(`Lanterna detectado no bolão ${poolName}: UserID ${l.user_id}`);
+                  lastPlaceMap[l.user_id] = (lastPlaceMap[l.user_id] || 0) + 1;
+              });
           }
       });
 
       // 3. Monta lista final APENAS com participantes humanos do bolão atual
       const formattedData: ParticipantStats[] = (currentPoolData || [])
         .filter((item: any) => {
-             // Aplica o filtro também na lista de exibição atual
              return item.user && item.user.is_admin !== true && item.user.is_ai !== true;
         })
         .map((item: any) => {
@@ -152,7 +168,7 @@ const InfoParticipantes = () => {
             total_wins: winsMap[userId] || 0,
             total_last_place: lastPlaceMap[userId] || 0,
             total_exact_scores: totalExactScoresMap[userId] || 0,
-            is_admin: false, // Forçamos false pois já filtramos os true
+            is_admin: false,
             is_ai: false
           };
       });
@@ -183,6 +199,7 @@ const InfoParticipantes = () => {
     .filter(s => s.total_last_place > 0)
     .sort((a, b) => b.total_last_place - a.total_last_place);
   
+  // Café com Leite: Quem não ganhou e nem perdeu (historicamente)
   const cafeComLeite = stats
     .filter(s => s.total_wins === 0 && s.total_last_place === 0);
 
