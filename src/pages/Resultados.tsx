@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/components/ui/use-toast";
-// Ajuste de importação: removidas as chaves se forem exportações padrão (default)
-import MatchCard from "@/components/results/MatchCard";
-import ResultForm from "@/components/results/ResultForm";
+// CORREÇÃO: Voltamos a usar chaves { } pois são exportações nomeadas
+import { MatchCard } from "@/components/results/MatchCard";
+import { ResultForm } from "@/components/results/ResultForm";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Match as MatchType, Team } from "@/types/matches";
@@ -45,7 +45,6 @@ const Resultados = () => {
     if (!pool) {
       const savedPoolId = localStorage.getItem('activePoolId');
       if (savedPoolId && userParticipations.length > 0) {
-        // Verifica se o usuário realmente participa desse bolão salvo
         const canSwitch = userParticipations.some(p => p.pool.id === savedPoolId);
         if (canSwitch) {
             switchPool(savedPoolId);
@@ -81,7 +80,6 @@ const Resultados = () => {
     queryKey: ['groupResultsData', championshipId],
     queryFn: async () => {
         if (!championshipId) return [];
-        // Usamos a notação !inner para filtrar grupos que pertencem a este campeonato
         const { data, error } = await supabase
             .from('groups_results')
             .select(`
@@ -138,7 +136,6 @@ const Resultados = () => {
     queryClient.invalidateQueries({ queryKey: ['matchesResultsGroupStage'] });
   };
 
-  // Renderização se nenhum bolão estiver ativo
   if (!pool) {
     return (
         <div className="container mx-auto p-8 text-center">
