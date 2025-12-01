@@ -66,7 +66,7 @@ function App() {
             
             {/* --- Rotas de Contexto do Bolão (Aninhadas) --- */}
             {/* A rota base /pool/:poolId leva ao Dashboard do Bolão */}
-            <Route path="/pool/:poolId/palpites-galera" element={<ProtectedRoute><DailyMatchesAndPredictions /></ProtectedRoute>}/>            
+            <Route path="/pool/:poolId" element={<ProtectedRoute><PoolDashboard /></ProtectedRoute>} />
                         
             {/* As sub-rotas mantêm o ID na URL, permitindo que a Navbar saiba onde estamos */}
             <Route path="/pool/:poolId/palpites" element={<ProtectedRoute><Palpites /></ProtectedRoute>} />
@@ -82,6 +82,7 @@ function App() {
             <Route path="/resultados" element={<Navigate to="/dashboard" replace />} />
             <Route path="/simulador" element={<Navigate to="/dashboard" replace />} />
             <Route path="/pool/:poolId/criteria-setup" element={<ProtectedRoute><PoolCriteriaSetup /></ProtectedRoute>} />
+            <Route path="/pool/:poolId/palpites-galera" element={<ProtectedRoute><DailyMatchesAndPredictions /></ProtectedRoute>}/>            
 
             {/* --- Rotas de Admin --- */}
             <Route path="/admin-login" element={<AdminLogin />} />
