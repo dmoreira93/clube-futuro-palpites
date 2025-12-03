@@ -359,6 +359,7 @@ export interface Database {
           name: string
           flag_url: string | null
           code: string | null
+          championship_id: string | null
           created_at: string
         }
         Insert: {
@@ -366,6 +367,7 @@ export interface Database {
           name: string
           flag_url?: string | null
           code?: string | null
+          championship_id?: string | null
           created_at?: string
         }
         Update: {
@@ -373,9 +375,17 @@ export interface Database {
           name?: string
           flag_url?: string | null
           code?: string | null
+          championship_id?: string | null
           created_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "teams_championship_id_fkey"
+            columns: ["championship_id"]
+            referencedRelation: "championships"
+            referencedColumns: ["id"]
+          }
+        ]
       }
       user_points_log: {
         Row: {
