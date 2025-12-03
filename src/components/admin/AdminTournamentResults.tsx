@@ -1,252 +1,176 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
-import { Loader2, CheckCircle, Trophy, Medal, AlertTriangle } from 'lucide-react';
-import { Team } from '@/types/matches';
-import { Badge } from '@/components/ui/badge';
+import { Loader2, Trophy, Filter, Save } from 'lucide-react';
 
-interface ResultState {
-  id: string;
-  champion_id: string | null;
-  runner_up_id: string | null;
-  third_place_id: string | null;
-  fourth_place_id: string | null;
-  final_home_score: number | null;
-  final_away_score: number | null;
-  is_completed: boolean;
-}
+export default function AdminTournamentResults() {
+  const [championships, setChampionships] = useState<any[]>([]);
+  const [selectedChampionship, setSelectedChampionship] = useState<string>("");
+  const [teams, setTeams] = useState<any[]>([]);
+  
+  // Form State
+  const [resultId, setResultId] = useState<string | null>(null);
+  const [champion, setChampion] = useState("");
+  const [runnerUp, setRunnerUp] = useState("");
+  const [third, setThird] = useState("");
+  const [fourth, setFourth] = useState("");
+  const [scoreHome, setScoreHome] = useState("");
+  const [scoreAway, setScoreAway] = useState("");
+  
+  const [loading, setLoading] = useState(false);
 
-const AdminTournamentResults = () => {
-  const [teams, setTeams] = useState<Team[]>([]);
-  const [result, setResult] = useState<Partial<ResultState>>({});
-  const [loading, setLoading] = useState(true);
-  const [isSaving, setIsSaving] = useState(false);
-
-  const fetchInitialData = useCallback(async () => {
-    setLoading(true);
-    try {
-      const { data: teamsData, error: teamsError } = await supabase
-        .from('teams').select('id, name').order('name');
-      if (teamsError) throw teamsError;
-      setTeams(teamsData || []);
-
-      const { data: resultData, error: resultError } = await supabase
-        .from('tournament_results')
-        .select('*')
-        .maybeSingle();
-
-      if (resultError) throw resultError;
-      
-      if (resultData) {
-        setResult(resultData);
-      }
-    } catch (e: any) {
-      toast.error('Erro ao buscar dados.', { description: e.message });
-    } finally {
-      setLoading(false);
+  useEffect(() => {
+    async function loadChamps() {
+        const { data } = await supabase.from("championships").select("id, name");
+        setChampionships(data || []);
     }
+    loadChamps();
   }, []);
 
   useEffect(() => {
-    fetchInitialData();
-  }, [fetchInitialData]);
+    if (selectedChampionship) loadData();
+    else { setTeams([]); resetForm(); }
+  }, [selectedChampionship]);
 
-  const handleSelectChange = (field: 'champion' | 'runner_up' | 'third_place' | 'fourth_place', teamId: string) => {
-    setResult(prev => ({ ...prev, [`${field}_id`]: teamId }));
+  const resetForm = () => {
+      setResultId(null); setChampion(""); setRunnerUp(""); setThird(""); setFourth(""); setScoreHome(""); setScoreAway("");
   };
 
-  const handleScoreChange = (field: 'final_home_score' | 'final_away_score', value: string) => {
-    const score = value === '' ? null : parseInt(value, 10);
-    setResult(prev => ({ ...prev, [field]: score }));
-  };
+  const loadData = async () => {
+      setLoading(true);
+      // 1. Times do Campeonato
+      const { data: teamsData } = await supabase.from("teams").select("id, name").eq("championship_id", selectedChampionship).order("name");
+      setTeams(teamsData || []);
 
-  const handleSubmit = async () => {
-    // Validações
-    const { champion_id, runner_up_id, third_place_id, fourth_place_id, final_home_score, final_away_score } = result;
-    if (!champion_id || !runner_up_id || !third_place_id || !fourth_place_id || final_home_score === null || isNaN(final_home_score) || final_away_score === null || isNaN(final_away_score)) {
-      toast.error("Por favor, preencha todos os campos corretamente.");
-      return;
-    }
-    const finalPositions = [champion_id, runner_up_id, third_place_id, fourth_place_id];
-    if (new Set(finalPositions).size !== 4) {
-      toast.error("As posições finais devem ser ocupadas por times distintos.");
-      return;
-    }
-
-    setIsSaving(true);
-    try {
-      // 1. Salva/Atualiza o resultado final
-      const { data: savedResult, error: upsertError } = await supabase
-        .from('tournament_results')
-        .upsert({
-          id: result.id || '1', // Usa o ID fixo '1' ou lógica correta de ID
-          champion_id: champion_id,
-          runner_up_id: runner_up_id,
-          third_place_id: third_place_id,
-          fourth_place_id: fourth_place_id,
-          final_home_score: final_home_score,
-          final_away_score: final_away_score,
-          is_completed: true,
-        }, { onConflict: 'id' })
-        .select()
-        .single();
+      // 2. Resultado Existente
+      const { data: res } = await supabase.from("tournament_results").select("*").eq("championship_id", selectedChampionship).maybeSingle();
       
-      if (upsertError) throw upsertError;
-
-      toast.success('Resultado final salvo! Iniciando cálculo de pontos...');
-
-      // 2. Chama a função SQL para processar os pontos
-      const { error: rpcError } = await supabase.rpc('process_final_results');
-      if (rpcError) throw rpcError;
-
-      toast.success("Pontuações dos palpites finais calculadas com sucesso!");
-      setResult(savedResult);
-
-    } catch (e: any) {
-      toast.error('Erro ao processar resultado final.', { description: e.message });
-    } finally {
-      setIsSaving(false);
-    }
+      if (res) {
+          setResultId(res.id);
+          setChampion(res.champion_id || "");
+          setRunnerUp(res.runner_up_id || "");
+          setThird(res.third_place_id || "");
+          setFourth(res.fourth_place_id || "");
+          setScoreHome(res.final_home_score?.toString() || "");
+          setScoreAway(res.final_away_score?.toString() || "");
+      } else {
+          resetForm();
+      }
+      setLoading(false);
   };
-  
-  if (loading) return <div className="flex justify-center p-8"><Loader2 className="h-8 w-8 animate-spin text-fifa-blue" /></div>;
+
+  const handleSave = async () => {
+      if (!champion || !runnerUp || !scoreHome || !scoreAway) return toast.error("Preencha ao menos Campeão, Vice e Placar");
+
+      setLoading(true);
+      const payload = {
+          championship_id: selectedChampionship, // VINCULA AO CAMPEONATO
+          champion_id: champion,
+          runner_up_id: runnerUp,
+          third_place_id: third || null,
+          fourth_place_id: fourth || null,
+          final_home_score: parseInt(scoreHome),
+          final_away_score: parseInt(scoreAway),
+          is_completed: true
+      };
+
+      // Upsert baseado no ID (se existir) ou championship_id (se tiver constraint unique)
+      // Como talvez não tenha constraint unique no championship_id, usamos o ID se tivermos
+      let error;
+      if (resultId) {
+          ({ error } = await supabase.from("tournament_results").update(payload).eq("id", resultId));
+      } else {
+          ({ error } = await supabase.from("tournament_results").insert(payload));
+      }
+
+      if (error) {
+          toast.error("Erro ao salvar: " + error.message);
+      } else {
+          toast.success("Salvo! Calculando pontos...");
+          // Dispara Pontuação
+          await supabase.rpc('process_final_results'); 
+          toast.success("Pontos calculados!");
+          loadData(); // Recarrega para pegar o ID se foi insert
+      }
+      setLoading(false);
+  };
 
   return (
     <div className="space-y-6">
-        
-        {/* Cabeçalho da Seção */}
+       <div className="flex justify-between items-center">
         <div>
-            <h2 className="text-2xl font-bold text-fifa-blue flex items-center gap-2">
-                <Trophy className="h-6 w-6 text-fifa-gold" /> Resultados Finais
-            </h2>
-            <p className="text-muted-foreground text-sm">Defina o pódio e o placar da grande final para encerrar a pontuação.</p>
+            <h2 className="text-2xl font-bold text-fifa-blue">Resultados Finais</h2>
+            <p className="text-muted-foreground">Defina o pódio e placar da final.</p>
         </div>
+        <div className="w-64">
+            <Select value={selectedChampionship} onValueChange={setSelectedChampionship}>
+                <SelectTrigger><SelectValue placeholder="Selecione o Campeonato" /></SelectTrigger>
+                <SelectContent>{championships.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent>
+            </Select>
+        </div>
+      </div>
 
-        <Card className="border-t-4 border-t-fifa-gold shadow-lg">
-            <CardHeader className="pb-4 border-b border-gray-100 bg-gray-50/50">
-                <div className="flex items-center justify-between">
-                    <div>
-                        <CardTitle className="text-xl text-gray-800">Pódio do Torneio</CardTitle>
-                        <CardDescription>Selecione os quatro primeiros colocados.</CardDescription>
-                    </div>
-                    {result.is_completed ? (
-                        <Badge className="bg-green-100 text-green-700 border-green-200 hover:bg-green-100 px-3 py-1">
-                            <CheckCircle className="w-4 h-4 mr-1" /> Processado
-                        </Badge>
-                    ) : (
-                        <Badge variant="outline" className="text-yellow-600 border-yellow-300 bg-yellow-50 px-3 py-1">
-                            <AlertTriangle className="w-4 h-4 mr-1" /> Pendente
-                        </Badge>
-                    )}
-                </div>
-            </CardHeader>
-            
-            <CardContent className="space-y-8 pt-6">
-                
-                {/* SEÇÃO DO PÓDIO */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="space-y-2">
-                        <Label className="flex items-center gap-2 text-fifa-gold font-bold text-lg">
-                            <Trophy className="w-5 h-5" /> Campeão
-                        </Label>
-                        <Select value={result.champion_id || ''} onValueChange={(value) => handleSelectChange('champion', value)} disabled={isSaving}>
-                            <SelectTrigger className="h-12 text-lg border-yellow-400 bg-yellow-50/50 focus:ring-yellow-400">
-                                <SelectValue placeholder="Selecione o Campeão..." />
-                            </SelectTrigger>
-                            <SelectContent>{teams.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}</SelectContent>
-                        </Select>
-                    </div>
+      {!selectedChampionship ? (
+          <div className="text-center py-12 bg-gray-50 border-2 border-dashed rounded-lg">
+              <Filter className="h-10 w-10 text-gray-300 mx-auto mb-2"/>
+              <p className="text-gray-500">Selecione um campeonato.</p>
+          </div>
+      ) : (
+          <Card className="border-t-4 border-t-yellow-500">
+              <CardHeader><CardTitle>Pódio Oficial</CardTitle></CardHeader>
+              <CardContent className="space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-1">
+                          <Label className="text-yellow-600 font-bold flex items-center gap-2"><Trophy className="h-4 w-4"/> Campeão</Label>
+                          <Select value={champion} onValueChange={setChampion}>
+                              <SelectTrigger className="bg-yellow-50 border-yellow-200"><SelectValue placeholder="Selecione..."/></SelectTrigger>
+                              <SelectContent>{teams.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}</SelectContent>
+                          </Select>
+                      </div>
+                      <div className="space-y-1">
+                          <Label className="text-gray-500 font-bold">Vice-Campeão</Label>
+                          <Select value={runnerUp} onValueChange={setRunnerUp}>
+                              <SelectTrigger><SelectValue placeholder="Selecione..."/></SelectTrigger>
+                              <SelectContent>{teams.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}</SelectContent>
+                          </Select>
+                      </div>
+                      <div className="space-y-1">
+                          <Label>3º Lugar</Label>
+                          <Select value={third} onValueChange={setThird}>
+                              <SelectTrigger><SelectValue placeholder="Selecione..."/></SelectTrigger>
+                              <SelectContent>{teams.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}</SelectContent>
+                          </Select>
+                      </div>
+                      <div className="space-y-1">
+                          <Label>4º Lugar</Label>
+                          <Select value={fourth} onValueChange={setFourth}>
+                              <SelectTrigger><SelectValue placeholder="Selecione..."/></SelectTrigger>
+                              <SelectContent>{teams.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}</SelectContent>
+                          </Select>
+                      </div>
+                  </div>
 
-                    <div className="space-y-2">
-                        <Label className="flex items-center gap-2 text-gray-600 font-bold text-lg">
-                            <Medal className="w-5 h-5 text-gray-400" /> Vice-Campeão
-                        </Label>
-                        <Select value={result.runner_up_id || ''} onValueChange={(value) => handleSelectChange('runner_up', value)} disabled={isSaving}>
-                            <SelectTrigger className="h-12 text-lg">
-                                <SelectValue placeholder="Selecione o Vice..." />
-                            </SelectTrigger>
-                            <SelectContent>{teams.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}</SelectContent>
-                        </Select>
-                    </div>
+                  <div className="p-4 bg-gray-50 rounded-lg border border-gray-100 text-center">
+                      <Label className="mb-2 block font-bold text-fifa-blue">PLACAR DA FINAL (Campeão x Vice)</Label>
+                      <div className="flex justify-center items-center gap-2">
+                          <Input type="number" className="w-20 text-center text-xl font-bold" value={scoreHome} onChange={e => setScoreHome(e.target.value)} placeholder="0" />
+                          <span className="text-2xl text-gray-300">X</span>
+                          <Input type="number" className="w-20 text-center text-xl font-bold" value={scoreAway} onChange={e => setScoreAway(e.target.value)} placeholder="0" />
+                      </div>
+                  </div>
 
-                    <div className="space-y-2">
-                        <Label className="flex items-center gap-2 text-orange-700 font-semibold">
-                            <Medal className="w-4 h-4 text-orange-600" /> 3º Lugar
-                        </Label>
-                        <Select value={result.third_place_id || ''} onValueChange={(value) => handleSelectChange('third_place', value)} disabled={isSaving}>
-                            <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
-                            <SelectContent>{teams.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}</SelectContent>
-                        </Select>
-                    </div>
-
-                    <div className="space-y-2">
-                        <Label className="flex items-center gap-2 text-gray-700 font-semibold">
-                            <Medal className="w-4 h-4 text-gray-500" /> 4º Lugar
-                        </Label>
-                        <Select value={result.fourth_place_id || ''} onValueChange={(value) => handleSelectChange('fourth_place', value)} disabled={isSaving}>
-                            <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
-                            <SelectContent>{teams.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}</SelectContent>
-                        </Select>
-                    </div>
-                </div>
-
-                <div className="border-t border-gray-100 my-6"></div>
-
-                {/* SEÇÃO DO PLACAR FINAL */}
-                <div className="bg-blue-50/50 p-6 rounded-xl border border-blue-100">
-                    <Label className="block text-center text-fifa-blue font-bold mb-4 uppercase tracking-wide">Placar Oficial da Final (Campeão x Vice)</Label>
-                    <div className="flex items-center justify-center gap-4">
-                        <div className="text-center">
-                            <span className="block text-xs text-gray-500 mb-1">Campeão</span>
-                            <Input 
-                                type="number" 
-                                min="0" 
-                                className="text-center text-2xl font-bold h-16 w-24 bg-white border-blue-200 shadow-sm" 
-                                value={result.final_home_score ?? ''} 
-                                onChange={e => handleScoreChange('final_home_score', e.target.value)} 
-                                disabled={isSaving} 
-                            />
-                        </div>
-                        <span className="text-2xl text-gray-400 font-light">X</span>
-                        <div className="text-center">
-                            <span className="block text-xs text-gray-500 mb-1">Vice</span>
-                            <Input 
-                                type="number" 
-                                min="0" 
-                                className="text-center text-2xl font-bold h-16 w-24 bg-white border-blue-200 shadow-sm" 
-                                value={result.final_away_score ?? ''} 
-                                onChange={e => handleScoreChange('final_away_score', e.target.value)} 
-                                disabled={isSaving} 
-                            />
-                        </div>
-                    </div>
-                </div>
-
-                <div className='pt-4'>
-                    <Button 
-                        className={`w-full h-12 text-lg font-bold shadow-md transition-all ${result.is_completed ? 'bg-green-600 hover:bg-green-700' : 'bg-fifa-gold text-fifa-blue hover:bg-yellow-500'}`}
-                        onClick={handleSubmit} 
-                        disabled={isSaving || (result.is_completed && !window.confirm("O resultado já foi processado. Deseja reprocessar? Isso pode alterar pontos existentes."))}
-                    >
-                        {isSaving ? (
-                            <><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Processando...</>
-                        ) : (
-                            result.is_completed ? <><CheckCircle className="mr-2 h-5 w-5" /> Resultado Processado (Clique para reprocessar)</> : 'Salvar Resultados e Calcular Pontos'
-                        )}
-                    </Button>
-                    <p className="text-center text-xs text-gray-400 mt-3">
-                        Atenção: Esta ação dispara o cálculo de pontos para todos os participantes.
-                    </p>
-                </div>
-            </CardContent>
-        </Card>
+                  <Button onClick={handleSave} disabled={loading} className="w-full h-12 text-lg bg-green-600 hover:bg-green-700">
+                      {loading ? <Loader2 className="mr-2 animate-spin"/> : <Save className="mr-2 h-5 w-5"/>}
+                      Salvar Resultado e Processar Pontos
+                  </Button>
+              </CardContent>
+          </Card>
+      )}
     </div>
   );
-};
-
-export default AdminTournamentResults;
+}
