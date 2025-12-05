@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { User } from '@supabase/supabase-js';
+import { User, Session } from '@supabase/supabase-js';
 import { toast } from 'sonner';
 import { Database } from '@/integrations/supabase/types';
 
@@ -54,30 +54,24 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const isAdmin = user?.is_admin ?? false;
   const isOwner = !!user && !!activePool && user.id === activePool.owner_id;
 
-  // Função FORTE de limpeza - Limpa TUDO para evitar loops
+  // --- 1. CLEANUP (SignOut) ---
   const signOut = useCallback(async () => {
     console.log("🛑 Logout forçado/solicitado. Limpando sessão...");
     
-    // 1. Limpa estados React
+    // Limpa estados React
     setUser(null);
     userRef.current = null;
     setActivePool(null);
     setUserParticipations([]);
     
-    // 2. Limpa Storage IMEDIATAMENTE (antes de chamar o supabase)
-    // Isso evita que, se o supabase falhar, o token continue lá no F5
+    // Limpa Storage
     localStorage.removeItem('activePoolId');
-    localStorage.removeItem('sb-wdbaoomwhuiztjoazagd-auth-token'); // Nome padrão do token Supabase
-    
-    // Limpa qualquer chave que comece com sb-
     Object.keys(localStorage).forEach(key => {
         if (key.startsWith('sb-')) localStorage.removeItem(key);
     });
-    
     sessionStorage.clear();
     setLoading(false);
 
-    // 3. Avisa o Supabase (pode falhar se a rede estiver off, mas o storage já foi limpo)
     try {
         await supabase.auth.signOut();
     } catch (e) {
@@ -85,8 +79,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   }, []);
 
+  // --- 2. SYNC PROFILE ---
   const fetchAndSyncProfile = useCallback(async (sessionUser: User): Promise<AppUser | null> => {
-    // Se já estivermos carregando o mesmo usuário, retorna o atual para evitar chamadas duplas
+    // Evita recarregar se o ID for o mesmo que já está na memória
     if (userRef.current?.id === sessionUser.id) {
         return userRef.current;
     }
@@ -94,21 +89,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     try {
       console.log("🔄 Sincronizando perfil:", sessionUser.email);
       
-      // 1. Busca Perfil
       const { data: profile, error } = await supabase
         .from('users_custom')
         .select('*')
         .eq('id', sessionUser.id)
-        .maybeSingle(); // Usamos maybeSingle para não gerar erro de exceção se não existir
+        .maybeSingle();
 
-      if (error) {
-         console.error("Erro ao buscar users_custom:", error);
-         throw error;
-      }
+      if (error) throw error;
 
-      // Se não tem perfil, é uma "Sessão Fantasma". Logout nela.
       if (!profile) {
-          console.warn("⚠️ Usuário autenticado mas sem perfil. Logout.");
+          console.warn("⚠️ Usuário sem perfil. Realizando logout.");
           await signOut();
           return null;
       }
@@ -122,11 +112,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         avatar_url: profile.avatar_url
       };
       
-      // Atualiza estado
       setUser(combinedUser);
       userRef.current = combinedUser;
       
-      // 2. Busca Participações (em paralelo se possível, mas sequencial é mais seguro aqui)
+      // Busca Participações
       const { data: participationsData } = await supabase
         .from('participations')
         .select(`*, pools(*)`) 
@@ -139,7 +128,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
       setUserParticipations(participations);
       
-      // 3. Define Bolão Ativo
+      // Define Bolão Ativo
       if (participations.length > 0) {
         const lastActivePoolId = localStorage.getItem('activePoolId');
         const lastActiveParticipation = participations.find(p => p.pool.id === lastActivePoolId);
@@ -157,92 +146,51 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       return combinedUser;
 
     } catch (error: any) {
-      console.error("❌ Erro crítico no fetchAndSyncProfile:", error);
-      // Se deu erro de rede ou banco, NÃO faz logout imediatamente, apenas retorna null.
-      // Isso evita o loop de "Erro -> Logout -> Login Automático -> Erro".
+      console.error("❌ Erro no fetchAndSyncProfile:", error);
       return null;
     }
   }, [signOut]);
   
+  // --- 3. CORE LOGIC (UseEffect Unificado) ---
   useEffect(() => {
     let mounted = true;
-    
-    // Removemos o safetyTimer e o initAuth() que faziam a chamada getSession() manualmente
 
-    // 1. Inicia o listener
-    const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
-        if (!mounted) return; // Evita erro se o componente for desmontado
+    // Listener único que gerencia TUDO (Inicialização, Login e Logout)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+        if (!mounted) return;
 
         console.log(`🔔 Auth Event: ${event}`);
         
-        // --- 1. TRATAMENTO DE LOGOUT ---
+        // A) LOGOUT
         if (event === 'SIGNED_OUT') {
             setUser(null);
             userRef.current = null;
             setActivePool(null);
             setUserParticipations([]);
-            setLoading(false); 
-            return; // Encerra o processamento
+            setLoading(false); // Libera a tela
         } 
-        
-        // --- 2. TRATAMENTO DE SESSÃO ATIVA (Login / Refresh / Token / Inicialização) ---
-        else if (session?.user) {
-            // Se o evento é INITIAL_SESSION (carregamento do F5/cache) ou SIGNED_IN (login)
-            if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION' || event === 'TOKEN_REFRESHED') {
-                // Seta loading true APENAS se não for SIGNED_OUT e ainda não tivermos o user
-                if (!user) setLoading(true); 
-                
-                await fetchAndSyncProfile(session.user);
-            }
+        // B) SESSÃO VÁLIDA (Login ou F5/Recarregamento)
+        else if (session?.user && (event === 'SIGNED_IN' || event === 'INITIAL_SESSION' || event === 'TOKEN_REFRESHED')) {
+            // Só ativa loading visual se ainda não tivermos usuário carregado
+            if (!userRef.current) setLoading(true); 
+            
+            await fetchAndSyncProfile(session.user);
+            
+            if (mounted) setLoading(false); // Libera a tela após carregar dados
         } 
-        
-        // --- 3. GARANTIA DE PARADA DE LOADING ---
-        // Em QUALQUER caso, garantimos que o loading pare.
-        setLoading(false); 
-    });
-
-    // 4. Se o TanStack Query começar a rodar antes, ele vê loading=false, mas user=null.
-    // Isso é esperado e o query deve verificar `isAuthenticated` ou `user` antes de rodar.
-
-    return () => { 
-        mounted = false;
-        authListener.subscription.unsubscribe(); 
-    };
-}, [fetchAndSyncProfile, user]); // Adicionei 'user' aqui. Se o user mudar, re-avalie.
-
-    initAuth();
-
-    // Listener de eventos do Supabase
-    const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
-        console.log(`🔔 Auth Event: ${event}`);
-        
-        if (event === 'SIGNED_OUT') {
-            setUser(null);
-            userRef.current = null;
-            setActivePool(null);
-            setUserParticipations([]);
-            setLoading(false);
-        } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-            if (session?.user) {
-                 await fetchAndSyncProfile(session.user);
-                 setLoading(false); // Garante que o loading pare após login
-            }
-        } else if (event === 'INITIAL_SESSION') {
-            // Já tratado no initAuth, mas serve de backup
-            if (session?.user) {
-                 await fetchAndSyncProfile(session.user);
-            }
-            setLoading(false);
+        // C) CASOS DE BORDA (Ex: Inicializou sem sessão)
+        else {
+            if (mounted) setLoading(false);
         }
     });
 
     return () => { 
-      mounted = false;
-      clearTimeout(safetyTimer);
-      authListener.subscription.unsubscribe(); 
+        mounted = false;
+        subscription.unsubscribe(); 
     };
-  }, [fetchAndSyncProfile]); // Removido 'signOut' das dependências para evitar recriação
-  
+  }, [fetchAndSyncProfile]);
+
+  // --- 4. ACTIONS ---
   const login = async (email: string, password: string) => {
     setLoading(true);
     try {
@@ -253,6 +201,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             return { success: false, error };
         }
 
+        // O listener 'SIGNED_IN' vai capturar isso, mas por segurança chamamos aqui também
         if (data.session?.user) {
             const profile = await fetchAndSyncProfile(data.session.user);
             if (!profile) {
@@ -261,7 +210,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             }
         }
         
-        // Sucesso total
         return { success: true, error: null };
     } catch (err) {
         setLoading(false);
