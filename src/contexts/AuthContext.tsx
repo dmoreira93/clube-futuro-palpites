@@ -166,42 +166,49 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   
   useEffect(() => {
     let mounted = true;
+    
+    // Removemos o safetyTimer e o initAuth() que faziam a chamada getSession() manualmente
 
-    // --- DISJUNTOR DE SEGURANÇA (TIMEOUT) ---
-    // Aumentado para 8s e APENAS para o loading visual
-    const safetyTimer = setTimeout(() => {
-        if (loading) {
-            console.warn("⚠️ Timeout de inicialização (8s). Liberando interface.");
-            setLoading(false);
-        }
-    }, 8000);
+    // 1. Inicia o listener
+    const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
+        if (!mounted) return; // Evita erro se o componente for desmontado
 
-    const initAuth = async () => {
-      try {
-        // Tenta pegar a sessão do storage
-        const { data: { session }, error } = await supabase.auth.getSession();
+        console.log(`🔔 Auth Event: ${event}`);
         
-        if (error) {
-            console.error("Erro na sessão inicial:", error);
-            if (mounted) setLoading(false);
-            return;
-        }
-
-        if (session?.user) {
-            console.log("✅ Sessão recuperada. Carregando dados...");
-            if (mounted) {
-                const profile = await fetchAndSyncProfile(session.user);
-                // Se falhou ao carregar perfil (ex: erro de rede), o loading vira false 
-                // e o usuário fica na tela de login (ou onde estiver), sem loop.
+        // --- 1. TRATAMENTO DE LOGOUT ---
+        if (event === 'SIGNED_OUT') {
+            setUser(null);
+            userRef.current = null;
+            setActivePool(null);
+            setUserParticipations([]);
+            setLoading(false); 
+            return; // Encerra o processamento
+        } 
+        
+        // --- 2. TRATAMENTO DE SESSÃO ATIVA (Login / Refresh / Token / Inicialização) ---
+        else if (session?.user) {
+            // Se o evento é INITIAL_SESSION (carregamento do F5/cache) ou SIGNED_IN (login)
+            if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION' || event === 'TOKEN_REFRESHED') {
+                // Seta loading true APENAS se não for SIGNED_OUT e ainda não tivermos o user
+                if (!user) setLoading(true); 
+                
+                await fetchAndSyncProfile(session.user);
             }
-        }
-      } catch (error) {
-        console.error("Exceção na inicialização:", error);
-      } finally {
-        if (mounted) setLoading(false);
-        clearTimeout(safetyTimer);
-      }
+        } 
+        
+        // --- 3. GARANTIA DE PARADA DE LOADING ---
+        // Em QUALQUER caso, garantimos que o loading pare.
+        setLoading(false); 
+    });
+
+    // 4. Se o TanStack Query começar a rodar antes, ele vê loading=false, mas user=null.
+    // Isso é esperado e o query deve verificar `isAuthenticated` ou `user` antes de rodar.
+
+    return () => { 
+        mounted = false;
+        authListener.subscription.unsubscribe(); 
     };
+}, [fetchAndSyncProfile, user]); // Adicionei 'user' aqui. Se o user mudar, re-avalie.
 
     initAuth();
 
