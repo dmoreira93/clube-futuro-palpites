@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/components/ui/use-toast";
-import { Loader2, AlertTriangle, Save, Trophy, Medal } from "lucide-react"; 
+import { Loader2, AlertTriangle, Save, Trophy, Medal, Lock, Wallet } from "lucide-react"; 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
@@ -32,13 +32,13 @@ interface FinalPredictionState {
   runner_up_id: string | null; 
   third_place_id: string | null;
   fourth_place_id: string | null;
-  final_home_score: string; // Mudado para string para facilitar input
+  final_home_score: string; 
   final_away_score: string;
   prediction_id?: string;
 }
 
 const Palpites = () => {
-    const { user, activePool: pool } = useAuth();
+    const { user, activePool: pool, userParticipations } = useAuth();
     const { toast } = useToast();
     const navigate = useNavigate();
 
@@ -56,10 +56,8 @@ const Palpites = () => {
         final_home_score: '', final_away_score: '',
     });
 
-    // --- REGRA DE BLOQUEIO GLOBAL ---
-    // Se o bolão tem prazo, usa o prazo. Se não, usa o início do campeonato (data do 1º jogo).
-    // Se nenhum prazo estiver definido, está aberto.
-    const isLocked = useMemo(() => {
+    // --- REGRA DE BLOQUEIO 1: PRAZO ---
+    const isDeadlineLocked = useMemo(() => {
         if (!pool) return true;
         
         // 1. Data Limite do Bolão (Prioridade)
@@ -67,8 +65,7 @@ const Palpites = () => {
             return isAfter(new Date(), new Date(pool.prediction_deadline));
         }
 
-        // 2. Início do Campeonato (Fallback se não houver deadline no bolão)
-        // Pega a data do jogo mais antigo
+        // 2. Início do Campeonato (Fallback)
         if (allMatches.length > 0) {
             const firstMatchDate = new Date(Math.min(...allMatches.map(m => new Date(m.match_date).getTime())));
             return isAfter(new Date(), firstMatchDate);
@@ -76,6 +73,20 @@ const Palpites = () => {
 
         return false;
     }, [pool, allMatches]);
+
+    // --- REGRA DE BLOQUEIO 2: PAGAMENTO (NOVO) ---
+    const isPaymentLocked = useMemo(() => {
+        if (!pool?.payment_required) return false;
+        
+        // Busca a participação do usuário neste bolão específico
+        const myPart = userParticipations.find(p => p.pool_id === pool.id);
+        
+        // Se não achou ou o status não é 'paid', bloqueia
+        return myPart?.payment_status !== 'paid';
+    }, [pool, userParticipations]);
+
+    // Bloqueio Geral (Se qualquer um for true, bloqueia edição)
+    const isLocked = isDeadlineLocked || isPaymentLocked;
 
     const deadlineMessage = useMemo(() => {
         if (!pool?.prediction_deadline) return "o início do campeonato";
@@ -95,8 +106,7 @@ const Palpites = () => {
                 .order('match_date', { ascending: true });
             setAllMatches(matchesData || []);
 
-            // 2. Buscar Times (via tabela teams, filtrando pelo campeonato se possível ou pegando todos)
-            // Se teams não tem championship_id direto, idealmente buscaríamos via grupos, mas assumindo tabela global de times:
+            // 2. Buscar Times
             const { data: teamsData } = await supabase.from('teams').select('*').order('name', { ascending: true });
             setTeams(teamsData || []);
 
@@ -234,28 +244,54 @@ const Palpites = () => {
         } finally { setSubmittingId(null); }
     };
 
+    // Componente de Alerta Dinâmico
+    const AlertHeader = () => {
+        if (isPaymentLocked) {
+            return (
+                <Alert variant="destructive" className="mb-8 bg-yellow-50 border-yellow-200">
+                    <Wallet className="h-5 w-5 text-yellow-600" />
+                    <AlertTitle className="text-yellow-800">Pagamento Pendente</AlertTitle>
+                    <AlertDescription className="text-yellow-700">
+                        O envio de palpites está bloqueado até que o seu pagamento seja confirmado pelo administrador do bolão.
+                    </AlertDescription>
+                </Alert>
+            );
+        }
+        
+        if (isDeadlineLocked) {
+            return (
+                <Alert variant="destructive" className="mb-8 bg-red-50 border-red-200">
+                    <Lock className="h-5 w-5 text-red-600" />
+                    <AlertTitle className="text-red-800">Apostas Encerradas</AlertTitle>
+                    <AlertDescription className="text-red-700">
+                        O prazo para envio de palpites encerrou em {deadlineMessage}.
+                    </AlertDescription>
+                </Alert>
+            );
+        }
+
+        return (
+            <Alert className="mb-8 bg-blue-50 border-blue-200">
+                <Save className="h-5 w-5 text-blue-600" />
+                <AlertTitle className="text-blue-800">Apostas Abertas</AlertTitle>
+                <AlertDescription className="text-blue-700">
+                    Preencha seus palpites e não esqueça de salvar! Encerramento: {deadlineMessage}.
+                </AlertDescription>
+            </Alert>
+        );
+    };
+
     if (loading) return <div className="flex justify-center items-center h-screen"><Loader2 className="h-10 w-10 animate-spin text-fifa-blue" /></div>;
     if (!pool) return null;
 
     return (
         <div className="container mx-auto p-4 sm:p-6 lg:p-8 max-w-5xl">
-            <div className="text-center mb-8">
+            <div className="text-center mb-6">
               <h1 className="text-3xl font-bold text-fifa-blue mb-2">Meus Palpites</h1>
               <p className="text-gray-500">Preencha seus palpites para o bolão <strong>{pool.name}</strong></p>
             </div>
             
-            <Alert variant={isLocked ? "destructive" : "default"} className={`mb-8 ${isLocked ? 'bg-red-50 border-red-200' : 'bg-blue-50 border-blue-200'}`}>
-                {isLocked ? <AlertTriangle className="h-5 w-5 text-red-600" /> : <Save className="h-5 w-5 text-blue-600" />}
-                <AlertTitle className={isLocked ? "text-red-800" : "text-blue-800"}>
-                    {isLocked ? "Apostas Encerradas" : "Apostas Abertas"}
-                </AlertTitle>
-                <AlertDescription className={isLocked ? "text-red-700" : "text-blue-700"}>
-                    {isLocked 
-                        ? `O prazo para envio de palpites encerrou em ${deadlineMessage}.`
-                        : `Você tem até ${deadlineMessage} para preencher ou alterar TODOS os seus palpites (Jogos, Grupos e Finais).`
-                    }
-                </AlertDescription>
-            </Alert>
+            <AlertHeader />
 
             <Tabs defaultValue="daily" className="w-full">
                 <TabsList className="grid w-full grid-cols-3 mb-8 h-12">
@@ -266,60 +302,61 @@ const Palpites = () => {
                 
                 {/* --- ABA 1: PARTIDAS --- */}
                 <TabsContent value="daily" className="space-y-6">
-                    {allMatches.map(match => {
-                        const p = dailyPredictions[match.id] || { home_score: '', away_score: '' };
-                        return (
-                            <Card key={match.id} className={`overflow-hidden transition-opacity ${isLocked ? 'opacity-80' : ''}`}>
-                                <CardContent className="p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
-                                    {/* Info do Jogo */}
-                                    <div className="flex-1 w-full flex items-center justify-center sm:justify-start gap-4 text-center sm:text-left">
-                                        <div className="text-xs text-gray-400 font-mono hidden sm:block">
-                                            {format(parseISO(match.match_date), 'dd/MM HH:mm')}
+                    {allMatches.length === 0 ? <p className="text-center py-4 text-gray-500">Nenhuma partida encontrada.</p> :
+                        allMatches.map(match => {
+                            const p = dailyPredictions[match.id] || { home_score: '', away_score: '' };
+                            return (
+                                <Card key={match.id} className={`overflow-hidden transition-opacity ${isLocked ? 'opacity-80' : ''}`}>
+                                    <CardContent className="p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+                                        {/* Info do Jogo */}
+                                        <div className="flex-1 w-full flex items-center justify-center sm:justify-start gap-4 text-center sm:text-left">
+                                            <div className="text-xs text-gray-400 font-mono hidden sm:block">
+                                                {format(parseISO(match.match_date), 'dd/MM HH:mm')}
+                                            </div>
+                                            <div className="flex items-center gap-2 flex-1 justify-end">
+                                                <span className="font-bold text-gray-700">{match.home_team?.name}</span>
+                                            </div>
+                                            <span className="text-gray-300 font-light">X</span>
+                                            <div className="flex items-center gap-2 flex-1 justify-start">
+                                                <span className="font-bold text-gray-700">{match.away_team?.name}</span>
+                                            </div>
                                         </div>
-                                        <div className="flex items-center gap-2 flex-1 justify-end">
-                                            <span className="font-bold text-gray-700">{match.home_team?.name}</span>
-                                            {/* TODO: Bandeira se tiver */}
-                                        </div>
-                                        <span className="text-gray-300 font-light">X</span>
-                                        <div className="flex items-center gap-2 flex-1 justify-start">
-                                            <span className="font-bold text-gray-700">{match.away_team?.name}</span>
-                                        </div>
-                                    </div>
 
-                                    {/* Inputs de Placar */}
-                                    <div className="flex items-center gap-2 bg-gray-50 p-2 rounded-lg border border-gray-100">
-                                        <Input 
-                                            type="number" min="0" className="w-14 text-center font-bold text-lg h-10 p-0" 
-                                            value={p.home_score} 
-                                            onChange={e => setDailyPredictions(prev => ({...prev, [match.id]: {...(prev[match.id] || {match_id: match.id}), home_score: e.target.value}}))}
-                                            disabled={isLocked || submittingId === match.id}
-                                        />
-                                        <span className="text-gray-400">-</span>
-                                        <Input 
-                                            type="number" min="0" className="w-14 text-center font-bold text-lg h-10 p-0" 
-                                            value={p.away_score}
-                                            onChange={e => setDailyPredictions(prev => ({...prev, [match.id]: {...(prev[match.id] || {match_id: match.id}), away_score: e.target.value}}))}
-                                            disabled={isLocked || submittingId === match.id}
-                                        />
-                                        {!isLocked && (
-                                            <Button 
-                                                size="icon" 
-                                                variant="ghost" 
-                                                className="h-10 w-10 text-green-600 hover:text-green-700 hover:bg-green-50"
-                                                onClick={() => handleMatchSave(match.id)}
-                                                disabled={submittingId === match.id}
-                                            >
-                                                {submittingId === match.id ? <Loader2 className="h-5 w-5 animate-spin"/> : <Save className="h-5 w-5"/>}
-                                            </Button>
-                                        )}
-                                    </div>
-                                </CardContent>
-                            </Card>
-                        )
-                    })}
+                                        {/* Inputs de Placar */}
+                                        <div className="flex items-center gap-2 bg-gray-50 p-2 rounded-lg border border-gray-100">
+                                            <Input 
+                                                type="number" min="0" className="w-14 text-center font-bold text-lg h-10 p-0" 
+                                                value={p.home_score} 
+                                                onChange={e => setDailyPredictions(prev => ({...prev, [match.id]: {...(prev[match.id] || {match_id: match.id}), home_score: e.target.value}}))}
+                                                disabled={isLocked || submittingId === match.id}
+                                            />
+                                            <span className="text-gray-400">-</span>
+                                            <Input 
+                                                type="number" min="0" className="w-14 text-center font-bold text-lg h-10 p-0" 
+                                                value={p.away_score}
+                                                onChange={e => setDailyPredictions(prev => ({...prev, [match.id]: {...(prev[match.id] || {match_id: match.id}), away_score: e.target.value}}))}
+                                                disabled={isLocked || submittingId === match.id}
+                                            />
+                                            {!isLocked && (
+                                                <Button 
+                                                    size="icon" 
+                                                    variant="ghost" 
+                                                    className="h-10 w-10 text-green-600 hover:text-green-700 hover:bg-green-50"
+                                                    onClick={() => handleMatchSave(match.id)}
+                                                    disabled={submittingId === match.id}
+                                                >
+                                                    {submittingId === match.id ? <Loader2 className="h-5 w-5 animate-spin"/> : <Save className="h-5 w-5"/>}
+                                                </Button>
+                                            )}
+                                        </div>
+                                    </CardContent>
+                                </Card>
+                            )
+                        })
+                    }
                 </TabsContent>
 
-                {/* --- ABA 2: GRUPOS (IMPLEMENTADO) --- */}
+                {/* --- ABA 2: GRUPOS --- */}
                 <TabsContent value="groups" className="space-y-6">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         {groups.map(group => {
@@ -370,7 +407,7 @@ const Palpites = () => {
                     </div>
                 </TabsContent>
 
-                {/* --- ABA 3: FINAL (IMPLEMENTADO) --- */}
+                {/* --- ABA 3: FINAL --- */}
                 <TabsContent value="final">
                     <Card className="border-t-4 border-t-fifa-gold shadow-lg">
                         <CardHeader>

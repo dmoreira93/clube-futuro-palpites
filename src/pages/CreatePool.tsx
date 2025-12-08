@@ -7,20 +7,20 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
+import { Textarea } from '@/components/ui/textarea'; // Restaurado
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
-import { Loader2, Trophy, DollarSign, Settings2 } from 'lucide-react';
+import { Loader2, Trophy, DollarSign, Settings2, Lock } from 'lucide-react';
 
-// Schema de validação
 const formSchema = z.object({
   name: z.string().min(3, "O nome deve ter pelo menos 3 caracteres").max(50),
   description: z.string().optional(),
   championship_id: z.string().uuid("Selecione um campeonato"),
   entry_fee: z.string().transform((val) => Number(val) || 0),
+  payment_required: z.boolean().default(false), // Novo campo mantido
   prize_percent_1st: z.string().transform((val) => Number(val) || 0),
   prize_percent_2nd: z.string().transform((val) => Number(val) || 0),
   prize_percent_3rd: z.string().transform((val) => Number(val) || 0),
@@ -38,7 +38,8 @@ const CreatePoolPage = () => {
     defaultValues: {
       name: "",
       description: "",
-      entry_fee: 0, // "0" para input type number
+      entry_fee: 0,
+      payment_required: false,
       prize_percent_1st: 70,
       prize_percent_2nd: 20,
       prize_percent_3rd: 10,
@@ -59,13 +60,11 @@ const CreatePoolPage = () => {
     setLoading(true);
 
     try {
-      // Validação de Porcentagem
       const totalPrize = values.prize_percent_1st + values.prize_percent_2nd + values.prize_percent_3rd;
       if (values.entry_fee > 0 && totalPrize !== 100) {
           throw new Error("A soma das porcentagens dos prêmios deve ser 100%.");
       }
 
-      // 1. Cria o Bolão (O trigger do banco vai inserir os critérios padrão automaticamente)
       const { data: pool, error } = await supabase
         .from('pools')
         .insert({
@@ -74,10 +73,10 @@ const CreatePoolPage = () => {
           description: values.description,
           championship_id: values.championship_id,
           entry_fee: values.entry_fee,
+          payment_required: values.payment_required,
           prize_percent_1st: values.prize_percent_1st,
           prize_percent_2nd: values.prize_percent_2nd,
           prize_percent_3rd: values.prize_percent_3rd,
-          // Gera código único no front ou deixa o banco gerar (se tiver default)
           invite_code: Math.random().toString(36).substring(2, 8).toUpperCase(), 
         })
         .select()
@@ -85,24 +84,19 @@ const CreatePoolPage = () => {
 
       if (error) throw error;
 
-      // 2. Cria a participação do dono (Admin)
       await supabase.from('participations').insert({
         user_id: user.id,
         pool_id: pool.id,
         is_admin: true,
-        payment_status: 'paid', // Dono não paga
+        payment_status: 'paid',
       });
 
-      await fetchAndSyncProfile(user); // Atualiza contexto
-
+      await fetchAndSyncProfile(user);
       toast.success("Bolão criado com sucesso!");
 
-      // 3. Redirecionamento Inteligente
       if (values.customize_criteria) {
-          // Vai para a tela de edição de critérios
           navigate(`/pool/${pool.id}/criteria-setup`);
       } else {
-          // Vai direto para o dashboard
           navigate(`/pool/${pool.id}`);
       }
 
@@ -133,15 +127,9 @@ const CreatePoolPage = () => {
                   <FormItem>
                     <FormLabel>Campeonato</FormLabel>
                     <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Selecione o campeonato real" />
-                        </SelectTrigger>
-                      </FormControl>
+                      <FormControl><SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger></FormControl>
                       <SelectContent>
-                        {championships.map(c => (
-                            <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-                        ))}
+                        {championships.map(c => (<SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>))}
                       </SelectContent>
                     </Select>
                     <FormMessage />
@@ -149,19 +137,30 @@ const CreatePoolPage = () => {
                 )}
               />
 
+              <FormField control={form.control} name="name" render={({ field }) => (
+                  <FormItem><FormLabel>Nome do Bolão</FormLabel><FormControl><Input placeholder="Ex: Bolão da Firma 2026" {...field} /></FormControl><FormMessage /></FormItem>
+              )} />
+
+              {/* CAMPO DE DESCRIÇÃO RESTAURADO */}
               <FormField
                 control={form.control}
-                name="name"
+                name="description"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Nome do Bolão</FormLabel>
-                    <FormControl><Input placeholder="Ex: Bolão da Firma 2026" {...field} /></FormControl>
+                    <FormLabel>Descrição (Opcional)</FormLabel>
+                    <FormControl>
+                      <Textarea 
+                        placeholder="Regras extras, chave PIX para pagamento, etc." 
+                        className="resize-none" 
+                        {...field} 
+                      />
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="p-4 bg-blue-50 rounded-lg border border-blue-100 space-y-4">
                   <FormField
                     control={form.control}
                     name="entry_fee"
@@ -169,56 +168,52 @@ const CreatePoolPage = () => {
                       <FormItem>
                         <FormLabel>Taxa de Entrada (R$)</FormLabel>
                         <FormControl><Input type="number" {...field} /></FormControl>
-                        <FormDescription>0 para gratuito.</FormDescription>
                         <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  {/* Switch de Pagamento Obrigatório */}
+                  <FormField
+                    control={form.control}
+                    name="payment_required"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-row items-center justify-between rounded-lg border bg-white p-3 shadow-sm">
+                        <div className="space-y-0.5">
+                          <FormLabel className="text-base flex items-center gap-2 text-blue-900">
+                              <Lock className="w-4 h-4"/> Bloquear palpites até o pagamento?
+                          </FormLabel>
+                          <FormDescription className="text-xs">
+                            Se ativado, o participante só poderá salvar palpites após você confirmar o pagamento dele.
+                          </FormDescription>
+                        </div>
+                        <FormControl>
+                          <Switch checked={field.value} onCheckedChange={field.onChange} />
+                        </FormControl>
                       </FormItem>
                     )}
                   />
               </div>
 
-              {/* Configuração de Prêmios (Só mostra se tiver taxa) */}
               <div className="space-y-4 p-4 bg-gray-50 rounded-lg border">
-                  <h4 className="font-medium flex items-center gap-2"><DollarSign className="w-4 h-4"/> Distribuição de Prêmios (%)</h4>
+                  <h4 className="font-medium flex items-center gap-2"><DollarSign className="w-4 h-4"/> Prêmios (%)</h4>
                   <div className="grid grid-cols-3 gap-4">
-                      <FormField control={form.control} name="prize_percent_1st" render={({ field }) => (
-                          <FormItem><FormLabel>1º Lugar</FormLabel><FormControl><Input type="number" {...field} /></FormControl></FormItem>
-                      )}/>
-                      <FormField control={form.control} name="prize_percent_2nd" render={({ field }) => (
-                          <FormItem><FormLabel>2º Lugar</FormLabel><FormControl><Input type="number" {...field} /></FormControl></FormItem>
-                      )}/>
-                      <FormField control={form.control} name="prize_percent_3rd" render={({ field }) => (
-                          <FormItem><FormLabel>3º Lugar</FormLabel><FormControl><Input type="number" {...field} /></FormControl></FormItem>
-                      )}/>
+                      <FormField control={form.control} name="prize_percent_1st" render={({ field }) => <FormItem><FormLabel>1º</FormLabel><FormControl><Input type="number" {...field} /></FormControl></FormItem>}/>
+                      <FormField control={form.control} name="prize_percent_2nd" render={({ field }) => <FormItem><FormLabel>2º</FormLabel><FormControl><Input type="number" {...field} /></FormControl></FormItem>}/>
+                      <FormField control={form.control} name="prize_percent_3rd" render={({ field }) => <FormItem><FormLabel>3º</FormLabel><FormControl><Input type="number" {...field} /></FormControl></FormItem>}/>
                   </div>
               </div>
 
-              {/* Toggle para Customizar Critérios */}
-              <FormField
-                control={form.control}
-                name="customize_criteria"
-                render={({ field }) => (
+              <FormField control={form.control} name="customize_criteria" render={({ field }) => (
                   <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4 shadow-sm">
-                    <div className="space-y-0.5">
-                      <FormLabel className="text-base flex items-center gap-2">
-                          <Settings2 className="w-4 h-4"/> Personalizar Pontuação
-                      </FormLabel>
-                      <FormDescription>
-                        Deseja alterar quantos pontos valem cada acerto? (Padrão: Placar=10, Vencedor=5...)
-                      </FormDescription>
-                    </div>
-                    <FormControl>
-                      <Switch
-                        checked={field.value}
-                        onCheckedChange={field.onChange}
-                      />
-                    </FormControl>
+                    <div className="space-y-0.5"><FormLabel className="text-base flex items-center gap-2"><Settings2 className="w-4 h-4"/> Personalizar Pontuação</FormLabel></div>
+                    <FormControl><Switch checked={field.value} onCheckedChange={field.onChange} /></FormControl>
                   </FormItem>
                 )}
               />
 
               <Button type="submit" className="w-full bg-fifa-blue hover:bg-blue-900" disabled={loading}>
-                {loading ? <Loader2 className="animate-spin mr-2"/> : null}
-                Criar Bolão
+                {loading ? <Loader2 className="animate-spin mr-2"/> : null} Criar Bolão
               </Button>
             </form>
           </Form>
