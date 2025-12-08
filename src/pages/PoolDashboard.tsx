@@ -13,7 +13,8 @@ import {
 } from 'lucide-react'; 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+// CORREÇÃO: Adicionado CardDescription na importação abaixo
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -22,7 +23,7 @@ interface PoolHeaderData {
   name: string;
   invite_code: string;
   description?: string | null;
-  owner_id: string; // Adicionado para verificação segura
+  owner_id: string; 
 }
 
 const PoolDashboard = () => {
@@ -42,7 +43,6 @@ const PoolDashboard = () => {
       
       const fetchPoolDetails = async () => {
         try {
-            // CRÍTICO: Buscamos o owner_id diretamente do banco para esta página
             const { data, error } = await supabase
             .from('pools')
             .select('name, invite_code, description, owner_id')
@@ -74,11 +74,8 @@ const PoolDashboard = () => {
     }
   };
 
-  // VERIFICAÇÃO DE SEGURANÇA:
-  // Compara o ID do usuário logado com o owner_id que veio do banco para ESTE bolão.
   const isOwner = user?.id && poolDetails?.owner_id && user.id === poolDetails.owner_id;
 
-  // Cálculos de Estatísticas
   const myRankData = ranking.find(p => p.id === user?.id);
   const leaderPoints = ranking.length > 0 ? ranking[0].points : 0;
   const myPoints = myRankData?.points || 0;
@@ -155,7 +152,6 @@ const PoolDashboard = () => {
             <div className="lg:col-span-2 space-y-8">
                 
                 {/* --- ÁREA DO DONO: GESTÃO FINANCEIRA --- */}
-                {/* Só aparece se for dono E houver participantes para gerir */}
                 {isOwner && (
                     <div className="animate-in fade-in slide-in-from-left-4">
                         <PaymentManagement />
@@ -214,6 +210,7 @@ const PoolDashboard = () => {
                 <Card className="bg-blue-50/50 border-blue-100">
                     <CardHeader>
                         <CardTitle className="text-lg text-fifa-blue">Próximas Partidas</CardTitle>
+                        {/* AQUI ESTAVA O ERRO: CardDescription estava a ser usado sem importar */}
                         <CardDescription>Prepare seus palpites!</CardDescription>
                     </CardHeader>
                     <CardContent>
@@ -232,7 +229,7 @@ const PoolDashboard = () => {
   );
 };
 
-// Componentes auxiliares (mantidos iguais)
+// Componentes auxiliares
 const StatCard = ({ title, value, icon, subtext, highlight = false }: any) => (
     <Card className={`${highlight ? 'border-fifa-gold bg-yellow-50/30' : ''} shadow-sm`}>
         <CardContent className="p-4 flex flex-col items-center text-center justify-center h-full">
