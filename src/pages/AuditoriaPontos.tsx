@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Calculator, CheckCircle, AlertTriangle, Search, RefreshCw } from "lucide-react";
+import { Calculator, CheckCircle, AlertTriangle, Search, RefreshCw, Trophy, Medal } from "lucide-react";
 import { toast } from "sonner";
 
 interface UserOption {
@@ -22,12 +22,11 @@ interface UserOption {
 
 interface AuditLog {
   id: string;
-  match_id: string | null;
   points_earned: number;
   points_type: string;
   description: string;
   created_at: string;
-  match_info?: string;
+  details: string; // Campo unificado para info do jogo, grupo ou final
 }
 
 const AuditoriaPontos = () => {
@@ -38,35 +37,41 @@ const AuditoriaPontos = () => {
   const [loading, setLoading] = useState(false);
   const [recalcLoading, setRecalcLoading] = useState(false);
 
-  // 1. Busca participantes do bolão ativo
+  // 1. Busca participantes do bolão ativo (Query Simplificada)
   useEffect(() => {
     const fetchParticipants = async () => {
       if (!activePool?.id) return;
 
       try {
+        // Correção: Join direto sem alias para evitar erros de tipagem
         const { data, error } = await supabase
           .from("participations")
           .select(`
-            user:users_custom (
+            user_id,
+            users_custom (
               id,
               name
             )
           `)
-          .eq("pool_id", activePool.id)
-          .order("joined_at", { ascending: true }); // Ou order por nome se preferir
+          .eq("pool_id", activePool.id);
 
         if (error) throw error;
 
-        // Mapeia e remove possíveis nulos
+        // Mapeamento seguro
         const mappedUsers = (data || [])
-          .map((p: any) => ({
-            id: p.user?.id,
-            name: p.user?.name || "Sem Nome"
-          }))
-          .filter(u => u.id); // Garante que tem ID
+          .map((p: any) => {
+             // O Supabase pode retornar array ou objeto dependendo da relação
+             const userData = Array.isArray(p.users_custom) ? p.users_custom[0] : p.users_custom;
+             return {
+                id: userData?.id,
+                name: userData?.name || "Participante Sem Nome"
+             };
+          })
+          .filter(u => u.id)
+          .sort((a, b) => a.name.localeCompare(b.name));
 
         setUsers(mappedUsers);
-      } catch (error) {
+      } catch (error: any) {
         console.error("Erro ao buscar participantes:", error);
         toast.error("Erro ao carregar lista de participantes.");
       }
@@ -75,19 +80,31 @@ const AuditoriaPontos = () => {
     fetchParticipants();
   }, [activePool?.id]);
 
-  // 2. Busca logs quando um usuário é selecionado
+  // 2. Busca logs (Query Profunda Corrigida)
   const fetchAuditLogs = async (userId: string) => {
     if (!userId || !activePool?.id) return;
     
     setLoading(true);
     try {
+      // Correção: Navegação correta entre tabelas:
+      // log -> match_prediction -> match -> teams
       const { data, error } = await supabase
         .from("user_points_log")
         .select(`
           *,
-          match:matches(
-            home_team:home_team_id(name),
-            away_team:away_team_id(name)
+          match_prediction:match_predictions (
+            match:matches (
+                home_team:home_team_id(name),
+                away_team:away_team_id(name),
+                home_score,
+                away_score
+            )
+          ),
+          group_prediction:group_predictions (
+             group:groups (name)
+          ),
+          final_prediction:final_predictions (
+             id
           )
         `)
         .eq("pool_id", activePool.id)
@@ -96,17 +113,36 @@ const AuditoriaPontos = () => {
 
       if (error) throw error;
 
-      const formattedLogs = data.map((log: any) => ({
-        ...log,
-        match_info: log.match 
-          ? `${log.match.home_team?.name} x ${log.match.away_team?.name}`
-          : "N/A"
-      }));
+      const formattedLogs: AuditLog[] = data.map((log: any) => {
+        let details = "-";
+
+        // Lógica para extrair detalhes legíveis baseado no tipo
+        if (log.match_prediction?.match) {
+            const m = log.match_prediction.match;
+            details = `Jogo: ${m.home_team?.name} ${m.home_score} x ${m.away_score} ${m.away_team?.name}`;
+        } else if (log.group_prediction?.group) {
+            details = `Grupo: ${log.group_prediction.group.name}`;
+        } else if (log.final_prediction) {
+            details = "Palpite Final (Campeão/Pódio)";
+        } else if (log.description) {
+            // Fallback para usar a descrição se não tiver relação
+            details = log.description; 
+        }
+
+        return {
+            id: log.id,
+            points_earned: log.points_earned,
+            points_type: log.points_type,
+            description: log.description || "Pontuação processada",
+            created_at: log.created_at,
+            details: details
+        };
+      });
 
       setLogs(formattedLogs);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Erro na auditoria:", error);
-      toast.error("Falha ao buscar histórico de pontos.");
+      toast.error("Falha ao buscar histórico: " + error.message);
     } finally {
       setLoading(false);
     }
@@ -117,13 +153,11 @@ const AuditoriaPontos = () => {
     fetchAuditLogs(value);
   };
 
-  // Função administrativa para forçar recálculo (útil para correção)
   const handleRecalculate = async () => {
     if (!selectedUser || !activePool?.id) return;
     
     setRecalcLoading(true);
     try {
-        // Chama a RPC que você criou anteriormente
         const { error } = await supabase.rpc('recalculate_user_points', { 
             p_pool_id: activePool.id,
             p_user_id: selectedUser 
@@ -132,7 +166,7 @@ const AuditoriaPontos = () => {
         if (error) throw error;
 
         toast.success("Pontuação recalculada com sucesso!");
-        fetchAuditLogs(selectedUser); // Atualiza a lista
+        fetchAuditLogs(selectedUser); // Refresh
     } catch (error: any) {
         console.error("Erro ao recalcular:", error);
         toast.error("Erro no recálculo: " + error.message);
@@ -143,52 +177,62 @@ const AuditoriaPontos = () => {
 
   if (!activePool) {
       return (
-        <div className="p-8 text-center text-gray-500">
-            Selecione um bolão para auditar.
+        <div className="flex justify-center items-center h-[50vh]">
+            <Card className="w-full max-w-md text-center p-6 border-dashed">
+                <div className="mx-auto bg-gray-100 p-4 rounded-full w-16 h-16 flex items-center justify-center mb-4">
+                    <Calculator className="h-8 w-8 text-gray-400" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-700">Nenhum Bolão Ativo</h3>
+                <p className="text-gray-500 mt-2">Selecione um bolão no menu para acessar a auditoria.</p>
+            </Card>
         </div>
       );
   }
 
   return (
     <div className="container mx-auto py-8 px-4 max-w-5xl">
-      <div className="flex justify-between items-center mb-8">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
         <div>
             <h1 className="text-3xl font-bold text-fifa-blue flex items-center gap-2">
                 <Calculator className="h-8 w-8 text-fifa-gold" /> Auditoria de Pontos
             </h1>
-            <p className="text-gray-500">Verifique o histórico detalhado de pontuação por participante.</p>
+            <p className="text-gray-500">Extrato detalhado de pontuação por participante.</p>
         </div>
       </div>
 
-      <Card className="mb-8">
-        <CardHeader>
-            <CardTitle>Selecione o Participante</CardTitle>
-            <CardDescription>Escolha um usuário do bolão <strong>{activePool.name}</strong> para ver o extrato.</CardDescription>
+      <Card className="mb-8 border-t-4 border-t-fifa-blue shadow-sm">
+        <CardHeader className="pb-4">
+            <CardTitle className="text-lg">Selecionar Participante</CardTitle>
+            <CardDescription>
+                Bolão Ativo: <span className="font-bold text-fifa-blue">{activePool.name}</span>
+            </CardDescription>
         </CardHeader>
-        <CardContent className="flex flex-col sm:flex-row gap-4">
-            <div className="flex-1">
+        <CardContent className="flex flex-col sm:flex-row gap-4 items-end">
+            <div className="flex-1 w-full">
+                <label className="text-sm font-medium mb-1 block text-gray-700">Participante</label>
                 <Select value={selectedUser} onValueChange={handleUserChange}>
-                <SelectTrigger>
-                    <SelectValue placeholder="Buscar participante..." />
+                <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Selecione um usuário..." />
                 </SelectTrigger>
                 <SelectContent>
-                    {users.map((user) => (
+                    {users.length > 0 ? users.map((user) => (
                     <SelectItem key={user.id} value={user.id}>
                         {user.name}
                     </SelectItem>
-                    ))}
+                    )) : <div className="p-2 text-sm text-gray-500 text-center">Nenhum participante encontrado.</div>}
                 </SelectContent>
                 </Select>
             </div>
+            
             {isAdmin && selectedUser && (
                 <Button 
                     variant="outline" 
                     onClick={handleRecalculate} 
                     disabled={recalcLoading}
-                    className="border-yellow-500 text-yellow-700 hover:bg-yellow-50"
+                    className="w-full sm:w-auto border-yellow-500 text-yellow-700 hover:bg-yellow-50"
                 >
                     {recalcLoading ? <RefreshCw className="mr-2 h-4 w-4 animate-spin"/> : <AlertTriangle className="mr-2 h-4 w-4"/>}
-                    Forçar Recálculo
+                    Recalcular Pontos
                 </Button>
             )}
         </CardContent>
@@ -198,47 +242,51 @@ const AuditoriaPontos = () => {
           <Card>
             <CardContent className="p-0">
                 {loading ? (
-                    <div className="p-8 text-center">Carregando dados...</div>
+                    <div className="p-12 text-center text-gray-500 animate-pulse">Carregando histórico...</div>
                 ) : logs.length === 0 ? (
                     <div className="p-12 text-center flex flex-col items-center text-gray-400">
                         <Search className="h-12 w-12 mb-2 opacity-20" />
-                        <p>Nenhum registro de pontos encontrado para este usuário.</p>
+                        <p>Nenhum registro de pontos encontrado para este usuário neste bolão.</p>
                     </div>
                 ) : (
-                    <Table>
-                        <TableHeader>
-                            <TableRow className="bg-gray-50">
-                                <TableHead>Data</TableHead>
-                                <TableHead>Tipo</TableHead>
-                                <TableHead>Detalhe (Jogo)</TableHead>
-                                <TableHead>Descrição</TableHead>
-                                <TableHead className="text-right">Pontos</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {logs.map((log) => (
-                                <TableRow key={log.id}>
-                                    <TableCell className="text-xs text-gray-500">
-                                        {new Date(log.created_at).toLocaleString('pt-BR')}
-                                    </TableCell>
-                                    <TableCell>
-                                        <Badge variant="outline" className="capitalize">
-                                            {log.points_type.replace('_', ' ')}
-                                        </Badge>
-                                    </TableCell>
-                                    <TableCell className="font-medium">
-                                        {log.match_info !== "N/A" ? log.match_info : "-"}
-                                    </TableCell>
-                                    <TableCell className="text-sm text-gray-600 max-w-md truncate" title={log.description}>
-                                        {log.description}
-                                    </TableCell>
-                                    <TableCell className="text-right font-bold text-green-600">
-                                        +{log.points_earned}
-                                    </TableCell>
+                    <div className="overflow-x-auto">
+                        <Table>
+                            <TableHeader>
+                                <TableRow className="bg-gray-50/50">
+                                    <TableHead className="w-[180px]">Data</TableHead>
+                                    <TableHead>Evento / Motivo</TableHead>
+                                    <TableHead>Detalhes</TableHead>
+                                    <TableHead className="text-right">Pontos</TableHead>
                                 </TableRow>
-                            ))}
-                        </TableBody>
-                    </Table>
+                            </TableHeader>
+                            <TableBody>
+                                {logs.map((log) => (
+                                    <TableRow key={log.id} className="hover:bg-gray-50 transition-colors">
+                                        <TableCell className="text-xs text-gray-500 font-mono">
+                                            {new Date(log.created_at).toLocaleString('pt-BR', { 
+                                                day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' 
+                                            })}
+                                        </TableCell>
+                                        <TableCell>
+                                            <div className="flex flex-col">
+                                                <span className="font-medium text-gray-700 capitalize">
+                                                    {log.points_type.replace(/_/g, ' ')}
+                                                </span>
+                                            </div>
+                                        </TableCell>
+                                        <TableCell className="text-sm text-gray-600">
+                                            {log.details}
+                                        </TableCell>
+                                        <TableCell className="text-right">
+                                            <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 font-bold px-3">
+                                                +{log.points_earned}
+                                            </Badge>
+                                        </TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
+                    </div>
                 )}
             </CardContent>
           </Card>

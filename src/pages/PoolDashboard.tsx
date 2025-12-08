@@ -5,7 +5,7 @@ import { supabase } from '@/integrations/supabase/client';
 import usePoolData from '@/hooks/usePoolData'; 
 import useParticipantsRanking from '@/hooks/useParticipantsRanking';
 import NoticeBoard from '@/components/dashboard/NoticeBoard';
-import PaymentManagement from '@/components/dashboard/PaymentManagement'; // IMPORTADO
+import PaymentManagement from '@/components/dashboard/PaymentManagement';
 import { Skeleton } from '@/components/ui/skeleton';
 import { 
     AlertCircle, Copy, Check, Trophy, Target, AlertTriangle, 
@@ -13,7 +13,7 @@ import {
 } from 'lucide-react'; 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -22,11 +22,12 @@ interface PoolHeaderData {
   name: string;
   invite_code: string;
   description?: string | null;
+  owner_id: string; // Adicionado para verificação segura
 }
 
 const PoolDashboard = () => {
   const { poolId } = useParams<{ poolId: string }>();
-  const { switchPool, user, activePool } = useAuth(); // activePool é importante
+  const { switchPool, user } = useAuth(); 
   const navigate = useNavigate();
   
   const [poolDetails, setPoolDetails] = useState<PoolHeaderData | null>(null);
@@ -38,11 +39,24 @@ const PoolDashboard = () => {
   useEffect(() => {
     if (poolId) {
       switchPool(poolId);
+      
       const fetchPoolDetails = async () => {
         try {
-            const { data } = await supabase.from('pools').select('name, invite_code, description').eq('id', poolId).single();
-            if (data) setPoolDetails(data);
-        } catch (error) { console.error(error); }
+            // CRÍTICO: Buscamos o owner_id diretamente do banco para esta página
+            const { data, error } = await supabase
+            .from('pools')
+            .select('name, invite_code, description, owner_id')
+            .eq('id', poolId)
+            .single();
+            
+            if (error) throw error;
+            
+            if (data) {
+                setPoolDetails(data as PoolHeaderData);
+            }
+        } catch (error) {
+            console.error("Erro ao buscar detalhes do bolão:", error);
+        }
       };
       fetchPoolDetails();
     }
@@ -60,9 +74,11 @@ const PoolDashboard = () => {
     }
   };
 
-  // Verifica se é Dono
-  const isOwner = activePool?.owner_id === user?.id;
+  // VERIFICAÇÃO DE SEGURANÇA:
+  // Compara o ID do usuário logado com o owner_id que veio do banco para ESTE bolão.
+  const isOwner = user?.id && poolDetails?.owner_id && user.id === poolDetails.owner_id;
 
+  // Cálculos de Estatísticas
   const myRankData = ranking.find(p => p.id === user?.id);
   const leaderPoints = ranking.length > 0 ? ranking[0].points : 0;
   const myPoints = myRankData?.points || 0;
@@ -123,7 +139,7 @@ const PoolDashboard = () => {
             <ActionButton icon={<Calculator />} label="Simulador" onClick={() => navigate(`/pool/${poolId}/simulador`)} />
             <ActionButton icon={<Info />} label="Participantes" onClick={() => navigate(`/pool/${poolId}/info-participantes`)} />
             
-            {/* BOTÃO DE ADMINISTRAÇÃO (SÓ PARA O DONO) */}
+            {/* BOTÃO EXCLUSIVO PARA O DONO */}
             {isOwner && (
                 <ActionButton 
                     icon={<Settings />} 
@@ -139,6 +155,7 @@ const PoolDashboard = () => {
             <div className="lg:col-span-2 space-y-8">
                 
                 {/* --- ÁREA DO DONO: GESTÃO FINANCEIRA --- */}
+                {/* Só aparece se for dono E houver participantes para gerir */}
                 {isOwner && (
                     <div className="animate-in fade-in slide-in-from-left-4">
                         <PaymentManagement />
@@ -156,6 +173,21 @@ const PoolDashboard = () => {
                                 {top3[2] && <PodiumStep participant={top3[2]} place={3} color="bg-orange-300" height="h-20" />}
                             </div>
                         ) : <div className="text-center py-8 text-gray-500">Ainda não há ranking disponível.</div>}
+
+                        {lastPlace && humanParticipants.length > 3 && (
+                            <div className="mt-6 pt-4 border-t flex items-center justify-between bg-red-50 p-3 rounded-lg">
+                                <div className="flex items-center gap-3">
+                                    <span className="text-2xl">🐢</span>
+                                    <div>
+                                        <p className="text-sm font-bold text-red-700">Zona de Punição</p>
+                                        <p className="text-xs text-red-600">Último colocado: {lastPlace.name}</p>
+                                    </div>
+                                </div>
+                                <Badge variant="destructive" className="bg-red-100 text-red-700 hover:bg-red-200 border-red-200">
+                                    {poolDetails?.description || "Pagar o café!"}
+                                </Badge>
+                            </div>
+                        )}
                     </CardContent>
                 </Card>
 
@@ -177,6 +209,22 @@ const PoolDashboard = () => {
                         </div>
                     </CardContent>
                 </Card>
+
+                {/* Próximos Jogos */}
+                <Card className="bg-blue-50/50 border-blue-100">
+                    <CardHeader>
+                        <CardTitle className="text-lg text-fifa-blue">Próximas Partidas</CardTitle>
+                        <CardDescription>Prepare seus palpites!</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                         <div className="text-center py-4 text-gray-500 text-sm">
+                            <p>Consulte a aba "Palpites" para ver a agenda completa.</p>
+                            <Button variant="link" onClick={() => navigate(`/pool/${poolId}/palpites`)} className="mt-2 text-fifa-blue">
+                                Ir para Palpites
+                            </Button>
+                        </div>
+                    </CardContent>
+                </Card>
             </div>
         </div>
       </div>
@@ -185,12 +233,13 @@ const PoolDashboard = () => {
 };
 
 // Componentes auxiliares (mantidos iguais)
-const StatCard = ({ title, value, icon, highlight = false }: any) => (
+const StatCard = ({ title, value, icon, subtext, highlight = false }: any) => (
     <Card className={`${highlight ? 'border-fifa-gold bg-yellow-50/30' : ''} shadow-sm`}>
         <CardContent className="p-4 flex flex-col items-center text-center justify-center h-full">
             <div className="mb-2 bg-white p-2 rounded-full shadow-sm">{icon}</div>
             <p className="text-xs text-gray-500 font-medium uppercase">{title}</p>
             <p className="text-2xl font-bold text-gray-800 my-1">{value}</p>
+            {subtext && <p className="text-[10px] text-gray-400">{subtext}</p>}
         </CardContent>
     </Card>
 );
