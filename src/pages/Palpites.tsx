@@ -1,5 +1,3 @@
-// src/pages/Palpites.tsx
-
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { Input } from "@/components/ui/input";
@@ -7,8 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/components/ui/use-toast";
-import { Label } from "@/components/ui/label";
-import { Loader2, Printer, AlertTriangle } from "lucide-react"; 
+import { Loader2, AlertTriangle, Save, Trophy, Medal } from "lucide-react"; 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
@@ -16,10 +13,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Match, Team } from "@/types/matches";
 import { format, parseISO, isAfter } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import ReactDOMServer from 'react-dom/server';
-import PredictionReceipt from '@/components/home/predictions/PredictionReceipt';
 
-// Interfaces ajustadas
+// Interfaces Locais
 interface LocalPrediction {
   match_id: string;
   home_score: string;
@@ -37,19 +32,18 @@ interface FinalPredictionState {
   runner_up_id: string | null; 
   third_place_id: string | null;
   fourth_place_id: string | null;
-  final_home_score: number | null;
-  final_away_score: number | null;
+  final_home_score: string; // Mudado para string para facilitar input
+  final_away_score: string;
   prediction_id?: string;
 }
 
 const Palpites = () => {
-    const { user, activePool: pool } = useAuth(); // IMPORTANTE: Usar activePool
+    const { user, activePool: pool } = useAuth();
     const { toast } = useToast();
     const navigate = useNavigate();
 
     const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
-    const [submittingMatchId, setSubmittingMatchId] = useState<string | null>(null);
+    const [submittingId, setSubmittingId] = useState<string | null>(null);
     
     const [allMatches, setAllMatches] = useState<Match[]>([]);
     const [teams, setTeams] = useState<Team[]>([]);
@@ -59,325 +53,398 @@ const Palpites = () => {
     const [groupPredictions, setGroupPredictions] = useState<{ [groupId: string]: GroupPredictionState }>({});
     const [finalPrediction, setFinalPrediction] = useState<FinalPredictionState>({
         champion_id: null, runner_up_id: null, third_place_id: null, fourth_place_id: null,
-        final_home_score: null, final_away_score: null,
+        final_home_score: '', final_away_score: '',
     });
 
-    const fetchInitialData = useCallback(async () => {
-        if (!user || !pool?.championship_id) { 
-            setLoading(false); 
-            return; 
+    // --- REGRA DE BLOQUEIO GLOBAL ---
+    // Se o bolão tem prazo, usa o prazo. Se não, usa o início do campeonato (data do 1º jogo).
+    // Se nenhum prazo estiver definido, está aberto.
+    const isLocked = useMemo(() => {
+        if (!pool) return true;
+        
+        // 1. Data Limite do Bolão (Prioridade)
+        if (pool.prediction_deadline) {
+            return isAfter(new Date(), new Date(pool.prediction_deadline));
         }
 
+        // 2. Início do Campeonato (Fallback se não houver deadline no bolão)
+        // Pega a data do jogo mais antigo
+        if (allMatches.length > 0) {
+            const firstMatchDate = new Date(Math.min(...allMatches.map(m => new Date(m.match_date).getTime())));
+            return isAfter(new Date(), firstMatchDate);
+        }
+
+        return false;
+    }, [pool, allMatches]);
+
+    const deadlineMessage = useMemo(() => {
+        if (!pool?.prediction_deadline) return "o início do campeonato";
+        return format(new Date(pool.prediction_deadline), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR });
+    }, [pool]);
+
+    const fetchInitialData = useCallback(async () => {
+        if (!user || !pool?.championship_id) { setLoading(false); return; }
+
         setLoading(true);
-        setError(null);
         try {
-            // 1. Buscar Partidas do Campeonato
-            const { data: matchesData, error: matchesError } = await supabase
+            // 1. Buscar Partidas
+            const { data: matchesData } = await supabase
                 .from('matches')
                 .select('*, home_team:home_team_id(*), away_team:away_team_id(*)')
                 .eq('championship_id', pool.championship_id)
                 .order('match_date', { ascending: true });
-            
-            if (matchesError) throw new Error(`Erro Partidas: ${matchesError.message}`);
             setAllMatches(matchesData || []);
 
-            // 2. Buscar Times
-            const { data: teamsData, error: teamsError } = await supabase
-                .from('teams')
-                .select('*')
-                .eq('championship_id', pool.championship_id) // Agora teams tem championship_id? Verifique seu schema. Se não tiver, use via groups.
-                // SE teams não tiver championship_id direto no seu schema novo, você pode filtrar depois ou buscar via groups. 
-                // Assumindo que tem, conforme diagrama.
-                .order('name', { ascending: true });
-            
-            if (teamsError) throw new Error(`Erro Times: ${teamsError.message}`);
+            // 2. Buscar Times (via tabela teams, filtrando pelo campeonato se possível ou pegando todos)
+            // Se teams não tem championship_id direto, idealmente buscaríamos via grupos, mas assumindo tabela global de times:
+            const { data: teamsData } = await supabase.from('teams').select('*').order('name', { ascending: true });
             setTeams(teamsData || []);
 
             // 3. Buscar Grupos
-            const { data: groupsData, error: groupsError } = await supabase
+            const { data: groupsData } = await supabase
                 .from('groups')
                 .select('id, name')
                 .eq('championship_id', pool.championship_id)
                 .order('name', { ascending: true });
-            
-            if (groupsError) throw new Error(`Erro Grupos: ${groupsError.message}`);
             setGroups(groupsData || []);
 
-            // --- BUSCA DE PALPITES (FILTRADOS PELO POOL_ID) ---
-
-            // 4. Palpites de Partida
-            const { data: predictionsData, error: predictionsError } = await supabase
-                .from('match_predictions')
-                .select('*')
-                .eq('user_id', user.id)
-                .eq('pool_id', pool.id); // CRUCIAL: Filtrar pelo bolão
-            
-            if (predictionsError) throw new Error(`Erro Palpites Jogos: ${predictionsError.message}`);
-            
-            const loadedPredictions: { [matchId: string]: LocalPrediction } = {};
-            (predictionsData || []).forEach(p => {
-                loadedPredictions[p.match_id] = { 
+            // 4. Carregar Palpites Existentes
+            if (user && pool) {
+                // Jogos
+                const { data: preds } = await supabase.from('match_predictions').select('*').eq('user_id', user.id).eq('pool_id', pool.id);
+                const loadedPreds: any = {};
+                preds?.forEach(p => loadedPreds[p.match_id] = { 
                     match_id: p.match_id, 
-                    home_score: p.home_score !== null ? String(p.home_score) : '', 
-                    away_score: p.away_score !== null ? String(p.away_score) : '', 
+                    home_score: p.home_score?.toString() || '', 
+                    away_score: p.away_score?.toString() || '', 
                     prediction_id: p.id 
-                };
-            });
-            setDailyPredictions(loadedPredictions);
-
-            // 5. Palpites de Grupo
-            const { data: groupPredData, error: groupPredError } = await supabase
-                .from('group_predictions')
-                .select('*')
-                .eq('user_id', user.id)
-                .eq('pool_id', pool.id); // CRUCIAL
-
-            if (groupPredError) throw new Error(`Erro Palpites Grupos: ${groupPredError.message}`);
-            
-            const loadedGroupPredictions: { [groupId: string]: GroupPredictionState } = {};
-            (groupPredData || []).forEach(gp => {
-                loadedGroupPredictions[gp.group_id] = { 
-                    group_id: gp.group_id, 
-                    predicted_first_team_id: gp.first_team_id, // Ajuste nome se mudou no schema (predicted_first -> first_team_id)
-                    predicted_second_team_id: gp.second_team_id, 
-                    prediction_id: gp.id 
-                };
-            });
-            setGroupPredictions(loadedGroupPredictions);
-
-            // 6. Palpite Final
-            const { data: finalPredData, error: finalPredError } = await supabase
-                .from('final_predictions')
-                .select('*')
-                .eq('user_id', user.id)
-                .eq('pool_id', pool.id) // CRUCIAL
-                .maybeSingle(); // Use maybeSingle para evitar erro se não existir
-
-            if (finalPredError) throw new Error(`Erro Palpite Final: ${finalPredError.message}`);
-            
-            if (finalPredData) {
-                setFinalPrediction({ 
-                    champion_id: finalPredData.champion_id,
-                    runner_up_id: finalPredData.runner_up_id,
-                    third_place_id: finalPredData.third_place_id,
-                    fourth_place_id: finalPredData.fourth_place_id,
-                    final_home_score: finalPredData.final_home_score,
-                    final_away_score: finalPredData.final_away_score,
-                    prediction_id: finalPredData.id 
                 });
+                setDailyPredictions(loadedPreds);
+
+                // Grupos
+                const { data: gPreds } = await supabase.from('group_predictions').select('*').eq('user_id', user.id).eq('pool_id', pool.id);
+                const loadedGroupPreds: any = {};
+                gPreds?.forEach(p => loadedGroupPreds[p.group_id] = {
+                    group_id: p.group_id,
+                    predicted_first_team_id: p.predicted_first_team_id,
+                    predicted_second_team_id: p.predicted_second_team_id,
+                    prediction_id: p.id
+                });
+                setGroupPredictions(loadedGroupPreds);
+
+                // Final
+                const { data: fPred } = await supabase.from('final_predictions').select('*').eq('user_id', user.id).eq('pool_id', pool.id).maybeSingle();
+                if (fPred) {
+                    setFinalPrediction({
+                        champion_id: fPred.champion_id,
+                        runner_up_id: fPred.runner_up_id,
+                        third_place_id: fPred.third_place_id,
+                        fourth_place_id: fPred.fourth_place_id,
+                        final_home_score: fPred.final_home_score?.toString() || '',
+                        final_away_score: fPred.final_away_score?.toString() || '',
+                        prediction_id: fPred.id
+                    });
+                }
             }
 
         } catch (err: any) {
             console.error(err);
-            setError(err.message);
-            toast({ title: "Erro ao Carregar Dados", description: err.message, variant: "destructive" });
+            toast({ title: "Erro", description: "Falha ao carregar dados.", variant: "destructive" });
         } finally {
             setLoading(false);
         }
     }, [user, pool, toast]);
     
-    useEffect(() => {
-        fetchInitialData();
-    }, [fetchInitialData]);
+    useEffect(() => { fetchInitialData(); }, [fetchInitialData]);
 
-    const groupStageMatches = useMemo(() => allMatches.filter(match => match.stage !== "Final" && match.stage !== "Disputa de 3º Lugar"), [allMatches]);
-    
-    const handleScoreChange = useCallback((matchId: string, type: 'home' | 'away', value: string) => {
-        setDailyPredictions(prev => ({ ...prev, [matchId]: { ...(prev[matchId] || { match_id: matchId, home_score: '', away_score: '' }), [type === 'home' ? 'home_score' : 'away_score']: value } }));
-    }, []);
+    // --- HANDLERS ---
 
-    const handleGroupTeamChange = useCallback((groupId: string, type: 'first' | 'second', teamId: string) => {
-        setGroupPredictions(prev => ({ ...prev, [groupId]: { ...(prev[groupId] || { group_id: groupId, predicted_first_team_id: null, predicted_second_team_id: null }), [type === 'first' ? 'predicted_first_team_id' : 'predicted_second_team_id']: teamId || null } }));
-    }, []);
+    const handleMatchSave = async (matchId: string) => {
+        if (isLocked) return;
+        const p = dailyPredictions[matchId];
+        if (!p || !p.home_score || !p.away_score) return toast({ title: "Preencha o placar", variant: "destructive" });
 
-    const handleFinalPredictionChange = useCallback((field: keyof FinalPredictionState, value: string | number | null) => {
-        setFinalPrediction(prev => ({ ...prev, [field]: value }));
-    }, []);
-
-    // --- SAVING FUNCTIONS (COM POOL_ID) ---
-
-    const handleSaveDailyPrediction = useCallback(async (matchId: string) => {
-        if (!user || !pool) return;
-        const prediction = dailyPredictions[matchId];
-        if (!prediction || prediction.home_score.trim() === '' || prediction.away_score.trim() === '') { toast({ title: "Erro", description: "Preencha ambos os placares.", variant: "destructive" }); return; }
-        
-        setSubmittingMatchId(matchId);
+        setSubmittingId(matchId);
         try {
-            const payload = { 
-                match_id: matchId, 
-                user_id: user.id, 
-                pool_id: pool.id, // Novo campo obrigatório
-                home_score: parseInt(prediction.home_score), 
-                away_score: parseInt(prediction.away_score) 
-            };
-            
-            // Upsert com chave composta correta
-            const { data, error } = await supabase
-                .from('match_predictions')
-                .upsert(payload, { onConflict: 'user_id, pool_id, match_id' }) 
-                .select()
-                .single();
+            const { error } = await supabase.from('match_predictions').upsert({
+                match_id: matchId,
+                user_id: user!.id,
+                pool_id: pool!.id,
+                home_score: parseInt(p.home_score),
+                away_score: parseInt(p.away_score)
+            }, { onConflict: 'user_id, pool_id, match_id' });
 
             if (error) throw error;
-            if (data) {
-                setDailyPredictions(prev => ({ ...prev, [matchId]: { ...prev[matchId], prediction_id: data.id } }));
-                toast({ title: "Sucesso!", description: `Palpite salvo!` });
-            }
-        } catch (error: any) {
-            toast({ title: "Erro ao salvar", description: error.message, variant: "destructive" });
-        } finally {
-            setSubmittingMatchId(null);
-        }
-    }, [user, pool, dailyPredictions, toast]);
-    
-    const handleSaveGroupPrediction = useCallback(async (groupId: string) => {
-        if (!user || !pool) return;
-        const prediction = groupPredictions[groupId];
-        if (!prediction || !prediction.predicted_first_team_id || !prediction.predicted_second_team_id) { toast({ title: "Erro", description: "Selecione os dois times.", variant: "destructive" }); return; }
-        if (prediction.predicted_first_team_id === prediction.predicted_second_team_id) { toast({ title: "Erro", description: "Os times devem ser diferentes.", variant: "destructive"}); return; }
-        
-        setSubmittingMatchId(groupId);
+            toast({ title: "Salvo!", description: "Palpite de jogo atualizado." });
+        } catch (e: any) {
+            toast({ title: "Erro", description: e.message, variant: "destructive" });
+        } finally { setSubmittingId(null); }
+    };
+
+    const handleGroupSave = async (groupId: string) => {
+        if (isLocked) return;
+        const p = groupPredictions[groupId];
+        if (!p || !p.predicted_first_team_id || !p.predicted_second_team_id) return toast({ title: "Selecione os dois times", variant: "destructive" });
+        if (p.predicted_first_team_id === p.predicted_second_team_id) return toast({ title: "Times iguais", description: "Selecione times diferentes para 1º e 2º.", variant: "destructive" });
+
+        setSubmittingId(groupId);
         try {
-            const payload = { 
-                group_id: groupId, 
-                user_id: user.id, 
-                pool_id: pool.id, // Novo campo
-                first_team_id: prediction.predicted_first_team_id, // Ajuste ao nome novo da coluna
-                second_team_id: prediction.predicted_second_team_id 
-            };
-            
-            const { data, error } = await supabase
-                .from('group_predictions')
-                .upsert(payload, { onConflict: 'user_id, pool_id, group_id' })
-                .select()
-                .single();
+            const { error } = await supabase.from('group_predictions').upsert({
+                group_id: groupId,
+                user_id: user!.id,
+                pool_id: pool!.id,
+                predicted_first_team_id: p.predicted_first_team_id,
+                predicted_second_team_id: p.predicted_second_team_id
+            }, { onConflict: 'user_id, pool_id, group_id' });
 
             if (error) throw error;
-            if (data) {
-                setGroupPredictions(prev => ({ ...prev, [groupId]: { ...prev[groupId], prediction_id: data.id }}));
-                toast({ title: "Sucesso!", description: "Palpite do grupo salvo!" });
-            }
-        } catch (error: any) {
-            toast({ title: "Erro ao salvar", description: error.message, variant: "destructive" });
-        } finally {
-            setSubmittingMatchId(null);
+            toast({ title: "Salvo!", description: `Grupo ${groups.find(g => g.id === groupId)?.name} atualizado.` });
+        } catch (e: any) {
+            toast({ title: "Erro", description: e.message, variant: "destructive" });
+        } finally { setSubmittingId(null); }
+    };
+
+    const handleFinalSave = async () => {
+        if (isLocked) return;
+        const f = finalPrediction;
+        if (!f.champion_id || !f.runner_up_id || !f.third_place_id || !f.fourth_place_id || !f.final_home_score || !f.final_away_score) {
+            return toast({ title: "Incompleto", description: "Preencha todos os campos da final (Pódio e Placar).", variant: "destructive" });
         }
-    }, [user, pool, groupPredictions, toast]);
-    
-    const handleSaveFinalPrediction = useCallback(async () => {
-        if (!user || !pool) return;
-        if (!finalPrediction.champion_id || !finalPrediction.runner_up_id || !finalPrediction.third_place_id || !finalPrediction.fourth_place_id) {
-            toast({ title: "Erro", description: "Preencha todos os times.", variant: "destructive" }); return;
-        }
-        
-        setSubmittingMatchId('final');
+        // Validação básica de unicidade
+        const podio = [f.champion_id, f.runner_up_id, f.third_place_id, f.fourth_place_id];
+        if (new Set(podio).size !== podio.length) return toast({ title: "Times repetidos", description: "Os times do pódio devem ser diferentes.", variant: "destructive" });
+
+        setSubmittingId('final');
         try {
-            const payload = { 
-                user_id: user.id, 
-                pool_id: pool.id, // Novo campo
-                champion_id: finalPrediction.champion_id, 
-                runner_up_id: finalPrediction.runner_up_id, 
-                third_place_id: finalPrediction.third_place_id, 
-                fourth_place_id: finalPrediction.fourth_place_id, 
-                final_home_score: finalPrediction.final_home_score, 
-                final_away_score: finalPrediction.final_away_score 
-            };
-            
-            const { data, error } = await supabase
-                .from('final_predictions')
-                .upsert(payload, { onConflict: 'user_id, pool_id' })
-                .select()
-                .single();
+            const { error } = await supabase.from('final_predictions').upsert({
+                user_id: user!.id,
+                pool_id: pool!.id,
+                champion_id: f.champion_id,
+                runner_up_id: f.runner_up_id,
+                third_place_id: f.third_place_id,
+                fourth_place_id: f.fourth_place_id,
+                final_home_score: parseInt(f.final_home_score),
+                final_away_score: parseInt(f.final_away_score)
+            }, { onConflict: 'user_id, pool_id' });
 
             if (error) throw error;
-            if (data) {
-                setFinalPrediction(prev => ({ ...prev, prediction_id: data.id }));
-                toast({ title: "Sucesso!", description: "Palpite final salvo!" });
-            }
-        } catch (error: any) {
-            toast({ title: "Erro ao salvar", description: error.message, variant: "destructive" });
-        } finally {
-            setSubmittingMatchId(null);
-        }
-    }, [user, pool, finalPrediction, toast]);
+            toast({ title: "Salvo!", description: "Seu palpite final foi registrado." });
+        } catch (e: any) {
+            toast({ title: "Erro", description: e.message, variant: "destructive" });
+        } finally { setSubmittingId(null); }
+    };
 
-    // (Mantive a função handlePrintReceipt idêntica ou pode removê-la se não usar impressão agora)
-    // Para simplificar, ocultei a lógica de impressão aqui, mas ela segue a mesma lógica de ler os states.
-    const handlePrintReceipt = useCallback(() => {
-        toast({ description: "Funcionalidade de impressão temporariamente desativada para migração." });
-    }, [toast]);
-
-    if (loading) { return <div className="flex justify-center items-center h-screen"><Loader2 className="h-10 w-10 animate-spin text-fifa-blue" /></div>; }
-    if (!user) { navigate("/login"); return null; }
-    if (error) { return <div className="p-4 text-center"><Card><CardHeader><CardTitle>Erro</CardTitle></CardHeader><CardContent>{error}</CardContent></Card></div>; }
-
-    const deadlineFormatted = pool?.prediction_deadline ? format(new Date(pool.prediction_deadline), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR }) : "Não definido";
-    const isGeneralLock = pool?.prediction_deadline ? isAfter(new Date(), new Date(pool.prediction_deadline)) : false;
+    if (loading) return <div className="flex justify-center items-center h-screen"><Loader2 className="h-10 w-10 animate-spin text-fifa-blue" /></div>;
+    if (!pool) return null;
 
     return (
-        <div className="container mx-auto p-4 sm:p-6 lg:p-8">
-            <div className="text-center mb-6">
-              <h1 className="text-3xl font-bold text-fifa-blue">Meus Palpites</h1>
-              {pool && <p className="text-gray-500">{pool.name}</p>}
+        <div className="container mx-auto p-4 sm:p-6 lg:p-8 max-w-5xl">
+            <div className="text-center mb-8">
+              <h1 className="text-3xl font-bold text-fifa-blue mb-2">Meus Palpites</h1>
+              <p className="text-gray-500">Preencha seus palpites para o bolão <strong>{pool.name}</strong></p>
             </div>
             
-            {isGeneralLock && (
-              <Alert variant="destructive" className="mb-6">
-                <AlertTriangle className="h-4 w-4" />
-                <AlertTitle>Prazo Encerrado</AlertTitle>
-                <AlertDescription>O prazo geral do bolão encerrou em {deadlineFormatted}.</AlertDescription>
-              </Alert>
-            )}
+            <Alert variant={isLocked ? "destructive" : "default"} className={`mb-8 ${isLocked ? 'bg-red-50 border-red-200' : 'bg-blue-50 border-blue-200'}`}>
+                {isLocked ? <AlertTriangle className="h-5 w-5 text-red-600" /> : <Save className="h-5 w-5 text-blue-600" />}
+                <AlertTitle className={isLocked ? "text-red-800" : "text-blue-800"}>
+                    {isLocked ? "Apostas Encerradas" : "Apostas Abertas"}
+                </AlertTitle>
+                <AlertDescription className={isLocked ? "text-red-700" : "text-blue-700"}>
+                    {isLocked 
+                        ? `O prazo para envio de palpites encerrou em ${deadlineMessage}.`
+                        : `Você tem até ${deadlineMessage} para preencher ou alterar TODOS os seus palpites (Jogos, Grupos e Finais).`
+                    }
+                </AlertDescription>
+            </Alert>
 
             <Tabs defaultValue="daily" className="w-full">
-                <TabsList className="grid w-full grid-cols-3 mb-6">
-                    <TabsTrigger value="daily">Partidas</TabsTrigger>
-                    <TabsTrigger value="groups">Grupos</TabsTrigger>
-                    <TabsTrigger value="final">Final</TabsTrigger>
+                <TabsList className="grid w-full grid-cols-3 mb-8 h-12">
+                    <TabsTrigger value="daily" className="text-base">Jogos</TabsTrigger>
+                    <TabsTrigger value="groups" className="text-base">Grupos</TabsTrigger>
+                    <TabsTrigger value="final" className="text-base">Finais</TabsTrigger>
                 </TabsList>
                 
-                <TabsContent value="daily">
-                    <Card>
+                {/* --- ABA 1: PARTIDAS --- */}
+                <TabsContent value="daily" className="space-y-6">
+                    {allMatches.map(match => {
+                        const p = dailyPredictions[match.id] || { home_score: '', away_score: '' };
+                        return (
+                            <Card key={match.id} className={`overflow-hidden transition-opacity ${isLocked ? 'opacity-80' : ''}`}>
+                                <CardContent className="p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+                                    {/* Info do Jogo */}
+                                    <div className="flex-1 w-full flex items-center justify-center sm:justify-start gap-4 text-center sm:text-left">
+                                        <div className="text-xs text-gray-400 font-mono hidden sm:block">
+                                            {format(parseISO(match.match_date), 'dd/MM HH:mm')}
+                                        </div>
+                                        <div className="flex items-center gap-2 flex-1 justify-end">
+                                            <span className="font-bold text-gray-700">{match.home_team?.name}</span>
+                                            {/* TODO: Bandeira se tiver */}
+                                        </div>
+                                        <span className="text-gray-300 font-light">X</span>
+                                        <div className="flex items-center gap-2 flex-1 justify-start">
+                                            <span className="font-bold text-gray-700">{match.away_team?.name}</span>
+                                        </div>
+                                    </div>
+
+                                    {/* Inputs de Placar */}
+                                    <div className="flex items-center gap-2 bg-gray-50 p-2 rounded-lg border border-gray-100">
+                                        <Input 
+                                            type="number" min="0" className="w-14 text-center font-bold text-lg h-10 p-0" 
+                                            value={p.home_score} 
+                                            onChange={e => setDailyPredictions(prev => ({...prev, [match.id]: {...(prev[match.id] || {match_id: match.id}), home_score: e.target.value}}))}
+                                            disabled={isLocked || submittingId === match.id}
+                                        />
+                                        <span className="text-gray-400">-</span>
+                                        <Input 
+                                            type="number" min="0" className="w-14 text-center font-bold text-lg h-10 p-0" 
+                                            value={p.away_score}
+                                            onChange={e => setDailyPredictions(prev => ({...prev, [match.id]: {...(prev[match.id] || {match_id: match.id}), away_score: e.target.value}}))}
+                                            disabled={isLocked || submittingId === match.id}
+                                        />
+                                        {!isLocked && (
+                                            <Button 
+                                                size="icon" 
+                                                variant="ghost" 
+                                                className="h-10 w-10 text-green-600 hover:text-green-700 hover:bg-green-50"
+                                                onClick={() => handleMatchSave(match.id)}
+                                                disabled={submittingId === match.id}
+                                            >
+                                                {submittingId === match.id ? <Loader2 className="h-5 w-5 animate-spin"/> : <Save className="h-5 w-5"/>}
+                                            </Button>
+                                        )}
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        )
+                    })}
+                </TabsContent>
+
+                {/* --- ABA 2: GRUPOS (IMPLEMENTADO) --- */}
+                <TabsContent value="groups" className="space-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {groups.map(group => {
+                            const p = groupPredictions[group.id] || { group_id: group.id, predicted_first_team_id: null, predicted_second_team_id: null };
+                            return (
+                                <Card key={group.id} className="border-t-4 border-t-fifa-blue">
+                                    <CardHeader className="pb-2">
+                                        <CardTitle className="text-lg">{group.name}</CardTitle>
+                                        <CardDescription>Quem passa de fase?</CardDescription>
+                                    </CardHeader>
+                                    <CardContent className="space-y-4">
+                                        <div className="space-y-2">
+                                            <label className="text-sm font-bold text-gray-600 flex items-center gap-2"><Trophy className="h-4 w-4 text-yellow-500"/> 1º Colocado</label>
+                                            <Select 
+                                                disabled={isLocked} 
+                                                value={p.predicted_first_team_id || ''} 
+                                                onValueChange={(val) => setGroupPredictions(prev => ({...prev, [group.id]: {...prev[group.id], predicted_first_team_id: val}}))}
+                                            >
+                                                <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                                                <SelectContent>
+                                                    {teams.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="text-sm font-bold text-gray-600 flex items-center gap-2"><Medal className="h-4 w-4 text-gray-400"/> 2º Colocado</label>
+                                            <Select 
+                                                disabled={isLocked} 
+                                                value={p.predicted_second_team_id || ''} 
+                                                onValueChange={(val) => setGroupPredictions(prev => ({...prev, [group.id]: {...prev[group.id], predicted_second_team_id: val}}))}
+                                            >
+                                                <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                                                <SelectContent>
+                                                    {teams.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                        {!isLocked && (
+                                            <Button className="w-full mt-2" onClick={() => handleGroupSave(group.id)} disabled={submittingId === group.id}>
+                                                {submittingId === group.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Save className="mr-2 h-4 w-4"/>} 
+                                                Salvar Grupo
+                                            </Button>
+                                        )}
+                                    </CardContent>
+                                </Card>
+                            )
+                        })}
+                    </div>
+                </TabsContent>
+
+                {/* --- ABA 3: FINAL (IMPLEMENTADO) --- */}
+                <TabsContent value="final">
+                    <Card className="border-t-4 border-t-fifa-gold shadow-lg">
                         <CardHeader>
-                          <CardTitle className="text-xl">Palpites das Partidas</CardTitle>
-                          <CardDescription>Cada jogo bloqueia no seu horário de início.</CardDescription>
+                            <CardTitle className="flex items-center gap-2 text-2xl text-fifa-blue"><Trophy className="h-8 w-8 text-yellow-500"/> O Grande Final</CardTitle>
+                            <CardDescription>Quem levará a taça? Defina o pódio e o placar da finalíssima.</CardDescription>
                         </CardHeader>
-                        <CardContent className="space-y-4">
-                            {groupStageMatches.length > 0 ? (
-                                groupStageMatches.map(match => {
-                                    const isMatchLocked = isGeneralLock || (parseISO(match.match_date).getTime() <= Date.now());
-                                    const prediction = dailyPredictions[match.id] || { home_score: '', away_score: '' };
-                                    return (
-                                        <Card key={match.id} className={`p-4 ${isMatchLocked ? 'bg-gray-100 opacity-70' : ''}`}>
-                                            <div className="flex justify-between items-center mb-2">
-                                                <p className="font-semibold">{match.home_team?.name} vs {match.away_team?.name}</p>
-                                                <p className="text-sm text-gray-500">{format(parseISO(match.match_date), 'dd/MM HH:mm', { locale: ptBR })}</p>
+                        <CardContent className="space-y-8">
+                            
+                            {/* PÓDIO */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div className="space-y-4">
+                                    <h3 className="font-bold text-gray-700 border-b pb-2">Pódio do Campeonato</h3>
+                                    <div className="space-y-3">
+                                        {[
+                                            { label: "Campeão", icon: <Trophy className="h-4 w-4 text-yellow-500"/>, field: 'champion_id' },
+                                            { label: "Vice-Campeão", icon: <Medal className="h-4 w-4 text-gray-400"/>, field: 'runner_up_id' },
+                                            { label: "3º Lugar", icon: <Medal className="h-4 w-4 text-orange-400"/>, field: 'third_place_id' },
+                                            { label: "4º Lugar", icon: <Medal className="h-4 w-4 text-blue-300"/>, field: 'fourth_place_id' },
+                                        ].map((item: any) => (
+                                            <div key={item.field}>
+                                                <label className="text-sm font-medium text-gray-600 flex items-center gap-2 mb-1">{item.icon} {item.label}</label>
+                                                <Select 
+                                                    disabled={isLocked}
+                                                    value={finalPrediction[item.field as keyof FinalPredictionState] as string || ''}
+                                                    onValueChange={(val) => setFinalPrediction(prev => ({...prev, [item.field]: val}))}
+                                                >
+                                                    <SelectTrigger><SelectValue placeholder="Selecione o time..." /></SelectTrigger>
+                                                    <SelectContent>{teams.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}</SelectContent>
+                                                </Select>
                                             </div>
-                                            <div className="flex items-center gap-2">
-                                                <Input type="number" min="0" className="w-20 text-center" value={prediction.home_score} onChange={e => handleScoreChange(match.id, 'home', e.target.value)} disabled={isMatchLocked || submittingMatchId === match.id} />
-                                                <span>x</span>
-                                                <Input type="number" min="0" className="w-20 text-center" value={prediction.away_score} onChange={e => handleScoreChange(match.id, 'away', e.target.value)} disabled={isMatchLocked || submittingMatchId === match.id} />
-                                                {!isMatchLocked && <Button size="sm" className="ml-auto" onClick={() => handleSaveDailyPrediction(match.id)} disabled={submittingMatchId === match.id}>{submittingMatchId === match.id ? <Loader2 className="animate-spin" /> : 'Salvar'}</Button>}
+                                        ))}
+                                    </div>
+                                </div>
+
+                                {/* PLACAR DA FINAL */}
+                                <div className="space-y-4">
+                                    <h3 className="font-bold text-gray-700 border-b pb-2">Placar da Final</h3>
+                                    <div className="bg-gray-50 p-6 rounded-xl border border-gray-100 text-center">
+                                        <p className="text-sm text-gray-500 mb-4">Qual será o resultado exato do jogo final?</p>
+                                        <div className="flex items-center justify-center gap-4">
+                                            <div className="flex flex-col items-center gap-2">
+                                                <span className="text-xs font-bold text-gray-400 uppercase">Campeão</span>
+                                                <Input 
+                                                    type="number" min="0" className="w-20 text-center text-2xl h-14 font-bold" 
+                                                    value={finalPrediction.final_home_score}
+                                                    onChange={(e) => setFinalPrediction(prev => ({...prev, final_home_score: e.target.value}))}
+                                                    disabled={isLocked}
+                                                />
                                             </div>
-                                        </Card>
-                                    );
-                                })
-                            ) : <p className="text-center py-4 text-gray-500">Nenhuma partida encontrada.</p>}
+                                            <span className="text-2xl font-light text-gray-300">X</span>
+                                            <div className="flex flex-col items-center gap-2">
+                                                <span className="text-xs font-bold text-gray-400 uppercase">Vice</span>
+                                                <Input 
+                                                    type="number" min="0" className="w-20 text-center text-2xl h-14 font-bold" 
+                                                    value={finalPrediction.final_away_score}
+                                                    onChange={(e) => setFinalPrediction(prev => ({...prev, final_away_score: e.target.value}))}
+                                                    disabled={isLocked}
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {!isLocked && (
+                                <div className="flex justify-end pt-4 border-t">
+                                    <Button size="lg" className="w-full md:w-auto bg-green-600 hover:bg-green-700 text-white font-bold" onClick={handleFinalSave} disabled={submittingId === 'final'}>
+                                        {submittingId === 'final' ? <Loader2 className="mr-2 h-5 w-5 animate-spin"/> : <Save className="mr-2 h-5 w-5"/>}
+                                        Salvar Palpite Final
+                                    </Button>
+                                </div>
+                            )}
                         </CardContent>
                     </Card>
-                </TabsContent>
-
-                {/* Conteúdos de Grupos e Final simplificados para brevidade, mas seguem a mesma lógica de estado acima */}
-                <TabsContent value="groups">
-                    <div className="text-center py-8 text-gray-500 border rounded-lg bg-white">
-                        <p>Funcionalidade de Grupos pronta no backend. Implemente o UI conforme necessário usando <code>handleSaveGroupPrediction</code>.</p>
-                    </div>
-                </TabsContent>
-
-                <TabsContent value="final">
-                     <div className="text-center py-8 text-gray-500 border rounded-lg bg-white">
-                        <p>Funcionalidade de Final pronta no backend. Implemente o UI conforme necessário usando <code>handleSaveFinalPrediction</code>.</p>
-                    </div>
                 </TabsContent>
             </Tabs>
         </div>
