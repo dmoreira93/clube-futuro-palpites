@@ -60,12 +60,12 @@ const Palpites = () => {
     const isDeadlineLocked = useMemo(() => {
         if (!pool) return true;
         
-        // 1. Data Limite do Bolão (Prioridade)
+        // 1. Data Limite do Bolão (Prioridade Absoluta)
         if (pool.prediction_deadline) {
             return isAfter(new Date(), new Date(pool.prediction_deadline));
         }
 
-        // 2. Início do Campeonato (Fallback)
+        // 2. Início do Campeonato (Fallback de segurança se não houver data limite)
         if (allMatches.length > 0) {
             const firstMatchDate = new Date(Math.min(...allMatches.map(m => new Date(m.match_date).getTime())));
             return isAfter(new Date(), firstMatchDate);
@@ -74,16 +74,18 @@ const Palpites = () => {
         return false;
     }, [pool, allMatches]);
 
-    // --- REGRA DE BLOQUEIO 2: PAGAMENTO (NOVO) ---
+    // --- REGRA DE BLOQUEIO 2: PAGAMENTO ---
     const isPaymentLocked = useMemo(() => {
+        // Se o bolão não exige pagamento, libera geral
         if (!pool?.payment_required) return false;
         
-        // Busca a participação do usuário neste bolão específico
-        const myPart = userParticipations.find(p => p.pool_id === pool.id);
+        // Imunidade do Dono: O dono nunca é bloqueado por pagamento
+        if (pool.owner_id === user?.id) return false;
         
-        // Se não achou ou o status não é 'paid', bloqueia
+        // Para os outros, verifica o status na lista de participações
+        const myPart = userParticipations.find(p => p.pool_id === pool.id);
         return myPart?.payment_status !== 'paid';
-    }, [pool, userParticipations]);
+    }, [pool, userParticipations, user?.id]);
 
     // Bloqueio Geral (Se qualquer um for true, bloqueia edição)
     const isLocked = isDeadlineLocked || isPaymentLocked;

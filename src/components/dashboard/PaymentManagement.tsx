@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext'; // Importar useAuth
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { CheckCircle, XCircle, DollarSign, Loader2, Search } from 'lucide-react';
+import { CheckCircle, XCircle, DollarSign, Loader2, Search, ShieldCheck } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 
 interface PaymentParticipant {
@@ -15,10 +16,11 @@ interface PaymentParticipant {
 }
 
 interface PaymentManagementProps {
-    poolId: string; // Recebe o ID diretamente
+    poolId: string;
 }
 
 const PaymentManagement = ({ poolId }: PaymentManagementProps) => {
+    const { user } = useAuth(); // Pegar o usuário logado para comparar
     const [participants, setParticipants] = useState<PaymentParticipant[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState("");
@@ -50,7 +52,7 @@ const PaymentManagement = ({ poolId }: PaymentManagementProps) => {
                 payment_status: item.payment_status || 'pending',
             }));
 
-            // Ordena: Pendentes primeiro, depois alfabético
+            // Ordena: Pendentes primeiro
             formattedData.sort((a, b) => {
                 if (a.payment_status === b.payment_status) return a.name.localeCompare(b.name);
                 return a.payment_status === 'pending' ? -1 : 1;
@@ -66,6 +68,12 @@ const PaymentManagement = ({ poolId }: PaymentManagementProps) => {
     };
 
     const handleConfirmPayment = async (userId: string, currentStatus: string) => {
+        // Bloqueio de segurança: Não permitir alterar o próprio status se for o dono
+        if (userId === user?.id) {
+            toast.info("Você é o dono do bolão. Seu pagamento é automático.");
+            return;
+        }
+
         const newStatus = currentStatus === 'paid' ? 'pending' : 'paid';
         try {
             const { error } = await supabase
@@ -78,7 +86,6 @@ const PaymentManagement = ({ poolId }: PaymentManagementProps) => {
 
             toast.success(newStatus === 'paid' ? "Pagamento confirmado!" : "Pagamento marcado como pendente.");
             
-            // Atualização otimista
             setParticipants(prev => prev.map(p => 
                 p.user_id === userId ? { ...p, payment_status: newStatus } : p
             ));
@@ -127,28 +134,37 @@ const PaymentManagement = ({ poolId }: PaymentManagementProps) => {
                     {filteredParticipants.length === 0 ? (
                         <p className="text-center text-gray-500 py-6 text-sm">Nenhum participante encontrado.</p>
                     ) : (
-                        filteredParticipants.map(p => (
-                            <div key={p.user_id} className="flex items-center justify-between py-3 hover:bg-gray-50 px-2 transition-colors -mx-2 rounded-md">
-                                <div className="flex flex-col">
-                                    <span className="font-medium text-sm text-gray-800">{p.name}</span>
-                                    {p.username && <span className="text-xs text-gray-400">@{p.username}</span>}
+                        filteredParticipants.map(p => {
+                            const isMe = p.user_id === user?.id;
+                            return (
+                                <div key={p.user_id} className={`flex items-center justify-between py-3 hover:bg-gray-50 px-2 transition-colors -mx-2 rounded-md ${isMe ? 'bg-blue-50/50' : ''}`}>
+                                    <div className="flex flex-col">
+                                        <div className="flex items-center gap-2">
+                                            <span className="font-medium text-sm text-gray-800">{p.name}</span>
+                                            {isMe && <Badge variant="secondary" className="text-[10px] h-4 px-1 bg-blue-100 text-blue-700">Você</Badge>}
+                                        </div>
+                                        {p.username && <span className="text-xs text-gray-400">@{p.username}</span>}
+                                    </div>
+                                    <div className="flex items-center gap-3">
+                                        <Badge variant={p.payment_status === 'paid' ? 'default' : 'outline'} className={p.payment_status === 'paid' ? 'bg-green-100 text-green-700 hover:bg-green-200 border-green-200 shadow-none' : 'text-yellow-700 border-yellow-300 bg-yellow-50'}>
+                                            {p.payment_status === 'paid' ? 'Pago' : 'Pendente'}
+                                        </Badge>
+                                        
+                                        {/* Botão desabilitado se for o próprio dono */}
+                                        <Button 
+                                            size="icon" 
+                                            variant="ghost" 
+                                            disabled={isMe}
+                                            className={`h-8 w-8 rounded-full ${isMe ? 'opacity-30' : p.payment_status === 'paid' ? 'hover:bg-red-50 hover:text-red-600' : 'hover:bg-green-50 hover:text-green-600'}`}
+                                            onClick={() => handleConfirmPayment(p.user_id, p.payment_status)}
+                                            title={isMe ? "Dono é isento" : (p.payment_status === 'paid' ? "Revogar Pagamento" : "Confirmar Pagamento")}
+                                        >
+                                            {isMe ? <ShieldCheck className="h-5 w-5 text-blue-500"/> : (p.payment_status === 'paid' ? <XCircle className="h-5 w-5" /> : <CheckCircle className="h-5 w-5" />)}
+                                        </Button>
+                                    </div>
                                 </div>
-                                <div className="flex items-center gap-3">
-                                    <Badge variant={p.payment_status === 'paid' ? 'default' : 'outline'} className={p.payment_status === 'paid' ? 'bg-green-100 text-green-700 hover:bg-green-200 border-green-200 shadow-none' : 'text-yellow-700 border-yellow-300 bg-yellow-50'}>
-                                        {p.payment_status === 'paid' ? 'Pago' : 'Pendente'}
-                                    </Badge>
-                                    <Button 
-                                        size="icon" 
-                                        variant="ghost" 
-                                        className={`h-8 w-8 rounded-full ${p.payment_status === 'paid' ? 'hover:bg-red-50 hover:text-red-600' : 'hover:bg-green-50 hover:text-green-600'}`}
-                                        onClick={() => handleConfirmPayment(p.user_id, p.payment_status)}
-                                        title={p.payment_status === 'paid' ? "Revogar Pagamento" : "Confirmar Pagamento"}
-                                    >
-                                        {p.payment_status === 'paid' ? <XCircle className="h-5 w-5" /> : <CheckCircle className="h-5 w-5" />}
-                                    </Button>
-                                </div>
-                            </div>
-                        ))
+                            );
+                        })
                     )}
                 </div>
             </CardContent>
