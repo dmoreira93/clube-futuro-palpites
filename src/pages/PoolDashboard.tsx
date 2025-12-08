@@ -6,6 +6,8 @@ import usePoolData from '@/hooks/usePoolData';
 import useParticipantsRanking from '@/hooks/useParticipantsRanking';
 import NoticeBoard from '@/components/dashboard/NoticeBoard';
 import PaymentManagement from '@/components/dashboard/PaymentManagement';
+// IMPORTAÇÃO NOVA
+import { PoolNextMatches } from '@/components/dashboard/PoolNextMatches'; 
 import { Skeleton } from '@/components/ui/skeleton';
 import { 
     AlertCircle, Copy, Check, Trophy, Target, AlertTriangle, 
@@ -13,7 +15,6 @@ import {
 } from 'lucide-react'; 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
-// CORREÇÃO: Adicionado CardDescription na importação abaixo
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
@@ -23,7 +24,8 @@ interface PoolHeaderData {
   name: string;
   invite_code: string;
   description?: string | null;
-  owner_id: string; 
+  owner_id: string;
+  championship_id: string; // Campo Adicionado
 }
 
 const PoolDashboard = () => {
@@ -43,9 +45,10 @@ const PoolDashboard = () => {
       
       const fetchPoolDetails = async () => {
         try {
+            // CORREÇÃO: Adicionado 'championship_id' na query
             const { data, error } = await supabase
             .from('pools')
-            .select('name, invite_code, description, owner_id')
+            .select('name, invite_code, description, owner_id, championship_id')
             .eq('id', poolId)
             .single();
             
@@ -62,6 +65,7 @@ const PoolDashboard = () => {
     }
   }, [poolId, switchPool]);
 
+  // ... (funções copyToClipboard, isOwner, cálculos de rank mantidos iguais) ...
   const isLoading = rankingLoading || statsLoading;
   const combinedError = rankingError || statsError;
 
@@ -136,7 +140,6 @@ const PoolDashboard = () => {
             <ActionButton icon={<Calculator />} label="Simulador" onClick={() => navigate(`/pool/${poolId}/simulador`)} />
             <ActionButton icon={<Info />} label="Participantes" onClick={() => navigate(`/pool/${poolId}/info-participantes`)} />
             
-            {/* BOTÃO EXCLUSIVO PARA O DONO */}
             {isOwner && (
                 <ActionButton 
                     icon={<Settings />} 
@@ -151,10 +154,10 @@ const PoolDashboard = () => {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             <div className="lg:col-span-2 space-y-8">
                 
-                {/* --- ÁREA DO DONO: GESTÃO FINANCEIRA --- */}
-                {isOwner && (
+                {/* ÁREA DO DONO */}
+                {isOwner && poolId && (
                     <div className="animate-in fade-in slide-in-from-left-4">
-                        <PaymentManagement />
+                        <PaymentManagement poolId={poolId} />
                     </div>
                 )}
 
@@ -206,22 +209,10 @@ const PoolDashboard = () => {
                     </CardContent>
                 </Card>
 
-                {/* Próximos Jogos */}
-                <Card className="bg-blue-50/50 border-blue-100">
-                    <CardHeader>
-                        <CardTitle className="text-lg text-fifa-blue">Próximas Partidas</CardTitle>
-                        {/* AQUI ESTAVA O ERRO: CardDescription estava a ser usado sem importar */}
-                        <CardDescription>Prepare seus palpites!</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                         <div className="text-center py-4 text-gray-500 text-sm">
-                            <p>Consulte a aba "Palpites" para ver a agenda completa.</p>
-                            <Button variant="link" onClick={() => navigate(`/pool/${poolId}/palpites`)} className="mt-2 text-fifa-blue">
-                                Ir para Palpites
-                            </Button>
-                        </div>
-                    </CardContent>
-                </Card>
+                {/* PRÓXIMOS JOGOS (NOVO COMPONENTE) */}
+                {poolDetails?.championship_id && poolId && (
+                    <PoolNextMatches championshipId={poolDetails.championship_id} poolId={poolId} />
+                )}
             </div>
         </div>
       </div>
@@ -229,7 +220,7 @@ const PoolDashboard = () => {
   );
 };
 
-// Componentes auxiliares
+// Componentes auxiliares (mantidos iguais)
 const StatCard = ({ title, value, icon, subtext, highlight = false }: any) => (
     <Card className={`${highlight ? 'border-fifa-gold bg-yellow-50/30' : ''} shadow-sm`}>
         <CardContent className="p-4 flex flex-col items-center text-center justify-center h-full">

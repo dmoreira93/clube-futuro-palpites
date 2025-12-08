@@ -1,58 +1,65 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { CheckCircle, XCircle, DollarSign, Loader2, AlertCircle } from 'lucide-react';
+import { CheckCircle, XCircle, DollarSign, Loader2, Search } from 'lucide-react';
+import { Input } from '@/components/ui/input';
 
 interface PaymentParticipant {
     user_id: string;
     name: string;
     payment_status: 'paid' | 'pending';
+    username?: string;
 }
 
-const PaymentManagement = () => {
-    const { pool } = useAuth();
+interface PaymentManagementProps {
+    poolId: string; // Recebe o ID diretamente
+}
+
+const PaymentManagement = ({ poolId }: PaymentManagementProps) => {
     const [participants, setParticipants] = useState<PaymentParticipant[]>([]);
     const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
+    const [searchTerm, setSearchTerm] = useState("");
 
     useEffect(() => {
-        if (pool?.id) {
+        if (poolId) {
             fetchParticipants();
         }
-    }, [pool?.id]);
+    }, [poolId]);
 
     const fetchParticipants = async () => {
-        if (!pool?.id) return;
         setLoading(true);
-        setError(null);
         try {
-            // CORREÇÃO: Removemos o pedido do campo 'email', que não existe em users_custom
-            // e simplificamos a query para evitar erros de join
             const { data, error } = await supabase
                 .from('participations')
                 .select(`
                     user_id,
                     payment_status,
-                    users_custom ( name )
+                    users_custom ( name, username )
                 `)
-                .eq('pool_id', pool.id);
+                .eq('pool_id', poolId);
 
             if (error) throw error;
 
             const formattedData = (data || []).map((item: any) => ({
                 user_id: item.user_id,
                 name: item.users_custom?.name || 'Participante',
+                username: item.users_custom?.username || '',
                 payment_status: item.payment_status || 'pending',
             }));
+
+            // Ordena: Pendentes primeiro, depois alfabético
+            formattedData.sort((a, b) => {
+                if (a.payment_status === b.payment_status) return a.name.localeCompare(b.name);
+                return a.payment_status === 'pending' ? -1 : 1;
+            });
 
             setParticipants(formattedData);
         } catch (err: any) {
             console.error("Erro ao buscar pagamentos:", err);
-            setError("Não foi possível carregar a lista.");
+            toast.error("Erro ao carregar lista financeira.");
         } finally {
             setLoading(false);
         }
@@ -64,53 +71,80 @@ const PaymentManagement = () => {
             const { error } = await supabase
                 .from('participations')
                 .update({ payment_status: newStatus })
-                .eq('pool_id', pool?.id)
+                .eq('pool_id', poolId)
                 .eq('user_id', userId);
 
             if (error) throw error;
 
-            toast.success(`Pagamento ${newStatus === 'paid' ? 'confirmado' : 'revogado'}!`);
-            // Atualização otimista da UI
+            toast.success(newStatus === 'paid' ? "Pagamento confirmado!" : "Pagamento marcado como pendente.");
+            
+            // Atualização otimista
             setParticipants(prev => prev.map(p => 
                 p.user_id === userId ? { ...p, payment_status: newStatus } : p
             ));
         } catch (err: any) {
-            toast.error("Erro ao atualizar.", { description: err.message });
+            toast.error("Erro ao atualizar status.", { description: err.message });
         }
     };
 
-    if (loading) return <div className="flex justify-center p-4"><Loader2 className="animate-spin text-fifa-blue" /></div>;
+    const filteredParticipants = participants.filter(p => 
+        p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+        (p.username && p.username.toLowerCase().includes(searchTerm.toLowerCase()))
+    );
 
-    if (error) return null; // Se der erro, apenas não mostra o componente para não sujar a tela
+    if (loading) return (
+        <Card className="shadow-md mb-6 border-blue-100">
+            <div className="flex justify-center p-8"><Loader2 className="animate-spin text-fifa-blue h-8 w-8" /></div>
+        </Card>
+    );
 
     return (
-        <Card className="shadow-md">
+        <Card className="shadow-md mb-6 border-l-4 border-l-green-500">
             <CardHeader className="pb-3 border-b border-gray-100 bg-gray-50/50">
-                <CardTitle className="text-lg flex items-center gap-2 text-fifa-blue">
-                    <DollarSign className="h-5 w-5 text-green-600" /> Gestão Financeira
-                </CardTitle>
-                <CardDescription>Controle quem já pagou a inscrição.</CardDescription>
+                <div className="flex justify-between items-center">
+                    <div>
+                        <CardTitle className="text-lg flex items-center gap-2 text-fifa-blue">
+                            <DollarSign className="h-5 w-5 text-green-600" /> Gestão Financeira
+                        </CardTitle>
+                        <CardDescription>Controle quem já pagou para liberar os palpites.</CardDescription>
+                    </div>
+                    <Badge variant="outline" className="bg-white">
+                        {participants.filter(p => p.payment_status === 'paid').length}/{participants.length} Pagos
+                    </Badge>
+                </div>
+                <div className="mt-2 relative">
+                    <Search className="absolute left-2 top-2.5 h-4 w-4 text-gray-400" />
+                    <Input 
+                        placeholder="Buscar participante..." 
+                        className="pl-8 h-9 text-sm" 
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                    />
+                </div>
             </CardHeader>
-            <CardContent className="pt-4">
-                <div className="space-y-3 max-h-[300px] overflow-y-auto pr-2">
-                    {participants.length === 0 ? (
-                        <p className="text-center text-gray-500 py-4 text-sm">Nenhum participante encontrado.</p>
+            <CardContent className="pt-0 max-h-[350px] overflow-y-auto scrollbar-thin">
+                <div className="divide-y divide-gray-100">
+                    {filteredParticipants.length === 0 ? (
+                        <p className="text-center text-gray-500 py-6 text-sm">Nenhum participante encontrado.</p>
                     ) : (
-                        participants.map(p => (
-                            <div key={p.user_id} className="flex items-center justify-between p-3 bg-white rounded-lg border border-gray-100 shadow-sm hover:shadow-md transition-all">
-                                <span className="font-medium text-sm text-gray-700 truncate max-w-[150px]">{p.name}</span>
-                                <div className="flex items-center gap-2">
-                                    <Badge variant={p.payment_status === 'paid' ? 'default' : 'outline'} className={p.payment_status === 'paid' ? 'bg-green-100 text-green-700 hover:bg-green-200 border-green-200' : 'text-yellow-700 border-yellow-300 bg-yellow-50'}>
+                        filteredParticipants.map(p => (
+                            <div key={p.user_id} className="flex items-center justify-between py-3 hover:bg-gray-50 px-2 transition-colors -mx-2 rounded-md">
+                                <div className="flex flex-col">
+                                    <span className="font-medium text-sm text-gray-800">{p.name}</span>
+                                    {p.username && <span className="text-xs text-gray-400">@{p.username}</span>}
+                                </div>
+                                <div className="flex items-center gap-3">
+                                    <Badge variant={p.payment_status === 'paid' ? 'default' : 'outline'} className={p.payment_status === 'paid' ? 'bg-green-100 text-green-700 hover:bg-green-200 border-green-200 shadow-none' : 'text-yellow-700 border-yellow-300 bg-yellow-50'}>
                                         {p.payment_status === 'paid' ? 'Pago' : 'Pendente'}
                                     </Badge>
                                     <Button 
                                         size="icon" 
                                         variant="ghost" 
-                                        className="h-8 w-8 rounded-full hover:bg-gray-100"
+                                        className={`h-8 w-8 rounded-full ${p.payment_status === 'paid' ? 'hover:bg-red-50 hover:text-red-600' : 'hover:bg-green-50 hover:text-green-600'}`}
                                         onClick={() => handleConfirmPayment(p.user_id, p.payment_status)}
-                                        title={p.payment_status === 'paid' ? "Revogar" : "Confirmar"}
+                                        title={p.payment_status === 'paid' ? "Revogar Pagamento" : "Confirmar Pagamento"}
                                     >
-                                        {p.payment_status === 'paid' ? <XCircle className="h-4 w-4 text-red-400" /> : <CheckCircle className="h-4 w-4 text-green-500" />}
+                                        {p.payment_status === 'paid' ? <XCircle className="h-5 w-5" /> : <CheckCircle className="h-5 w-5" />}
                                     </Button>
                                 </div>
                             </div>
