@@ -1,223 +1,229 @@
-// src/components/dashboard/NoticeBoard.tsx (VERSÃO FINAL E MAIS ROBUSTA)
-
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Loader2, Megaphone, Trophy, Star, UserX, Trash2 } from 'lucide-react';
+import { Loader2, Megaphone, Trophy, Star, UserX, Trash2, Edit } from 'lucide-react';
 import { toast } from 'sonner';
-import { Participant } from '@/hooks/useParticipantsRanking';
-import useParticipantsRanking from '@/hooks/useParticipantsRanking';
+import useParticipantsRanking, { Participant } from '@/hooks/useParticipantsRanking';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Separator } from '../ui/separator';
 import { Badge } from '../ui/badge';
 import { cn } from '@/lib/utils';
-import { isAIParticipant } from '@/lib/utils';
 
-// Funções auxiliares mantidas como estavam
-const formatPrize = (prizeString: string | null | undefined): string | null => {
-    if (!prizeString || !prizeString.startsWith('R$ ')) return prizeString;
-    const value = parseFloat(prizeString.replace('R$ ', '').replace('.', '').replace(',', '.'));
-    if (!isNaN(value)) return `R$ ${value.toFixed(2).replace('.', ',')}`;
-    return prizeString;
-};
-
-const calculatePrize = (rank: number, participant: Participant, totalHumanParticipants: number, pool: any): string => {
-    if (!pool || isAIParticipant(participant) || participant.is_admin) return "";
-    const totalPot = (pool.entry_fee || 0) * totalHumanParticipants;
-    if (pool.entry_fee > 0) {
-        if (rank === 1 && pool.prize_percent_1st > 0) return `R$ ${(totalPot * pool.prize_percent_1st / 100).toFixed(2).replace('.', ',')}`;
-        if (rank === 2 && pool.prize_percent_2nd > 0) return `R$ ${(totalPot * pool.prize_percent_2nd / 100).toFixed(2).replace('.', ',')}`;
-        if (rank === 3 && pool.prize_percent_3rd > 0) return `R$ ${(totalPot * pool.prize_percent_3rd / 100).toFixed(2).replace('.', ',')}`;
-    }
-    if (pool.enable_punishment && rank === totalHumanParticipants && totalHumanParticipants > 3) {
-        return pool.punishment_description || "";
-    }
-    return "";
-};
+// Função auxiliar para identificar IA
+const isAIParticipant = (p: Participant) => p.name?.startsWith('IA ') || p.username?.startsWith('GPT');
 
 const NoticeBoard = () => {
-  const { user, pool } = useAuth();
+  const { user, activePool: pool } = useAuth(); // Corrigido para activePool
   const queryClient = useQueryClient();
   const [newMessage, setNewMessage] = useState('');
-  // **MELHORIA**: Garante que `rankingData` seja sempre um array.
-  const { participants: rankingData = [], isLoading: isLoadingRanking } = useParticipantsRanking();
+  const [isEditing, setIsEditing] = useState(false);
+  
+  // Busca ranking para calcular estatísticas localmente (sem precisar de RPC)
+  const { participants: rankingData = [], loading: isLoadingRanking } = useParticipantsRanking();
   
   const poolMessagesQueryKey = ['poolMessages', pool?.id];
 
-  const { data: stats, isLoading: isLoadingStats } = useQuery({
-    queryKey: ['dashboardStats', pool?.id],
-    queryFn: async () => {
-      if (!pool?.id) return null;
-      const { data, error } = await supabase.rpc('get_pool_dashboard_stats', { p_pool_id: pool.id });
-      if (error) {
-        console.error("Erro ao buscar estatísticas do dashboard:", error);
-        throw new Error("Não foi possível carregar as estatísticas do bolão.");
-      }
-      // **MELHORIA**: Retorna nulo se não houver dados, para evitar erros.
-      return data && data.length > 0 ? data[0] : null;
-    },
-    enabled: !!pool,
-  });
-
-  const { data: message, isLoading: isLoadingMessages } = useQuery({
+  // 1. Busca a mensagem do bolão
+  const { data: messageData, isLoading: isLoadingMessages } = useQuery({
     queryKey: poolMessagesQueryKey,
     queryFn: async () => {
       if (!pool?.id) return null;
-      const { data, error } = await supabase.from('pool_messages').select('message').eq('pool_id', pool.id).order('created_at', { ascending: false }).limit(1).maybeSingle();
+      const { data, error } = await supabase
+        .from('pool_messages')
+        .select('message')
+        .eq('pool_id', pool.id)
+        .maybeSingle();
+      
       if (error) throw error;
       return data;
     },
-    enabled: !!pool,
-    onSuccess: (data) => {
-      setNewMessage(data?.message || '');
-    }
+    enabled: !!pool?.id,
   });
 
+  // Atualiza o estado local quando a mensagem chega do banco
+  useMemo(() => {
+    if (messageData?.message) {
+        setNewMessage(messageData.message);
+    } else {
+        setNewMessage('');
+    }
+  }, [messageData]);
+
+  // 2. Salvar Mensagem (Upsert)
   const upsertMessage = useMutation({
-    mutationFn: async (messageText: string) => {
-      if (!pool?.id) throw new Error("Bolão não encontrado.");
-      const { error } = await supabase.rpc('upsert_pool_message', { p_pool_id: pool.id, p_message: messageText });
+    mutationFn: async (text: string) => {
+      if (!pool?.id || !user?.id) throw new Error("Dados inválidos.");
+      
+      const { error } = await supabase
+        .from('pool_messages')
+        .upsert({ 
+            pool_id: pool.id, 
+            message: text,
+            updated_at: new Date().toISOString()
+        });
+
       if (error) throw error;
     },
     onSuccess: () => {
-      toast.success("Recado do bolão atualizado!");
+      toast.success("Mural atualizado!");
+      setIsEditing(false);
       queryClient.invalidateQueries({ queryKey: poolMessagesQueryKey });
     },
-    onError: (error: any) => { toast.error("Falha ao salvar o recado.", { description: error.message }); }
+    onError: () => toast.error("Erro ao atualizar mural.")
   });
 
+  // 3. Apagar Mensagem
   const deleteMessage = useMutation({
     mutationFn: async () => {
-        if (!pool?.id) throw new Error("Bolão não encontrado.");
-        const { error } = await supabase.rpc('delete_pool_message', { p_pool_id: pool.id });
+        if (!pool?.id) return;
+        const { error } = await supabase.from('pool_messages').delete().eq('pool_id', pool.id);
         if (error) throw error;
     },
     onSuccess: () => {
-        toast.success("Recado removido!");
-        setNewMessage(''); 
+        toast.success("Recado removido.");
+        setNewMessage('');
+        setIsEditing(false);
         queryClient.invalidateQueries({ queryKey: poolMessagesQueryKey });
     },
-    onError: (error: any) => { toast.error("Falha ao remover o recado.", { description: error.message }); }
+    onError: () => toast.error("Erro ao remover.")
   });
 
   const isOwner = user?.id === pool?.owner_id;
-  
-  const processedRanking = useMemo(() => {
-    // **MELHORIA**: Verifica se `rankingData` é um array antes de usar `.filter`.
-    if (!Array.isArray(rankingData)) {
-      return { topThree: [], lastPlace: null };
-    }
-    const humanParticipants = rankingData.filter(p => !isAIParticipant(p) && !p.is_admin);
-    const topThree = humanParticipants.slice(0, 3).map((p, i) => ({
-      ...p,
-      rank: i + 1,
-      prize: calculatePrize(i + 1, p, humanParticipants.length, pool)
-    }));
-    const lastPlace = humanParticipants.length > 3 
-      ? { 
-          ...humanParticipants[humanParticipants.length - 1], 
-          rank: humanParticipants.length, 
-          prize: calculatePrize(humanParticipants.length, humanParticipants[humanParticipants.length - 1], humanParticipants.length, pool) 
-        } 
-      : null;
-    return { topThree, lastPlace };
-  }, [rankingData, pool]);
-  
-  const { topThree, lastPlace } = processedRanking;
+
+  // 4. Calcular Estatísticas do Dashboard (Baseado no Ranking carregado)
+  const stats = useMemo(() => {
+    if (!rankingData || rankingData.length === 0) return null;
+
+    // Filtra IAs e Admins para estatísticas justas
+    const validParticipants = rankingData.filter(p => !isAIParticipant(p) && !p.is_admin);
+    
+    if (validParticipants.length === 0) return null;
+
+    // Maior Pontuador
+    const topScorer = validParticipants.reduce((prev, current) => (prev.points > current.points) ? prev : current);
+    
+    // Rei da Cravada (Mais placares exatos)
+    const mostExact = validParticipants.reduce((prev, current) => (prev.exactscores > current.exactscores) ? prev : current);
+    
+    // Lanterna (Menor pontuação entre quem jogou)
+    // Se só tiver 1, ele é tudo. Se tiver mais, pega o último.
+    const lastPlace = validParticipants.length > 1 ? validParticipants[validParticipants.length - 1] : null;
+
+    const pointsGap = topScorer.points - (lastPlace?.points || 0);
+
+    return { topScorer, mostExact, lastPlace, pointsGap };
+  }, [rankingData]);
+
+  // 5. Processar Pódio (Top 3)
+  const topThree = useMemo(() => {
+      const valid = rankingData.filter(p => !isAIParticipant(p) && !p.is_admin);
+      return valid.slice(0, 3).map((p, i) => ({ ...p, rank: i + 1 }));
+  }, [rankingData]);
 
   return (
-    <Card className="shadow-lg">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2"><Megaphone className="text-fifa-blue"/> Mural do Bolão</CardTitle>
-        <CardDescription>Recados do administrador e destaques da competição.</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-6">
-        {/* O restante do código de renderização permanece o mesmo, pois já é seguro */}
-        {isOwner && (
-          <div className="space-y-2">
-            <Textarea placeholder="Deixe um recado para os participantes..." value={newMessage} onChange={(e) => setNewMessage(e.target.value)} rows={3}/>
-            <div className="flex gap-2">
-                <Button onClick={() => upsertMessage.mutate(newMessage)} disabled={upsertMessage.isPending}>{upsertMessage.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Salvar Recado</Button>
-                {message?.message && (<Button variant="destructive" onClick={() => deleteMessage.mutate()} disabled={deleteMessage.isPending}>{deleteMessage.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4"/>} Remover Recado</Button>)}
-            </div>
-          </div>
-        )}
-        {isLoadingMessages ? <Loader2 className="animate-spin" /> : message?.message && !isOwner && (<blockquote className="mt-6 border-l-2 pl-6 italic">"{message.message}"</blockquote>)}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
-          {isLoadingStats ? <div className="col-span-full flex justify-center"><Loader2 className="animate-spin"/></div> : stats && ( <>
-              <div className="flex flex-col items-center justify-center p-2 bg-slate-50 rounded-lg">
-                  <Trophy className="text-yellow-500 mb-1"/>
-                  <span className="font-bold text-sm">{stats.top_scorer?.name || 'N/A'}</span>
-                  <span className="text-xs text-muted-foreground">{stats.top_scorer?.points || 0} pts</span>
-                  <span className="text-xs font-semibold text-gray-500 mt-1">Maior Pontuador</span>
-              </div>
-              <div className="flex flex-col items-center justify-center p-2 bg-slate-50 rounded-lg">
-                  <Star className="text-blue-500 mb-1"/>
-                  <span className="font-bold text-sm">{stats.most_exact?.name || 'N/A'}</span>
-                  <span className="text-xs text-muted-foreground">{stats.most_exact?.exact_scores || 0} exatos</span>
-                  <span className="text-xs font-semibold text-gray-500 mt-1">Mais Acertos Exatos</span>
-              </div>
-              <div className="flex flex-col items-center justify-center p-2 bg-slate-50 rounded-lg">
-                  <UserX className="text-red-500 mb-1"/>
-                  <span className="font-bold text-sm">{stats.last_place?.name || 'N/A'}</span>
-                  <span className="text-xs text-muted-foreground">{stats.last_place?.points || 0} pts</span>
-                  <span className="text-xs font-semibold text-gray-500 mt-1">Menor Pontuador</span>
-              </div>
-              <div className="flex flex-col items-center justify-center p-2 bg-slate-50 rounded-lg">
-                  <span className="font-bold text-lg">{stats.points_gap || 0}</span>
-                  <span className="text-xs font-semibold text-gray-500">Diferença 1º/Últ.</span>
-              </div>
-          </>)}
-        </div>
-        {(isLoadingRanking || (topThree && topThree.length > 0) || lastPlace) && <Separator />}
-        <div>
-            {isLoadingRanking ? <div className="flex justify-center"><Loader2 className="animate-spin" /></div> : ((topThree && topThree.length > 0) || lastPlace) && (
-                <div className="space-y-4">
-                    {topThree && topThree.length > 0 && (
-                        <div className="space-y-2">
-                            <h4 className="font-semibold text-center text-muted-foreground">Primeiros Colocados</h4>
-                            {topThree.map((winner, index) => (
-                                <div key={winner.id} className={cn("flex items-center justify-between p-3 rounded-md border-l-4", index === 0 && "bg-blue-50 dark:bg-blue-900/30 border-blue-500", index === 1 && "bg-green-50 dark:bg-green-900/20 border-green-500", index === 2 && "bg-green-50/50 dark:bg-green-900/10 border-green-400")}>
-                                    <div className="flex items-center gap-3">
-                                        <Avatar className="h-8 w-8"><AvatarImage src={winner.avatar_url || ''} /><AvatarFallback>{winner.name.substring(0,1)}</AvatarFallback></Avatar>
-                                        <div>
-                                            <p className="font-bold flex items-center gap-2">
-                                                <Badge variant="secondary" className={cn("font-bold", index === 0 && "bg-blue-600 text-white", index === 1 && "bg-green-600 text-white", index === 2 && "bg-green-500 text-white")}>{winner.rank}º</Badge>
-                                                {winner.name}
-                                            </p>
-                                            {winner.prize && <p className="text-xs text-gray-600 dark:text-gray-400 font-semibold">{formatPrize(winner.prize)}</p>}
-                                        </div>
-                                    </div>
-                                    <span className="font-mono text-sm font-bold">{winner.points} pts</span>
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                     {lastPlace && (
-                         <div className="space-y-2 mt-4">
-                            <h4 className="font-semibold text-center text-muted-foreground">Lanterna</h4>
-                            <div className="flex items-center justify-between p-3 rounded-md bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500">
-                                <div className="flex items-center gap-3">
-                                    <Avatar className="h-8 w-8"><AvatarImage src={lastPlace.avatar_url || ''} /><AvatarFallback>{lastPlace.name.substring(0,1)}</AvatarFallback></Avatar>
-                                    <div>
-                                        <p className="font-bold flex items-center gap-2"><Badge variant="destructive">{lastPlace.rank}º</Badge>{lastPlace.name}</p>
-                                        {lastPlace.prize && <p className="text-xs text-red-700 dark:text-red-400 font-semibold">{formatPrize(lastPlace.prize)}</p>}
-                                    </div>
-                                </div>
-                                <span className="font-mono text-sm font-bold">{lastPlace.points} pts</span>
-                            </div>
-                         </div>
-                     )}
-                </div>
+    <Card className="shadow-lg border-t-4 border-t-blue-500">
+      <CardHeader className="pb-4">
+        <div className="flex justify-between items-center">
+            <CardTitle className="flex items-center gap-2 text-xl text-fifa-blue">
+                <Megaphone className="h-6 w-6 text-fifa-gold"/> Mural do Bolão
+            </CardTitle>
+            {isOwner && !isEditing && (
+                <Button variant="ghost" size="sm" onClick={() => setIsEditing(true)}>
+                    <Edit className="h-4 w-4 mr-2"/> Editar Recado
+                </Button>
             )}
         </div>
+        <CardDescription>Fique por dentro das novidades e estatísticas.</CardDescription>
+      </CardHeader>
+      
+      <CardContent className="space-y-6">
+        
+        {/* ÁREA DE MENSAGEM */}
+        {isEditing ? (
+            <div className="space-y-3 bg-gray-50 p-4 rounded-lg border border-blue-100 animate-in fade-in">
+                <label className="text-sm font-bold text-gray-700">Escreva seu recado:</label>
+                <Textarea 
+                    placeholder="Ex: Pessoal, o pagamento vence sexta-feira!" 
+                    value={newMessage} 
+                    onChange={(e) => setNewMessage(e.target.value)} 
+                    rows={3}
+                    className="bg-white"
+                />
+                <div className="flex gap-2 justify-end">
+                    <Button variant="outline" size="sm" onClick={() => setIsEditing(false)}>Cancelar</Button>
+                    {messageData?.message && (
+                        <Button variant="destructive" size="sm" onClick={() => deleteMessage.mutate()} disabled={deleteMessage.isPending}>
+                            <Trash2 className="h-4 w-4"/>
+                        </Button>
+                    )}
+                    <Button size="sm" onClick={() => upsertMessage.mutate(newMessage)} disabled={upsertMessage.isPending}>
+                        {upsertMessage.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Publicar"}
+                    </Button>
+                </div>
+            </div>
+        ) : (
+            messageData?.message ? (
+                <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded-r-lg">
+                    <p className="text-gray-800 italic font-medium">"{messageData.message}"</p>
+                    <p className="text-xs text-right text-gray-400 mt-2 font-bold uppercase tracking-wider">- Admin</p>
+                </div>
+            ) : (
+                <p className="text-center text-gray-400 italic py-2 text-sm">Nenhum recado fixado no momento.</p>
+            )
+        )}
+
+        <Separator />
+
+        {/* ESTATÍSTICAS RÁPIDAS */}
+        {isLoadingRanking ? (
+            <div className="flex justify-center py-4"><Loader2 className="animate-spin text-fifa-blue"/></div>
+        ) : stats && (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+                <StatBox icon={<Trophy className="text-yellow-500"/>} label="Maior Pontuador" value={stats.topScorer.name} sub={`${stats.topScorer.points} pts`} />
+                <StatBox icon={<Star className="text-purple-500"/>} label="Rei da Cravada" value={stats.mostExact.name} sub={`${stats.mostExact.exactscores} exatos`} />
+                <StatBox icon={<UserX className="text-red-500"/>} label="Lanterna" value={stats.lastPlace?.name || '-'} sub={stats.lastPlace ? `${stats.lastPlace.points} pts` : '-'} />
+                <StatBox icon={<span className="text-xl font-bold text-blue-500">GAP</span>} label="Diferença 1º/Últ." value={stats.pointsGap} sub="pontos" />
+            </div>
+        )}
+
+        {/* LISTA DE LÍDERES */}
+        {topThree.length > 0 && (
+            <>
+                <Separator />
+                <div className="space-y-3">
+                    <h4 className="text-sm font-bold text-gray-500 uppercase tracking-wide">Líderes Atuais</h4>
+                    {topThree.map((p, i) => (
+                        <div key={p.id} className={cn("flex items-center justify-between p-2 rounded-lg border", i === 0 ? "bg-yellow-50 border-yellow-200" : "bg-white border-gray-100")}>
+                            <div className="flex items-center gap-3">
+                                <Badge variant={i === 0 ? "default" : "secondary"} className={i===0 ? "bg-yellow-500 hover:bg-yellow-600" : ""}>{i + 1}º</Badge>
+                                <div className="flex items-center gap-2">
+                                    <Avatar className="h-6 w-6"><AvatarImage src={p.avatar_url || ''}/><AvatarFallback>{p.name?.substring(0,1)}</AvatarFallback></Avatar>
+                                    <span className="font-semibold text-sm text-gray-800">{p.name}</span>
+                                </div>
+                            </div>
+                            <span className="font-bold text-sm text-fifa-blue">{p.points} pts</span>
+                        </div>
+                    ))}
+                </div>
+            </>
+        )}
       </CardContent>
     </Card>
   );
 };
+
+// Componente visual simples para os stats
+const StatBox = ({ icon, label, value, sub }: any) => (
+    <div className="flex flex-col items-center justify-center p-3 bg-slate-50 rounded-lg border border-slate-100">
+        <div className="mb-1">{icon}</div>
+        <span className="font-bold text-sm text-gray-800 truncate w-full">{value}</span>
+        <span className="text-xs text-gray-500">{sub}</span>
+        <span className="text-[10px] uppercase font-bold text-gray-400 mt-1">{label}</span>
+    </div>
+);
 
 export default NoticeBoard;

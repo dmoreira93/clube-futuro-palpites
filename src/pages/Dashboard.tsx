@@ -28,7 +28,7 @@ const Dashboard = () => {
                         Olá, {firstName}! 👋
                     </h1>
                     <p className="text-blue-100 text-lg">
-                        Pronto para mais uma rodada de palpites?
+                        Hora de provar quem é o craque da rodada.
                     </p>
                 </div>
                 <div className="flex flex-wrap gap-3 justify-center md:justify-end">
@@ -52,7 +52,7 @@ const Dashboard = () => {
         {/* Seção de Bolões */}
         <section>
             <h2 className="text-2xl font-bold text-gray-800 mb-6 flex items-center gap-2">
-                <Trophy className="h-6 w-6 text-fifa-blue" /> Meus Bolões Ativos
+                <Trophy className="h-6 w-6 text-fifa-blue" /> Meus Bolões
             </h2>
             
             {userParticipations.length > 0 ? (
@@ -85,7 +85,7 @@ const Dashboard = () => {
                             
                             <CardFooter className="pt-2">
                                 <Button className="w-full bg-fifa-blue hover:bg-blue-900 group-hover:shadow-md transition-all" onClick={() => handlePoolSelect(pool.id)}>
-                                    Acessar Painel <ArrowRight className="ml-2 h-4 w-4 group-hover:translate-x-1 transition-transform" />
+                                    Acessar Painel do Bolão <ArrowRight className="ml-2 h-4 w-4 group-hover:translate-x-1 transition-transform" />
                                 </Button>
                             </CardFooter>
                         </Card>
@@ -96,7 +96,7 @@ const Dashboard = () => {
                     <div className="bg-blue-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
                         <Users className="h-8 w-8 text-fifa-blue/50" />
                     </div>
-                    <h3 className="text-xl font-semibold text-gray-800 mb-2">Você ainda não participa de nenhum bolão</h3>
+                    <h3 className="text-xl font-semibold text-gray-800 mb-2">Você ainda está no banco de reservas!</h3>
                     <p className="text-gray-500 mb-6 max-w-md mx-auto">
                         Comece agora mesmo! Você pode criar seu próprio campeonato ou entrar em um existente com um código de convite.
                     </p>

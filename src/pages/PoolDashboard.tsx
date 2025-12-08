@@ -138,7 +138,7 @@ const PoolDashboard = () => {
             <ActionButton icon={<BarChart2 />} label="Resultados" onClick={() => navigate(`/pool/${poolId}/resultados`)} />
             <ActionButton icon={<Trophy />} label="Ranking" onClick={() => navigate(`/pool/${poolId}/ranking`)} />
             <ActionButton icon={<Calculator />} label="Simulador" onClick={() => navigate(`/pool/${poolId}/simulador`)} />
-            <ActionButton icon={<Info />} label="Participantes" onClick={() => navigate(`/pool/${poolId}/info-participantes`)} />
+            <ActionButton icon={<Info />} label="Informações da Galera" onClick={() => navigate(`/pool/${poolId}/info-participantes`)} />
             
             {isOwner && (
                 <ActionButton 
