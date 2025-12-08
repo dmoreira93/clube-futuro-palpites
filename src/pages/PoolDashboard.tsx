@@ -6,7 +6,6 @@ import usePoolData from '@/hooks/usePoolData';
 import useParticipantsRanking from '@/hooks/useParticipantsRanking';
 import NoticeBoard from '@/components/dashboard/NoticeBoard';
 import PaymentManagement from '@/components/dashboard/PaymentManagement';
-// IMPORTAÇÃO NOVA
 import { PoolNextMatches } from '@/components/dashboard/PoolNextMatches'; 
 import { Skeleton } from '@/components/ui/skeleton';
 import { 
@@ -25,7 +24,10 @@ interface PoolHeaderData {
   invite_code: string;
   description?: string | null;
   owner_id: string;
-  championship_id: string; // Campo Adicionado
+  championship_id: string;
+  // NOVOS CAMPOS PARA PUNIÇÃO
+  punishment_description?: string | null;
+  enable_punishment?: boolean;
 }
 
 const PoolDashboard = () => {
@@ -45,10 +47,10 @@ const PoolDashboard = () => {
       
       const fetchPoolDetails = async () => {
         try {
-            // CORREÇÃO: Adicionado 'championship_id' na query
+            // CORREÇÃO: Adicionado 'punishment_description' e 'enable_punishment' na query
             const { data, error } = await supabase
             .from('pools')
-            .select('name, invite_code, description, owner_id, championship_id')
+            .select('name, invite_code, description, owner_id, championship_id, punishment_description, enable_punishment')
             .eq('id', poolId)
             .single();
             
@@ -65,7 +67,6 @@ const PoolDashboard = () => {
     }
   }, [poolId, switchPool]);
 
-  // ... (funções copyToClipboard, isOwner, cálculos de rank mantidos iguais) ...
   const isLoading = rankingLoading || statsLoading;
   const combinedError = rankingError || statsError;
 
@@ -88,6 +89,9 @@ const PoolDashboard = () => {
   const top3 = humanParticipants.slice(0, 3);
   const lastPlace = humanParticipants.length > 1 ? humanParticipants[humanParticipants.length - 1] : null;
 
+  // Só mostra se a punição estiver ativada E houver um lanterna definido
+  const showPunishment = poolDetails?.enable_punishment && lastPlace && humanParticipants.length > 2;
+
   if (isLoading && !poolDetails) return <PoolDashboardSkeleton />;
   if (combinedError) return <ErrorAlert message={combinedError} />;
 
@@ -106,6 +110,10 @@ const PoolDashboard = () => {
                     <h1 className="text-3xl md:text-4xl font-bold text-fifa-blue">
                         {poolDetails ? poolDetails.name : <Skeleton className="h-10 w-64" />}
                     </h1>
+                    {/* Descrição do Bolão (Opcional) */}
+                    {poolDetails?.description && (
+                        <p className="text-sm text-gray-500 mt-1 max-w-2xl">{poolDetails.description}</p>
+                    )}
                 </div>
 
                 {poolDetails?.invite_code && (
@@ -140,6 +148,7 @@ const PoolDashboard = () => {
             <ActionButton icon={<Calculator />} label="Simulador" onClick={() => navigate(`/pool/${poolId}/simulador`)} />
             <ActionButton icon={<Info />} label="Informações da Galera" onClick={() => navigate(`/pool/${poolId}/info-participantes`)} />
             
+            {/* BOTÃO EXCLUSIVO PARA O DONO */}
             {isOwner && (
                 <ActionButton 
                     icon={<Settings />} 
@@ -154,7 +163,7 @@ const PoolDashboard = () => {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             <div className="lg:col-span-2 space-y-8">
                 
-                {/* ÁREA DO DONO */}
+                {/* --- ÁREA DO DONO: GESTÃO FINANCEIRA --- */}
                 {isOwner && poolId && (
                     <div className="animate-in fade-in slide-in-from-left-4">
                         <PaymentManagement poolId={poolId} />
@@ -173,17 +182,18 @@ const PoolDashboard = () => {
                             </div>
                         ) : <div className="text-center py-8 text-gray-500">Ainda não há ranking disponível.</div>}
 
-                        {lastPlace && humanParticipants.length > 3 && (
-                            <div className="mt-6 pt-4 border-t flex items-center justify-between bg-red-50 p-3 rounded-lg">
+                        {/* ÁREA DE PUNIÇÃO CORRIGIDA */}
+                        {showPunishment && lastPlace && (
+                            <div className="mt-6 pt-4 border-t flex items-center justify-between bg-red-50 p-3 rounded-lg animate-in fade-in">
                                 <div className="flex items-center gap-3">
                                     <span className="text-2xl">🐢</span>
                                     <div>
                                         <p className="text-sm font-bold text-red-700">Zona de Punição</p>
-                                        <p className="text-xs text-red-600">Último colocado: {lastPlace.name}</p>
+                                        <p className="text-xs text-red-600">Último colocado: <span className="font-bold">{lastPlace.name}</span></p>
                                     </div>
                                 </div>
                                 <Badge variant="destructive" className="bg-red-100 text-red-700 hover:bg-red-200 border-red-200">
-                                    {poolDetails?.description || "Pagar o café!"}
+                                    {poolDetails?.punishment_description || "Pagar a prenda!"}
                                 </Badge>
                             </div>
                         )}
@@ -209,7 +219,7 @@ const PoolDashboard = () => {
                     </CardContent>
                 </Card>
 
-                {/* PRÓXIMOS JOGOS (NOVO COMPONENTE) */}
+                {/* PRÓXIMOS JOGOS */}
                 {poolDetails?.championship_id && poolId && (
                     <PoolNextMatches championshipId={poolDetails.championship_id} poolId={poolId} />
                 )}
