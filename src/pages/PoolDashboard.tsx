@@ -72,6 +72,9 @@ const PoolDashboard = () => {
                 prize_percent_1st, prize_percent_2nd, prize_percent_3rd,
                 points_exact_score, points_winner_diff, points_winner, points_wrong,
                 is_public
+                points_exact_score, points_winner_diff, points_winner, points_match_draw, points_match_one_score, points_wrong,
+                points_group_winner, points_group_inverted, points_group_single,
+                points_champion, points_runner_up, points_third_place, points_fourth_place, points_final_score, points_top4_bonus,
             `)
             .eq('id', poolId)
             .single();
