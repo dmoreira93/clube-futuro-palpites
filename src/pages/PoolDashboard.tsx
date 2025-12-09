@@ -20,15 +20,15 @@ import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
+// Interface completa para evitar erros de tipagem
 interface PoolHeaderData {
-  id: string; // Adicionado ID para passar ao Dialog se precisar
+  id: string;
   name: string;
   invite_code: string;
   description?: string | null;
   owner_id: string;
   championship_id: string;
   
-  // Financeiro e Punição
   entry_fee: number;
   admin_fee_percent: number;
   prize_percent_1st: number;
@@ -37,11 +37,22 @@ interface PoolHeaderData {
   punishment_description?: string | null;
   enable_punishment?: boolean;
 
-  // Pontuação
+  // Pontuação (Todos os campos)
   points_exact_score: number;
   points_winner_diff: number;
   points_winner: number;
   points_wrong: number;
+  points_match_draw: number;
+  points_match_one_score: number;
+  points_group_winner: number;
+  points_group_inverted: number;
+  points_group_single: number;
+  points_champion: number;
+  points_runner_up: number;
+  points_third_place: number;
+  points_fourth_place: number;
+  points_final_score: number;
+  points_top4_bonus: number;
   
   is_public: boolean;
 }
@@ -63,19 +74,10 @@ const PoolDashboard = () => {
       
       const fetchPoolDetails = async () => {
         try {
+            // CORREÇÃO: Select limpo e sem duplicatas
             const { data, error } = await supabase
             .from('pools')
-            .select(`
-                id, name, invite_code, description, owner_id, championship_id, 
-                punishment_description, enable_punishment,
-                entry_fee, admin_fee_percent, 
-                prize_percent_1st, prize_percent_2nd, prize_percent_3rd,
-                points_exact_score, points_winner_diff, points_winner, points_wrong,
-                is_public
-                points_exact_score, points_winner_diff, points_winner, points_match_draw, points_match_one_score, points_wrong,
-                points_group_winner, points_group_inverted, points_group_single,
-                points_champion, points_runner_up, points_third_place, points_fourth_place, points_final_score, points_top4_bonus,
-            `)
+            .select('*') // Traz tudo para evitar esquecer campos novos (ideal para dashboard principal)
             .eq('id', poolId)
             .single();
             
@@ -114,7 +116,6 @@ const PoolDashboard = () => {
   const top3 = humanParticipants.slice(0, 3);
   const lastPlace = humanParticipants.length > 1 ? humanParticipants[humanParticipants.length - 1] : null;
 
-  // Mostra punição se habilitada e se houver perdedores suficientes
   const showPunishment = poolDetails?.enable_punishment && lastPlace && humanParticipants.length > 1;
 
   if (isLoading && !poolDetails) return <PoolDashboardSkeleton />;
