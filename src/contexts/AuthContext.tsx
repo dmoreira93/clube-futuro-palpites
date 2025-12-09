@@ -58,13 +58,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const signOut = useCallback(async () => {
     console.log("🛑 Logout forçado/solicitado. Limpando sessão...");
     
-    // Limpa estados React
     setUser(null);
     userRef.current = null;
     setActivePool(null);
     setUserParticipations([]);
     
-    // Limpa Storage
     localStorage.removeItem('activePoolId');
     Object.keys(localStorage).forEach(key => {
         if (key.startsWith('sb-')) localStorage.removeItem(key);
@@ -79,7 +77,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   }, []);
 
-  // --- 2. SYNC PROFILE ---
+  // --- 2. SYNC PROFILE (COM CORREÇÃO DO GOOGLE) ---
   const fetchAndSyncProfile = useCallback(async (sessionUser: User): Promise<AppUser | null> => {
     // Evita recarregar se o ID for o mesmo que já está na memória
     if (userRef.current?.id === sessionUser.id) {
@@ -89,27 +87,43 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     try {
       console.log("🔄 Sincronizando perfil:", sessionUser.email);
       
-      const { data: profile, error } = await supabase
+      let { data: profile, error } = await supabase
         .from('users_custom')
         .select('*')
         .eq('id', sessionUser.id)
         .maybeSingle();
 
-      if (error) throw error;
-
+      // --- CORREÇÃO GOOGLE LOGIN ---
+      // Se não achou perfil, tenta criar manualmente (Fallback caso o Trigger falhe)
       if (!profile) {
-          console.warn("⚠️ Usuário sem perfil. Realizando logout.");
-          await signOut();
-          return null;
+         console.warn("⚠️ Perfil não encontrado. Tentando criar fallback...");
+         
+         const { error: insertError } = await supabase.from("users_custom").insert({
+            id: sessionUser.id,
+            email: sessionUser.email,
+            // Pega nome/foto do Google Metadata
+            name: sessionUser.user_metadata.full_name || sessionUser.user_metadata.name || sessionUser.email?.split('@')[0],
+            avatar_url: sessionUser.user_metadata.avatar_url || sessionUser.user_metadata.picture,
+         });
+
+         if (!insertError) {
+             // Busca novamente após criar
+             const res = await supabase.from('users_custom').select('*').eq('id', sessionUser.id).single();
+             profile = res.data;
+         } else {
+             console.error("Erro fatal ao criar perfil fallback:", insertError);
+             await signOut();
+             return null;
+         }
       }
       
       const combinedUser: AppUser = { 
         ...sessionUser, 
-        username: profile.username,
-        name: profile.name,
-        is_admin: profile.is_admin,
-        first_login: profile.first_login,
-        avatar_url: profile.avatar_url
+        username: profile?.username,
+        name: profile?.name,
+        is_admin: profile?.is_admin,
+        first_login: profile?.first_login,
+        avatar_url: profile?.avatar_url
       };
       
       setUser(combinedUser);
@@ -151,34 +165,29 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [signOut]);
   
-  // --- 3. CORE LOGIC (UseEffect Unificado) ---
+  // --- 3. CORE LOGIC ---
   useEffect(() => {
     let mounted = true;
 
-    // Listener único que gerencia TUDO (Inicialização, Login e Logout)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
         if (!mounted) return;
 
         console.log(`🔔 Auth Event: ${event}`);
         
-        // A) LOGOUT
         if (event === 'SIGNED_OUT') {
             setUser(null);
             userRef.current = null;
             setActivePool(null);
             setUserParticipations([]);
-            setLoading(false); // Libera a tela
+            setLoading(false);
         } 
-        // B) SESSÃO VÁLIDA (Login ou F5/Recarregamento)
         else if (session?.user && (event === 'SIGNED_IN' || event === 'INITIAL_SESSION' || event === 'TOKEN_REFRESHED')) {
-            // Só ativa loading visual se ainda não tivermos usuário carregado
             if (!userRef.current) setLoading(true); 
             
             await fetchAndSyncProfile(session.user);
             
-            if (mounted) setLoading(false); // Libera a tela após carregar dados
+            if (mounted) setLoading(false);
         } 
-        // C) CASOS DE BORDA (Ex: Inicializou sem sessão)
         else {
             if (mounted) setLoading(false);
         }
@@ -201,7 +210,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             return { success: false, error };
         }
 
-        // O listener 'SIGNED_IN' vai capturar isso, mas por segurança chamamos aqui também
         if (data.session?.user) {
             const profile = await fetchAndSyncProfile(data.session.user);
             if (!profile) {
