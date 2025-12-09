@@ -18,6 +18,9 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { PoolRulesDialog } from '@/components/pool/PoolRulesDialog'; // Importe o novo componente
+import { BookOpen } from 'lucide-react';
+
 
 interface PoolHeaderData {
   name: string;
@@ -147,7 +150,18 @@ const PoolDashboard = () => {
             <ActionButton icon={<Trophy />} label="Ranking" onClick={() => navigate(`/pool/${poolId}/ranking`)} />
             <ActionButton icon={<Calculator />} label="Simulador" onClick={() => navigate(`/pool/${poolId}/simulador`)} />
             <ActionButton icon={<Info />} label="Informações da Galera" onClick={() => navigate(`/pool/${poolId}/info-participantes`)} />
-            
+           
+          {/* NOVO BOTÃO DE CRITÉRIOS */}
+            {poolDetails && (
+              <PoolRulesDialog 
+                 pool={poolDetails} 
+                    triggerButton={
+                        <Button variant="outline" className="flex-1 min-w-[130px] h-12 border-gray-200 text-gray-700 hover:bg-gray-50">
+                           <BookOpen className="mr-2 h-4 w-4" /> <span className="text-sm font-medium">Critérios</span>
+                       </Button>
+                   }
+              />
+          )}
             {/* BOTÃO EXCLUSIVO PARA O DONO */}
             {isOwner && (
                 <ActionButton 
