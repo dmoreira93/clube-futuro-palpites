@@ -10,11 +10,11 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Target, Trophy, AlertTriangle, BookOpen, Ban } from "lucide-react";
+import { Target, Trophy, AlertTriangle, BookOpen } from "lucide-react";
 
 interface PoolRulesProps {
   pool: any;
-  triggerButton?: React.ReactNode; // Botão opcional para abrir o modal
+  triggerButton?: React.ReactNode;
 }
 
 export function PoolRulesDialog({ pool, triggerButton }: PoolRulesProps) {
@@ -50,25 +50,25 @@ export function PoolRulesDialog({ pool, triggerButton }: PoolRulesProps) {
                   <TableRow>
                     <TableCell className="font-medium">Cravada (Placar Exato)</TableCell>
                     <TableCell className="text-right">
-                      <Badge className="bg-purple-100 text-purple-700 hover:bg-purple-200">{pool.points_exact_score} pts</Badge>
+                      <Badge className="bg-purple-100 text-purple-700 hover:bg-purple-200">{pool.points_exact_score ?? 10} pts</Badge>
                     </TableCell>
                   </TableRow>
                   <TableRow>
-                    <TableCell className="font-medium">Vencedor + Saldo de Gols</TableCell>
+                    <TableCell className="font-medium">Vencedor + Saldo</TableCell>
                     <TableCell className="text-right">
-                      <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-200">{pool.points_winner_diff} pts</Badge>
+                      <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-200">{pool.points_winner_diff ?? 7} pts</Badge>
                     </TableCell>
                   </TableRow>
                   <TableRow>
                     <TableCell className="font-medium">Apenas Vencedor</TableCell>
                     <TableCell className="text-right">
-                      <Badge className="bg-green-100 text-green-700 hover:bg-green-200">{pool.points_winner} pts</Badge>
+                      <Badge className="bg-green-100 text-green-700 hover:bg-green-200">{pool.points_winner ?? 5} pts</Badge>
                     </TableCell>
                   </TableRow>
                   <TableRow>
                     <TableCell className="font-medium">Erro Total</TableCell>
                     <TableCell className="text-right">
-                      <Badge variant="outline">{pool.points_wrong} pts</Badge>
+                      <Badge variant="outline">{pool.points_wrong ?? 0} pts</Badge>
                     </TableCell>
                   </TableRow>
                 </TableBody>
