@@ -34,10 +34,11 @@ const formSchema = z.object({
   is_public: z.boolean().default(false),
   customize_criteria: z.boolean().default(false),
   
-  // Pontuação (Só usadas se customize_criteria = true, mas salvamos sempre)
+  // Pontuação (AGORA SÃO 4)
   points_exact_score: z.string().transform((val) => Number(val) || 10),
   points_winner_diff: z.string().transform((val) => Number(val) || 7),
   points_winner: z.string().transform((val) => Number(val) || 5),
+  points_wrong: z.string().transform((val) => Number(val) || 0), // Novo campo para "Erro"
 
   // Punição
   enable_punishment: z.boolean().default(false),
@@ -67,6 +68,7 @@ const CreatePoolPage = () => {
       points_exact_score: 10,
       points_winner_diff: 7,
       points_winner: 5,
+      points_wrong: 0, // Padrão 0
 
       enable_punishment: false,
       punishment_description: "",
@@ -91,7 +93,7 @@ const CreatePoolPage = () => {
     setLoading(true);
 
     try {
-      // Validação de Prêmios (se houver taxa de entrada)
+      // Validação de Prêmios
       const totalPrize = values.prize_percent_1st + values.prize_percent_2nd + values.prize_percent_3rd;
       if (values.entry_fee > 0 && totalPrize !== 100) {
           throw new Error("A soma das porcentagens dos prêmios deve ser 100%.");
@@ -99,7 +101,7 @@ const CreatePoolPage = () => {
 
       // Validação Punição
       if (values.enable_punishment && !values.punishment_description) {
-          throw new Error("Descreva a prenda para o último colocado.");
+          throw new Error("Por favor, descreva qual será a prenda para o último colocado.");
       }
 
       const { data: pool, error } = await supabase
@@ -119,10 +121,11 @@ const CreatePoolPage = () => {
           prize_percent_2nd: values.prize_percent_2nd,
           prize_percent_3rd: values.prize_percent_3rd,
           
-          // Pontuação
+          // Pontuação (Agora salva os 4)
           points_exact_score: values.points_exact_score,
           points_winner_diff: values.points_winner_diff,
           points_winner: values.points_winner,
+          points_wrong: values.points_wrong,
 
           // Punição
           enable_punishment: values.enable_punishment,
@@ -135,7 +138,6 @@ const CreatePoolPage = () => {
 
       if (error) throw error;
 
-      // Cria a participação do dono
       await supabase.from('participations').insert({
         user_id: user.id,
         pool_id: pool.id,
@@ -167,7 +169,8 @@ const CreatePoolPage = () => {
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
               
-              {/* --- DADOS BÁSICOS --- */}
+              {/* ... (DADOS BÁSICOS e FINANCEIRO iguais ao anterior) ... */}
+              {/* Vou omitir para poupar espaço, é o mesmo código do post anterior */}
               <div className="space-y-4">
                   <FormField
                     control={form.control}
@@ -270,7 +273,7 @@ const CreatePoolPage = () => {
                   />
               </div>
 
-              {/* --- PONTUAÇÃO --- */}
+              {/* --- PONTUAÇÃO (CORRIGIDO) --- */}
               <div className="space-y-4 pt-2">
                   <FormField
                     control={form.control}
@@ -287,22 +290,27 @@ const CreatePoolPage = () => {
                   />
 
                   {watchCustomize && (
-                      <div className="grid grid-cols-3 gap-4 p-4 border rounded-lg bg-gray-50 animate-in fade-in slide-in-from-top-2">
+                      // MUDANÇA AQUI: grid-cols-4 para caber os 4 campos
+                      <div className="grid grid-cols-4 gap-3 p-4 border rounded-lg bg-gray-50 animate-in fade-in slide-in-from-top-2">
                           <FormField control={form.control} name="points_exact_score" render={({ field }) => (
-                              <FormItem><FormLabel className="text-xs font-bold text-purple-600">Cravada</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormDescription className="text-[10px]">Placar Exato</FormDescription></FormItem>
+                              <FormItem><FormLabel className="text-xs font-bold text-purple-600">Cravada</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormDescription className="text-[9px]">Placar Exato</FormDescription></FormItem>
                           )} />
                           <FormField control={form.control} name="points_winner_diff" render={({ field }) => (
-                              <FormItem><FormLabel className="text-xs font-bold text-blue-600">Saldo</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormDescription className="text-[10px]">Vencedor + Gols</FormDescription></FormItem>
+                              <FormItem><FormLabel className="text-xs font-bold text-blue-600">Saldo</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormDescription className="text-[9px]">Vencedor+Gols</FormDescription></FormItem>
                           )} />
                           <FormField control={form.control} name="points_winner" render={({ field }) => (
-                              <FormItem><FormLabel className="text-xs font-bold text-green-600">Vencedor</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormDescription className="text-[10px]">Apenas Vencedor</FormDescription></FormItem>
+                              <FormItem><FormLabel className="text-xs font-bold text-green-600">Vencedor</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormDescription className="text-[9px]">Só Vencedor</FormDescription></FormItem>
+                          )} />
+                           {/* NOVO CAMPO: Erro */}
+                          <FormField control={form.control} name="points_wrong" render={({ field }) => (
+                              <FormItem><FormLabel className="text-xs font-bold text-red-600">Erro</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormDescription className="text-[9px]">Errou Tudo</FormDescription></FormItem>
                           )} />
                       </div>
                   )}
               </div>
 
-              {/* --- PUNIÇÃO --- */}
-              <div className="space-y-4 pt-2 border-t">
+              {/* ... (PUNIÇÃO e botão final iguais) ... */}
+              <div className="space-y-4 pt-2 border-t mt-4">
                   <FormField
                     control={form.control}
                     name="enable_punishment"
@@ -328,7 +336,7 @@ const CreatePoolPage = () => {
                   )}
               </div>
 
-              <Button type="submit" className="w-full bg-fifa-blue hover:bg-blue-900 h-12 text-lg" disabled={loading}>
+              <Button type="submit" className="w-full bg-fifa-blue hover:bg-blue-900 h-12 text-lg mt-6" disabled={loading}>
                 {loading ? <Loader2 className="animate-spin mr-2"/> : null} Criar Bolão
               </Button>
             </form>
