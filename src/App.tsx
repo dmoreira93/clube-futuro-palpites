@@ -14,9 +14,11 @@ import PrivacyPolicy from "./pages/PrivacyPolicy";
 import TermsOfUse from "./pages/TermsOfUse";
 import CompleteProfile from "./pages/CompleteProfile";
 
+// Páginas Híbridas (Entrada no Bolão - Tratam Auth internamente)
+import JoinPoolPage from "./pages/JoinPool";
+
 // Páginas Protegidas (Dashboard Geral)
 import Dashboard from "./pages/Dashboard";
-import JoinPoolPage from "./pages/JoinPool";
 import CreatePoolPage from "./pages/CreatePool";
 import PoolSettingsPage from "./pages/PoolSettings";
 import ProfilePage from "./pages/Profile";
@@ -32,7 +34,7 @@ import Resultados from "./pages/Resultados";
 import Simulador from "./pages/Simulador";
 import InfoParticipantes from "./pages/InfoParticipantes";
 import PoolCriteriaSetup from "./pages/PoolCriteriaSetup";
-import DailyMatchesAndPredictions from "./pages/DailyMatchesAndPredictions"; // Importe este arquivo
+import DailyMatchesAndPredictions from "./pages/DailyMatchesAndPredictions";
 
 // Admin
 import Admin from "./pages/Admin";
@@ -55,22 +57,29 @@ function App() {
             <Route path="/criterios" element={<Criterios />} />
             <Route path="/PrivacyPolicy" element={<PrivacyPolicy />} />
             <Route path="/TermsOfUse" element={<TermsOfUse />} />
-            <Route path="/complete-profile" element={<CompleteProfile />} />
+            
+            {/* ROTAS DE ENTRADA (JOIN) 
+                Ficam fora do ProtectedRoute porque a própria página gerencia 
+                se mostra o botão de Login Google ou o botão de Entrar.
+            */}
+            <Route path="/join" element={<JoinPoolPage />} />
+            <Route path="/join/:code" element={<JoinPoolPage />} />
+
+            {/* --- Rotas Semi-Protegidas --- */}
+            <Route path="/complete-profile" element={<ProtectedRoute><CompleteProfile /></ProtectedRoute>} />
             
             {/* --- Rotas Protegidas (Gerais) --- */}
             <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
             <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
             <Route path="/noticias" element={<ProtectedRoute><NoticiasPage /></ProtectedRoute>} />
             <Route path="/auditoria" element={<ProtectedRoute><AuditoriaPontos /></ProtectedRoute>} />
-            <Route path="/join-pool" element={<ProtectedRoute><JoinPoolPage /></ProtectedRoute>} />
+            
+            {/* Rota antiga /join-pool removida em favor das novas /join */}
             <Route path="/create-pool" element={<ProtectedRoute><CreatePoolPage /></ProtectedRoute>} />
             <Route path="/change-password" element={<ProtectedRoute><ChangePassword /></ProtectedRoute>} />
             
             {/* --- Rotas de Contexto do Bolão (Aninhadas) --- */}
-            {/* A rota base /pool/:poolId leva ao Dashboard do Bolão */}
             <Route path="/pool/:poolId" element={<ProtectedRoute><PoolDashboard /></ProtectedRoute>} />
-                        
-            {/* As sub-rotas mantêm o ID na URL, permitindo que a Navbar saiba onde estamos */}
             <Route path="/pool/:poolId/palpites" element={<ProtectedRoute><Palpites /></ProtectedRoute>} />
             <Route path="/pool/:poolId/ranking" element={<ProtectedRoute><RankingPage /></ProtectedRoute>} />
             <Route path="/pool/:poolId/resultados" element={<ProtectedRoute><Resultados /></ProtectedRoute>} />
@@ -78,7 +87,7 @@ function App() {
             <Route path="/pool/:poolId/settings" element={<ProtectedRoute><PoolSettingsPage /></ProtectedRoute>} />
             <Route path="/pool/:poolId/info-participantes" element={<ProtectedRoute><InfoParticipantes /></ProtectedRoute>} />
 
-            {/* Redirecionamentos de compatibilidade (caso alguém tente acessar as rotas antigas) */}
+            {/* Redirecionamentos de compatibilidade */}
             <Route path="/palpites" element={<Navigate to="/dashboard" replace />} />
             <Route path="/ranking" element={<Navigate to="/dashboard" replace />} />
             <Route path="/resultados" element={<Navigate to="/dashboard" replace />} />
