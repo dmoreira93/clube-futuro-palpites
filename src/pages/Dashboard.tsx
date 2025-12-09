@@ -32,7 +32,7 @@ const Dashboard = () => {
                     </p>
                 </div>
                 <div className="flex flex-wrap gap-3 justify-center md:justify-end">
-                     <Link to="/join-pool">
+                     <Link to="/join">
                         <Button variant="secondary" className="gap-2 text-fifa-blue font-semibold hover:bg-blue-50">
                             <LogIn className="h-4 w-4" /> Entrar em um Bolão
                         </Button>
