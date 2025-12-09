@@ -7,7 +7,7 @@ import useParticipantsRanking from '@/hooks/useParticipantsRanking';
 import NoticeBoard from '@/components/dashboard/NoticeBoard';
 import PaymentManagement from '@/components/dashboard/PaymentManagement';
 import { PoolNextMatches } from '@/components/dashboard/PoolNextMatches'; 
-import { PoolRulesDialog } from '@/components/pool/PoolRulesDialog';
+import { PoolRulesDialog } from '@/components/pools/PoolRulesDialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { 
     AlertCircle, Copy, Check, Trophy, Target, AlertTriangle, 
