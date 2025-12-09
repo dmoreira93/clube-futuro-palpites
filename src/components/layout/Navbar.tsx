@@ -36,13 +36,12 @@ const Navbar = () => {
   };
 
   const renderUserActions = () => {
-    if (loading && !user) return <Loader2 className="h-6 w-6 animate-spin text-white" />;
+    // 1. Carregando: Mostra Spinner
+    if (loading) return <Loader2 className="h-6 w-6 animate-spin text-white" />;
 
-    // CORREÇÃO AQUI: Se estiver logado, NÃO MOSTRA os botões de entrar/cadastrar
-    if (!isAuthenticated) {
-       // Oculta botões na própria página de login/cadastro para não ficar redundante
+    // 2. Não Logado: Mostra Botões (exceto nas páginas de auth)
+    if (!isAuthenticated || !user) {
        const noAuthButtonPages = ['/login', '/admin-login', '/cadastro'];
-       // Verifica se a rota atual começa com alguma das rotas proibidas
        const shouldHideButtons = noAuthButtonPages.some(path => location.pathname.startsWith(path));
 
        if (shouldHideButtons) return null;
@@ -55,23 +54,29 @@ const Navbar = () => {
       );
     }
 
-    // Se estiver logado, mostra o menu do usuário (Avatar)
+    // 3. Logado: Mostra Menu do Usuário (Avatar)
     return (
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button variant="ghost" className="relative h-10 w-10 rounded-full">
-            <Avatar className="h-10 w-10 border-2 border-fifa-gold"><AvatarImage src={user?.avatar_url || undefined} alt={user?.name || 'Avatar'} /><AvatarFallback className="bg-fifa-blue text-fifa-gold">{user?.name ? user.name.substring(0, 2).toUpperCase() : <User />}</AvatarFallback></Avatar>
+            <Avatar className="h-10 w-10 border-2 border-fifa-gold">
+                <AvatarImage src={user.avatar_url || undefined} alt={user.name || 'Avatar'} />
+                <AvatarFallback className="bg-fifa-blue text-fifa-gold">
+                    {user.name ? user.name.substring(0, 2).toUpperCase() : <User />}
+                </AvatarFallback>
+            </Avatar>
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent className="w-56" align="end" forceMount>
           <DropdownMenuLabel className="font-normal">
-            <div className="flex flex-col space-y-1"><p className="text-sm font-medium leading-none">{user?.name}</p><p className="text-xs leading-none text-muted-foreground">{user?.email}</p></div>
+            <div className="flex flex-col space-y-1">
+                <p className="text-sm font-medium leading-none">{user.name}</p>
+                <p className="text-xs leading-none text-muted-foreground">{user.email}</p>
+            </div>
           </DropdownMenuLabel>
           <DropdownMenuSeparator />
           <DropdownMenuItem onSelect={() => navigate('/profile')}><User className="mr-2 h-4 w-4" /><span>Meu Perfil</span></DropdownMenuItem>
-          
           <DropdownMenuItem onSelect={() => navigate('/auditoria')}><FileText className="mr-2 h-4 w-4" /><span>Auditoria de Pontos</span></DropdownMenuItem>
-          
           {isAdmin && (<DropdownMenuItem onSelect={() => navigate('/admin')}><Shield className="mr-2 h-4 w-4" /><span>Painel Admin</span></DropdownMenuItem>)}
           <DropdownMenuSeparator />
           <DropdownMenuItem onSelect={handleLogout}><LogOut className="mr-2 h-4 w-4" /><span>Sair</span></DropdownMenuItem>
@@ -82,7 +87,7 @@ const Navbar = () => {
 
   return (
     <div className="flex flex-col sticky top-0 z-40 shadow-lg">
-        {/* BARRA SUPERIOR PRINCIPAL (AZUL) */}
+        {/* BARRA AZUL */}
         <nav className="bg-fifa-blue text-white">
         <div className="container mx-auto px-4">
             <div className="flex justify-between items-center py-2 h-16">
@@ -92,7 +97,7 @@ const Navbar = () => {
                 <span className="font-bold text-lg hidden sm:inline text-fifa-gold">Futuro Palpites</span>
                 </Link>
 
-                {/* SELETOR DE BOLÃO (Só aparece se logado) */}
+                {/* SELETOR DE BOLÃO */}
                 {isAuthenticated && (
                 <DropdownMenu>
                     <DropdownMenuTrigger asChild>
@@ -124,13 +129,13 @@ const Navbar = () => {
                 )}
             </div>
 
-            {/* LADO DIREITO: MENU DO USUÁRIO */}
+            {/* AÇÕES DO USUÁRIO (LOGIN OU MENU) */}
             <div className="flex items-center">{renderUserActions()}</div>
             </div>
         </div>
         </nav>
 
-        {/* SUBMENU DO BOLÃO (SÓ APARECE SE TIVER UM BOLÃO SELECIONADO) */}
+        {/* SUBMENU DO BOLÃO */}
         {isAuthenticated && currentPool && (
             <div className="bg-white border-b border-gray-200 shadow-sm">
                 <div className="container mx-auto px-4 overflow-x-auto">

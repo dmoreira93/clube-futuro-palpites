@@ -1,140 +1,179 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/contexts/AuthContext';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { useToast } from '@/components/ui/use-toast';
-import { Loader2, LogIn, Users, ArrowRight } from 'lucide-react';
-import { PublicPoolsList } from '@/components/pools/PublicPoolsList';
-import { Separator } from '@/components/ui/separator';
+import { useEffect, useState } from "react";
+import { useParams, useNavigate } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
+import { PoolJoinCard } from "@/components/pool/PoolJoinCard"; // Verifique se o caminho está certo (singular/plural)
+import { LoginGoogle } from "@/components/auth/LoginGoogle"; // <--- Importamos o botão
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card, CardContent, CardFooter } from "@/components/ui/card";
+import { toast } from "sonner";
+import { Loader2, User } from "lucide-react";
 
-const HERO_BG_IMAGE = "/hero-bg.png";
-
-const JoinPoolPage = () => {
-  const { user } = useAuth();
-  const [poolCode, setPoolCode] = useState('');
-  const [loading, setLoading] = useState(false);
+export default function JoinPoolPage() {
+  const { code } = useParams<{ code: string }>();
+  const { user, fetchAndSyncProfile } = useAuth(); // Importante: fetchAndSyncProfile
   const navigate = useNavigate();
-  const { toast } = useToast();
+  
+  const [poolData, setPoolData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [joining, setJoining] = useState(false);
+  const [nickname, setNickname] = useState("");
 
-  const handleVerifyCode = async () => {
-    if (!poolCode.trim()) {
-      toast({ title: 'Erro', description: 'Por favor, insira um código de convite.', variant: 'destructive' });
-      return;
-    }
-    
-    setLoading(true);
-    try {
-      // Verifica se o código existe antes de redirecionar
-      const { data: pool, error } = await supabase
-        .from('pools')
-        .select('invite_code')
-        .eq('invite_code', poolCode.trim().toUpperCase())
-        .single();
+  // Carrega dados do bolão
+  useEffect(() => {
+    async function loadPoolDetails() {
+      if (!code) return;
+      try {
+        setLoading(true);
+        const { data: pool, error } = await supabase
+          .from("pools")
+          .select(`*, championship:championships(name)`)
+          .eq("invite_code", code.toUpperCase())
+          .single();
 
-      if (error || !pool) {
-        throw new Error('Código inválido ou bolão não encontrado.');
+        if (error) throw error;
+
+        // Contagem de participantes
+        const { count } = await supabase
+          .from("participations")
+          .select("*", { count: 'exact', head: true })
+          .eq("pool_id", pool.id);
+
+        setPoolData({
+            ...pool,
+            championship_name: pool.championship?.name,
+            participants_count: count || 0
+        });
+      } catch (error) {
+        toast.error("Bolão não encontrado.");
+        navigate("/");
+      } finally {
+        setLoading(false);
       }
+    }
+    loadPoolDetails();
+  }, [code, navigate]);
 
-      // Redireciona para a página de Panorama/Confirmação
-      navigate(`/cadastro/${pool.invite_code}`);
+  // Função unificada para Salvar Apelido (se precisar) e Entrar
+  const handleJoin = async () => {
+    if (!user) return; // Segurança
+
+    try {
+        setJoining(true);
+
+        // 1. Se não tiver username, salva primeiro
+        if (!user.username) {
+            if (!nickname.trim()) {
+                toast.error("Escolha um apelido para participar!");
+                setJoining(false);
+                return;
+            }
+            const { error: updateError } = await supabase
+                .from("users_custom")
+                .update({ username: nickname, first_login: false })
+                .eq("id", user.id);
+            
+            if (updateError) throw updateError;
+            
+            // Sincroniza o contexto local
+            await fetchAndSyncProfile(user);
+        }
+
+        // 2. Verifica se já participa
+        const { data: existing } = await supabase
+            .from("participations")
+            .select("id")
+            .eq("user_id", user.id)
+            .eq("pool_id", poolData.id)
+            .maybeSingle();
+
+        if (existing) {
+            toast.info("Você já está neste bolão!");
+            navigate(`/pool/${poolData.id}`);
+            return;
+        }
+
+        // 3. Entra no bolão
+        const { error } = await supabase.from("participations").insert({
+            user_id: user.id,
+            pool_id: poolData.id,
+            payment_status: 'pending'
+        });
+
+        if (error) throw error;
+
+        toast.success("Bem-vindo ao bolão!");
+        navigate(`/pool/${poolData.id}`);
 
     } catch (error: any) {
-      toast({ title: 'Código Inválido', description: "Verifique se digitou corretamente.", variant: 'destructive' });
+        toast.error("Erro ao entrar: " + error.message);
     } finally {
-      setLoading(false);
+        setJoining(false);
     }
   };
-  
-  const navigateToCreatePool = () => {
-    navigate('/create-pool');
-  };
+
+  if (loading) {
+    return <div className="h-screen flex items-center justify-center"><Loader2 className="h-10 w-10 animate-spin text-fifa-blue"/></div>;
+  }
+
+  // Se o bolão não carregou
+  if (!poolData) return null;
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
-      {/* Cabeçalho */}
-      <div className="bg-fifa-blue text-white py-10 px-4 text-center shadow-md relative overflow-hidden">
-         <div className="absolute inset-0 opacity-10 bg-cover bg-center" style={{ backgroundImage: `url('${HERO_BG_IMAGE}')` }}></div>
-        <div className="container mx-auto relative max-w-4xl z-10">
-            <div className="flex justify-center mb-4">
-                <div className="bg-white/10 p-3 rounded-full backdrop-blur-sm">
-                    <LogIn className="h-8 w-8 text-fifa-gold" />
-                </div>
-            </div>
-            <h1 className="text-3xl md:text-4xl font-bold text-fifa-gold drop-shadow-sm">Entrar em um Bolão</h1>
-            <p className="text-gray-200 mt-2 text-lg">Use um código de convite ou escolha um bolão público.</p>
-        </div>
-      </div>
-
-      <div className="container mx-auto px-4 py-12 max-w-4xl flex-grow space-y-12">
+    <div className="min-h-screen bg-gray-100 flex flex-col items-center justify-center p-4 gap-6">
         
-        {/* Card de Entrada com Código */}
-        <Card className="max-w-md mx-auto shadow-xl border-t-4 border-t-fifa-gold bg-white">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-xl text-fifa-blue">Código de Convite</CardTitle>
-            <CardDescription>
-              Recebeu um código de um amigo? Digite abaixo para ver os detalhes.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-5 pt-4">
-            <div className="space-y-2">
-              <Label htmlFor="pool-code" className="text-gray-700 font-medium">Código</Label>
-              <Input 
-                id="pool-code" 
-                placeholder="Ex: AB12CD" 
-                value={poolCode}
-                onChange={(e) => setPoolCode(e.target.value.toUpperCase())}
-                className="uppercase font-mono text-lg tracking-widest text-center border-gray-300 focus:border-fifa-gold focus:ring-fifa-gold py-6"
-                maxLength={6}
-                onKeyDown={(e) => e.key === 'Enter' && handleVerifyCode()}
-              />
-            </div>
-            <Button 
-                onClick={handleVerifyCode} 
-                disabled={loading} 
-                className="w-full bg-fifa-blue hover:bg-blue-900 font-bold py-6 shadow-md hover:shadow-lg transition-all"
-            >
-              {loading ? <Loader2 className="animate-spin mr-2 h-5 w-5" /> : (
-                  <>Verificar Código <ArrowRight className="ml-2 h-4 w-4"/></>
-              )}
-            </Button>
-            
-            <div className="relative py-3">
-              <div className="absolute inset-0 flex items-center"><span className="w-full border-t border-gray-200" /></div>
-              <div className="relative flex justify-center text-xs uppercase"><span className="bg-white px-2 text-muted-foreground font-medium">Ou</span></div>
-            </div>
-            
-            <Button onClick={navigateToCreatePool} variant="outline" className="w-full border-fifa-blue text-fifa-blue hover:bg-blue-50 font-semibold py-5 transition-colors">
-              Criar meu próprio Bolão
-            </Button>
-          </CardContent>
+        {/* Renderiza o Card de Detalhes (sem botões de ação internos, vamos controlar fora) */}
+        <PoolJoinCard 
+            pool={poolData} 
+            onJoin={() => {}} // Passamos vazio pois vamos controlar os botões abaixo
+            loading={false}
+        />
+
+        {/* ÁREA DE AÇÃO (Lógica Inteligente) */}
+        <Card className="w-full max-w-lg shadow-lg border-t-4 border-t-green-500">
+            <CardContent className="pt-6 text-center space-y-4">
+                
+                {/* CENÁRIO 1: NÃO LOGADO -> Mostra Google Login */}
+                {!user && (
+                    <div className="space-y-3">
+                        <h3 className="font-bold text-gray-700">Para participar, faça login:</h3>
+                        <LoginGoogle />
+                        <p className="text-xs text-gray-400">Rápido, seguro e sem senhas.</p>
+                    </div>
+                )}
+
+                {/* CENÁRIO 2: LOGADO SEM APELIDO -> Pede Apelido */}
+                {user && !user.username && (
+                    <div className="space-y-3 animate-in fade-in">
+                        <div className="bg-yellow-50 p-3 rounded-lg border border-yellow-200 text-yellow-800 text-sm flex items-center gap-2">
+                            <User className="h-4 w-4"/>
+                            <span>Falta pouco! Como quer ser chamado no ranking?</span>
+                        </div>
+                        <Input 
+                            placeholder="Seu Apelido (Ex: Imperador)" 
+                            value={nickname}
+                            onChange={(e) => setNickname(e.target.value)}
+                            className="text-center text-lg font-bold"
+                        />
+                        <Button className="w-full bg-green-600 hover:bg-green-700 font-bold" onClick={handleJoin} disabled={joining}>
+                            {joining ? <Loader2 className="animate-spin"/> : "Salvar e Entrar no Bolão"}
+                        </Button>
+                    </div>
+                )}
+
+                {/* CENÁRIO 3: LOGADO E COM APELIDO -> Botão de Entrar */}
+                {user && user.username && (
+                    <div className="space-y-2 animate-in fade-in">
+                        <p className="text-sm text-gray-600">Entrar como <strong className="text-fifa-blue">{user.username}</strong></p>
+                        <Button className="w-full h-12 text-lg bg-green-600 hover:bg-green-700 font-bold shadow-md" onClick={handleJoin} disabled={joining}>
+                            {joining ? <Loader2 className="animate-spin mr-2"/> : "Confirmar Entrada"}
+                        </Button>
+                    </div>
+                )}
+
+            </CardContent>
         </Card>
-
-        <div className="flex items-center justify-center my-8">
-            <Separator className="max-w-md bg-gray-200" />
-        </div>
-
-        {/* Seção de Bolões Públicos */}
-        <div className="space-y-8 bg-white p-8 rounded-xl shadow-sm border border-gray-100">
-          <div className="text-center max-w-2xl mx-auto">
-            <div className="inline-flex items-center justify-center p-3 bg-blue-50 rounded-full mb-4">
-                <Users className="h-6 w-6 text-fifa-blue" />
-            </div>
-            <h2 className="text-2xl font-bold text-fifa-blue mb-2">Bolões Públicos</h2>
-            <p className="text-muted-foreground">
-                Não tem código? Sem problemas! Participe de bolões abertos para toda a comunidade.
-            </p>
-          </div>
-          
-          <PublicPoolsList />
-        </div>
-
-      </div>
     </div>
   );
-};
-
-export default JoinPoolPage;
+}
