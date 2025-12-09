@@ -7,10 +7,11 @@ import useParticipantsRanking from '@/hooks/useParticipantsRanking';
 import NoticeBoard from '@/components/dashboard/NoticeBoard';
 import PaymentManagement from '@/components/dashboard/PaymentManagement';
 import { PoolNextMatches } from '@/components/dashboard/PoolNextMatches'; 
+import { PoolRulesDialog } from '@/components/pool/PoolRulesDialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { 
     AlertCircle, Copy, Check, Trophy, Target, AlertTriangle, 
-    Calculator, ListChecks, BarChart2, Users, Info, Eye, Settings, ShieldCheck
+    Calculator, ListChecks, BarChart2, Users, Info, Eye, Settings, ShieldCheck, BookOpen
 } from 'lucide-react'; 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -18,19 +19,31 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { PoolRulesDialog } from '@/components/pool/PoolRulesDialog'; // Importe o novo componente
-import { BookOpen } from 'lucide-react';
-
 
 interface PoolHeaderData {
+  id: string; // Adicionado ID para passar ao Dialog se precisar
   name: string;
   invite_code: string;
   description?: string | null;
   owner_id: string;
   championship_id: string;
-  // NOVOS CAMPOS PARA PUNIÇÃO
+  
+  // Financeiro e Punição
+  entry_fee: number;
+  admin_fee_percent: number;
+  prize_percent_1st: number;
+  prize_percent_2nd: number;
+  prize_percent_3rd: number;
   punishment_description?: string | null;
   enable_punishment?: boolean;
+
+  // Pontuação
+  points_exact_score: number;
+  points_winner_diff: number;
+  points_winner: number;
+  points_wrong: number;
+  
+  is_public: boolean;
 }
 
 const PoolDashboard = () => {
@@ -50,10 +63,16 @@ const PoolDashboard = () => {
       
       const fetchPoolDetails = async () => {
         try {
-            // CORREÇÃO: Adicionado 'punishment_description' e 'enable_punishment' na query
             const { data, error } = await supabase
             .from('pools')
-            .select('name, invite_code, description, owner_id, championship_id, punishment_description, enable_punishment')
+            .select(`
+                id, name, invite_code, description, owner_id, championship_id, 
+                punishment_description, enable_punishment,
+                entry_fee, admin_fee_percent, 
+                prize_percent_1st, prize_percent_2nd, prize_percent_3rd,
+                points_exact_score, points_winner_diff, points_winner, points_wrong,
+                is_public
+            `)
             .eq('id', poolId)
             .single();
             
@@ -92,8 +111,8 @@ const PoolDashboard = () => {
   const top3 = humanParticipants.slice(0, 3);
   const lastPlace = humanParticipants.length > 1 ? humanParticipants[humanParticipants.length - 1] : null;
 
-  // Só mostra se a punição estiver ativada E houver um lanterna definido
-  const showPunishment = poolDetails?.enable_punishment && lastPlace && humanParticipants.length > 2;
+  // Mostra punição se habilitada e se houver perdedores suficientes
+  const showPunishment = poolDetails?.enable_punishment && lastPlace && humanParticipants.length > 1;
 
   if (isLoading && !poolDetails) return <PoolDashboardSkeleton />;
   if (combinedError) return <ErrorAlert message={combinedError} />;
@@ -109,13 +128,13 @@ const PoolDashboard = () => {
                     <div className="flex items-center gap-2 mb-1">
                         <Badge variant="outline" className="text-fifa-blue border-fifa-blue bg-blue-50">Bolão Ativo</Badge>
                         {isOwner && <Badge className="bg-purple-100 text-purple-700 border-purple-200"><ShieldCheck className="w-3 h-3 mr-1"/> Admin</Badge>}
+                        {poolDetails?.is_public && <Badge className="bg-green-100 text-green-700 border-green-200">Público</Badge>}
                     </div>
                     <h1 className="text-3xl md:text-4xl font-bold text-fifa-blue">
                         {poolDetails ? poolDetails.name : <Skeleton className="h-10 w-64" />}
                     </h1>
-                    {/* Descrição do Bolão (Opcional) */}
                     {poolDetails?.description && (
-                        <p className="text-sm text-gray-500 mt-1 max-w-2xl">{poolDetails.description}</p>
+                        <p className="text-sm text-gray-500 mt-1 max-w-2xl line-clamp-2">{poolDetails.description}</p>
                     )}
                 </div>
 
@@ -149,19 +168,20 @@ const PoolDashboard = () => {
             <ActionButton icon={<BarChart2 />} label="Resultados" onClick={() => navigate(`/pool/${poolId}/resultados`)} />
             <ActionButton icon={<Trophy />} label="Ranking" onClick={() => navigate(`/pool/${poolId}/ranking`)} />
             <ActionButton icon={<Calculator />} label="Simulador" onClick={() => navigate(`/pool/${poolId}/simulador`)} />
-            <ActionButton icon={<Info />} label="Informações da Galera" onClick={() => navigate(`/pool/${poolId}/info-participantes`)} />
-           
-          {/* NOVO BOTÃO DE CRITÉRIOS */}
+            <ActionButton icon={<Info />} label="Participantes" onClick={() => navigate(`/pool/${poolId}/info-participantes`)} />
+            
+            {/* BOTÃO DE CRITÉRIOS */}
             {poolDetails && (
-              <PoolRulesDialog 
-                 pool={poolDetails} 
+                <PoolRulesDialog 
+                    pool={poolDetails} 
                     triggerButton={
                         <Button variant="outline" className="flex-1 min-w-[130px] h-12 border-gray-200 text-gray-700 hover:bg-gray-50">
-                           <BookOpen className="mr-2 h-4 w-4" /> <span className="text-sm font-medium">Critérios</span>
-                       </Button>
-                   }
-              />
-          )}
+                            <BookOpen className="mr-2 h-4 w-4" /> <span className="text-sm font-medium">Critérios</span>
+                        </Button>
+                    }
+                />
+            )}
+
             {/* BOTÃO EXCLUSIVO PARA O DONO */}
             {isOwner && (
                 <ActionButton 
@@ -196,7 +216,7 @@ const PoolDashboard = () => {
                             </div>
                         ) : <div className="text-center py-8 text-gray-500">Ainda não há ranking disponível.</div>}
 
-                        {/* ÁREA DE PUNIÇÃO CORRIGIDA */}
+                        {/* ÁREA DE PUNIÇÃO */}
                         {showPunishment && lastPlace && (
                             <div className="mt-6 pt-4 border-t flex items-center justify-between bg-red-50 p-3 rounded-lg animate-in fade-in">
                                 <div className="flex items-center gap-3">
@@ -206,7 +226,7 @@ const PoolDashboard = () => {
                                         <p className="text-xs text-red-600">Último colocado: <span className="font-bold">{lastPlace.name}</span></p>
                                     </div>
                                 </div>
-                                <Badge variant="destructive" className="bg-red-100 text-red-700 hover:bg-red-200 border-red-200">
+                                <Badge variant="destructive" className="bg-red-100 text-red-700 hover:bg-red-200 border-red-200 max-w-[200px] truncate" title={poolDetails?.punishment_description || ""}>
                                     {poolDetails?.punishment_description || "Pagar a prenda!"}
                                 </Badge>
                             </div>
@@ -244,7 +264,7 @@ const PoolDashboard = () => {
   );
 };
 
-// Componentes auxiliares (mantidos iguais)
+// Componentes auxiliares (mantidos)
 const StatCard = ({ title, value, icon, subtext, highlight = false }: any) => (
     <Card className={`${highlight ? 'border-fifa-gold bg-yellow-50/30' : ''} shadow-sm`}>
         <CardContent className="p-4 flex flex-col items-center text-center justify-center h-full">

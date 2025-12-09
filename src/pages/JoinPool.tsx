@@ -7,53 +7,43 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/components/ui/use-toast';
-import { Loader2, LogIn, Users } from 'lucide-react';
+import { Loader2, LogIn, Users, ArrowRight } from 'lucide-react';
 import { PublicPoolsList } from '@/components/pools/PublicPoolsList';
 import { Separator } from '@/components/ui/separator';
 
-// URL da imagem de fundo (assumindo que está na pasta public)
 const HERO_BG_IMAGE = "/hero-bg.png";
 
 const JoinPoolPage = () => {
-  const { user, fetchAndSyncProfile } = useAuth();
+  const { user } = useAuth();
   const [poolCode, setPoolCode] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  const handleJoinPool = async () => {
+  const handleVerifyCode = async () => {
     if (!poolCode.trim()) {
       toast({ title: 'Erro', description: 'Por favor, insira um código de convite.', variant: 'destructive' });
       return;
     }
+    
     setLoading(true);
     try {
-      const { data: pool, error: poolError } = await supabase
+      // Verifica se o código existe antes de redirecionar
+      const { data: pool, error } = await supabase
         .from('pools')
-        .select('id')
+        .select('invite_code')
         .eq('invite_code', poolCode.trim().toUpperCase())
         .single();
 
-      if (poolError || !pool) {
-        throw new Error('Código do bolão não encontrado ou inválido.');
+      if (error || !pool) {
+        throw new Error('Código inválido ou bolão não encontrado.');
       }
 
-      const { error: userUpdateError } = await supabase
-        .from('users_custom')
-        .update({ pool_id: pool.id })
-        .eq('id', user!.id);
-
-      if (userUpdateError) {
-        throw userUpdateError;
-      }
-      
-      await fetchAndSyncProfile(user!);
-
-      toast({ title: 'Sucesso!', description: `Você entrou no bolão!` });
-      navigate('/dashboard');
+      // Redireciona para a página de Panorama/Confirmação
+      navigate(`/cadastro/${pool.invite_code}`);
 
     } catch (error: any) {
-      toast({ title: 'Erro ao entrar no bolão', description: error.message, variant: 'destructive' });
+      toast({ title: 'Código Inválido', description: "Verifique se digitou corretamente.", variant: 'destructive' });
     } finally {
       setLoading(false);
     }
@@ -65,7 +55,7 @@ const JoinPoolPage = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
-      {/* Cabeçalho Padrão */}
+      {/* Cabeçalho */}
       <div className="bg-fifa-blue text-white py-10 px-4 text-center shadow-md relative overflow-hidden">
          <div className="absolute inset-0 opacity-10 bg-cover bg-center" style={{ backgroundImage: `url('${HERO_BG_IMAGE}')` }}></div>
         <div className="container mx-auto relative max-w-4xl z-10">
@@ -86,7 +76,7 @@ const JoinPoolPage = () => {
           <CardHeader className="pb-2">
             <CardTitle className="text-xl text-fifa-blue">Código de Convite</CardTitle>
             <CardDescription>
-              Recebeu um código de um amigo? Digite abaixo para entrar.
+              Recebeu um código de um amigo? Digite abaixo para ver os detalhes.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-5 pt-4">
@@ -99,14 +89,17 @@ const JoinPoolPage = () => {
                 onChange={(e) => setPoolCode(e.target.value.toUpperCase())}
                 className="uppercase font-mono text-lg tracking-widest text-center border-gray-300 focus:border-fifa-gold focus:ring-fifa-gold py-6"
                 maxLength={6}
+                onKeyDown={(e) => e.key === 'Enter' && handleVerifyCode()}
               />
             </div>
             <Button 
-                onClick={handleJoinPool} 
+                onClick={handleVerifyCode} 
                 disabled={loading} 
                 className="w-full bg-fifa-blue hover:bg-blue-900 font-bold py-6 shadow-md hover:shadow-lg transition-all"
             >
-              {loading ? <Loader2 className="animate-spin mr-2 h-5 w-5" /> : 'Entrar no Bolão'}
+              {loading ? <Loader2 className="animate-spin mr-2 h-5 w-5" /> : (
+                  <>Verificar Código <ArrowRight className="ml-2 h-4 w-4"/></>
+              )}
             </Button>
             
             <div className="relative py-3">
