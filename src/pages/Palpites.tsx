@@ -45,6 +45,9 @@ const Palpites = () => {
     const [loading, setLoading] = useState(true);
     const [submittingId, setSubmittingId] = useState<string | null>(null);
     
+    // Novo Estado: Regras do Campeonato
+    const [champRules, setChampRules] = useState({ has_groups: true, has_final: true });
+
     const [allMatches, setAllMatches] = useState<Match[]>([]);
     const [teams, setTeams] = useState<Team[]>([]);
     const [groups, setGroups] = useState<{ id: string; name: string }[]>([]);
@@ -56,7 +59,7 @@ const Palpites = () => {
         final_home_score: '', final_away_score: '',
     });
 
-    // --- REGRA DE BLOQUEIO 1: PRAZO ---
+    // --- REGRA DE BLOQUEIO 1: PRAZO (MODIFICADO) ---
     const isDeadlineLocked = useMemo(() => {
         if (!pool) return true;
         
@@ -65,7 +68,7 @@ const Palpites = () => {
             return isAfter(new Date(), new Date(pool.prediction_deadline));
         }
 
-        // 2. Início do Campeonato (Fallback de segurança se não houver data limite)
+        // 2. Início do Campeonato (Fallback)
         if (allMatches.length > 0) {
             const firstMatchDate = new Date(Math.min(...allMatches.map(m => new Date(m.match_date).getTime())));
             return isAfter(new Date(), firstMatchDate);
@@ -76,18 +79,15 @@ const Palpites = () => {
 
     // --- REGRA DE BLOQUEIO 2: PAGAMENTO ---
     const isPaymentLocked = useMemo(() => {
-        // Se o bolão não exige pagamento, libera geral
         if (!pool?.payment_required) return false;
         
-        // Imunidade do Dono: O dono nunca é bloqueado por pagamento
+        // Imunidade do Dono
         if (pool.owner_id === user?.id) return false;
         
-        // Para os outros, verifica o status na lista de participações
         const myPart = userParticipations.find(p => p.pool_id === pool.id);
         return myPart?.payment_status !== 'paid';
     }, [pool, userParticipations, user?.id]);
 
-    // Bloqueio Geral (Se qualquer um for true, bloqueia edição)
     const isLocked = isDeadlineLocked || isPaymentLocked;
 
     const deadlineMessage = useMemo(() => {
@@ -100,6 +100,21 @@ const Palpites = () => {
 
         setLoading(true);
         try {
+            // 0. BUSCAR REGRAS DO CAMPEONATO
+            const { data: champData } = await supabase
+                .from('championships')
+                .select('has_group_stage, has_final_match')
+                .eq('id', pool.championship_id)
+                .single();
+            
+            // Define as regras (se não vier do banco, assume TRUE como padrão antigo)
+            if (champData) {
+                setChampRules({
+                    has_groups: champData.has_group_stage ?? true,
+                    has_final: champData.has_final_match ?? true
+                });
+            }
+
             // 1. Buscar Partidas
             const { data: matchesData } = await supabase
                 .from('matches')
@@ -112,13 +127,15 @@ const Palpites = () => {
             const { data: teamsData } = await supabase.from('teams').select('*').order('name', { ascending: true });
             setTeams(teamsData || []);
 
-            // 3. Buscar Grupos
-            const { data: groupsData } = await supabase
-                .from('groups')
-                .select('id, name')
-                .eq('championship_id', pool.championship_id)
-                .order('name', { ascending: true });
-            setGroups(groupsData || []);
+            // 3. Buscar Grupos (SÓ SE O CAMPEONATO TIVER)
+            if (champData?.has_group_stage !== false) {
+                const { data: groupsData } = await supabase
+                    .from('groups')
+                    .select('id, name')
+                    .eq('championship_id', pool.championship_id)
+                    .order('name', { ascending: true });
+                setGroups(groupsData || []);
+            }
 
             // 4. Carregar Palpites Existentes
             if (user && pool) {
@@ -134,28 +151,32 @@ const Palpites = () => {
                 setDailyPredictions(loadedPreds);
 
                 // Grupos
-                const { data: gPreds } = await supabase.from('group_predictions').select('*').eq('user_id', user.id).eq('pool_id', pool.id);
-                const loadedGroupPreds: any = {};
-                gPreds?.forEach(p => loadedGroupPreds[p.group_id] = {
-                    group_id: p.group_id,
-                    predicted_first_team_id: p.predicted_first_team_id,
-                    predicted_second_team_id: p.predicted_second_team_id,
-                    prediction_id: p.id
-                });
-                setGroupPredictions(loadedGroupPreds);
+                if (champData?.has_group_stage !== false) {
+                    const { data: gPreds } = await supabase.from('group_predictions').select('*').eq('user_id', user.id).eq('pool_id', pool.id);
+                    const loadedGroupPreds: any = {};
+                    gPreds?.forEach(p => loadedGroupPreds[p.group_id] = {
+                        group_id: p.group_id,
+                        predicted_first_team_id: p.predicted_first_team_id,
+                        predicted_second_team_id: p.predicted_second_team_id,
+                        prediction_id: p.id
+                    });
+                    setGroupPredictions(loadedGroupPreds);
+                }
 
                 // Final
-                const { data: fPred } = await supabase.from('final_predictions').select('*').eq('user_id', user.id).eq('pool_id', pool.id).maybeSingle();
-                if (fPred) {
-                    setFinalPrediction({
-                        champion_id: fPred.champion_id,
-                        runner_up_id: fPred.runner_up_id,
-                        third_place_id: fPred.third_place_id,
-                        fourth_place_id: fPred.fourth_place_id,
-                        final_home_score: fPred.final_home_score?.toString() || '',
-                        final_away_score: fPred.final_away_score?.toString() || '',
-                        prediction_id: fPred.id
-                    });
+                if (champData?.has_final_match !== false) {
+                    const { data: fPred } = await supabase.from('final_predictions').select('*').eq('user_id', user.id).eq('pool_id', pool.id).maybeSingle();
+                    if (fPred) {
+                        setFinalPrediction({
+                            champion_id: fPred.champion_id,
+                            runner_up_id: fPred.runner_up_id,
+                            third_place_id: fPred.third_place_id,
+                            fourth_place_id: fPred.fourth_place_id,
+                            final_home_score: fPred.final_home_score?.toString() || '',
+                            final_away_score: fPred.final_away_score?.toString() || '',
+                            prediction_id: fPred.id
+                        });
+                    }
                 }
             }
 
@@ -222,7 +243,7 @@ const Palpites = () => {
         if (!f.champion_id || !f.runner_up_id || !f.third_place_id || !f.fourth_place_id || !f.final_home_score || !f.final_away_score) {
             return toast({ title: "Incompleto", description: "Preencha todos os campos da final (Pódio e Placar).", variant: "destructive" });
         }
-        // Validação básica de unicidade
+        
         const podio = [f.champion_id, f.runner_up_id, f.third_place_id, f.fourth_place_id];
         if (new Set(podio).size !== podio.length) return toast({ title: "Times repetidos", description: "Os times do pódio devem ser diferentes.", variant: "destructive" });
 
@@ -246,7 +267,7 @@ const Palpites = () => {
         } finally { setSubmittingId(null); }
     };
 
-    // Componente de Alerta Dinâmico
+    // Alerta Dinâmico
     const AlertHeader = () => {
         if (isPaymentLocked) {
             return (
@@ -259,7 +280,6 @@ const Palpites = () => {
                 </Alert>
             );
         }
-        
         if (isDeadlineLocked) {
             return (
                 <Alert variant="destructive" className="mb-8 bg-red-50 border-red-200">
@@ -271,7 +291,6 @@ const Palpites = () => {
                 </Alert>
             );
         }
-
         return (
             <Alert className="mb-8 bg-blue-50 border-blue-200">
                 <Save className="h-5 w-5 text-blue-600" />
@@ -286,6 +305,14 @@ const Palpites = () => {
     if (loading) return <div className="flex justify-center items-center h-screen"><Loader2 className="h-10 w-10 animate-spin text-fifa-blue" /></div>;
     if (!pool) return null;
 
+    // Helper para definir largura das abas no CSS Grid
+    const getGridCols = () => {
+        let cols = 1; // Jogos é sempre fixo
+        if (champRules.has_groups) cols++;
+        if (champRules.has_final) cols++;
+        return `grid-cols-${cols}`;
+    };
+
     return (
         <div className="container mx-auto p-4 sm:p-6 lg:p-8 max-w-5xl">
             <div className="text-center mb-6">
@@ -296,10 +323,16 @@ const Palpites = () => {
             <AlertHeader />
 
             <Tabs defaultValue="daily" className="w-full">
-                <TabsList className="grid w-full grid-cols-3 mb-8 h-12">
+                <TabsList className={`grid w-full ${getGridCols()} mb-8 h-12`}>
                     <TabsTrigger value="daily" className="text-base">Jogos</TabsTrigger>
-                    <TabsTrigger value="groups" className="text-base">Grupos</TabsTrigger>
-                    <TabsTrigger value="final" className="text-base">Finais</TabsTrigger>
+                    
+                    {champRules.has_groups && (
+                        <TabsTrigger value="groups" className="text-base">Grupos</TabsTrigger>
+                    )}
+                    
+                    {champRules.has_final && (
+                        <TabsTrigger value="final" className="text-base">Finais</TabsTrigger>
+                    )}
                 </TabsList>
                 
                 {/* --- ABA 1: PARTIDAS --- */}
@@ -359,132 +392,136 @@ const Palpites = () => {
                 </TabsContent>
 
                 {/* --- ABA 2: GRUPOS --- */}
-                <TabsContent value="groups" className="space-y-6">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        {groups.map(group => {
-                            const p = groupPredictions[group.id] || { group_id: group.id, predicted_first_team_id: null, predicted_second_team_id: null };
-                            return (
-                                <Card key={group.id} className="border-t-4 border-t-fifa-blue">
-                                    <CardHeader className="pb-2">
-                                        <CardTitle className="text-lg">{group.name}</CardTitle>
-                                        <CardDescription>Quem passa de fase?</CardDescription>
-                                    </CardHeader>
-                                    <CardContent className="space-y-4">
-                                        <div className="space-y-2">
-                                            <label className="text-sm font-bold text-gray-600 flex items-center gap-2"><Trophy className="h-4 w-4 text-yellow-500"/> 1º Colocado</label>
-                                            <Select 
-                                                disabled={isLocked} 
-                                                value={p.predicted_first_team_id || ''} 
-                                                onValueChange={(val) => setGroupPredictions(prev => ({...prev, [group.id]: {...prev[group.id], predicted_first_team_id: val}}))}
-                                            >
-                                                <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
-                                                <SelectContent>
-                                                    {teams.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
-                                                </SelectContent>
-                                            </Select>
-                                        </div>
-                                        <div className="space-y-2">
-                                            <label className="text-sm font-bold text-gray-600 flex items-center gap-2"><Medal className="h-4 w-4 text-gray-400"/> 2º Colocado</label>
-                                            <Select 
-                                                disabled={isLocked} 
-                                                value={p.predicted_second_team_id || ''} 
-                                                onValueChange={(val) => setGroupPredictions(prev => ({...prev, [group.id]: {...prev[group.id], predicted_second_team_id: val}}))}
-                                            >
-                                                <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
-                                                <SelectContent>
-                                                    {teams.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
-                                                </SelectContent>
-                                            </Select>
-                                        </div>
-                                        {!isLocked && (
-                                            <Button className="w-full mt-2" onClick={() => handleGroupSave(group.id)} disabled={submittingId === group.id}>
-                                                {submittingId === group.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Save className="mr-2 h-4 w-4"/>} 
-                                                Salvar Grupo
-                                            </Button>
-                                        )}
-                                    </CardContent>
-                                </Card>
-                            )
-                        })}
-                    </div>
-                </TabsContent>
-
-                {/* --- ABA 3: FINAL --- */}
-                <TabsContent value="final">
-                    <Card className="border-t-4 border-t-fifa-gold shadow-lg">
-                        <CardHeader>
-                            <CardTitle className="flex items-center gap-2 text-2xl text-fifa-blue"><Trophy className="h-8 w-8 text-yellow-500"/> O Grande Final</CardTitle>
-                            <CardDescription>Quem levará a taça? Defina o pódio e o placar da finalíssima.</CardDescription>
-                        </CardHeader>
-                        <CardContent className="space-y-8">
-                            
-                            {/* PÓDIO */}
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div className="space-y-4">
-                                    <h3 className="font-bold text-gray-700 border-b pb-2">Pódio do Campeonato</h3>
-                                    <div className="space-y-3">
-                                        {[
-                                            { label: "Campeão", icon: <Trophy className="h-4 w-4 text-yellow-500"/>, field: 'champion_id' },
-                                            { label: "Vice-Campeão", icon: <Medal className="h-4 w-4 text-gray-400"/>, field: 'runner_up_id' },
-                                            { label: "3º Lugar", icon: <Medal className="h-4 w-4 text-orange-400"/>, field: 'third_place_id' },
-                                            { label: "4º Lugar", icon: <Medal className="h-4 w-4 text-blue-300"/>, field: 'fourth_place_id' },
-                                        ].map((item: any) => (
-                                            <div key={item.field}>
-                                                <label className="text-sm font-medium text-gray-600 flex items-center gap-2 mb-1">{item.icon} {item.label}</label>
+                {champRules.has_groups && (
+                    <TabsContent value="groups" className="space-y-6">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            {groups.map(group => {
+                                const p = groupPredictions[group.id] || { group_id: group.id, predicted_first_team_id: null, predicted_second_team_id: null };
+                                return (
+                                    <Card key={group.id} className="border-t-4 border-t-fifa-blue">
+                                        <CardHeader className="pb-2">
+                                            <CardTitle className="text-lg">{group.name}</CardTitle>
+                                            <CardDescription>Quem passa de fase?</CardDescription>
+                                        </CardHeader>
+                                        <CardContent className="space-y-4">
+                                            <div className="space-y-2">
+                                                <label className="text-sm font-bold text-gray-600 flex items-center gap-2"><Trophy className="h-4 w-4 text-yellow-500"/> 1º Colocado</label>
                                                 <Select 
-                                                    disabled={isLocked}
-                                                    value={finalPrediction[item.field as keyof FinalPredictionState] as string || ''}
-                                                    onValueChange={(val) => setFinalPrediction(prev => ({...prev, [item.field]: val}))}
+                                                    disabled={isLocked} 
+                                                    value={p.predicted_first_team_id || ''} 
+                                                    onValueChange={(val) => setGroupPredictions(prev => ({...prev, [group.id]: {...prev[group.id], predicted_first_team_id: val}}))}
                                                 >
-                                                    <SelectTrigger><SelectValue placeholder="Selecione o time..." /></SelectTrigger>
-                                                    <SelectContent>{teams.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}</SelectContent>
+                                                    <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                                                    <SelectContent>
+                                                        {teams.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
+                                                    </SelectContent>
                                                 </Select>
                                             </div>
-                                        ))}
-                                    </div>
-                                </div>
-
-                                {/* PLACAR DA FINAL */}
-                                <div className="space-y-4">
-                                    <h3 className="font-bold text-gray-700 border-b pb-2">Placar da Final</h3>
-                                    <div className="bg-gray-50 p-6 rounded-xl border border-gray-100 text-center">
-                                        <p className="text-sm text-gray-500 mb-4">Qual será o resultado exato do jogo final?</p>
-                                        <div className="flex items-center justify-center gap-4">
-                                            <div className="flex flex-col items-center gap-2">
-                                                <span className="text-xs font-bold text-gray-400 uppercase">Campeão</span>
-                                                <Input 
-                                                    type="number" min="0" className="w-20 text-center text-2xl h-14 font-bold" 
-                                                    value={finalPrediction.final_home_score}
-                                                    onChange={(e) => setFinalPrediction(prev => ({...prev, final_home_score: e.target.value}))}
-                                                    disabled={isLocked}
-                                                />
+                                            <div className="space-y-2">
+                                                <label className="text-sm font-bold text-gray-600 flex items-center gap-2"><Medal className="h-4 w-4 text-gray-400"/> 2º Colocado</label>
+                                                <Select 
+                                                    disabled={isLocked} 
+                                                    value={p.predicted_second_team_id || ''} 
+                                                    onValueChange={(val) => setGroupPredictions(prev => ({...prev, [group.id]: {...prev[group.id], predicted_second_team_id: val}}))}
+                                                >
+                                                    <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                                                    <SelectContent>
+                                                        {teams.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
+                                                    </SelectContent>
+                                                </Select>
                                             </div>
-                                            <span className="text-2xl font-light text-gray-300">X</span>
-                                            <div className="flex flex-col items-center gap-2">
-                                                <span className="text-xs font-bold text-gray-400 uppercase">Vice</span>
-                                                <Input 
-                                                    type="number" min="0" className="w-20 text-center text-2xl h-14 font-bold" 
-                                                    value={finalPrediction.final_away_score}
-                                                    onChange={(e) => setFinalPrediction(prev => ({...prev, final_away_score: e.target.value}))}
-                                                    disabled={isLocked}
-                                                />
+                                            {!isLocked && (
+                                                <Button className="w-full mt-2" onClick={() => handleGroupSave(group.id)} disabled={submittingId === group.id}>
+                                                    {submittingId === group.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Save className="mr-2 h-4 w-4"/>} 
+                                                    Salvar Grupo
+                                                </Button>
+                                            )}
+                                        </CardContent>
+                                    </Card>
+                                )
+                            })}
+                        </div>
+                    </TabsContent>
+                )}
+
+                {/* --- ABA 3: FINAL --- */}
+                {champRules.has_final && (
+                    <TabsContent value="final">
+                        <Card className="border-t-4 border-t-fifa-gold shadow-lg">
+                            <CardHeader>
+                                <CardTitle className="flex items-center gap-2 text-2xl text-fifa-blue"><Trophy className="h-8 w-8 text-yellow-500"/> O Grande Final</CardTitle>
+                                <CardDescription>Quem levará a taça? Defina o pódio e o placar da finalíssima.</CardDescription>
+                            </CardHeader>
+                            <CardContent className="space-y-8">
+                                
+                                {/* PÓDIO */}
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div className="space-y-4">
+                                        <h3 className="font-bold text-gray-700 border-b pb-2">Pódio do Campeonato</h3>
+                                        <div className="space-y-3">
+                                            {[
+                                                { label: "Campeão", icon: <Trophy className="h-4 w-4 text-yellow-500"/>, field: 'champion_id' },
+                                                { label: "Vice-Campeão", icon: <Medal className="h-4 w-4 text-gray-400"/>, field: 'runner_up_id' },
+                                                { label: "3º Lugar", icon: <Medal className="h-4 w-4 text-orange-400"/>, field: 'third_place_id' },
+                                                { label: "4º Lugar", icon: <Medal className="h-4 w-4 text-blue-300"/>, field: 'fourth_place_id' },
+                                            ].map((item: any) => (
+                                                <div key={item.field}>
+                                                    <label className="text-sm font-medium text-gray-600 flex items-center gap-2 mb-1">{item.icon} {item.label}</label>
+                                                    <Select 
+                                                        disabled={isLocked}
+                                                        value={finalPrediction[item.field as keyof FinalPredictionState] as string || ''}
+                                                        onValueChange={(val) => setFinalPrediction(prev => ({...prev, [item.field]: val}))}
+                                                    >
+                                                        <SelectTrigger><SelectValue placeholder="Selecione o time..." /></SelectTrigger>
+                                                        <SelectContent>{teams.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}</SelectContent>
+                                                    </Select>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    {/* PLACAR DA FINAL */}
+                                    <div className="space-y-4">
+                                        <h3 className="font-bold text-gray-700 border-b pb-2">Placar da Final</h3>
+                                        <div className="bg-gray-50 p-6 rounded-xl border border-gray-100 text-center">
+                                            <p className="text-sm text-gray-500 mb-4">Qual será o resultado exato do jogo final?</p>
+                                            <div className="flex items-center justify-center gap-4">
+                                                <div className="flex flex-col items-center gap-2">
+                                                    <span className="text-xs font-bold text-gray-400 uppercase">Campeão</span>
+                                                    <Input 
+                                                        type="number" min="0" className="w-20 text-center text-2xl h-14 font-bold" 
+                                                        value={finalPrediction.final_home_score}
+                                                        onChange={(e) => setFinalPrediction(prev => ({...prev, final_home_score: e.target.value}))}
+                                                        disabled={isLocked}
+                                                    />
+                                                </div>
+                                                <span className="text-2xl font-light text-gray-300">X</span>
+                                                <div className="flex flex-col items-center gap-2">
+                                                    <span className="text-xs font-bold text-gray-400 uppercase">Vice</span>
+                                                    <Input 
+                                                        type="number" min="0" className="w-20 text-center text-2xl h-14 font-bold" 
+                                                        value={finalPrediction.final_away_score}
+                                                        onChange={(e) => setFinalPrediction(prev => ({...prev, final_away_score: e.target.value}))}
+                                                        disabled={isLocked}
+                                                    />
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
                                 </div>
-                            </div>
 
-                            {!isLocked && (
-                                <div className="flex justify-end pt-4 border-t">
-                                    <Button size="lg" className="w-full md:w-auto bg-green-600 hover:bg-green-700 text-white font-bold" onClick={handleFinalSave} disabled={submittingId === 'final'}>
-                                        {submittingId === 'final' ? <Loader2 className="mr-2 h-5 w-5 animate-spin"/> : <Save className="mr-2 h-5 w-5"/>}
-                                        Salvar Palpite Final
-                                    </Button>
-                                </div>
-                            )}
-                        </CardContent>
-                    </Card>
-                </TabsContent>
+                                {!isLocked && (
+                                    <div className="flex justify-end pt-4 border-t">
+                                        <Button size="lg" className="w-full md:w-auto bg-green-600 hover:bg-green-700 text-white font-bold" onClick={handleFinalSave} disabled={submittingId === 'final'}>
+                                            {submittingId === 'final' ? <Loader2 className="mr-2 h-5 w-5 animate-spin"/> : <Save className="mr-2 h-5 w-5"/>}
+                                            Salvar Palpite Final
+                                        </Button>
+                                    </div>
+                                )}
+                            </CardContent>
+                        </Card>
+                    </TabsContent>
+                )}
             </Tabs>
         </div>
     );
