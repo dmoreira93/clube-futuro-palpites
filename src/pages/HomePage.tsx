@@ -1,8 +1,9 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { BarChart3, UserCheck, Users, Trophy, ChevronUp, ChevronDown, MessageSquare, BookOpen, Ticket, Goal } from 'lucide-react'; // Adicionei Goal
+import { BarChart3, UserCheck, Users, Trophy, ChevronUp, ChevronDown, BookOpen, Ticket, Goal, LayoutDashboard } from 'lucide-react';
 import { useState } from 'react';
+import { useAuth } from '@/contexts/AuthContext'; // <--- IMPORTANTE
 
 // --- URL do seu Formulário de Contato / Tickets ---
 const SUPPORT_TICKET_URL = "https://docs.google.com/forms/d/e/1FAIpQLSes1345R-Ld4eWwwBD5HuqqMMCs6j3KiexlidDu09rbnApM0w/viewform?usp=dialog";
@@ -34,6 +35,7 @@ const FAQItem = ({ question, answer }: { question: string; answer: string }) => 
 // --- Componente principal da Nova Landing Page ---
 const HomePage = () => {
     const navigate = useNavigate();
+    const { isAuthenticated } = useAuth(); // <--- Pegamos o estado de login
 
     const scrollToTop = () => {
         window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -42,7 +44,7 @@ const HomePage = () => {
     return (
         <div className="flex flex-col min-h-screen bg-background font-sans" id="top">
             
-            {/* --- CABEÇALHO --- */}
+            {/* --- CABEÇALHO DA LANDING PAGE --- */}
             <header className="bg-fifa-blue text-white shadow-lg sticky top-0 z-50 border-b border-white/10 backdrop-blur-md bg-opacity-95">
                 <div className="container mx-auto px-4">
                     <div className="flex justify-between items-center py-3 h-16">
@@ -53,21 +55,36 @@ const HomePage = () => {
                         
                         {/* BOTÕES DE AÇÃO NO CABEÇALHO */}
                         <div className="flex items-center space-x-3">
-                            <Button 
-                                variant="outline" 
-                                size="sm" 
-                                onClick={() => navigate("/cadastro")} 
-                                className="hidden sm:flex border-fifa-gold text-fifa-gold bg-transparent hover:bg-fifa-gold hover:text-fifa-blue font-semibold transition-all duration-300"
-                            >
-                                Cadastrar
-                            </Button>
-                            <Button 
-                                size="sm" 
-                                onClick={() => navigate("/login")} 
-                                className="bg-gradient-to-b from-yellow-400 to-fifa-gold text-fifa-blue font-bold shadow-md hover:shadow-[0_0_15px_rgba(255,215,0,0.5)] hover:scale-105 transition-all duration-300 border border-yellow-300"
-                            >
-                                Entrar
-                            </Button>
+                            {isAuthenticated ? (
+                                /* CASO LOGADO: Mostra botão para o Dashboard */
+                                <Button 
+                                    size="sm" 
+                                    onClick={() => navigate("/dashboard")} 
+                                    className="bg-fifa-gold text-fifa-blue font-bold shadow-md hover:bg-yellow-400 transition-all flex items-center gap-2"
+                                >
+                                    <LayoutDashboard className="h-4 w-4" />
+                                    Meu Dashboard
+                                </Button>
+                            ) : (
+                                /* CASO DESLOGADO: Mostra Entrar/Cadastrar */
+                                <>
+                                    <Button 
+                                        variant="outline" 
+                                        size="sm" 
+                                        onClick={() => navigate("/cadastro")} 
+                                        className="hidden sm:flex border-fifa-gold text-fifa-gold bg-transparent hover:bg-fifa-gold hover:text-fifa-blue font-semibold transition-all duration-300"
+                                    >
+                                        Cadastrar
+                                    </Button>
+                                    <Button 
+                                        size="sm" 
+                                        onClick={() => navigate("/login")} 
+                                        className="bg-gradient-to-b from-yellow-400 to-fifa-gold text-fifa-blue font-bold shadow-md hover:shadow-[0_0_15px_rgba(255,215,0,0.5)] hover:scale-105 transition-all duration-300 border border-yellow-300"
+                                    >
+                                        Entrar
+                                    </Button>
+                                </>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -80,7 +97,7 @@ const HomePage = () => {
                     className="relative bg-cover text-white py-32 md:py-48 flex items-center justify-center overflow-hidden"
                     style={{ 
                         backgroundImage: `url('${HERO_BG_IMAGE}')`,
-                        backgroundPosition: 'center 30%', // Ajuste fino para mostrar mais a bola/estádio
+                        backgroundPosition: 'center 30%', 
                         backgroundSize: 'cover'
                     }}
                 >
@@ -98,13 +115,13 @@ const HomePage = () => {
                         <div className="flex flex-col sm:flex-row items-center justify-center gap-4 animate-in slide-in-from-bottom-4 duration-700 delay-200">
                             <Button 
                                 size="lg" 
-                                onClick={() => navigate("/cadastro")} 
+                                onClick={() => navigate(isAuthenticated ? "/create-pool" : "/cadastro")} 
                                 className="w-full sm:w-auto bg-gradient-to-r from-yellow-500 via-fifa-gold to-yellow-500 text-fifa-blue text-lg font-bold py-6 px-8 rounded-full shadow-[0_0_20px_rgba(255,215,0,0.4)] hover:shadow-[0_0_30px_rgba(255,215,0,0.6)] hover:scale-105 transition-all duration-300 border-2 border-yellow-300"
                             >
-                                Comece a Criar Seu Bolão!
+                                {isAuthenticated ? "Criar Novo Bolão" : "Comece a Criar Seu Bolão!"}
                             </Button>
                             
-                            {/* LINK SECUNDÁRIO PARA CRITÉRIOS (NOVO) */}
+                            {/* LINK SECUNDÁRIO PARA CRITÉRIOS */}
                             <Button
                                 variant="link"
                                 onClick={() => navigate("/criterios")}
@@ -120,7 +137,7 @@ const HomePage = () => {
                 {/* --- SEÇÃO 2: ESTATÍSTICAS --- */}
                 <section className="bg-gray-50 py-16 relative z-20 -mt-12 rounded-t-[2.5rem] shadow-[0_-10px_40px_rgba(0,0,0,0.1)]">
                     <div className="container mx-auto px-4">
-                         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 text-center max-w-5xl mx-auto">
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 text-center max-w-5xl mx-auto">
                             <div className="bg-white p-8 rounded-2xl shadow-sm hover:shadow-md transition-all duration-300 border border-gray-100">
                                 <div className="bg-blue-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
                                     <Trophy className="h-8 w-8 text-fifa-blue" />
@@ -179,9 +196,8 @@ const HomePage = () => {
                     </div>
                 </section>
 
-                {/* --- NOVA SEÇÃO: CONHEÇA NOSSOS CRITÉRIOS (DESTACADA) --- */}
+                {/* --- SEÇÃO 4: CRITÉRIOS --- */}
                 <section className="py-20 bg-fifa-blue text-white relative overflow-hidden">
-                    {/* Elementos decorativos de fundo */}
                     <div className="absolute top-0 left-0 w-full h-full opacity-10 pointer-events-none">
                         <div className="absolute -top-24 -left-24 w-96 h-96 bg-fifa-gold rounded-full blur-3xl"></div>
                         <div className="absolute bottom-0 right-0 w-64 h-64 bg-blue-400 rounded-full blur-3xl"></div>
@@ -204,7 +220,7 @@ const HomePage = () => {
                     </div>
                 </section>
 
-                {/* --- SEÇÃO 4: FAQ --- */}
+                {/* --- SEÇÃO 5: FAQ --- */}
                 <section className="py-20 bg-gray-50" id="faq">
                     <div className="container mx-auto px-4 max-w-4xl">
                         <h2 className="text-3xl font-bold text-center mb-12 text-fifa-blue">Dúvidas Frequentes</h2>

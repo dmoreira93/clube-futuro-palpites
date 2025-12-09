@@ -2,39 +2,53 @@ import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { PoolJoinCard } from "@/components/pools/PoolJoinCard"; // Verifique se o caminho está certo (singular/plural)
-import { LoginGoogle } from "@/components/auth/LoginGoogle"; // <--- Importamos o botão
+// Verifique se a pasta é 'pools' (plural) mesmo
+import { PoolJoinCard } from "@/components/pools/PoolJoinCard"; 
+import { LoginGoogle } from "@/components/auth/LoginGoogle"; 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardFooter } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { toast } from "sonner";
-import { Loader2, User } from "lucide-react";
+import { Loader2, User, AlertCircle } from "lucide-react";
 
 export default function JoinPoolPage() {
   const { code } = useParams<{ code: string }>();
-  const { user, fetchAndSyncProfile } = useAuth(); // Importante: fetchAndSyncProfile
+  const { user, fetchAndSyncProfile } = useAuth();
   const navigate = useNavigate();
   
   const [poolData, setPoolData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null); // Estado para erro visual
   const [joining, setJoining] = useState(false);
   const [nickname, setNickname] = useState("");
 
-  // Carrega dados do bolão
   useEffect(() => {
     async function loadPoolDetails() {
-      if (!code) return;
+      if (!code) {
+          setLoading(false);
+          setErrorMsg("Código inválido.");
+          return;
+      }
+
       try {
         setLoading(true);
+        // Busca simples primeiro para garantir que o código existe
         const { data: pool, error } = await supabase
           .from("pools")
-          .select(`*, championship:championships(name)`)
+          .select(`
+            *,
+            championship:championships(name)
+          `)
           .eq("invite_code", code.toUpperCase())
           .single();
 
-        if (error) throw error;
+        if (error || !pool) {
+            console.error("Erro busca bolão:", error);
+            setErrorMsg("Bolão não encontrado ou código expirado.");
+            return;
+        }
 
-        // Contagem de participantes
+        // Busca participantes
         const { count } = await supabase
           .from("participations")
           .select("*", { count: 'exact', head: true })
@@ -46,23 +60,22 @@ export default function JoinPoolPage() {
             participants_count: count || 0
         });
       } catch (error) {
-        toast.error("Bolão não encontrado.");
-        navigate("/");
+        console.error(error);
+        setErrorMsg("Erro ao carregar informações.");
       } finally {
         setLoading(false);
       }
     }
     loadPoolDetails();
-  }, [code, navigate]);
+  }, [code]);
 
-  // Função unificada para Salvar Apelido (se precisar) e Entrar
   const handleJoin = async () => {
-    if (!user) return; // Segurança
+    if (!user || !poolData) return; 
 
     try {
         setJoining(true);
 
-        // 1. Se não tiver username, salva primeiro
+        // 1. Salva apelido se não tiver
         if (!user.username) {
             if (!nickname.trim()) {
                 toast.error("Escolha um apelido para participar!");
@@ -76,7 +89,6 @@ export default function JoinPoolPage() {
             
             if (updateError) throw updateError;
             
-            // Sincroniza o contexto local
             await fetchAndSyncProfile(user);
         }
 
@@ -108,33 +120,49 @@ export default function JoinPoolPage() {
 
     } catch (error: any) {
         toast.error("Erro ao entrar: " + error.message);
-    } finally {
         setJoining(false);
     }
   };
 
+  // TELA DE CARREGAMENTO
   if (loading) {
-    return <div className="h-screen flex items-center justify-center"><Loader2 className="h-10 w-10 animate-spin text-fifa-blue"/></div>;
+    return (
+        <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 gap-4">
+            <Loader2 className="h-12 w-12 animate-spin text-fifa-blue"/>
+            <p className="text-gray-500 font-medium">Buscando bolão...</p>
+        </div>
+    );
   }
 
-  // Se o bolão não carregou
-  if (!poolData) return null;
+  // TELA DE ERRO (Para não ficar tela branca)
+  if (errorMsg || !poolData) {
+      return (
+        <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 p-4 text-center">
+            <div className="bg-red-100 p-4 rounded-full mb-4">
+                <AlertCircle className="h-10 w-10 text-red-500" />
+            </div>
+            <h2 className="text-xl font-bold text-gray-800 mb-2">Ops! Algo deu errado.</h2>
+            <p className="text-gray-600 max-w-md mb-6">{errorMsg || "Não foi possível carregar os dados do bolão."}</p>
+            <Button onClick={() => navigate("/dashboard")} variant="outline">
+                Voltar ao Início
+            </Button>
+        </div>
+      );
+  }
 
+  // TELA DE SUCESSO (CARD)
   return (
     <div className="min-h-screen bg-gray-100 flex flex-col items-center justify-center p-4 gap-6">
         
-        {/* Renderiza o Card de Detalhes (sem botões de ação internos, vamos controlar fora) */}
         <PoolJoinCard 
             pool={poolData} 
-            onJoin={() => {}} // Passamos vazio pois vamos controlar os botões abaixo
+            onJoin={() => {}} 
             loading={false}
         />
 
-        {/* ÁREA DE AÇÃO (Lógica Inteligente) */}
         <Card className="w-full max-w-lg shadow-lg border-t-4 border-t-green-500">
             <CardContent className="pt-6 text-center space-y-4">
                 
-                {/* CENÁRIO 1: NÃO LOGADO -> Mostra Google Login */}
                 {!user && (
                     <div className="space-y-3">
                         <h3 className="font-bold text-gray-700">Para participar, faça login:</h3>
@@ -143,7 +171,6 @@ export default function JoinPoolPage() {
                     </div>
                 )}
 
-                {/* CENÁRIO 2: LOGADO SEM APELIDO -> Pede Apelido */}
                 {user && !user.username && (
                     <div className="space-y-3 animate-in fade-in">
                         <div className="bg-yellow-50 p-3 rounded-lg border border-yellow-200 text-yellow-800 text-sm flex items-center gap-2">
@@ -162,7 +189,6 @@ export default function JoinPoolPage() {
                     </div>
                 )}
 
-                {/* CENÁRIO 3: LOGADO E COM APELIDO -> Botão de Entrar */}
                 {user && user.username && (
                     <div className="space-y-2 animate-in fade-in">
                         <p className="text-sm text-gray-600">Entrar como <strong className="text-fifa-blue">{user.username}</strong></p>
