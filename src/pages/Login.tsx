@@ -4,7 +4,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/components/ui/use-toast";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
-import { LoginGoogle } from "@/components/auth/LoginGoogle"; // <--- IMPORTADO AQUI
+import { LoginGoogle } from "@/components/auth/LoginGoogle"; 
 import {
   Card,
   CardContent,
@@ -30,9 +30,31 @@ const Login = () => {
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // --- LÓGICA DE REDIRECIONAMENTO INTELIGENTE ---
   useEffect(() => {
     if (!loading && isAuthenticated && user) {
-      navigate(user.first_login ? "/change-password" : "/dashboard");
+      // 1. Prioridade: Se não tem apelido (username), vai completar perfil
+      if (!user.username) {
+        navigate("/complete-profile");
+        return;
+      }
+
+      // 2. Se for primeiro login
+      if (user.first_login) {
+        // Verifica se é login social (Google/Apple)
+        const isSocial = user.app_metadata?.provider !== 'email';
+        
+        // Se for Social, pula a troca de senha e vai pro Dashboard
+        if (isSocial) {
+            navigate("/dashboard");
+        } else {
+            // Se for Email/Senha, obriga a trocar a senha provisória
+            navigate("/change-password");
+        }
+      } else {
+        // 3. Usuário normal, vai pro Dashboard
+        navigate("/dashboard");
+      }
     }
   }, [isAuthenticated, loading, user, navigate]);
 
@@ -64,9 +86,16 @@ const Login = () => {
       if (session?.user) {
           const profile = await fetchAndSyncProfile(session.user);
           
+          // Aplica a mesma lógica de redirecionamento aqui para garantir rapidez
           if (profile) {
-              navigate(profile.first_login ? "/change-password" : "/dashboard");
-              return;
+             if (!profile.username) {
+                 navigate("/complete-profile");
+             } else if (profile.first_login) {
+                 navigate("/change-password"); // Login por senha sempre cai aqui se for first_login
+             } else {
+                 navigate("/dashboard");
+             }
+             return;
           }
       }
       
@@ -118,7 +147,7 @@ const Login = () => {
             {/* LOGIN SOCIAL */}
             <LoginGoogle />
 
-            <div className="relative">
+            <div className="relative my-2">
                 <div className="absolute inset-0 flex items-center"><span className="w-full border-t border-gray-300" /></div>
                 <div className="relative flex justify-center text-xs uppercase"><span className="bg-white px-2 text-gray-500 font-medium">Ou com e-mail</span></div>
             </div>

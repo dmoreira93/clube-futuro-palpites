@@ -12,6 +12,7 @@ import Criterios from "./pages/Criterios";
 import NotFound from "./pages/NotFound";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
 import TermsOfUse from "./pages/TermsOfUse";
+import CompleteProfile from "./pages/CompleteProfile";
 
 // Páginas Protegidas (Dashboard Geral)
 import Dashboard from "./pages/Dashboard";
@@ -54,6 +55,7 @@ function App() {
             <Route path="/criterios" element={<Criterios />} />
             <Route path="/PrivacyPolicy" element={<PrivacyPolicy />} />
             <Route path="/TermsOfUse" element={<TermsOfUse />} />
+            <Route path="/complete-profile" element={<CompleteProfile />} />
             
             {/* --- Rotas Protegidas (Gerais) --- */}
             <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
