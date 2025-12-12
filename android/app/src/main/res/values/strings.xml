@@ -4,4 +4,5 @@
     <string name="title_activity_main">Clube Futuro Palpites</string>
     <string name="package_name">com.clubefuturo.app</string>
     <string name="custom_url_scheme">com.clubefuturo.app</string>
+    <string name="server_client_id">S708828307783-c9hlvi74c4tm5kn5g38gmi5gdp0ke388.apps.googleusercontent.com</string>
 </resources>

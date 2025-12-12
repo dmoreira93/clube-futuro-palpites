@@ -11,7 +11,7 @@ const config: CapacitorConfig = {
     GoogleAuth: {
       scopes: ['profile', 'email'],
       // Cole aqui o SEU "Client ID" do Google Cloud
-      serverClientId: 'SEU_CLIENT_ID_DO_GOOGLE_CLOUD.apps.googleusercontent.com', 
+      serverClientId: '708828307783-c9hlvi74c4tm5kn5g38gmi5gdp0ke388.apps.googleusercontent.com', 
       forceCodeForRefreshToken: true,
     },
   },
