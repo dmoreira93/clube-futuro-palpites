@@ -59,7 +59,7 @@ const fetchRanking = async (poolId: string): Promise<Participant[]> => {
         avatar_url: user?.avatar_url || null,
         is_ai: user?.is_ai || false, // Mapeia do objeto de usuário
         points: entry.points || 0,
-        is_admin: entry.is_admin || false,
+        is_admin: user?.is_admin || entry.is_admin || false,
         matchesplayed: matches,
         scored_matches: matches,
         exactscores: exacts,
