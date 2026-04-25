@@ -18,7 +18,6 @@ interface Team {
 }
 
 const Simulador = () => {
-  // CORREÇÃO CRÍTICA: Pegando activePool e renomeando para pool internamente
   const { user, activePool: pool } = useAuth();
   
   const [isLoading, setIsLoading] = useState(false);
@@ -34,26 +33,43 @@ const Simulador = () => {
 
   useEffect(() => {
     const fetchMatchesForPrint = async () => {
-      let matchesQuery = supabase.from('matches').select('*').order('match_date', { ascending: true });
-      
-      // Força a tipagem para ignorar o aviso e tentar pegar o campeonato se existir
       const poolWithChamp = pool as any;
+      
+      let query = supabase
+        .from('matches')
+        .select(`
+          id,
+          match_date,
+          stage,
+          home_team:teams!home_team_id(name),
+          away_team:teams!away_team_id(name)
+        `)
+        .order('match_date', { ascending: true });
+
+      // Filtra pelo campeonato atual
       if (poolWithChamp?.championship_id) {
-          matchesQuery = matchesQuery.eq('championship_id', poolWithChamp.championship_id);
+          query = query.eq('championship_id', poolWithChamp.championship_id);
       }
 
-      const [matchesRes, teamsRes] = await Promise.all([
-        matchesQuery,
-        supabase.from('teams').select('id, name')
-      ]);
+      const { data, error } = await query;
 
-      if (matchesRes.data && teamsRes.data) {
-        const teamsMap = new Map(teamsRes.data.map(t => [t.id, t.name]));
-        
-        const formattedMatches = matchesRes.data.map(m => ({
+      if (error) {
+         console.error("Erro ao buscar rascunho de jogos para impressão:", error);
+         return;
+      }
+
+      if (data) {
+        // Formata com segurança caso o Supabase devolva arrays ou nulos
+        const getTeamName = (teamData: any) => {
+           if (!teamData) return 'A Definir';
+           if (Array.isArray(teamData)) return teamData[0]?.name || 'A Definir';
+           return teamData.name || 'A Definir';
+        };
+
+        const formattedMatches = data.map(m => ({
           ...m,
-          home_team: { name: m.home_team_id ? teamsMap.get(m.home_team_id) : 'A Definir' },
-          away_team: { name: m.away_team_id ? teamsMap.get(m.away_team_id) : 'A Definir' }
+          home_team: { name: getTeamName(m.home_team) },
+          away_team: { name: getTeamName(m.away_team) }
         }));
         
         setPrintableMatches(formattedMatches);
@@ -81,7 +97,7 @@ const Simulador = () => {
       if (pError || tError || gError) throw pError || tError || gError;
       
       if (!predictionsQueryData || predictionsQueryData.length === 0) {
-        toast.warning("Você ainda não possui palpites salvos neste bolão! Faça seus palpites no sistema primeiro.");
+        toast.warning("Você ainda não possui palpites salvos neste bolão! Imprima a folha ao lado ou faça seus palpites no sistema primeiro.");
         setIsLoading(false);
         return;
       }
@@ -96,15 +112,11 @@ const Simulador = () => {
       const results = calculateGroupStandings(formattedPredictions, teamsData as Team[] || [], groupsData || []);
       setSimulatedResults(results);
       setAllTeams(results.flatMap(g => g.standings));
-      toast.success("Simulação concluída!");
+      toast.success("Simulação concluída! Agora preencha o mata-mata.");
 
     } catch (error: any) {
       console.error("Erro na simulação:", error);
-      if (error.code === 'PGRST200' && error.message.includes('pool_id')) {
-          toast.error("A tabela de palpites não está configurada para múltiplos bolões ainda.", { duration: 8000 });
-      } else {
-          toast.error("Ocorreu um erro ao realizar a simulação: " + error.message);
-      }
+      toast.error("Ocorreu um erro ao realizar a simulação: " + error.message);
     } finally {
       setIsLoading(false);
     }
@@ -173,11 +185,11 @@ const Simulador = () => {
           <CardContent className="flex flex-col sm:flex-row justify-center items-center gap-4">
             <Button size="lg" onClick={handleSimulation} disabled={isLoading} className="bg-green-600 hover:bg-green-700 text-white w-full sm:w-auto">
               {isLoading ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <PlayCircle className="mr-2 h-5 w-5" />}
-              {isLoading ? 'Calculando...' : 'Simular Classificação dos Grupos'}
+              {isLoading ? 'Calculando...' : 'Simular Classificação'}
             </Button>
             
             <Button size="lg" variant="outline" onClick={() => window.print()} disabled={printableMatches.length === 0} className="w-full sm:w-auto">
-              <FileText className="mr-2 h-5 w-5" /> Imprimir Jogos (Folha para Anotação)
+              <FileText className="mr-2 h-5 w-5" /> Imprimir Jogos (Folha Rascunho)
             </Button>
           </CardContent>
         </Card>
@@ -212,23 +224,27 @@ const Simulador = () => {
         )}
       </div>
 
-      <div className="hidden print:block p-8 bg-white text-black min-h-screen">
+      {/* ÁREA DE IMPRESSÃO (Força a exibição de cores e bordas independentemente da preferência do navegador) */}
+      <div 
+        className="hidden print:block p-8 bg-white text-black min-h-screen font-sans" 
+        style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}
+      >
         <div className={simulatedResults ? "break-after-page" : ""}>
-          <div className="text-center mb-8 border-b-2 border-black pb-4">
+          <div className="text-center mb-8 border-b-4 border-black pb-4">
             <h1 className="text-3xl font-black uppercase">Revista de Palpites - {pool?.name}</h1>
-            <p className="text-lg text-gray-600 mt-2">Folha de rascunho para Fase de Grupos</p>
+            <p className="text-lg text-gray-700 mt-2 font-semibold">Folha de rascunho para a Fase de Grupos</p>
           </div>
           
-          <div className="grid grid-cols-2 gap-x-12 gap-y-6">
+          <div className="grid grid-cols-2 gap-x-12 gap-y-4">
             {printableMatches.map((match, idx) => (
-              <div key={idx} className="flex justify-between items-center border-b border-gray-300 pb-2">
-                <span className="w-5/12 text-right font-bold truncate pr-2">{match.home_team?.name || 'A Definir'}</span>
-                <span className="flex items-center gap-2 font-mono">
-                  <div className="w-8 h-8 border-2 border-gray-800 rounded flex items-center justify-center"></div>
-                  <span className="font-bold text-gray-500">X</span>
-                  <div className="w-8 h-8 border-2 border-gray-800 rounded flex items-center justify-center"></div>
+              <div key={idx} className="flex justify-between items-center border-b-2 border-gray-300 pb-2">
+                <span className="w-5/12 text-right font-bold truncate pr-2 text-sm">{match.home_team?.name}</span>
+                <span className="flex items-center gap-2">
+                  <div className="w-8 h-8 border-[3px] border-black rounded flex items-center justify-center"></div>
+                  <span className="font-black text-gray-800">X</span>
+                  <div className="w-8 h-8 border-[3px] border-black rounded flex items-center justify-center"></div>
                 </span>
-                <span className="w-5/12 text-left font-bold truncate pl-2">{match.away_team?.name || 'A Definir'}</span>
+                <span className="w-5/12 text-left font-bold truncate pl-2 text-sm">{match.away_team?.name}</span>
               </div>
             ))}
           </div>
@@ -236,33 +252,33 @@ const Simulador = () => {
 
         {simulatedResults && (
           <div className="pt-8">
-             <div className="text-center mb-8 border-b-2 border-black pb-4">
+             <div className="text-center mb-8 border-b-4 border-black pb-4">
               <h1 className="text-3xl font-black uppercase">Chaveamento Mata-Mata</h1>
-              <p className="text-lg text-gray-600 mt-2">Baseado na sua simulação de grupos. Preencha quem avança!</p>
+              <p className="text-lg text-gray-700 mt-2 font-semibold">Preencha quem avança até o título!</p>
             </div>
 
             <div className="grid grid-cols-4 gap-4 mb-10">
               {simulatedResults.map((group) => (
-                <div key={group.id} className="border border-gray-400 p-2 text-sm">
-                  <div className="font-bold bg-gray-200 text-center mb-1">{group.name}</div>
-                  <div>1º {group.standings[0]?.name}</div>
-                  <div>2º {group.standings[1]?.name}</div>
+                <div key={group.id} className="border-2 border-black p-2 text-sm rounded-md shadow-sm">
+                  <div className="font-black bg-gray-200 text-center mb-2 pb-1 border-b border-black">{group.name}</div>
+                  <div className="font-semibold text-gray-800">1º {group.standings[0]?.name}</div>
+                  <div className="font-semibold text-gray-800">2º {group.standings[1]?.name}</div>
                 </div>
               ))}
             </div>
 
-            <div className="space-y-6 max-w-2xl mx-auto">
+            <div className="space-y-6 max-w-2xl mx-auto mt-12">
               {[...Array(8)].map((_, i) => (
-                <div key={i} className="flex justify-between items-center bg-gray-50 p-3 border border-gray-300 rounded">
-                  <div className="w-5/12 border-b-2 border-gray-800 h-6"></div>
-                  <div className="font-black text-gray-400">X</div>
-                  <div className="w-5/12 border-b-2 border-gray-800 h-6"></div>
+                <div key={i} className="flex justify-between items-center p-4 border-2 border-black rounded-lg bg-gray-50">
+                  <div className="w-5/12 h-[3px] bg-black"></div>
+                  <div className="font-black text-black text-xl px-4">X</div>
+                  <div className="w-5/12 h-[3px] bg-black"></div>
                 </div>
               ))}
             </div>
             
-            <div className="mt-12 text-center text-sm text-gray-500">
-              * Rascunho preenchido à mão. Lembre-se de repassar seus palpites oficiais para a plataforma antes do prazo!
+            <div className="mt-12 text-center text-sm font-bold text-gray-500">
+              * Lembre-se de repassar seus rascunhos para a plataforma antes do prazo oficial!
             </div>
           </div>
         )}
