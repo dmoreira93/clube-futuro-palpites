@@ -18,7 +18,9 @@ interface Team {
 }
 
 const Simulador = () => {
-  const { user, pool } = useAuth();
+  // CORREÇÃO CRÍTICA: Pegando activePool e renomeando para pool internamente
+  const { user, activePool: pool } = useAuth();
+  
   const [isLoading, setIsLoading] = useState(false);
   const [simulatedResults, setSimulatedResults] = useState<SimulatedGroup[] | null>(null);
   const [allTeams, setAllTeams] = useState<SimulatedTeamStats[]>([]);
@@ -32,10 +34,12 @@ const Simulador = () => {
 
   useEffect(() => {
     const fetchMatchesForPrint = async () => {
-      // Ignora erro de campeonato nulo para garantir que o botão destrave
       let matchesQuery = supabase.from('matches').select('*').order('match_date', { ascending: true });
-      if (pool?.championship_id) {
-          matchesQuery = matchesQuery.eq('championship_id', pool.championship_id);
+      
+      // Força a tipagem para ignorar o aviso e tentar pegar o campeonato se existir
+      const poolWithChamp = pool as any;
+      if (poolWithChamp?.championship_id) {
+          matchesQuery = matchesQuery.eq('championship_id', poolWithChamp.championship_id);
       }
 
       const [matchesRes, teamsRes] = await Promise.all([
@@ -96,9 +100,8 @@ const Simulador = () => {
 
     } catch (error: any) {
       console.error("Erro na simulação:", error);
-      // Se a coluna pool_id não existir na tabela, avisamos explicitamente
       if (error.code === 'PGRST200' && error.message.includes('pool_id')) {
-          toast.error("Erro no Banco de Dados: A tabela 'match_predictions' precisa da coluna 'pool_id'.", { duration: 8000 });
+          toast.error("A tabela de palpites não está configurada para múltiplos bolões ainda.", { duration: 8000 });
       } else {
           toast.error("Ocorreu um erro ao realizar a simulação: " + error.message);
       }
@@ -209,7 +212,6 @@ const Simulador = () => {
         )}
       </div>
 
-      {/* ÁREA DE IMPRESSÃO - Visível apenas quando ctrl+p é acionado */}
       <div className="hidden print:block p-8 bg-white text-black min-h-screen">
         <div className={simulatedResults ? "break-after-page" : ""}>
           <div className="text-center mb-8 border-b-2 border-black pb-4">

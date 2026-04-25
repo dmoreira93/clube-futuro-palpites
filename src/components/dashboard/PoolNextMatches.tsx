@@ -53,13 +53,13 @@ export function PoolNextMatches({ championshipId, poolId }: PoolNextMatchesProps
         const start = startOfDay(targetDate).toISOString();
         const end = endOfDay(targetDate).toISOString();
 
-        // CORREÇÃO CRÍTICA AQUI: Sintaxe correta do Supabase para joins de Foreign Keys
+        // CORREÇÃO AQUI: Trocado "round" por "stage" para coincidir com o banco de dados
         const { data: todaysMatches, error: matchesError } = await supabase
           .from('matches')
           .select(`
             id,
             match_date,
-            round,
+            stage,
             home_team:teams!home_team_id(name, flag_url, code),
             away_team:teams!away_team_id(name, flag_url, code)
           `)
@@ -104,7 +104,7 @@ export function PoolNextMatches({ championshipId, poolId }: PoolNextMatchesProps
                 </CardTitle>
                 <CardDescription>
                     {matches.length > 0 && matchDate
-                        ? `Rodada de ${format(matchDate, "EEEE, dd 'de' MMMM", { locale: ptBR })}`
+                        ? `Jogos de ${format(matchDate, "EEEE, dd 'de' MMMM", { locale: ptBR })}`
                         : "Prepare seus palpites!"
                     }
                 </CardDescription>
@@ -125,10 +125,13 @@ export function PoolNextMatches({ championshipId, poolId }: PoolNextMatchesProps
           <div className="space-y-3">
             {matches.map((match) => (
               <div key={match.id} className="flex flex-col bg-white border border-gray-100 rounded-lg p-3 shadow-sm hover:shadow-md transition-shadow">
+                
+                {/* CORREÇÃO AQUI: Renderizando match.stage em vez de match.round */}
                 <div className="flex justify-between items-center mb-2 text-[10px] text-gray-400 uppercase font-bold tracking-wide">
-                    <span>{match.round}</span>
+                    <span>{match.stage}</span>
                     <span>{format(new Date(match.match_date), "HH:mm")}</span>
                 </div>
+
                 <div className="flex justify-between items-center">
                     <div className="flex items-center gap-3 flex-1">
                         <Avatar className="h-8 w-8 border border-gray-100">
@@ -137,7 +140,9 @@ export function PoolNextMatches({ championshipId, poolId }: PoolNextMatchesProps
                         </Avatar>
                         <span className="text-sm font-semibold text-gray-800 truncate">{match.home_team?.name}</span>
                     </div>
+
                     <span className="text-xs text-gray-300 font-light px-2">X</span>
+
                     <div className="flex items-center gap-3 flex-1 justify-end">
                         <span className="text-sm font-semibold text-gray-800 truncate text-right">{match.away_team?.name}</span>
                         <Avatar className="h-8 w-8 border border-gray-100">
@@ -148,6 +153,7 @@ export function PoolNextMatches({ championshipId, poolId }: PoolNextMatchesProps
                 </div>
               </div>
             ))}
+            
             <Button className="w-full mt-2 bg-blue-100 text-blue-700 hover:bg-blue-200 border border-blue-200" variant="outline" onClick={() => navigate(`/pool/${poolId}/palpites`)}>
                 Palpitar Agora
             </Button>
