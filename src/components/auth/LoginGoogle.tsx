@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { GoogleAuth } from '@codetrix-studio/capacitor-google-auth';
 import { Capacitor } from '@capacitor/core';
@@ -9,12 +9,9 @@ import { Loader2 } from 'lucide-react';
 export function LoginGoogle() {
   const [loading, setLoading] = useState(false);
 
-  // Inicializa o plugin do Google (necessário para a Web)
-  useEffect(() => {
-    if (!Capacitor.isNativePlatform()) {
-      GoogleAuth.initialize();
-    }
-  }, []);
+  // O useEffect com GoogleAuth.initialize() foi completamente removido!
+  // Como usamos o supabase.auth.signInWithOAuth na Web, o plugin do Capacitor
+  // só é acionado nos celulares, onde a inicialização é automática.
 
   const handleGoogleLogin = async () => {
     setLoading(true);
@@ -48,11 +45,10 @@ export function LoginGoogle() {
         if (error) throw error;
       }
     } catch (error: any) {
-      console.error(error);
+      console.error("Erro no login:", error);
       toast.error("Erro ao entrar com Google", { description: error.message });
       setLoading(false);
     }
-    // Nota: No fluxo Web, o setLoading(false) não acontece aqui porque a página recarrega.
   };
 
   return (
