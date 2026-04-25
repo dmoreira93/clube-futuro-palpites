@@ -24,28 +24,23 @@ const Simulador = () => {
   const [allTeams, setAllTeams] = useState<SimulatedTeamStats[]>([]);
   const [knockoutSelections, setKnockoutSelections] = useState<{ [matchId: string]: string }>({});
   
-  // Estado para armazenar todos os confrontos que serão impressos na "revista"
   const [printableMatches, setPrintableMatches] = useState<any[]>([]);
 
   const isDeadlinePassed = pool?.prediction_deadline
     ? isAfter(new Date(), new Date(pool.prediction_deadline))
     : false;
 
-  // Carrega os confrontos do campeonato para a folha de impressão em branco
   useEffect(() => {
     const fetchMatchesForPrint = async () => {
-      if (!pool?.championship_id) return;
-      
-      // Busca segura: separando matches e teams para evitar erro de nomenclatura de FK no Supabase
+      // Ignora erro de campeonato nulo para garantir que o botão destrave
+      let matchesQuery = supabase.from('matches').select('*').order('match_date', { ascending: true });
+      if (pool?.championship_id) {
+          matchesQuery = matchesQuery.eq('championship_id', pool.championship_id);
+      }
+
       const [matchesRes, teamsRes] = await Promise.all([
-        supabase
-          .from('matches')
-          .select('*')
-          .eq('championship_id', pool.championship_id)
-          .order('match_date', { ascending: true }),
-        supabase
-          .from('teams')
-          .select('id, name')
+        matchesQuery,
+        supabase.from('teams').select('id, name')
       ]);
 
       if (matchesRes.data && teamsRes.data) {
@@ -61,14 +56,11 @@ const Simulador = () => {
       }
     };
 
-    fetchMatchesForPrint();
-  }, [pool?.championship_id]);
+    if (pool) fetchMatchesForPrint();
+  }, [pool]);
 
   const handleSimulation = async () => {
-    if (!user || !pool) {
-      toast.error('Você precisa estar logado para simular seus palpites.');
-      return;
-    }
+    if (!user || !pool) return toast.error('Você precisa estar logado para simular.');
     setIsLoading(true);
     setSimulatedResults(null);
     setKnockoutSelections({}); 
@@ -77,16 +69,15 @@ const Simulador = () => {
         supabase.from('match_predictions')
           .select('home_score, away_score, matches!inner(home_team_id, away_team_id)')
           .eq('user_id', user.id)
-          .eq('pool_id', pool.id), // Isolamento do bolão atual
+          .eq('pool_id', pool.id),
         supabase.from('teams').select('id, name, group_id'),
         supabase.from('groups').select('id, name')
       ]);
 
       if (pError || tError || gError) throw pError || tError || gError;
       
-      // Aviso visual forte caso o usuário clique sem ter palpites no bolão novo
       if (!predictionsQueryData || predictionsQueryData.length === 0) {
-        toast.warning("Você ainda não possui palpites salvos neste bolão! Imprima a folha em branco ao lado ou faça seus palpites no sistema primeiro.");
+        toast.warning("Você ainda não possui palpites salvos neste bolão! Faça seus palpites no sistema primeiro.");
         setIsLoading(false);
         return;
       }
@@ -101,11 +92,16 @@ const Simulador = () => {
       const results = calculateGroupStandings(formattedPredictions, teamsData as Team[] || [], groupsData || []);
       setSimulatedResults(results);
       setAllTeams(results.flatMap(g => g.standings));
-      toast.success("Simulação concluída! Agora selecione os vencedores do mata-mata.");
+      toast.success("Simulação concluída!");
 
     } catch (error: any) {
       console.error("Erro na simulação:", error);
-      toast.error("Ocorreu um erro ao realizar a simulação. Verifique sua conexão.");
+      // Se a coluna pool_id não existir na tabela, avisamos explicitamente
+      if (error.code === 'PGRST200' && error.message.includes('pool_id')) {
+          toast.error("Erro no Banco de Dados: A tabela 'match_predictions' precisa da coluna 'pool_id'.", { duration: 8000 });
+      } else {
+          toast.error("Ocorreu um erro ao realizar a simulação: " + error.message);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -114,11 +110,9 @@ const Simulador = () => {
   const handleKnockoutSelection = useCallback((matchId: string, teamId: string | null) => {
     setKnockoutSelections(prev => {
       const newState = { ...prev };
-      if (teamId) {
-        newState[matchId] = teamId;
-      } else {
-        delete newState[matchId];
-      }
+      if (teamId) newState[matchId] = teamId;
+      else delete newState[matchId];
+      
       const cascadeClearMap: { [key: string]: string[] } = {
         'r16-1': ['qf-1', 'sf-1', 'final', 'third_place'], 'r16-2': ['qf-1', 'sf-1', 'final', 'third_place'],
         'r16-3': ['qf-2', 'sf-1', 'final', 'third_place'], 'r16-4': ['qf-2', 'sf-1', 'final', 'third_place'],
@@ -129,19 +123,14 @@ const Simulador = () => {
         'sf-1': ['final', 'third_place'], 'sf-2': ['final', 'third_place'],
       };
       const downstreamMatchesToClear = cascadeClearMap[matchId as keyof typeof cascadeClearMap];
-      if (downstreamMatchesToClear) {
-        downstreamMatchesToClear.forEach(idToClear => { delete newState[idToClear]; });
-      }
+      if (downstreamMatchesToClear) downstreamMatchesToClear.forEach(idToClear => { delete newState[idToClear]; });
       return newState;
     });
   }, []);
 
   const handleAdoptGroupPrediction = async (groupId: string, firstTeamId: string, secondTeamId: string) => {
     if (!user) return;
-    if (firstTeamId === secondTeamId) {
-      toast.error("Você não pode escolher o mesmo time como 1º e 2º lugar.");
-      return;
-    }
+    if (firstTeamId === secondTeamId) return toast.error("Você não pode escolher o mesmo time como 1º e 2º lugar.");
     const toastId = toast.loading('Salvando palpites do grupo...');
     try {
       const { error } = await supabase.from('group_predictions').upsert({
@@ -170,7 +159,6 @@ const Simulador = () => {
 
   return (
     <>
-      {/* ===== ÁREA DE TELA (Oculta na impressão) ===== */}
       <div className="container mx-auto p-4 md:p-6 lg:p-8 space-y-8 print:hidden">
         <Card className="text-center">
           <CardHeader>
@@ -185,7 +173,6 @@ const Simulador = () => {
               {isLoading ? 'Calculando...' : 'Simular Classificação dos Grupos'}
             </Button>
             
-            {/* O botão agora ficará ativo assim que os jogos carregarem */}
             <Button size="lg" variant="outline" onClick={() => window.print()} disabled={printableMatches.length === 0} className="w-full sm:w-auto">
               <FileText className="mr-2 h-5 w-5" /> Imprimir Jogos (Folha para Anotação)
             </Button>
@@ -222,10 +209,8 @@ const Simulador = () => {
         )}
       </div>
 
-      {/* ===== ÁREA DE IMPRESSÃO (Oculta na tela) ===== */}
+      {/* ÁREA DE IMPRESSÃO - Visível apenas quando ctrl+p é acionado */}
       <div className="hidden print:block p-8 bg-white text-black min-h-screen">
-        
-        {/* Folha 1: FASE DE GRUPOS (Se simulador não rodou, mostra ela inteira. Se rodou, mostra as duas) */}
         <div className={simulatedResults ? "break-after-page" : ""}>
           <div className="text-center mb-8 border-b-2 border-black pb-4">
             <h1 className="text-3xl font-black uppercase">Revista de Palpites - {pool?.name}</h1>
@@ -247,7 +232,6 @@ const Simulador = () => {
           </div>
         </div>
 
-        {/* Folha 2: MATA-MATA (Só aparece na impressão se o usuário tiver clicado em Simular) */}
         {simulatedResults && (
           <div className="pt-8">
              <div className="text-center mb-8 border-b-2 border-black pb-4">
@@ -255,7 +239,6 @@ const Simulador = () => {
               <p className="text-lg text-gray-600 mt-2">Baseado na sua simulação de grupos. Preencha quem avança!</p>
             </div>
 
-            {/* Listar os times classificados de cada grupo no topo como referência */}
             <div className="grid grid-cols-4 gap-4 mb-10">
               {simulatedResults.map((group) => (
                 <div key={group.id} className="border border-gray-400 p-2 text-sm">
@@ -266,7 +249,6 @@ const Simulador = () => {
               ))}
             </div>
 
-            {/* Linhas vazias para o chaveamento simulando as Oitavas/Quartas */}
             <div className="space-y-6 max-w-2xl mx-auto">
               {[...Array(8)].map((_, i) => (
                 <div key={i} className="flex justify-between items-center bg-gray-50 p-3 border border-gray-300 rounded">

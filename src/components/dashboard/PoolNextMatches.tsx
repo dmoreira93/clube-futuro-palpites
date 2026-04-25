@@ -1,10 +1,10 @@
+// src/components/dashboard/PoolNextMatches.tsx
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
 import { Loader2, CalendarClock, ChevronRight } from "lucide-react";
 import { format, startOfDay, endOfDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -26,24 +26,23 @@ export function PoolNextMatches({ championshipId, poolId }: PoolNextMatchesProps
       try {
         const now = new Date().toISOString();
 
-        // 1. Descobrir qual é a data do PRÓXIMO jogo deste campeonato
         const { data: nextMatch, error: nextMatchError } = await supabase
           .from('matches')
           .select('match_date')
           .eq('championship_id', championshipId)
-          .gt('match_date', now) // Apenas jogos futuros
+          .gt('match_date', now)
           .order('match_date', { ascending: true })
           .limit(1)
           .single();
 
-        if (nextMatchError && nextMatchError.code !== 'PGRST116') { // PGRST116 é "nenhum resultado", que é ok
+        if (nextMatchError && nextMatchError.code !== 'PGRST116') {
              console.error("Erro ao buscar data:", nextMatchError);
              setLoading(false);
              return;
         }
 
         if (!nextMatch) {
-            setMatches([]); // Não há jogos futuros
+            setMatches([]);
             setLoading(false);
             return;
         }
@@ -51,18 +50,18 @@ export function PoolNextMatches({ championshipId, poolId }: PoolNextMatchesProps
         const targetDate = new Date(nextMatch.match_date);
         setMatchDate(targetDate);
 
-        // 2. Buscar TODOS os jogos desse dia específico (00:00 até 23:59)
         const start = startOfDay(targetDate).toISOString();
         const end = endOfDay(targetDate).toISOString();
 
+        // CORREÇÃO CRÍTICA AQUI: Sintaxe correta do Supabase para joins de Foreign Keys
         const { data: todaysMatches, error: matchesError } = await supabase
           .from('matches')
           .select(`
             id,
             match_date,
             round,
-            home_team:home_team_id(name, flag_url, code),
-            away_team:away_team_id(name, flag_url, code)
+            home_team:teams!home_team_id(name, flag_url, code),
+            away_team:teams!away_team_id(name, flag_url, code)
           `)
           .eq('championship_id', championshipId)
           .gte('match_date', start)
@@ -126,16 +125,11 @@ export function PoolNextMatches({ championshipId, poolId }: PoolNextMatchesProps
           <div className="space-y-3">
             {matches.map((match) => (
               <div key={match.id} className="flex flex-col bg-white border border-gray-100 rounded-lg p-3 shadow-sm hover:shadow-md transition-shadow">
-                
-                {/* Cabeçalho do Jogo (Hora e Rodada) */}
                 <div className="flex justify-between items-center mb-2 text-[10px] text-gray-400 uppercase font-bold tracking-wide">
                     <span>{match.round}</span>
                     <span>{format(new Date(match.match_date), "HH:mm")}</span>
                 </div>
-
-                {/* Times */}
                 <div className="flex justify-between items-center">
-                    {/* Casa */}
                     <div className="flex items-center gap-3 flex-1">
                         <Avatar className="h-8 w-8 border border-gray-100">
                             <AvatarImage src={match.home_team?.flag_url} />
@@ -143,10 +137,7 @@ export function PoolNextMatches({ championshipId, poolId }: PoolNextMatchesProps
                         </Avatar>
                         <span className="text-sm font-semibold text-gray-800 truncate">{match.home_team?.name}</span>
                     </div>
-
                     <span className="text-xs text-gray-300 font-light px-2">X</span>
-
-                    {/* Fora */}
                     <div className="flex items-center gap-3 flex-1 justify-end">
                         <span className="text-sm font-semibold text-gray-800 truncate text-right">{match.away_team?.name}</span>
                         <Avatar className="h-8 w-8 border border-gray-100">
@@ -157,12 +148,7 @@ export function PoolNextMatches({ championshipId, poolId }: PoolNextMatchesProps
                 </div>
               </div>
             ))}
-            
-            <Button 
-                className="w-full mt-2 bg-blue-100 text-blue-700 hover:bg-blue-200 border border-blue-200" 
-                variant="outline"
-                onClick={() => navigate(`/pool/${poolId}/palpites`)}
-            >
+            <Button className="w-full mt-2 bg-blue-100 text-blue-700 hover:bg-blue-200 border border-blue-200" variant="outline" onClick={() => navigate(`/pool/${poolId}/palpites`)}>
                 Palpitar Agora
             </Button>
           </div>
