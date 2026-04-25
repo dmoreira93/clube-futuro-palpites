@@ -36,23 +36,33 @@ const Simulador = () => {
     const fetchMatchesForPrint = async () => {
       if (!pool?.championship_id) return;
       
-      const { data, error } = await supabase
-        .from('matches')
-        .select(`
-          id, match_date, round,
-          home_team:teams!home_team_id(name),
-          away_team:teams!away_team_id(name)
-        `)
-        .eq('championship_id', pool.championship_id)
-        .order('match_date', { ascending: true });
+      // Busca segura: separando matches e teams para evitar erro de nomenclatura de FK no Supabase
+      const [matchesRes, teamsRes] = await Promise.all([
+        supabase
+          .from('matches')
+          .select('*')
+          .eq('championship_id', pool.championship_id)
+          .order('match_date', { ascending: true }),
+        supabase
+          .from('teams')
+          .select('id, name')
+      ]);
 
-      if (data && !error) {
-        setPrintableMatches(data);
+      if (matchesRes.data && teamsRes.data) {
+        const teamsMap = new Map(teamsRes.data.map(t => [t.id, t.name]));
+        
+        const formattedMatches = matchesRes.data.map(m => ({
+          ...m,
+          home_team: { name: m.home_team_id ? teamsMap.get(m.home_team_id) : 'A Definir' },
+          away_team: { name: m.away_team_id ? teamsMap.get(m.away_team_id) : 'A Definir' }
+        }));
+        
+        setPrintableMatches(formattedMatches);
       }
     };
 
     fetchMatchesForPrint();
-  }, [pool]);
+  }, [pool?.championship_id]);
 
   const handleSimulation = async () => {
     if (!user || !pool) {
@@ -67,14 +77,16 @@ const Simulador = () => {
         supabase.from('match_predictions')
           .select('home_score, away_score, matches!inner(home_team_id, away_team_id)')
           .eq('user_id', user.id)
-          .eq('pool_id', pool.id), // <-- CORREÇÃO: ISOLAMENTO DO BOLÃO ATUAL GARANTIDO AQUI
+          .eq('pool_id', pool.id), // Isolamento do bolão atual
         supabase.from('teams').select('id, name, group_id'),
         supabase.from('groups').select('id, name')
       ]);
 
       if (pError || tError || gError) throw pError || tError || gError;
+      
+      // Aviso visual forte caso o usuário clique sem ter palpites no bolão novo
       if (!predictionsQueryData || predictionsQueryData.length === 0) {
-        toast.info("Você ainda não fez palpites para os jogos da fase de grupos.");
+        toast.warning("Você ainda não possui palpites salvos neste bolão! Imprima a folha em branco ao lado ou faça seus palpites no sistema primeiro.");
         setIsLoading(false);
         return;
       }
@@ -93,14 +105,13 @@ const Simulador = () => {
 
     } catch (error: any) {
       console.error("Erro na simulação:", error);
-      toast.error("Ocorreu um erro ao realizar a simulação: " + error.message);
+      toast.error("Ocorreu um erro ao realizar a simulação. Verifique sua conexão.");
     } finally {
       setIsLoading(false);
     }
   };
   
   const handleKnockoutSelection = useCallback((matchId: string, teamId: string | null) => {
-    // ... (Mantém sua lógica original intacta)
     setKnockoutSelections(prev => {
       const newState = { ...prev };
       if (teamId) {
@@ -126,7 +137,6 @@ const Simulador = () => {
   }, []);
 
   const handleAdoptGroupPrediction = async (groupId: string, firstTeamId: string, secondTeamId: string) => {
-    // ... (Mantém sua lógica original intacta)
     if (!user) return;
     if (firstTeamId === secondTeamId) {
       toast.error("Você não pode escolher o mesmo time como 1º e 2º lugar.");
@@ -145,7 +155,6 @@ const Simulador = () => {
   };
 
   const handleAdoptFinalPredictions = async (championId: string, runnerUpId: string, thirdPlaceId: string, fourthPlaceId: string, finalHomeScore: number, finalAwayScore: number) => {
-    // ... (Mantém sua lógica original intacta)
     if (!user) return;
     const toastId = toast.loading('Salvando palpites finais...');
     try {
@@ -170,14 +179,14 @@ const Simulador = () => {
               Veja como ficaria a fase de grupos e o chaveamento com base nos seus palpites de jogos!
             </CardDescription>
           </CardHeader>
-          <CardContent className="flex flex-col sm:flex-row justify-center gap-4">
-            <Button size="lg" onClick={handleSimulation} disabled={isLoading} className="bg-green-600 hover:bg-green-700 text-white">
+          <CardContent className="flex flex-col sm:flex-row justify-center items-center gap-4">
+            <Button size="lg" onClick={handleSimulation} disabled={isLoading} className="bg-green-600 hover:bg-green-700 text-white w-full sm:w-auto">
               {isLoading ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <PlayCircle className="mr-2 h-5 w-5" />}
               {isLoading ? 'Calculando...' : 'Simular Classificação dos Grupos'}
             </Button>
             
-            {/* NOVO: Botão para imprimir apenas os confrontos da fase de grupos */}
-            <Button size="lg" variant="outline" onClick={() => window.print()} disabled={printableMatches.length === 0}>
+            {/* O botão agora ficará ativo assim que os jogos carregarem */}
+            <Button size="lg" variant="outline" onClick={() => window.print()} disabled={printableMatches.length === 0} className="w-full sm:w-auto">
               <FileText className="mr-2 h-5 w-5" /> Imprimir Jogos (Folha para Anotação)
             </Button>
           </CardContent>
