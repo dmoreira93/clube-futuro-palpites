@@ -23,16 +23,13 @@ export function ProtectedRoute({ children, adminOnly = false }: ProtectedRoutePr
   }
 
   if (!isAuthenticated) {
-    return <Navigate to="/login" />;
+    // A adição do "replace" impede acumulo no histórico do navegador 
+    return <Navigate to="/login" replace />;
   }
 
   if (adminOnly && !isAdmin) {
-    return <Navigate to="/" />;
+    return <Navigate to="/" replace />;
   }
-
-  // --- REMOVIDO ---
-  // O bloco que forçava o redirecionamento para '/join-pool' foi retirado.
-  // Agora o usuário novo vai direto para o Dashboard, onde verá as opções de boas-vindas.
   
   return children;
 }

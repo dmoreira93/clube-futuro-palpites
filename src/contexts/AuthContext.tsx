@@ -46,6 +46,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<AppUser | null>(null);
   const [activePool, setActivePool] = useState<Pool | null>(null);
   const [userParticipations, setUserParticipations] = useState<Participation[]>([]);
+  // loading INICIA COMO TRUE PARA SEGURAR QUALQUER REDIRECIONAMENTO
   const [loading, setLoading] = useState(true);
   
   const userRef = useRef<AppUser | null>(null);
@@ -79,7 +80,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   // --- 2. SYNC PROFILE (COM CORREÇÃO DO GOOGLE) ---
   const fetchAndSyncProfile = useCallback(async (sessionUser: User): Promise<AppUser | null> => {
-    // Evita recarregar se o ID for o mesmo que já está na memória
     if (userRef.current?.id === sessionUser.id) {
         return userRef.current;
     }
@@ -93,27 +93,23 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         .eq('id', sessionUser.id)
         .maybeSingle();
 
-      // --- CORREÇÃO GOOGLE LOGIN ---
-      // Se não achou perfil, tenta criar manualmente (Fallback caso o Trigger falhe)
-      if (!profile) {
+      // Só tenta criar fallback se o perfil não existir e NÃO for erro de conexão
+      if (!profile && !error) {
          console.warn("⚠️ Perfil não encontrado. Tentando criar fallback...");
          
          const { error: insertError } = await supabase.from("users_custom").insert({
             id: sessionUser.id,
             email: sessionUser.email,
-            // Pega nome/foto do Google Metadata
-            name: sessionUser.user_metadata.full_name || sessionUser.user_metadata.name || sessionUser.email?.split('@')[0],
-            avatar_url: sessionUser.user_metadata.avatar_url || sessionUser.user_metadata.picture,
+            name: sessionUser.user_metadata?.full_name || sessionUser.user_metadata?.name || sessionUser.email?.split('@')[0],
+            avatar_url: sessionUser.user_metadata?.avatar_url || sessionUser.user_metadata?.picture,
          });
 
          if (!insertError) {
-             // Busca novamente após criar
              const res = await supabase.from('users_custom').select('*').eq('id', sessionUser.id).single();
              profile = res.data;
          } else {
-             console.error("Erro fatal ao criar perfil fallback:", insertError);
-             await signOut();
-             return null;
+             console.error("Erro ao criar perfil fallback:", insertError);
+             // REMOVIDO o signOut() daqui. Se falhar, vamos prosseguir com dados básicos para evitar loop.
          }
       }
       
@@ -161,14 +157,40 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     } catch (error: any) {
       console.error("❌ Erro no fetchAndSyncProfile:", error);
-      return null;
+      // CORREÇÃO CRÍTICA CONTRA LOOP:
+      // Se der erro de rede ao buscar o banco de dados, assumimos os dados da sessão.
+      // Assim o `user` não fica nulo enquanto o Supabase diz que ele está logado.
+      const fallbackUser: AppUser = { ...sessionUser };
+      setUser(fallbackUser);
+      userRef.current = fallbackUser;
+      return fallbackUser;
     }
-  }, [signOut]);
+  }, []); // Removida a dependência do signOut para evitar re-render desnecessário
   
-  // --- 3. CORE LOGIC ---
+  // --- 3. CORE LOGIC (CORRIGIDA) ---
   useEffect(() => {
     let mounted = true;
 
+    // 1. Busca ATIVAMENTE a sessão atual assim que a página carrega
+    const initializeAuth = async () => {
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        if (error) throw error;
+        
+        if (session?.user) {
+          await fetchAndSyncProfile(session.user);
+        }
+      } catch (err) {
+        console.error("Erro na carga inicial da sessão:", err);
+      } finally {
+        // Só liberamos a tela de loading DEPOIS de verificar a sessão existente
+        if (mounted) setLoading(false);
+      }
+    };
+
+    initializeAuth();
+
+    // 2. Mantém o listener apenas para mudanças de estado "em tempo real" (Login em outra aba, etc)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
         if (!mounted) return;
 
@@ -181,16 +203,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             setUserParticipations([]);
             setLoading(false);
         } 
-        else if (session?.user && (event === 'SIGNED_IN' || event === 'INITIAL_SESSION' || event === 'TOKEN_REFRESHED')) {
-            if (!userRef.current) setLoading(true); 
-            
+        // Ignoramos o 'INITIAL_SESSION' aqui, pois a função initializeAuth() já cuidou dele
+        else if (session?.user && (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED')) {
             await fetchAndSyncProfile(session.user);
-            
-            if (mounted) setLoading(false);
         } 
-        else {
-            if (mounted) setLoading(false);
-        }
     });
 
     return () => { 
