@@ -46,7 +46,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<AppUser | null>(null);
   const [activePool, setActivePool] = useState<Pool | null>(null);
   const [userParticipations, setUserParticipations] = useState<Participation[]>([]);
-  // loading INICIA COMO TRUE PARA SEGURAR QUALQUER REDIRECIONAMENTO
   const [loading, setLoading] = useState(true);
   
   const userRef = useRef<AppUser | null>(null);
@@ -78,7 +77,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   }, []);
 
-  // --- 2. SYNC PROFILE (COM CORREÇÃO DO GOOGLE) ---
+  // --- 2. SYNC PROFILE ---
   const fetchAndSyncProfile = useCallback(async (sessionUser: User): Promise<AppUser | null> => {
     if (userRef.current?.id === sessionUser.id) {
         return userRef.current;
@@ -93,7 +92,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         .eq('id', sessionUser.id)
         .maybeSingle();
 
-      // Só tenta criar fallback se o perfil não existir e NÃO for erro de conexão
       if (!profile && !error) {
          console.warn("⚠️ Perfil não encontrado. Tentando criar fallback...");
          
@@ -109,7 +107,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
              profile = res.data;
          } else {
              console.error("Erro ao criar perfil fallback:", insertError);
-             // REMOVIDO o signOut() daqui. Se falhar, vamos prosseguir com dados básicos para evitar loop.
          }
       }
       
@@ -157,21 +154,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     } catch (error: any) {
       console.error("❌ Erro no fetchAndSyncProfile:", error);
-      // CORREÇÃO CRÍTICA CONTRA LOOP:
-      // Se der erro de rede ao buscar o banco de dados, assumimos os dados da sessão.
-      // Assim o `user` não fica nulo enquanto o Supabase diz que ele está logado.
       const fallbackUser: AppUser = { ...sessionUser };
       setUser(fallbackUser);
       userRef.current = fallbackUser;
       return fallbackUser;
     }
-  }, []); // Removida a dependência do signOut para evitar re-render desnecessário
+  }, []); 
   
-  // --- 3. CORE LOGIC (CORRIGIDA) ---
+  // --- 3. CORE LOGIC ---
   useEffect(() => {
     let mounted = true;
 
-    // 1. Busca ATIVAMENTE a sessão atual assim que a página carrega
     const initializeAuth = async () => {
       try {
         const { data: { session }, error } = await supabase.auth.getSession();
@@ -183,14 +176,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       } catch (err) {
         console.error("Erro na carga inicial da sessão:", err);
       } finally {
-        // Só liberamos a tela de loading DEPOIS de verificar a sessão existente
         if (mounted) setLoading(false);
       }
     };
 
     initializeAuth();
 
-    // 2. Mantém o listener apenas para mudanças de estado "em tempo real" (Login em outra aba, etc)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
         if (!mounted) return;
 
@@ -203,9 +194,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             setUserParticipations([]);
             setLoading(false);
         } 
-        // Ignoramos o 'INITIAL_SESSION' aqui, pois a função initializeAuth() já cuidou dele
         else if (session?.user && (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED')) {
             await fetchAndSyncProfile(session.user);
+            // CORREÇÃO 1: Desbloqueia a tela caso o login venha de um provedor como o Google
+            if (mounted) setLoading(false); 
         } 
     });
 
@@ -234,6 +226,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             }
         }
         
+        // CORREÇÃO 2: Desbloqueia a tela quando o login por e-mail e senha tem SUCESSO!
+        setLoading(false); 
         return { success: true, error: null };
     } catch (err) {
         setLoading(false);
