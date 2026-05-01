@@ -32,42 +32,27 @@ const Simulador = () => {
     : false;
 
   useEffect(() => {
+    // Busca 100% segura para evitar erro 400 de relacionamento
     const fetchMatchesForPrint = async () => {
       const poolWithChamp = pool as any;
-      
-      let query = supabase
-        .from('matches')
-        .select(`
-          id,
-          match_date,
-          stage,
-          home_team:teams!home_team_id(name),
-          away_team:teams!away_team_id(name)
-        `)
-        .order('match_date', { ascending: true });
+      if (!poolWithChamp?.championship_id) return;
 
-      if (poolWithChamp?.championship_id) {
-          query = query.eq('championship_id', poolWithChamp.championship_id);
-      }
+      const [matchesRes, teamsRes] = await Promise.all([
+        supabase
+          .from('matches')
+          .select('*')
+          .eq('championship_id', poolWithChamp.championship_id)
+          .order('match_date', { ascending: true }),
+        supabase.from('teams').select('id, name')
+      ]);
 
-      const { data, error } = await query;
-
-      if (error) {
-         console.error("Erro ao buscar rascunho de jogos para impressão:", error);
-         return;
-      }
-
-      if (data) {
-        const getTeamName = (teamData: any) => {
-           if (!teamData) return 'A Definir';
-           if (Array.isArray(teamData)) return teamData[0]?.name || 'A Definir';
-           return teamData.name || 'A Definir';
-        };
-
-        const formattedMatches = data.map(m => ({
+      if (matchesRes.data && teamsRes.data) {
+        const teamsMap = new Map(teamsRes.data.map(t => [t.id, t.name]));
+        
+        const formattedMatches = matchesRes.data.map(m => ({
           ...m,
-          home_team: { name: getTeamName(m.home_team) },
-          away_team: { name: getTeamName(m.away_team) }
+          home_team: { name: m.home_team_id ? teamsMap.get(m.home_team_id) : 'A Definir' },
+          away_team: { name: m.away_team_id ? teamsMap.get(m.away_team_id) : 'A Definir' }
         }));
         
         setPrintableMatches(formattedMatches);
@@ -170,145 +155,180 @@ const Simulador = () => {
     }
   };
 
-  return (
-    <>
-      {/* ===== ÁREA DE TELA (Oculta na impressão) ===== */}
-      <div className="container mx-auto p-4 md:p-6 lg:p-8 space-y-8 print:hidden">
-        <Card className="text-center">
-          <CardHeader>
-            <CardTitle className="text-2xl md:text-3xl font-bold text-fifa-blue">Simulador de Bolão</CardTitle>
-            <CardDescription>
-              Veja como ficaria a fase de grupos e o chaveamento com base nos seus palpites de jogos!
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-col sm:flex-row justify-center items-center gap-4">
-            <Button size="lg" onClick={handleSimulation} disabled={isLoading} className="bg-green-600 hover:bg-green-700 text-white w-full sm:w-auto">
-              {isLoading ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <PlayCircle className="mr-2 h-5 w-5" />}
-              {isLoading ? 'Calculando...' : 'Simular Classificação'}
-            </Button>
-            
-            <Button size="lg" variant="outline" onClick={() => window.print()} disabled={printableMatches.length === 0} className="w-full sm:w-auto">
-              <FileText className="mr-2 h-5 w-5" /> Imprimir Jogos (Folha Rascunho)
-            </Button>
-          </CardContent>
-        </Card>
+  // --- FUNÇÕES DE IMPRESSÃO BLINDADAS ---
+  const handlePrintBlank = () => {
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      toast.error("Permita os pop-ups no seu navegador para poder imprimir.");
+      return;
+    }
 
-        {simulatedResults && (
-          <div className="space-y-8">
-            <div className="text-center">
-              <Button variant="secondary" onClick={() => window.print()}>
-                <Printer className="mr-2 h-4 w-4" /> Imprimir Simulação Mata-Mata
-              </Button>
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Revista de Palpites</title>
+        <style>
+          body { font-family: Arial, sans-serif; padding: 20px; color: black; background: white; }
+          .header { text-align: center; border-bottom: 3px solid black; padding-bottom: 10px; margin-bottom: 20px; }
+          .title { font-size: 24px; font-weight: 900; text-transform: uppercase; margin: 0; }
+          .subtitle { font-size: 16px; color: #444; margin-top: 5px; }
+          .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px 40px; }
+          .match { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #ccc; padding-bottom: 8px; }
+          .team { width: 40%; font-size: 14px; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+          .team.home { text-align: right; }
+          .team.away { text-align: left; }
+          .score-box { display: flex; align-items: center; gap: 10px; }
+          .box { width: 30px; height: 30px; border: 2px solid black; border-radius: 4px; }
+          .x { font-weight: 900; font-size: 16px; }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <h1 class="title">Revista de Palpites - ${pool?.name || ''}</h1>
+          <p class="subtitle">Folha de rascunho para a Fase de Grupos</p>
+        </div>
+        <div class="grid">
+          ${printableMatches.map(m => `
+            <div class="match">
+              <span class="team home">${m.home_team?.name}</span>
+              <span class="score-box">
+                <div class="box"></div>
+                <span class="x">X</span>
+                <div class="box"></div>
+              </span>
+              <span class="team away">${m.away_team?.name}</span>
             </div>
-            
-            <div id="simulation-group-tables">
-              <SimulatedGroupTables 
-                simulatedGroups={simulatedResults} 
-                onAdoptPrediction={handleAdoptGroupPrediction}
-                isDeadlinePassed={isDeadlinePassed}
-              />
-            </div>
-            
-            <div id="simulation-knockout-bracket" className="mt-8">
-              <KnockoutBracket
-                simulatedGroups={simulatedResults}
-                knockoutSelections={knockoutSelections}
-                onSelectionChange={handleKnockoutSelection}
-                onAdoptAllFinalPredictions={handleAdoptFinalPredictions}
-                allTeams={allTeams}
-                isDeadlinePassed={isDeadlinePassed}
-              />
-            </div>
-          </div>
-        )}
-      </div>
+          `).join('')}
+        </div>
+        <script>
+          // O timeout garante que o HTML carregou antes de chamar a impressora
+          setTimeout(() => { window.print(); window.close(); }, 500);
+        </script>
+      </body>
+      </html>
+    `;
+    printWindow.document.write(html);
+    printWindow.document.close();
+  };
 
-      {/* 
-        ===== ÁREA DE IMPRESSÃO =====
-        Usamos inline-styles pesados (style={{...}}) para garantir que o 
-        Chrome não tenha como sobrescrever com as cores do site.
-        O absolute e top-0 garantem que a impressão quebre a barreira da tela do site.
-      */}
-      <div 
-        className="hidden print:block print:absolute print:top-0 print:left-0 print:w-full print:m-0 print:p-8"
-        style={{ backgroundColor: 'white', color: 'black', WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}
-      >
-        
-        {/* Folha 1: FASE DE GRUPOS */}
-        <div style={{ pageBreakAfter: simulatedResults ? 'always' : 'auto' }}>
-          <div style={{ textAlign: 'center', borderBottom: '4px solid black', paddingBottom: '1rem', marginBottom: '2rem' }}>
-            <h1 style={{ fontSize: '24px', fontWeight: '900', color: 'black', textTransform: 'uppercase' }}>
-              Revista de Palpites - {pool?.name}
-            </h1>
-            <p style={{ fontSize: '16px', color: '#333', marginTop: '0.5rem' }}>
-              Folha de rascunho para a Fase de Grupos
-            </p>
-          </div>
-          
-          {printableMatches.length === 0 ? (
-            <p style={{ textAlign: 'center', color: 'black' }}>Nenhum jogo encontrado para imprimir.</p>
-          ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', columnGap: '3rem', rowGap: '1rem' }}>
-              {printableMatches.map((match, idx) => (
-                <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px solid #ccc', paddingBottom: '0.5rem' }}>
-                  <span style={{ width: '40%', textAlign: 'right', fontWeight: 'bold', color: 'black', fontSize: '14px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    {match.home_team?.name}
-                  </span>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <div style={{ width: '30px', height: '30px', border: '3px solid black', borderRadius: '4px' }}></div>
-                    <span style={{ fontWeight: '900', color: 'black' }}>X</span>
-                    <div style={{ width: '30px', height: '30px', border: '3px solid black', borderRadius: '4px' }}></div>
-                  </span>
-                  <span style={{ width: '40%', textAlign: 'left', fontWeight: 'bold', color: 'black', fontSize: '14px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    {match.away_team?.name}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
+  const handlePrintSimulated = () => {
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      toast.error("Permita os pop-ups no seu navegador para poder imprimir.");
+      return;
+    }
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Chaveamento Simulado</title>
+        <style>
+          body { font-family: Arial, sans-serif; padding: 20px; color: black; background: white; }
+          .header { text-align: center; border-bottom: 3px solid black; padding-bottom: 10px; margin-bottom: 20px; }
+          .title { font-size: 24px; font-weight: 900; text-transform: uppercase; margin: 0; }
+          .subtitle { font-size: 16px; color: #444; margin-top: 5px; }
+          .group-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 40px; }
+          .group-card { border: 2px solid black; padding: 10px; border-radius: 6px; font-size: 14px; }
+          .group-name { font-weight: 900; background: #eee; text-align: center; margin: -10px -10px 10px -10px; padding: 5px; border-bottom: 1px solid black; }
+          .team-line { font-weight: bold; margin-bottom: 5px; }
+          .knockout-list { display: flex; flex-direction: column; gap: 20px; max-width: 600px; margin: 0 auto; }
+          .knockout-match { display: flex; justify-content: space-between; align-items: center; padding: 15px; border: 2px solid black; border-radius: 8px; background: #fafafa; }
+          .line { width: 40%; height: 3px; background: black; }
+          .x { font-size: 20px; font-weight: 900; padding: 0 15px; }
+          .footer { margin-top: 40px; text-align: center; font-size: 14px; font-weight: bold; color: #555; }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <h1 class="title">Chaveamento Mata-Mata</h1>
+          <p class="subtitle">Baseado na sua simulação de grupos. Preencha quem avança!</p>
         </div>
 
-        {/* Folha 2: MATA-MATA (Só aparece na impressão se o usuário tiver clicado em Simular) */}
-        {simulatedResults && (
-          <div style={{ paddingTop: '2rem' }}>
-             <div style={{ textAlign: 'center', borderBottom: '4px solid black', paddingBottom: '1rem', marginBottom: '2rem' }}>
-              <h1 style={{ fontSize: '24px', fontWeight: '900', color: 'black', textTransform: 'uppercase' }}>
-                Chaveamento Mata-Mata
-              </h1>
-              <p style={{ fontSize: '16px', color: '#333', marginTop: '0.5rem' }}>
-                Baseado na sua simulação. Preencha quem avança!
-              </p>
+        <div class="group-grid">
+          ${simulatedResults?.map(g => `
+            <div class="group-card">
+              <div class="group-name">${g.name}</div>
+              <div class="team-line">1º ${g.standings[0]?.name || ''}</div>
+              <div class="team-line">2º ${g.standings[1]?.name || ''}</div>
             </div>
+          `).join('')}
+        </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1rem', marginBottom: '2.5rem' }}>
-              {simulatedResults.map((group) => (
-                <div key={group.id} style={{ border: '2px solid black', padding: '0.5rem', fontSize: '14px', borderRadius: '6px' }}>
-                  <div style={{ fontWeight: '900', backgroundColor: '#eee', textAlign: 'center', marginBottom: '0.5rem', paddingBottom: '0.25rem', borderBottom: '1px solid black', color: 'black' }}>
-                    {group.name}
-                  </div>
-                  <div style={{ fontWeight: 'bold', color: 'black' }}>1º {group.standings[0]?.name}</div>
-                  <div style={{ fontWeight: 'bold', color: 'black' }}>2º {group.standings[1]?.name}</div>
-                </div>
-              ))}
+        <div class="knockout-list">
+          ${Array(8).fill(0).map(() => `
+            <div class="knockout-match">
+              <div class="line"></div>
+              <div class="x">X</div>
+              <div class="line"></div>
             </div>
+          `).join('')}
+        </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', maxWidth: '600px', margin: '0 auto', marginTop: '3rem' }}>
-              {[...Array(8)].map((_, i) => (
-                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1rem', border: '2px solid black', borderRadius: '8px', backgroundColor: '#fafafa' }}>
-                  <div style={{ width: '40%', height: '3px', backgroundColor: 'black' }}></div>
-                  <div style={{ fontWeight: '900', color: 'black', fontSize: '20px', padding: '0 1rem' }}>X</div>
-                  <div style={{ width: '40%', height: '3px', backgroundColor: 'black' }}></div>
-                </div>
-              ))}
-            </div>
-            
-            <div style={{ marginTop: '3rem', textAlign: 'center', fontSize: '14px', fontWeight: 'bold', color: '#555' }}>
-              * Lembre-se de repassar seus rascunhos para a plataforma antes do prazo oficial!
-            </div>
+        <div class="footer">
+          * Rascunho preenchido à mão. Lembre-se de repassar seus palpites oficiais para a plataforma antes do prazo!
+        </div>
+        <script>
+          setTimeout(() => { window.print(); window.close(); }, 500);
+        </script>
+      </body>
+      </html>
+    `;
+    printWindow.document.write(html);
+    printWindow.document.close();
+  };
+
+  return (
+    <div className="container mx-auto p-4 md:p-6 lg:p-8 space-y-8">
+      <Card className="text-center">
+        <CardHeader>
+          <CardTitle className="text-2xl md:text-3xl font-bold text-fifa-blue">Simulador de Bolão</CardTitle>
+          <CardDescription>
+            Veja como ficaria a fase de grupos e o chaveamento com base nos seus palpites de jogos!
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-col sm:flex-row justify-center items-center gap-4">
+          <Button size="lg" onClick={handleSimulation} disabled={isLoading} className="bg-green-600 hover:bg-green-700 text-white w-full sm:w-auto">
+            {isLoading ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <PlayCircle className="mr-2 h-5 w-5" />}
+            {isLoading ? 'Calculando...' : 'Simular Classificação'}
+          </Button>
+          
+          <Button size="lg" variant="outline" onClick={handlePrintBlank} disabled={printableMatches.length === 0} className="w-full sm:w-auto">
+            <FileText className="mr-2 h-5 w-5" /> Imprimir Jogos (Folha Rascunho)
+          </Button>
+        </CardContent>
+      </Card>
+
+      {simulatedResults && (
+        <div className="space-y-8">
+          <div className="text-center">
+            <Button variant="secondary" onClick={handlePrintSimulated}>
+              <Printer className="mr-2 h-4 w-4" /> Imprimir Simulação Mata-Mata
+            </Button>
           </div>
-        )}
-      </div>
-    </>
+          
+          <div id="simulation-group-tables">
+            <SimulatedGroupTables 
+              simulatedGroups={simulatedResults} 
+              onAdoptPrediction={handleAdoptGroupPrediction}
+              isDeadlinePassed={isDeadlinePassed}
+            />
+          </div>
+          
+          <div id="simulation-knockout-bracket" className="mt-8">
+            <KnockoutBracket
+              simulatedGroups={simulatedResults}
+              knockoutSelections={knockoutSelections}
+              onSelectionChange={handleKnockoutSelection}
+              onAdoptAllFinalPredictions={handleAdoptFinalPredictions}
+              allTeams={allTeams}
+              isDeadlinePassed={isDeadlinePassed}
+            />
+          </div>
+        </div>
+      )}
+    </div>
   );
 };
 
