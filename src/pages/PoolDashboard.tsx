@@ -171,7 +171,7 @@ const PoolDashboard = () => {
             <StatCard title="Minha Posição" value={`${myDisplayRank}º`} icon={<Trophy className="h-5 w-5 text-yellow-500" />} highlight />
             <StatCard title="Distância pro Líder" value={pointsToLeader <= 0 ? 'Liderando!' : pointsToLeader} icon={<BarChart2 className="h-5 w-5 text-green-500" />} />
             <StatCard title="Placares Exatos" value={myRankData?.exactscores || 0} icon={<Target className="h-5 w-5 text-purple-500" />} />
-        </div>  </div>
+        </div>
 
         {/* MENUS / BOTÕES */}
         <div className="flex flex-wrap gap-3">
