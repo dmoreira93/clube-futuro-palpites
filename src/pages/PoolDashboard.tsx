@@ -11,8 +11,8 @@ import { PoolRulesDialog } from '@/components/pools/PoolRulesDialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { 
     AlertCircle, Copy, Check, Trophy, Target, 
-    Calculator, ListChecks, BarChart2, Users, Info, Eye, Settings, ShieldCheck, BookOpen
-} from 'lucide-react'; 
+    Calculator, ListChecks, BarChart2, Users, Info, Eye, Settings, ShieldCheck, BookOpen, FileSearch
+} from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
