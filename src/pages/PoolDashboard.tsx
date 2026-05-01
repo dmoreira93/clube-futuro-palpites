@@ -165,12 +165,13 @@ const PoolDashboard = () => {
 
       <div className="container mx-auto px-4 py-8 space-y-8">
 
-        {/* ESTATÍSTICAS PESSOAIS */}
+            {/* ESTATÍSTICAS PESSOAIS */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <StatCard title="Minha Posição" value={`${myDisplayRank}º`} icon={<Trophy className="h-5 w-5 text-yellow-500" />} highlight />            <StatCard title="Minha Posição" value={`${myRankData?.rank || '-'}º`} icon={<Trophy className="h-5 w-5 text-yellow-500" />} highlight />
-            <StatCard title="Distância pro Líder" value={pointsToLeader === 0 ? 'Liderando!' : pointsToLeader} icon={<BarChart2 className="h-5 w-5 text-green-500" />} />
-             <StatCard title="Placares Exatos" value={myRankData?.exactscores || 0} icon={<Target className="h-5 w-5 text-purple-500" />} />
-        </div>
+            <StatCard title="Minha Pontuação" value={myPoints} icon={<Target className="h-5 w-5 text-blue-500" />} />
+            <StatCard title="Minha Posição" value={`${myDisplayRank}º`} icon={<Trophy className="h-5 w-5 text-yellow-500" />} highlight />
+            <StatCard title="Distância pro Líder" value={pointsToLeader <= 0 ? 'Liderando!' : pointsToLeader} icon={<BarChart2 className="h-5 w-5 text-green-500" />} />
+            <StatCard title="Placares Exatos" value={myRankData?.exactscores || 0} icon={<Target className="h-5 w-5 text-purple-500" />} />
+        </div>  </div>
 
         {/* MENUS / BOTÕES */}
         <div className="flex flex-wrap gap-3">
