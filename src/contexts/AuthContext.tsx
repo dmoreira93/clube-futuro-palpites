@@ -208,10 +208,21 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, [fetchAndSyncProfile]);
 
   // --- 4. ACTIONS ---
-  const login = async (email: string, password: string) => {
+  // Troque a palavra "email" por "identifier" (que pode ser o usuário ou e-mail real)
+  const login = async (identifier: string, password: string) => {
     setLoading(true);
     try {
-        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+        // O TRUQUE: Se não tiver '@', o sistema adiciona o domínio fantasma automaticamente.
+        const formatIdentifier = identifier.trim().toLowerCase();
+        const emailToLogin = formatIdentifier.includes('@') 
+            ? formatIdentifier 
+            : `${formatIdentifier}@app.com`; // Você pode mudar "@app.com" para o que quiser
+
+        // Usa a nova variável formatada para logar
+        const { data, error } = await supabase.auth.signInWithPassword({ 
+            email: emailToLogin, 
+            password 
+        });
         
         if (error) {
             setLoading(false);
@@ -226,7 +237,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             }
         }
         
-        // CORREÇÃO 2: Desbloqueia a tela quando o login por e-mail e senha tem SUCESSO!
         setLoading(false); 
         return { success: true, error: null };
     } catch (err) {

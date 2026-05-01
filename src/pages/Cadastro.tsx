@@ -10,12 +10,11 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { useToast } from "@/components/ui/use-toast"; // Verifique se o caminho está correto, se for 'sonner', mude para 'sonner'
+import { useToast } from "@/components/ui/use-toast"; 
 import { Label } from "@/components/ui/label";
-import { UserIcon, Loader2, BarChart3 } from "lucide-react";
+import { UserIcon, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
-// Reutilizando a imagem da Home
 const HERO_BG_IMAGE = "/hero-bg.png";
 
 const Cadastro = () => {
@@ -25,8 +24,7 @@ const Cadastro = () => {
 
   const [formData, setFormData] = useState({
     name: "",
-    nickname: "",
-    email: "",
+    username: "", // Usaremos username como identificador de login
     password: "",
     confirmPassword: "",
   });
@@ -52,7 +50,7 @@ const Cadastro = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!formData.name || !formData.nickname || !formData.email || !formData.password) {
+    if (!formData.name || !formData.username || !formData.password) {
       toast({
         title: "Dados incompletos",
         description: "Por favor, preencha todos os campos obrigatórios.",
@@ -75,7 +73,6 @@ const Cadastro = () => {
     try {
         let poolId = null;
 
-        // Se um código de convite foi passado pela URL, verifica se ele é válido
         if (inviteCode) {
             const { data: pool, error: poolError } = await supabase
               .from('pools')
@@ -89,21 +86,27 @@ const Cadastro = () => {
             poolId = pool.id;
         }
 
-        // Tenta criar o usuário com a senha
+        // TRUQUE DO DOMÍNIO FANTASMA: Cria um email falso baseado no username
+        const formatUsername = formData.username.trim().toLowerCase();
+        const emailForSupabase = `${formatUsername}@app.com`;
+
         const { data: authData, error: signUpError } = await supabase.auth.signUp({
-            email: formData.email,
+            email: emailForSupabase,
             password: formData.password,
             options: {
               data: {
                 name: formData.name,
-                username: formData.nickname,
-                // Associa o pool_id no momento do cadastro se houver um código
+                username: formatUsername,
                 pool_id: poolId 
               },
             },
         });
 
         if (signUpError) {
+            // Se o erro for de email já cadastrado, traduzimos para usuário já cadastrado
+            if (signUpError.message.includes("User already registered")) {
+                throw new Error("Este usuário já está em uso. Tente outro.");
+            }
             throw signUpError;
         }
 
@@ -113,10 +116,10 @@ const Cadastro = () => {
 
         toast({
             title: "Cadastro realizado com sucesso!",
-            description: "Enviamos um e-mail de confirmação. Por favor, verifique sua caixa de entrada.",
+            description: "Você já pode fazer o login com seu usuário.",
         });
 
-        navigate('/login'); // Redireciona para o login após o sucesso
+        navigate('/login'); 
 
     } catch (error: any) {
         toast({
@@ -137,7 +140,6 @@ const Cadastro = () => {
             backgroundPosition: 'center top'
         }}
     >
-      {/* Overlay escuro */}
       <div className="absolute inset-0 bg-gradient-to-b from-fifa-blue/80 via-fifa-blue/70 to-fifa-blue/90"></div>
 
       <Card className="w-full max-w-md relative z-10 shadow-2xl bg-white/95 backdrop-blur-sm border-none">
@@ -159,7 +161,7 @@ const Cadastro = () => {
               <Input
                 id="name"
                 name="name"
-                placeholder="Seu Nome"
+                placeholder="Ex: Diogo Moreira"
                 value={formData.name}
                 onChange={handleChange}
                 required
@@ -168,29 +170,16 @@ const Cadastro = () => {
             </div>
             
             <div className="space-y-2">
-              <Label htmlFor="nickname">Apelido</Label>
+              <Label htmlFor="username">Usuário (Usado para acessar)</Label>
               <Input
-                id="nickname"
-                name="nickname"
-                placeholder="Como aparecerá no ranking"
-                value={formData.nickname}
+                id="username"
+                name="username"
+                type="text"
+                placeholder="Ex: dmoreira"
+                value={formData.username}
                 onChange={handleChange}
                 required
-                className="border-gray-300 focus:border-fifa-blue focus:ring-fifa-blue"
-              />
-            </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="email">E-mail</Label>
-              <Input
-                id="email"
-                name="email"
-                type="email"
-                placeholder="seu@email.com"
-                value={formData.email}
-                onChange={handleChange}
-                required
-                className="border-gray-300 focus:border-fifa-blue focus:ring-fifa-blue"
+                className="border-gray-300 focus:border-fifa-blue focus:ring-fifa-blue lowercase"
               />
             </div>
             

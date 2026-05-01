@@ -4,7 +4,6 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/components/ui/use-toast";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
-import { LoginGoogle } from "@/components/auth/LoginGoogle"; 
 import {
   Card,
   CardContent,
@@ -25,34 +24,26 @@ const Login = () => {
   const { toast } = useToast();
   
   const [formData, setFormData] = useState({
-    email: "",
+    username: "", // <-- Modificado de email para username
     password: "",
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // --- LÓGICA DE REDIRECIONAMENTO INTELIGENTE ---
   useEffect(() => {
     if (!loading && isAuthenticated && user) {
-      // 1. Prioridade: Se não tem apelido (username), vai completar perfil
       if (!user.username) {
         navigate("/complete-profile");
         return;
       }
 
-      // 2. Se for primeiro login
       if (user.first_login) {
-        // Verifica se é login social (Google/Apple)
         const isSocial = user.app_metadata?.provider !== 'email';
-        
-        // Se for Social, pula a troca de senha e vai pro Dashboard
         if (isSocial) {
             navigate("/dashboard");
         } else {
-            // Se for Email/Senha, obriga a trocar a senha provisória
             navigate("/change-password");
         }
       } else {
-        // 3. Usuário normal, vai pro Dashboard
         navigate("/dashboard");
       }
     }
@@ -64,7 +55,7 @@ const Login = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.email || !formData.password) {
+    if (!formData.username || !formData.password) {
       toast({
         title: "Erro de Validação",
         description: "Por favor, preencha todos os campos.",
@@ -75,7 +66,8 @@ const Login = () => {
     
     setIsSubmitting(true);
     try {
-      const { success, error } = await login(formData.email, formData.password);
+      // Chama o login passando o username ao invés do e-mail
+      const { success, error } = await login(formData.username, formData.password);
       
       if (!success) {
         throw error || new Error("Ocorreu um erro desconhecido durante o login.");
@@ -86,12 +78,11 @@ const Login = () => {
       if (session?.user) {
           const profile = await fetchAndSyncProfile(session.user);
           
-          // Aplica a mesma lógica de redirecionamento aqui para garantir rapidez
           if (profile) {
              if (!profile.username) {
                  navigate("/complete-profile");
              } else if (profile.first_login) {
-                 navigate("/change-password"); // Login por senha sempre cai aqui se for first_login
+                 navigate("/change-password"); 
              } else {
                  navigate("/dashboard");
              }
@@ -103,7 +94,7 @@ const Login = () => {
       console.error("Erro no login:", error);
       toast({
         title: "Erro no Login",
-        description: error.message || "Email ou senha inválidos.",
+        description: error.message || "Usuário ou senha inválidos.",
         variant: "destructive",
       });
       setIsSubmitting(false);
@@ -144,25 +135,17 @@ const Login = () => {
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             
-            {/* LOGIN SOCIAL */}
-            <LoginGoogle />
-
-            <div className="relative my-2">
-                <div className="absolute inset-0 flex items-center"><span className="w-full border-t border-gray-300" /></div>
-                <div className="relative flex justify-center text-xs uppercase"><span className="bg-white px-2 text-gray-500 font-medium">Ou com e-mail</span></div>
-            </div>
-
             <div className="space-y-2">
-              <Label htmlFor="email">E-mail</Label>
+              <Label htmlFor="username">Usuário</Label>
               <Input 
-                id="email" 
-                name="email" 
-                type="email" 
-                placeholder="seu@email.com" 
-                value={formData.email} 
+                id="username" 
+                name="username" 
+                type="text" 
+                placeholder="Ex: dmoreira" 
+                value={formData.username} 
                 onChange={handleChange} 
                 required 
-                className="border-gray-300 focus:border-fifa-blue focus:ring-fifa-blue"
+                className="border-gray-300 focus:border-fifa-blue focus:ring-fifa-blue lowercase"
               />
             </div>
             <div className="space-y-2">

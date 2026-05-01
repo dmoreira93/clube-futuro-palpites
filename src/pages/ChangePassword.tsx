@@ -1,5 +1,3 @@
-// src/pages/ChangePassword.tsx - CORRIGIDO
-
 import { useState } from "react";
 import { useNavigate } from "react-router-dom"; 
 import { useAuth } from "@/contexts/AuthContext";
@@ -37,13 +35,12 @@ const ChangePassword = () => {
         throw updateError;
       }
       
-      // CORREÇÃO AQUI: Mudamos para 'false' para indicar que NÃO é mais o primeiro login
       await updateUserProfile({ first_login: false });
 
       toast.success("Senha alterada com sucesso!");
       
-      // Redireciona para entrar no bolão ou dashboard
-      navigate("/join-pool"); 
+      // Redireciona para o dashboard após concluir
+      navigate("/dashboard"); 
 
     } catch (error: any) {
       console.error(error);
