@@ -141,7 +141,7 @@ const Login = () => {
                 id="username" 
                 name="username" 
                 type="text" 
-                placeholder="Ex: dmoreira" 
+                placeholder="usuário"
                 value={formData.username} 
                 onChange={handleChange} 
                 required 

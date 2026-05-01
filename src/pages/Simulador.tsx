@@ -25,37 +25,76 @@ const Simulador = () => {
   const [allTeams, setAllTeams] = useState<SimulatedTeamStats[]>([]);
   const [knockoutSelections, setKnockoutSelections] = useState<{ [matchId: string]: string }>({});
   
-  const [printableMatches, setPrintableMatches] = useState<any[]>([]);
+  // Novo estado que armazena os jogos já agrupados
+  const [groupedMatches, setGroupedMatches] = useState<{group: string, matches: any[]}[]>([]);
 
   const isDeadlinePassed = pool?.prediction_deadline
     ? isAfter(new Date(), new Date(pool.prediction_deadline))
     : false;
 
   useEffect(() => {
-    // Busca 100% segura para evitar erro 400 de relacionamento
+    // Busca e Agrupa os Jogos para Impressão
     const fetchMatchesForPrint = async () => {
       const poolWithChamp = pool as any;
       if (!poolWithChamp?.championship_id) return;
 
-      const [matchesRes, teamsRes] = await Promise.all([
+      const [matchesRes, teamsRes, groupsRes] = await Promise.all([
         supabase
           .from('matches')
           .select('*')
           .eq('championship_id', poolWithChamp.championship_id)
           .order('match_date', { ascending: true }),
-        supabase.from('teams').select('id, name')
+        supabase.from('teams').select('id, name, group_id'),
+        supabase.from('groups').select('id, name')
       ]);
 
-      if (matchesRes.data && teamsRes.data) {
-        const teamsMap = new Map(teamsRes.data.map(t => [t.id, t.name]));
+      if (matchesRes.data && teamsRes.data && groupsRes.data) {
+        const groupsMap = new Map(groupsRes.data.map(g => [g.id, g.name]));
+        const teamsMap = new Map(teamsRes.data.map(t => [t.id, t]));
         
-        const formattedMatches = matchesRes.data.map(m => ({
-          ...m,
-          home_team: { name: m.home_team_id ? teamsMap.get(m.home_team_id) : 'A Definir' },
-          away_team: { name: m.away_team_id ? teamsMap.get(m.away_team_id) : 'A Definir' }
-        }));
-        
-        setPrintableMatches(formattedMatches);
+        // 1. Formata e descobre de qual grupo é a partida
+        const formatted = matchesRes.data.map(m => {
+          const homeTeam = teamsMap.get(m.home_team_id);
+          const awayTeam = teamsMap.get(m.away_team_id);
+          
+          let groupName = 'Mata-Mata / Outros';
+          if (homeTeam && homeTeam.group_id) {
+             groupName = groupsMap.get(homeTeam.group_id) || groupName;
+          }
+
+          // Formatar a data (DD/MM HH:MM)
+          const dateObj = new Date(m.match_date);
+          const day = String(dateObj.getDate()).padStart(2, '0');
+          const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+          const hours = String(dateObj.getHours()).padStart(2, '0');
+          const minutes = String(dateObj.getMinutes()).padStart(2, '0');
+          const formattedDate = `${day}/${month} ${hours}:${minutes}`;
+
+          return {
+            ...m,
+            home_team: { name: homeTeam?.name || 'A Definir' },
+            away_team: { name: awayTeam?.name || 'A Definir' },
+            group_name: groupName,
+            formatted_date: formattedDate
+          };
+        });
+
+        // 2. Agrupa pelo nome do grupo
+        const groupedObj = formatted.reduce((acc: any, match: any) => {
+           if (!acc[match.group_name]) acc[match.group_name] = [];
+           acc[match.group_name].push(match);
+           return acc;
+        }, {});
+
+        // 3. Converte para array e organiza alfabeticamente (Grupo A, Grupo B...)
+        const groupedArray = Object.keys(groupedObj)
+           .sort() 
+           .map(key => ({
+               group: key,
+               matches: groupedObj[key]
+           }));
+
+        setGroupedMatches(groupedArray);
       }
     };
 
@@ -170,17 +209,25 @@ const Simulador = () => {
         <title>Revista de Palpites</title>
         <style>
           body { font-family: Arial, sans-serif; padding: 20px; color: black; background: white; }
-          .header { text-align: center; border-bottom: 3px solid black; padding-bottom: 10px; margin-bottom: 20px; }
+          .header { text-align: center; border-bottom: 3px solid black; padding-bottom: 10px; margin-bottom: 30px; }
           .title { font-size: 24px; font-weight: 900; text-transform: uppercase; margin: 0; }
           .subtitle { font-size: 16px; color: #444; margin-top: 5px; }
-          .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px 40px; }
-          .match { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #ccc; padding-bottom: 8px; }
-          .team { width: 40%; font-size: 14px; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-          .team.home { text-align: right; }
-          .team.away { text-align: left; }
-          .score-box { display: flex; align-items: center; gap: 10px; }
-          .box { width: 30px; height: 30px; border: 2px solid black; border-radius: 4px; }
-          .x { font-weight: 900; font-size: 16px; }
+          
+          /* Evita quebra de página no meio de um grupo */
+          .group-section { margin-bottom: 30px; page-break-inside: avoid; }
+          .group-title { font-size: 16px; font-weight: 900; background: #eee; padding: 6px 12px; border: 2px solid black; border-radius: 4px; margin-bottom: 15px; display: inline-block; }
+          
+          .matches-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px 40px; }
+          .match { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px dashed #ccc; padding-bottom: 8px; }
+          
+          .match-date { font-size: 11px; color: #555; width: 80px; text-align: left; }
+          .team { flex: 1; font-size: 13px; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+          .team.home { text-align: right; margin-right: 10px; }
+          .team.away { text-align: left; margin-left: 10px; }
+          
+          .score-box { display: flex; align-items: center; gap: 5px; flex-shrink: 0; }
+          .box { width: 25px; height: 25px; border: 2px solid black; border-radius: 4px; }
+          .x { font-weight: 900; font-size: 12px; color: #333; }
         </style>
       </head>
       <body>
@@ -188,21 +235,28 @@ const Simulador = () => {
           <h1 class="title">Revista de Palpites - ${pool?.name || ''}</h1>
           <p class="subtitle">Folha de rascunho para a Fase de Grupos</p>
         </div>
-        <div class="grid">
-          ${printableMatches.map(m => `
-            <div class="match">
-              <span class="team home">${m.home_team?.name}</span>
-              <span class="score-box">
-                <div class="box"></div>
-                <span class="x">X</span>
-                <div class="box"></div>
-              </span>
-              <span class="team away">${m.away_team?.name}</span>
+        
+        ${groupedMatches.map(g => `
+          <div class="group-section">
+            <div class="group-title">${g.group}</div>
+            <div class="matches-grid">
+              ${g.matches.map((m: any) => `
+                <div class="match">
+                  <span class="match-date">${m.formatted_date}</span>
+                  <span class="team home">${m.home_team?.name}</span>
+                  <span class="score-box">
+                    <div class="box"></div>
+                    <span class="x">X</span>
+                    <div class="box"></div>
+                  </span>
+                  <span class="team away">${m.away_team?.name}</span>
+                </div>
+              `).join('')}
             </div>
-          `).join('')}
-        </div>
+          </div>
+        `).join('')}
+        
         <script>
-          // O timeout garante que o HTML carregou antes de chamar a impressora
           setTimeout(() => { window.print(); window.close(); }, 500);
         </script>
       </body>
@@ -294,7 +348,7 @@ const Simulador = () => {
             {isLoading ? 'Calculando...' : 'Simular Classificação'}
           </Button>
           
-          <Button size="lg" variant="outline" onClick={handlePrintBlank} disabled={printableMatches.length === 0} className="w-full sm:w-auto">
+          <Button size="lg" variant="outline" onClick={handlePrintBlank} disabled={groupedMatches.length === 0} className="w-full sm:w-auto">
             <FileText className="mr-2 h-5 w-5" /> Imprimir Jogos (Folha Rascunho)
           </Button>
         </CardContent>
