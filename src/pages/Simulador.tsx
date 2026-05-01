@@ -115,7 +115,7 @@ const Simulador = () => {
           .select('home_score, away_score, matches!inner(home_team_id, away_team_id)')
           .eq('user_id', user.id)
           .eq('pool_id', pool.id),
-        supabase.from('teams').select('id, name, group_id'), // Busca todos para evitar erro estrutural
+        supabase.from('teams').select('id, name, group_id'), 
         groupsQuery // Traz SOMENTE os grupos deste campeonato
       ]);
 
@@ -274,23 +274,26 @@ const Simulador = () => {
       return;
     }
 
-    // Extratores Seguros de Nome
-    const getGroupName = (g: any) => g.name || g.group_name || g.group?.name || 'Grupo';
-    const getTeamName = (t: any) => t?.team?.name || t?.name || 'A Definir';
+    // Extratores Seguros e Robustos para garantir que o nome apareça!
+    const getGroupName = (g: any) => g?.groupName || g?.group_name || g?.name || g?.group?.name || 'Grupo';
+    const getTeamName = (t: any) => t?.teamName || t?.team_name || t?.name || t?.team?.name || 'A Definir';
 
     // Função que resgata automaticamente o classificado do grupo pela letra
     const getTeamByLetter = (letter: string, pos: number) => {
         const group: any = simulatedResults?.find((g: any) => {
-            const name = getGroupName(g).toUpperCase();
-            return name.endsWith(` ${letter}`) || name === letter;
+            const name = getGroupName(g).toUpperCase().trim();
+            // Identifica se é "GRUPO A", "A", "GROUP A", etc.
+            return name === `GRUPO ${letter}` || name.endsWith(` ${letter}`) || name === letter;
         });
+        
         if (group && group.standings && group.standings[pos]) {
-            return getTeamName(group.standings[pos]);
+            const teamName = getTeamName(group.standings[pos]);
+            if (teamName && teamName !== 'A Definir') return teamName;
         }
         return `${pos === 0 ? '1º' : '2º'} Grupo ${letter}`;
     };
 
-    // Cruzamentos Oficiais Padrão
+    // Cruzamentos Oficiais Padrão (Mundial de Clubes 2025 / Copa)
     const matchups = [
         { id: 'Oitavas 1', t1: getTeamByLetter('A', 0), t2: getTeamByLetter('B', 1) },
         { id: 'Oitavas 2', t1: getTeamByLetter('C', 0), t2: getTeamByLetter('D', 1) },
@@ -316,7 +319,7 @@ const Simulador = () => {
           /* Resumo dos Grupos */
           .group-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 30px; }
           .group-card { border: 2px solid black; border-radius: 6px; overflow: hidden; page-break-inside: avoid; }
-          .group-name { font-weight: 900; background: #eee; text-align: center; padding: 4px; border-bottom: 2px solid black; font-size: 14px; }
+          .group-name { font-weight: 900; background: #eee; text-align: center; padding: 4px; border-bottom: 2px solid black; font-size: 14px; text-transform: uppercase; }
           .team-line { font-weight: bold; font-size: 12px; padding: 6px 8px; border-bottom: 1px solid #ccc; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;}
           .team-line:last-child { border-bottom: none; }
 
@@ -329,6 +332,8 @@ const Simulador = () => {
           .match-header { background: #f9f9f9; font-size: 11px; font-weight: bold; padding: 4px 8px; border-bottom: 1px solid #eee; color: #555; text-transform: uppercase;}
           .team-slot { height: 28px; padding: 0 8px; display: flex; align-items: center; font-size: 13px; font-weight: bold; border-bottom: 1px dashed #eee; color: black; }
           .team-slot:last-child { border-bottom: none; }
+          
+          /* Se tiver 'Grupo' no nome, fica clarinho para escrever. Se for o time, fica escuro! */
           .empty-slot { color: #aaa; font-weight: normal; font-style: italic; }
 
           .footer { margin-top: 30px; text-align: center; font-size: 12px; font-weight: bold; color: #555; }
@@ -341,14 +346,13 @@ const Simulador = () => {
         </div>
 
         <div class="group-grid">
-          ${simulatedResults?.map((g: any) => {
-            return `
+          ${simulatedResults?.map((g: any) => `
             <div class="group-card">
               <div class="group-name">${getGroupName(g)}</div>
               <div class="team-line">1º ${getTeamName(g.standings[0])}</div>
               <div class="team-line">2º ${getTeamName(g.standings[1])}</div>
             </div>
-          `}).join('')}
+          `).join('')}
         </div>
 
         <div class="bracket-container">
