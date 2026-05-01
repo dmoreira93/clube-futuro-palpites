@@ -172,39 +172,8 @@ const Simulador = () => {
 
   return (
     <>
-      {/* 
-        ================================================================
-        CSS MÁGICO DE IMPRESSÃO
-        Isso impede que a cor branca do sistema "suma" no papel branco.
-        ================================================================
-      */}
-      <style>{`
-        @media screen {
-          #print-section { display: none !important; }
-        }
-        @media print {
-          #screen-section { display: none !important; }
-          body, html, #root {
-            background-color: white !important;
-            color: black !important;
-          }
-          #print-section {
-            display: block !important;
-            background: white !important;
-            color: black !important;
-            width: 100%;
-          }
-          #print-section * {
-            color: black !important;
-          }
-          .force-border {
-            border-color: black !important;
-          }
-        }
-      `}</style>
-
       {/* ===== ÁREA DE TELA (Oculta na impressão) ===== */}
-      <div id="screen-section" className="container mx-auto p-4 md:p-6 lg:p-8 space-y-8">
+      <div className="container mx-auto p-4 md:p-6 lg:p-8 space-y-8 print:hidden">
         <Card className="text-center">
           <CardHeader>
             <CardTitle className="text-2xl md:text-3xl font-bold text-fifa-blue">Simulador de Bolão</CardTitle>
@@ -254,60 +223,86 @@ const Simulador = () => {
         )}
       </div>
 
-      {/* ===== ÁREA DE IMPRESSÃO (Força a exibição de cores e bordas) ===== */}
-      <div id="print-section" className="p-8 font-sans">
+      {/* 
+        ===== ÁREA DE IMPRESSÃO =====
+        Usamos inline-styles pesados (style={{...}}) para garantir que o 
+        Chrome não tenha como sobrescrever com as cores do site.
+        O absolute e top-0 garantem que a impressão quebre a barreira da tela do site.
+      */}
+      <div 
+        className="hidden print:block print:absolute print:top-0 print:left-0 print:w-full print:m-0 print:p-8"
+        style={{ backgroundColor: 'white', color: 'black', WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}
+      >
         
         {/* Folha 1: FASE DE GRUPOS */}
-        <div className={simulatedResults ? "break-after-page" : ""}>
-          <div className="text-center mb-8 border-b-4 force-border pb-4">
-            <h1 className="text-3xl font-black uppercase">Revista de Palpites - {pool?.name}</h1>
-            <p className="text-lg mt-2 font-semibold">Folha de rascunho para a Fase de Grupos</p>
+        <div style={{ pageBreakAfter: simulatedResults ? 'always' : 'auto' }}>
+          <div style={{ textAlign: 'center', borderBottom: '4px solid black', paddingBottom: '1rem', marginBottom: '2rem' }}>
+            <h1 style={{ fontSize: '24px', fontWeight: '900', color: 'black', textTransform: 'uppercase' }}>
+              Revista de Palpites - {pool?.name}
+            </h1>
+            <p style={{ fontSize: '16px', color: '#333', marginTop: '0.5rem' }}>
+              Folha de rascunho para a Fase de Grupos
+            </p>
           </div>
           
-          <div className="grid grid-cols-2 gap-x-12 gap-y-4">
-            {printableMatches.map((match, idx) => (
-              <div key={idx} className="flex justify-between items-center border-b-2 force-border pb-2">
-                <span className="w-5/12 text-right font-bold truncate pr-2 text-sm">{match.home_team?.name}</span>
-                <span className="flex items-center gap-2">
-                  <div className="w-8 h-8 border-[3px] force-border rounded flex items-center justify-center"></div>
-                  <span className="font-black">X</span>
-                  <div className="w-8 h-8 border-[3px] force-border rounded flex items-center justify-center"></div>
-                </span>
-                <span className="w-5/12 text-left font-bold truncate pl-2 text-sm">{match.away_team?.name}</span>
-              </div>
-            ))}
-          </div>
+          {printableMatches.length === 0 ? (
+            <p style={{ textAlign: 'center', color: 'black' }}>Nenhum jogo encontrado para imprimir.</p>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', columnGap: '3rem', rowGap: '1rem' }}>
+              {printableMatches.map((match, idx) => (
+                <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px solid #ccc', paddingBottom: '0.5rem' }}>
+                  <span style={{ width: '40%', textAlign: 'right', fontWeight: 'bold', color: 'black', fontSize: '14px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {match.home_team?.name}
+                  </span>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <div style={{ width: '30px', height: '30px', border: '3px solid black', borderRadius: '4px' }}></div>
+                    <span style={{ fontWeight: '900', color: 'black' }}>X</span>
+                    <div style={{ width: '30px', height: '30px', border: '3px solid black', borderRadius: '4px' }}></div>
+                  </span>
+                  <span style={{ width: '40%', textAlign: 'left', fontWeight: 'bold', color: 'black', fontSize: '14px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {match.away_team?.name}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Folha 2: MATA-MATA (Só aparece na impressão se o usuário tiver clicado em Simular) */}
         {simulatedResults && (
-          <div className="pt-8">
-             <div className="text-center mb-8 border-b-4 force-border pb-4">
-              <h1 className="text-3xl font-black uppercase">Chaveamento Mata-Mata</h1>
-              <p className="text-lg mt-2 font-semibold">Preencha quem avança até o título!</p>
+          <div style={{ paddingTop: '2rem' }}>
+             <div style={{ textAlign: 'center', borderBottom: '4px solid black', paddingBottom: '1rem', marginBottom: '2rem' }}>
+              <h1 style={{ fontSize: '24px', fontWeight: '900', color: 'black', textTransform: 'uppercase' }}>
+                Chaveamento Mata-Mata
+              </h1>
+              <p style={{ fontSize: '16px', color: '#333', marginTop: '0.5rem' }}>
+                Baseado na sua simulação. Preencha quem avança!
+              </p>
             </div>
 
-            <div className="grid grid-cols-4 gap-4 mb-10">
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1rem', marginBottom: '2.5rem' }}>
               {simulatedResults.map((group) => (
-                <div key={group.id} className="border-2 force-border p-2 text-sm rounded-md shadow-sm">
-                  <div className="font-black text-center mb-2 pb-1 border-b force-border">{group.name}</div>
-                  <div className="font-semibold">1º {group.standings[0]?.name}</div>
-                  <div className="font-semibold">2º {group.standings[1]?.name}</div>
+                <div key={group.id} style={{ border: '2px solid black', padding: '0.5rem', fontSize: '14px', borderRadius: '6px' }}>
+                  <div style={{ fontWeight: '900', backgroundColor: '#eee', textAlign: 'center', marginBottom: '0.5rem', paddingBottom: '0.25rem', borderBottom: '1px solid black', color: 'black' }}>
+                    {group.name}
+                  </div>
+                  <div style={{ fontWeight: 'bold', color: 'black' }}>1º {group.standings[0]?.name}</div>
+                  <div style={{ fontWeight: 'bold', color: 'black' }}>2º {group.standings[1]?.name}</div>
                 </div>
               ))}
             </div>
 
-            <div className="space-y-6 max-w-2xl mx-auto mt-12">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', maxWidth: '600px', margin: '0 auto', marginTop: '3rem' }}>
               {[...Array(8)].map((_, i) => (
-                <div key={i} className="flex justify-between items-center p-4 border-2 force-border rounded-lg">
-                  <div className="w-5/12 h-[3px] bg-black force-border border-b-4"></div>
-                  <div className="font-black text-xl px-4">X</div>
-                  <div className="w-5/12 h-[3px] bg-black force-border border-b-4"></div>
+                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1rem', border: '2px solid black', borderRadius: '8px', backgroundColor: '#fafafa' }}>
+                  <div style={{ width: '40%', height: '3px', backgroundColor: 'black' }}></div>
+                  <div style={{ fontWeight: '900', color: 'black', fontSize: '20px', padding: '0 1rem' }}>X</div>
+                  <div style={{ width: '40%', height: '3px', backgroundColor: 'black' }}></div>
                 </div>
               ))}
             </div>
             
-            <div className="mt-12 text-center text-sm font-bold">
+            <div style={{ marginTop: '3rem', textAlign: 'center', fontSize: '14px', fontWeight: 'bold', color: '#555' }}>
               * Lembre-se de repassar seus rascunhos para a plataforma antes do prazo oficial!
             </div>
           </div>
