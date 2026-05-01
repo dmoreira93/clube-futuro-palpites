@@ -25,7 +25,6 @@ const Simulador = () => {
   const [allTeams, setAllTeams] = useState<SimulatedTeamStats[]>([]);
   const [knockoutSelections, setKnockoutSelections] = useState<{ [matchId: string]: string }>({});
   
-  // Novo estado que armazena os jogos já agrupados
   const [groupedMatches, setGroupedMatches] = useState<{group: string, matches: any[]}[]>([]);
 
   const isDeadlinePassed = pool?.prediction_deadline
@@ -33,7 +32,7 @@ const Simulador = () => {
     : false;
 
   useEffect(() => {
-    // Busca e Agrupa os Jogos para Impressão
+    // Busca e Agrupa os Jogos para Impressão da Folha em Branco
     const fetchMatchesForPrint = async () => {
       const poolWithChamp = pool as any;
       if (!poolWithChamp?.championship_id) return;
@@ -52,7 +51,6 @@ const Simulador = () => {
         const groupsMap = new Map(groupsRes.data.map(g => [g.id, g.name]));
         const teamsMap = new Map(teamsRes.data.map(t => [t.id, t]));
         
-        // 1. Formata e descobre de qual grupo é a partida
         const formatted = matchesRes.data.map(m => {
           const homeTeam = teamsMap.get(m.home_team_id);
           const awayTeam = teamsMap.get(m.away_team_id);
@@ -62,7 +60,6 @@ const Simulador = () => {
              groupName = groupsMap.get(homeTeam.group_id) || groupName;
           }
 
-          // Formatar a data (DD/MM HH:MM)
           const dateObj = new Date(m.match_date);
           const day = String(dateObj.getDate()).padStart(2, '0');
           const month = String(dateObj.getMonth() + 1).padStart(2, '0');
@@ -79,14 +76,12 @@ const Simulador = () => {
           };
         });
 
-        // 2. Agrupa pelo nome do grupo
         const groupedObj = formatted.reduce((acc: any, match: any) => {
            if (!acc[match.group_name]) acc[match.group_name] = [];
            acc[match.group_name].push(match);
            return acc;
         }, {});
 
-        // 3. Converte para array e organiza alfabeticamente (Grupo A, Grupo B...)
         const groupedArray = Object.keys(groupedObj)
            .sort() 
            .map(key => ({
@@ -194,7 +189,7 @@ const Simulador = () => {
     }
   };
 
-  // --- FUNÇÕES DE IMPRESSÃO BLINDADAS ---
+  // --- FUNÇÕES DE IMPRESSÃO ---
   const handlePrintBlank = () => {
     const printWindow = window.open('', '_blank');
     if (!printWindow) {
@@ -208,23 +203,18 @@ const Simulador = () => {
       <head>
         <title>Revista de Palpites</title>
         <style>
-          body { font-family: Arial, sans-serif; padding: 20px; color: black; background: white; }
+          body { font-family: Arial, sans-serif; padding: 20px; color: black; background: white; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
           .header { text-align: center; border-bottom: 3px solid black; padding-bottom: 10px; margin-bottom: 30px; }
           .title { font-size: 24px; font-weight: 900; text-transform: uppercase; margin: 0; }
           .subtitle { font-size: 16px; color: #444; margin-top: 5px; }
-          
-          /* Evita quebra de página no meio de um grupo */
           .group-section { margin-bottom: 30px; page-break-inside: avoid; }
           .group-title { font-size: 16px; font-weight: 900; background: #eee; padding: 6px 12px; border: 2px solid black; border-radius: 4px; margin-bottom: 15px; display: inline-block; }
-          
           .matches-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px 40px; }
           .match { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px dashed #ccc; padding-bottom: 8px; }
-          
           .match-date { font-size: 11px; color: #555; width: 80px; text-align: left; }
           .team { flex: 1; font-size: 13px; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
           .team.home { text-align: right; margin-right: 10px; }
           .team.away { text-align: left; margin-left: 10px; }
-          
           .score-box { display: flex; align-items: center; gap: 5px; flex-shrink: 0; }
           .box { width: 25px; height: 25px; border: 2px solid black; border-radius: 4px; }
           .x { font-weight: 900; font-size: 12px; color: #333; }
@@ -256,9 +246,7 @@ const Simulador = () => {
           </div>
         `).join('')}
         
-        <script>
-          setTimeout(() => { window.print(); window.close(); }, 500);
-        </script>
+        <script>setTimeout(() => { window.print(); window.close(); }, 500);</script>
       </body>
       </html>
     `;
@@ -273,58 +261,138 @@ const Simulador = () => {
       return;
     }
 
+    // Função que resgata automaticamente o classificado do grupo pela letra
+    const getTeam = (letter: string, pos: number) => {
+        const group: any = simulatedResults?.find((g: any) => {
+            const name = (g.name || g.group_name || '').toUpperCase();
+            return name.endsWith(` ${letter}`) || name === letter;
+        });
+        if (group && group.standings && group.standings[pos]) {
+            return group.standings[pos].name;
+        }
+        return `${pos === 0 ? '1º' : '2º'} Grupo ${letter}`;
+    };
+
+    // Cruzamentos Oficiais Padrão (Copa do Mundo)
+    const matchups = [
+        { id: 'Oitavas 1', t1: getTeam('A', 0), t2: getTeam('B', 1) },
+        { id: 'Oitavas 2', t1: getTeam('C', 0), t2: getTeam('D', 1) },
+        { id: 'Oitavas 3', t1: getTeam('E', 0), t2: getTeam('F', 1) },
+        { id: 'Oitavas 4', t1: getTeam('G', 0), t2: getTeam('H', 1) },
+        { id: 'Oitavas 5', t1: getTeam('B', 0), t2: getTeam('A', 1) },
+        { id: 'Oitavas 6', t1: getTeam('D', 0), t2: getTeam('C', 1) },
+        { id: 'Oitavas 7', t1: getTeam('F', 0), t2: getTeam('E', 1) },
+        { id: 'Oitavas 8', t1: getTeam('H', 0), t2: getTeam('G', 1) },
+    ];
+
     const html = `
       <!DOCTYPE html>
       <html>
       <head>
         <title>Chaveamento Simulado</title>
         <style>
-          body { font-family: Arial, sans-serif; padding: 20px; color: black; background: white; }
+          body { font-family: Arial, sans-serif; padding: 20px; color: black; background: white; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
           .header { text-align: center; border-bottom: 3px solid black; padding-bottom: 10px; margin-bottom: 20px; }
           .title { font-size: 24px; font-weight: 900; text-transform: uppercase; margin: 0; }
-          .subtitle { font-size: 16px; color: #444; margin-top: 5px; }
-          .group-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 40px; }
-          .group-card { border: 2px solid black; padding: 10px; border-radius: 6px; font-size: 14px; }
-          .group-name { font-weight: 900; background: #eee; text-align: center; margin: -10px -10px 10px -10px; padding: 5px; border-bottom: 1px solid black; }
-          .team-line { font-weight: bold; margin-bottom: 5px; }
-          .knockout-list { display: flex; flex-direction: column; gap: 20px; max-width: 600px; margin: 0 auto; }
-          .knockout-match { display: flex; justify-content: space-between; align-items: center; padding: 15px; border: 2px solid black; border-radius: 8px; background: #fafafa; }
-          .line { width: 40%; height: 3px; background: black; }
-          .x { font-size: 20px; font-weight: 900; padding: 0 15px; }
-          .footer { margin-top: 40px; text-align: center; font-size: 14px; font-weight: bold; color: #555; }
+          .subtitle { font-size: 14px; color: #444; margin-top: 5px; }
+
+          /* Resumo dos Grupos */
+          .group-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 30px; }
+          .group-card { border: 2px solid black; border-radius: 6px; overflow: hidden; page-break-inside: avoid; }
+          .group-name { font-weight: 900; background: #eee; text-align: center; padding: 4px; border-bottom: 2px solid black; font-size: 14px; }
+          .team-line { font-weight: bold; font-size: 12px; padding: 6px 8px; border-bottom: 1px solid #ccc; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;}
+          .team-line:last-child { border-bottom: none; }
+
+          /* Bracket Layout 4 Colunas */
+          .bracket-container { display: flex; justify-content: space-between; gap: 15px; margin-top: 30px; page-break-inside: avoid; }
+          .column { display: flex; flex-direction: column; justify-content: space-around; flex: 1; }
+          .col-title { text-align: center; font-weight: 900; font-size: 14px; margin-bottom: 15px; text-transform: uppercase; }
+
+          .match-box { border: 2px solid #ccc; border-radius: 6px; margin-bottom: 15px; background: #fff; overflow: hidden; box-shadow: 2px 2px 0px #eee; }
+          .match-header { background: #f9f9f9; font-size: 11px; font-weight: bold; padding: 4px 8px; border-bottom: 1px solid #eee; color: #555; }
+          .team-slot { height: 28px; padding: 0 8px; display: flex; align-items: center; font-size: 13px; font-weight: bold; border-bottom: 1px dashed #eee; color: black; }
+          .team-slot:last-child { border-bottom: none; }
+          .empty-slot { color: #aaa; font-weight: normal; font-style: italic; }
+
+          .footer { margin-top: 30px; text-align: center; font-size: 12px; font-weight: bold; color: #555; }
         </style>
       </head>
       <body>
         <div class="header">
-          <h1 class="title">Chaveamento Mata-Mata</h1>
-          <p class="subtitle">Baseado na sua simulação de grupos. Preencha quem avança!</p>
+          <h1 class="title">Chaveamento Mata-Mata - ${pool?.name || ''}</h1>
+          <p class="subtitle">Com base na sua simulação da Fase de Grupos. Preencha quem avança até o título!</p>
         </div>
 
         <div class="group-grid">
-          ${simulatedResults?.map(g => `
+          ${simulatedResults?.map((g: any) => {
+            const gName = g.name || g.group_name || 'Grupo';
+            return `
             <div class="group-card">
-              <div class="group-name">${g.name}</div>
-              <div class="team-line">1º ${g.standings[0]?.name || ''}</div>
-              <div class="team-line">2º ${g.standings[1]?.name || ''}</div>
+              <div class="group-name">${gName}</div>
+              <div class="team-line">1º ${g.standings[0]?.name || 'A Definir'}</div>
+              <div class="team-line">2º ${g.standings[1]?.name || 'A Definir'}</div>
             </div>
-          `).join('')}
+          `}).join('')}
         </div>
 
-        <div class="knockout-list">
-          ${Array(8).fill(0).map(() => `
-            <div class="knockout-match">
-              <div class="line"></div>
-              <div class="x">X</div>
-              <div class="line"></div>
+        <div class="bracket-container">
+          <!-- Oitavas de Final -->
+          <div class="column">
+            <div class="col-title">Oitavas</div>
+            ${matchups.map(m => `
+              <div class="match-box" style="border-color: black;">
+                <div class="match-header">${m.id}</div>
+                <div class="team-slot">${m.t1}</div>
+                <div class="team-slot">${m.t2}</div>
+              </div>
+            `).join('')}
+          </div>
+
+          <!-- Quartas de Final -->
+          <div class="column" style="justify-content: space-evenly;">
+            <div class="col-title">Quartas</div>
+            ${[1,2,3,4].map(i => `
+              <div class="match-box">
+                <div class="match-header">Quartas ${i}</div>
+                <div class="team-slot empty-slot">Vencedor</div>
+                <div class="team-slot empty-slot">Vencedor</div>
+              </div>
+            `).join('')}
+          </div>
+
+          <!-- Semifinais -->
+          <div class="column" style="justify-content: space-evenly;">
+            <div class="col-title">Semifinais</div>
+            ${[1,2].map(i => `
+              <div class="match-box">
+                <div class="match-header">Semi ${i}</div>
+                <div class="team-slot empty-slot">Vencedor</div>
+                <div class="team-slot empty-slot">Vencedor</div>
+              </div>
+            `).join('')}
+          </div>
+
+          <!-- Finais -->
+          <div class="column" style="justify-content: center; gap: 40px;">
+            <div class="col-title">Finais</div>
+            <div class="match-box">
+              <div class="match-header">GRANDE FINAL</div>
+              <div class="team-slot empty-slot">Vencedor Semi 1</div>
+              <div class="team-slot empty-slot">Vencedor Semi 2</div>
             </div>
-          `).join('')}
+            <div class="match-box">
+              <div class="match-header">Disputa 3º Lugar</div>
+              <div class="team-slot empty-slot">Perdedor Semi 1</div>
+              <div class="team-slot empty-slot">Perdedor Semi 2</div>
+            </div>
+          </div>
         </div>
 
         <div class="footer">
-          * Rascunho preenchido à mão. Lembre-se de repassar seus palpites oficiais para a plataforma antes do prazo!
+          * Lembre-se de repassar seus palpites do mata-mata para o sistema oficial antes do encerramento do prazo!
         </div>
         <script>
-          setTimeout(() => { window.print(); window.close(); }, 500);
+          setTimeout(() => { window.print(); window.close(); }, 800);
         </script>
       </body>
       </html>
