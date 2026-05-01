@@ -116,7 +116,7 @@ const Simulador = () => {
           .eq('user_id', user.id)
           .eq('pool_id', pool.id),
         supabase.from('teams').select('id, name, group_id'), 
-        groupsQuery // Traz SOMENTE os grupos deste campeonato
+        groupsQuery 
       ]);
 
       if (pError || tError || gError) throw pError || tError || gError;
@@ -127,7 +127,6 @@ const Simulador = () => {
         return;
       }
 
-      // FILTRO MESTRE: Isola apenas os times que pertencem aos grupos Deste Campeonato
       const validGroupIds = new Set((groupsData || []).map(g => g.id));
       const filteredTeams = (teamsData || []).filter(t => validGroupIds.has(t.group_id));
 
@@ -138,7 +137,6 @@ const Simulador = () => {
         away_team_id: p.matches.away_team_id,
       }));
 
-      // Roda a simulação com as listas higienizadas
       const results = calculateGroupStandings(formattedPredictions, filteredTeams as Team[], groupsData || []);
       setSimulatedResults(results);
       setAllTeams(results.flatMap(g => g.standings));
@@ -202,7 +200,6 @@ const Simulador = () => {
     }
   };
 
-  // --- FUNÇÕES DE IMPRESSÃO ---
   const handlePrintBlank = () => {
     const printWindow = window.open('', '_blank');
     if (!printWindow) {
@@ -274,15 +271,12 @@ const Simulador = () => {
       return;
     }
 
-    // Extratores Seguros e Robustos para garantir que o nome apareça!
     const getGroupName = (g: any) => g?.groupName || g?.group_name || g?.name || g?.group?.name || 'Grupo';
     const getTeamName = (t: any) => t?.teamName || t?.team_name || t?.name || t?.team?.name || 'A Definir';
 
-    // Função que resgata automaticamente o classificado do grupo pela letra
     const getTeamByLetter = (letter: string, pos: number) => {
         const group: any = simulatedResults?.find((g: any) => {
             const name = getGroupName(g).toUpperCase().trim();
-            // Identifica se é "GRUPO A", "A", "GROUP A", etc.
             return name === `GRUPO ${letter}` || name.endsWith(` ${letter}`) || name === letter;
         });
         
@@ -293,7 +287,6 @@ const Simulador = () => {
         return `${pos === 0 ? '1º' : '2º'} Grupo ${letter}`;
     };
 
-    // Cruzamentos Oficiais Padrão (Mundial de Clubes 2025 / Copa)
     const matchups = [
         { id: 'Oitavas 1', t1: getTeamByLetter('A', 0), t2: getTeamByLetter('B', 1) },
         { id: 'Oitavas 2', t1: getTeamByLetter('C', 0), t2: getTeamByLetter('D', 1) },
@@ -323,18 +316,21 @@ const Simulador = () => {
           .team-line { font-weight: bold; font-size: 12px; padding: 6px 8px; border-bottom: 1px solid #ccc; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;}
           .team-line:last-child { border-bottom: none; }
 
-          /* Bracket Layout 4 Colunas */
-          .bracket-container { display: flex; justify-content: space-between; gap: 15px; margin-top: 30px; page-break-inside: avoid; }
-          .column { display: flex; flex-direction: column; justify-content: space-around; flex: 1; }
-          .col-title { text-align: center; font-weight: 900; font-size: 14px; margin-bottom: 15px; text-transform: uppercase; }
+          /* Títulos das Colunas (Separados para não quebrar o alinhamento das caixas) */
+          .bracket-titles { display: flex; justify-content: space-between; gap: 15px; margin-top: 30px; margin-bottom: 10px; }
+          .col-title { flex: 1; text-align: center; font-weight: 900; font-size: 14px; text-transform: uppercase; }
 
-          .match-box { border: 2px solid #ccc; border-radius: 6px; margin-bottom: 15px; background: #fff; overflow: hidden; box-shadow: 2px 2px 0px #eee; }
+          /* Bracket Layout 4 Colunas */
+          .bracket-container { display: flex; justify-content: space-between; gap: 15px; page-break-inside: avoid; }
+          .column { display: flex; flex-direction: column; justify-content: space-around; flex: 1; }
+
+          .match-box { border: 2px solid #ccc; border-radius: 6px; margin-bottom: 12px; background: #fff; overflow: hidden; box-shadow: 2px 2px 0px #eee; }
           .match-header { background: #f9f9f9; font-size: 11px; font-weight: bold; padding: 4px 8px; border-bottom: 1px solid #eee; color: #555; text-transform: uppercase;}
-          .team-slot { height: 28px; padding: 0 8px; display: flex; align-items: center; font-size: 13px; font-weight: bold; border-bottom: 1px dashed #eee; color: black; }
+          .team-slot { height: 28px; padding: 0 8px; display: flex; align-items: center; font-size: 12px; font-weight: bold; border-bottom: 1px dashed #eee; color: black; }
           .team-slot:last-child { border-bottom: none; }
           
-          /* Se tiver 'Grupo' no nome, fica clarinho para escrever. Se for o time, fica escuro! */
-          .empty-slot { color: #aaa; font-weight: normal; font-style: italic; }
+          /* Estilo para orientar quem venceu qual jogo */
+          .empty-slot { color: #888; font-weight: normal; font-size: 11px; font-style: italic; }
 
           .footer { margin-top: 30px; text-align: center; font-size: 12px; font-weight: bold; color: #555; }
         </style>
@@ -355,10 +351,17 @@ const Simulador = () => {
           `).join('')}
         </div>
 
+        <!-- Títulos Fixos em cima -->
+        <div class="bracket-titles">
+          <div class="col-title">Oitavas</div>
+          <div class="col-title">Quartas</div>
+          <div class="col-title">Semifinais</div>
+          <div class="col-title">Finais</div>
+        </div>
+
         <div class="bracket-container">
           <!-- Oitavas de Final -->
           <div class="column">
-            <div class="col-title">Oitavas</div>
             ${matchups.map(m => `
               <div class="match-box" style="border-color: black;">
                 <div class="match-header">${m.id}</div>
@@ -369,41 +372,46 @@ const Simulador = () => {
           </div>
 
           <!-- Quartas de Final -->
-          <div class="column" style="justify-content: space-evenly;">
-            <div class="col-title">Quartas</div>
-            ${[1,2,3,4].map(i => `
+          <div class="column">
+            ${[
+              {id: 1, t1: 'Venc. Oitavas 1', t2: 'Venc. Oitavas 2'},
+              {id: 2, t1: 'Venc. Oitavas 3', t2: 'Venc. Oitavas 4'},
+              {id: 3, t1: 'Venc. Oitavas 5', t2: 'Venc. Oitavas 6'},
+              {id: 4, t1: 'Venc. Oitavas 7', t2: 'Venc. Oitavas 8'}
+            ].map(q => `
               <div class="match-box">
-                <div class="match-header">Quartas ${i}</div>
-                <div class="team-slot empty-slot">Vencedor Oitavas</div>
-                <div class="team-slot empty-slot">Vencedor Oitavas</div>
+                <div class="match-header">Quartas ${q.id}</div>
+                <div class="team-slot empty-slot">${q.t1}</div>
+                <div class="team-slot empty-slot">${q.t2}</div>
               </div>
             `).join('')}
           </div>
 
           <!-- Semifinais -->
-          <div class="column" style="justify-content: space-evenly;">
-            <div class="col-title">Semifinais</div>
-            ${[1,2].map(i => `
+          <div class="column">
+            ${[
+              {id: 1, t1: 'Venc. Quartas 1', t2: 'Venc. Quartas 2'},
+              {id: 2, t1: 'Venc. Quartas 3', t2: 'Venc. Quartas 4'}
+            ].map(s => `
               <div class="match-box">
-                <div class="match-header">Semi ${i}</div>
-                <div class="team-slot empty-slot">Vencedor Quartas</div>
-                <div class="team-slot empty-slot">Vencedor Quartas</div>
+                <div class="match-header">Semi ${s.id}</div>
+                <div class="team-slot empty-slot">${s.t1}</div>
+                <div class="team-slot empty-slot">${s.t2}</div>
               </div>
             `).join('')}
           </div>
 
           <!-- Finais -->
           <div class="column" style="justify-content: center; gap: 40px;">
-            <div class="col-title">Finais</div>
             <div class="match-box">
               <div class="match-header">GRANDE FINAL</div>
-              <div class="team-slot empty-slot">Vencedor Semi 1</div>
-              <div class="team-slot empty-slot">Vencedor Semi 2</div>
+              <div class="team-slot empty-slot">Venc. Semi 1</div>
+              <div class="team-slot empty-slot">Venc. Semi 2</div>
             </div>
             <div class="match-box">
               <div class="match-header">Disputa 3º Lugar</div>
-              <div class="team-slot empty-slot">Perdedor Semi 1</div>
-              <div class="team-slot empty-slot">Perdedor Semi 2</div>
+              <div class="team-slot empty-slot">Perd. Semi 1</div>
+              <div class="team-slot empty-slot">Perd. Semi 2</div>
             </div>
           </div>
         </div>
