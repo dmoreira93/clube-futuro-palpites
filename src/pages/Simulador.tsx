@@ -44,7 +44,7 @@ const Simulador = () => {
           .eq('championship_id', poolWithChamp.championship_id)
           .order('match_date', { ascending: true }),
         supabase.from('teams').select('id, name, group_id'),
-        supabase.from('groups').select('id, name')
+        supabase.from('groups').select('id, name').eq('championship_id', poolWithChamp.championship_id)
       ]);
 
       if (matchesRes.data && teamsRes.data && groupsRes.data) {
@@ -56,7 +56,7 @@ const Simulador = () => {
           const awayTeam = teamsMap.get(m.away_team_id);
           
           let groupName = 'Mata-Mata / Outros';
-          if (homeTeam && homeTeam.group_id) {
+          if (homeTeam && homeTeam.group_id && groupsMap.has(homeTeam.group_id)) {
              groupName = groupsMap.get(homeTeam.group_id) || groupName;
           }
 
@@ -102,13 +102,21 @@ const Simulador = () => {
     setSimulatedResults(null);
     setKnockoutSelections({}); 
     try {
+      const poolWithChamp = pool as any;
+      const champId = poolWithChamp?.championship_id;
+
+      let groupsQuery = supabase.from('groups').select('id, name');
+      if (champId) {
+          groupsQuery = groupsQuery.eq('championship_id', champId);
+      }
+
       const [{ data: predictionsQueryData, error: pError }, { data: teamsData, error: tError }, { data: groupsData, error: gError }] = await Promise.all([
         supabase.from('match_predictions')
           .select('home_score, away_score, matches!inner(home_team_id, away_team_id)')
           .eq('user_id', user.id)
           .eq('pool_id', pool.id),
-        supabase.from('teams').select('id, name, group_id'),
-        supabase.from('groups').select('id, name')
+        supabase.from('teams').select('id, name, group_id'), // Busca todos para evitar erro estrutural
+        groupsQuery // Traz SOMENTE os grupos deste campeonato
       ]);
 
       if (pError || tError || gError) throw pError || tError || gError;
@@ -119,6 +127,10 @@ const Simulador = () => {
         return;
       }
 
+      // FILTRO MESTRE: Isola apenas os times que pertencem aos grupos Deste Campeonato
+      const validGroupIds = new Set((groupsData || []).map(g => g.id));
+      const filteredTeams = (teamsData || []).filter(t => validGroupIds.has(t.group_id));
+
       const formattedPredictions = predictionsQueryData.map(p => ({
         home_score: p.home_score,
         away_score: p.away_score,
@@ -126,7 +138,8 @@ const Simulador = () => {
         away_team_id: p.matches.away_team_id,
       }));
 
-      const results = calculateGroupStandings(formattedPredictions, teamsData as Team[] || [], groupsData || []);
+      // Roda a simulação com as listas higienizadas
+      const results = calculateGroupStandings(formattedPredictions, filteredTeams as Team[], groupsData || []);
       setSimulatedResults(results);
       setAllTeams(results.flatMap(g => g.standings));
       toast.success("Simulação concluída! Agora preencha o mata-mata.");
@@ -261,28 +274,32 @@ const Simulador = () => {
       return;
     }
 
+    // Extratores Seguros de Nome
+    const getGroupName = (g: any) => g.name || g.group_name || g.group?.name || 'Grupo';
+    const getTeamName = (t: any) => t?.team?.name || t?.name || 'A Definir';
+
     // Função que resgata automaticamente o classificado do grupo pela letra
-    const getTeam = (letter: string, pos: number) => {
+    const getTeamByLetter = (letter: string, pos: number) => {
         const group: any = simulatedResults?.find((g: any) => {
-            const name = (g.name || g.group_name || '').toUpperCase();
+            const name = getGroupName(g).toUpperCase();
             return name.endsWith(` ${letter}`) || name === letter;
         });
         if (group && group.standings && group.standings[pos]) {
-            return group.standings[pos].name;
+            return getTeamName(group.standings[pos]);
         }
         return `${pos === 0 ? '1º' : '2º'} Grupo ${letter}`;
     };
 
-    // Cruzamentos Oficiais Padrão (Copa do Mundo)
+    // Cruzamentos Oficiais Padrão
     const matchups = [
-        { id: 'Oitavas 1', t1: getTeam('A', 0), t2: getTeam('B', 1) },
-        { id: 'Oitavas 2', t1: getTeam('C', 0), t2: getTeam('D', 1) },
-        { id: 'Oitavas 3', t1: getTeam('E', 0), t2: getTeam('F', 1) },
-        { id: 'Oitavas 4', t1: getTeam('G', 0), t2: getTeam('H', 1) },
-        { id: 'Oitavas 5', t1: getTeam('B', 0), t2: getTeam('A', 1) },
-        { id: 'Oitavas 6', t1: getTeam('D', 0), t2: getTeam('C', 1) },
-        { id: 'Oitavas 7', t1: getTeam('F', 0), t2: getTeam('E', 1) },
-        { id: 'Oitavas 8', t1: getTeam('H', 0), t2: getTeam('G', 1) },
+        { id: 'Oitavas 1', t1: getTeamByLetter('A', 0), t2: getTeamByLetter('B', 1) },
+        { id: 'Oitavas 2', t1: getTeamByLetter('C', 0), t2: getTeamByLetter('D', 1) },
+        { id: 'Oitavas 3', t1: getTeamByLetter('E', 0), t2: getTeamByLetter('F', 1) },
+        { id: 'Oitavas 4', t1: getTeamByLetter('G', 0), t2: getTeamByLetter('H', 1) },
+        { id: 'Oitavas 5', t1: getTeamByLetter('B', 0), t2: getTeamByLetter('A', 1) },
+        { id: 'Oitavas 6', t1: getTeamByLetter('D', 0), t2: getTeamByLetter('C', 1) },
+        { id: 'Oitavas 7', t1: getTeamByLetter('F', 0), t2: getTeamByLetter('E', 1) },
+        { id: 'Oitavas 8', t1: getTeamByLetter('H', 0), t2: getTeamByLetter('G', 1) },
     ];
 
     const html = `
@@ -309,7 +326,7 @@ const Simulador = () => {
           .col-title { text-align: center; font-weight: 900; font-size: 14px; margin-bottom: 15px; text-transform: uppercase; }
 
           .match-box { border: 2px solid #ccc; border-radius: 6px; margin-bottom: 15px; background: #fff; overflow: hidden; box-shadow: 2px 2px 0px #eee; }
-          .match-header { background: #f9f9f9; font-size: 11px; font-weight: bold; padding: 4px 8px; border-bottom: 1px solid #eee; color: #555; }
+          .match-header { background: #f9f9f9; font-size: 11px; font-weight: bold; padding: 4px 8px; border-bottom: 1px solid #eee; color: #555; text-transform: uppercase;}
           .team-slot { height: 28px; padding: 0 8px; display: flex; align-items: center; font-size: 13px; font-weight: bold; border-bottom: 1px dashed #eee; color: black; }
           .team-slot:last-child { border-bottom: none; }
           .empty-slot { color: #aaa; font-weight: normal; font-style: italic; }
@@ -325,12 +342,11 @@ const Simulador = () => {
 
         <div class="group-grid">
           ${simulatedResults?.map((g: any) => {
-            const gName = g.name || g.group_name || 'Grupo';
             return `
             <div class="group-card">
-              <div class="group-name">${gName}</div>
-              <div class="team-line">1º ${g.standings[0]?.name || 'A Definir'}</div>
-              <div class="team-line">2º ${g.standings[1]?.name || 'A Definir'}</div>
+              <div class="group-name">${getGroupName(g)}</div>
+              <div class="team-line">1º ${getTeamName(g.standings[0])}</div>
+              <div class="team-line">2º ${getTeamName(g.standings[1])}</div>
             </div>
           `}).join('')}
         </div>
@@ -342,8 +358,8 @@ const Simulador = () => {
             ${matchups.map(m => `
               <div class="match-box" style="border-color: black;">
                 <div class="match-header">${m.id}</div>
-                <div class="team-slot">${m.t1}</div>
-                <div class="team-slot">${m.t2}</div>
+                <div class="team-slot ${m.t1.includes('Grupo') ? 'empty-slot' : ''}">${m.t1}</div>
+                <div class="team-slot ${m.t2.includes('Grupo') ? 'empty-slot' : ''}">${m.t2}</div>
               </div>
             `).join('')}
           </div>
@@ -354,8 +370,8 @@ const Simulador = () => {
             ${[1,2,3,4].map(i => `
               <div class="match-box">
                 <div class="match-header">Quartas ${i}</div>
-                <div class="team-slot empty-slot">Vencedor</div>
-                <div class="team-slot empty-slot">Vencedor</div>
+                <div class="team-slot empty-slot">Vencedor Oitavas</div>
+                <div class="team-slot empty-slot">Vencedor Oitavas</div>
               </div>
             `).join('')}
           </div>
@@ -366,8 +382,8 @@ const Simulador = () => {
             ${[1,2].map(i => `
               <div class="match-box">
                 <div class="match-header">Semi ${i}</div>
-                <div class="team-slot empty-slot">Vencedor</div>
-                <div class="team-slot empty-slot">Vencedor</div>
+                <div class="team-slot empty-slot">Vencedor Quartas</div>
+                <div class="team-slot empty-slot">Vencedor Quartas</div>
               </div>
             `).join('')}
           </div>
@@ -389,7 +405,7 @@ const Simulador = () => {
         </div>
 
         <div class="footer">
-          * Lembre-se de repassar seus palpites do mata-mata para o sistema oficial antes do encerramento do prazo!
+          * Rascunho de preenchimento. Lembre-se de repassar seus palpites do mata-mata para o sistema oficial antes do prazo!
         </div>
         <script>
           setTimeout(() => { window.print(); window.close(); }, 800);
