@@ -108,11 +108,19 @@ const PoolDashboard = () => {
 
   const isOwner = user?.id && poolDetails?.owner_id && user.id === poolDetails.owner_id;
 
-  const myRankData = ranking.find(p => p.id === user?.id);
-  const leaderPoints = ranking.length > 0 ? ranking[0].points : 0;
+  // 1. Primeiro, separamos apenas os participantes reais (tira Admin e IA)
+  const humanParticipants = ranking.filter(p => !p.is_ai && !p.is_admin);
+  
+  // 2. Calculamos os dados baseados APENAS na lista de participantes reais
+  const myRankData = humanParticipants.find(p => p.id === user?.id);
+  const myHumanIndex = humanParticipants.findIndex(p => p.id === user?.id);
+  const myDisplayRank = myHumanIndex !== -1 ? myHumanIndex + 1 : '-'; // Posição real ignorando admin
+  
+  // 3. O líder agora é o primeiro da lista de humanos
+  const leaderPoints = humanParticipants.length > 0 ? humanParticipants[0].points : 0;
   const myPoints = myRankData?.points || 0;
   const pointsToLeader = leaderPoints - myPoints;
-  const humanParticipants = ranking.filter(p => !p.is_ai && !p.is_admin);
+  
   const top3 = humanParticipants.slice(0, 3);
   const lastPlace = humanParticipants.length > 1 ? humanParticipants[humanParticipants.length - 1] : null;
 
@@ -159,8 +167,7 @@ const PoolDashboard = () => {
 
         {/* ESTATÍSTICAS PESSOAIS */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <StatCard title="Minha Pontuação" value={myPoints} icon={<Target className="h-5 w-5 text-blue-500" />} />
-            <StatCard title="Minha Posição" value={`${myRankData?.rank || '-'}º`} icon={<Trophy className="h-5 w-5 text-yellow-500" />} highlight />
+            <StatCard title="Minha Posição" value={`${myDisplayRank}º`} icon={<Trophy className="h-5 w-5 text-yellow-500" />} highlight />            <StatCard title="Minha Posição" value={`${myRankData?.rank || '-'}º`} icon={<Trophy className="h-5 w-5 text-yellow-500" />} highlight />
             <StatCard title="Distância pro Líder" value={pointsToLeader === 0 ? 'Liderando!' : pointsToLeader} icon={<BarChart2 className="h-5 w-5 text-green-500" />} />
              <StatCard title="Placares Exatos" value={myRankData?.exactscores || 0} icon={<Target className="h-5 w-5 text-purple-500" />} />
         </div>

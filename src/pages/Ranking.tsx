@@ -45,19 +45,17 @@ const RankingPage = () => {
   const rankedParticipants = useMemo(() => {
     if (!participants || !pool) return [];
 
-    const humanParticipants = participants.filter(p => !p.is_admin && !isAIParticipant(p));
+    // 1. Filtra a lista removendo o admin e as IAs completamente
+    const validParticipants = participants.filter(p => !p.is_admin && !isAIParticipant(p));
     
-    return participants.map((participant) => {
-      const rank = participant.rank; 
+    // 2. Mapeia a lista limpa. O 'index' dita o rank real agora.
+    return validParticipants.map((participant, index) => {
+      const realRank = index + 1; // Como a lista já vem ordenada, o index dita o rank perfeito (1, 2, 3...)
       
-      let humanRank = 0;
-      if (!participant.is_admin && !isAIParticipant(participant)) {
-          humanRank = humanParticipants.findIndex(h => h.id === participant.id) + 1;
-      }
+      const prize = calculatePrize(realRank, participant, validParticipants.length, pool);
       
-      const prize = humanRank > 0 ? calculatePrize(humanRank, participant, humanParticipants.length, pool) : "";
-      
-      return { ...participant, rank, prize };
+      // Sobrescreve o 'rank' que veio do banco pelo 'realRank' que acabamos de calcular
+      return { ...participant, rank: realRank, prize };
     });
   }, [participants, pool]);
 
@@ -77,13 +75,12 @@ const RankingPage = () => {
             <Table>
               <TableHeader>
                 <TableRow>
-                    <TableHead className="w-[50px] text-center">Pos.</TableHead>
-                    <TableHead>Participante</TableHead>
-                    <TableHead className="text-right">Pontos</TableHead>
-                    {/* ALTERADO: De 'Jogos' para 'Cravadas' */}
-                    <TableHead className="hidden md:table-cell text-right">Cravadas</TableHead>
-                    <TableHead className="hidden md:table-cell text-right">Precisão</TableHead>
-                    <TableHead className="hidden md:table-cell text-right">Prêmio/Punição</TableHead>
+                  <TableHead className="w-[50px] text-center">Pos.</TableHead>
+                  <TableHead>Participante</TableHead>
+                  <TableHead className="text-right">Pontos</TableHead>
+                  <TableHead className="hidden md:table-cell text-right">Cravadas</TableHead>
+                  <TableHead className="hidden md:table-cell text-right">Precisão</TableHead>
+                  <TableHead className="hidden md:table-cell text-right">Prêmio/Punição</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
