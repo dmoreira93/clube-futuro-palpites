@@ -64,11 +64,14 @@ const AuditoriaPontos = () => {
             group:groups(name)
           )
         `)
-        .eq("pool_id", activePool.id)
+        // CORREÇÃO: Aceita o ID do bolão atual OU dados antigos (is.null) da primeira edição
+        .or(`pool_id.eq.${activePool.id},pool_id.is.null`)
         .eq("user_id", userId)
         .order("created_at", { ascending: false });
 
       if (error) throw error;
+
+// ... (O restante da função continua exatamente igual)
 
       const formattedLogs: AuditLog[] = data.map((log: any) => {
         let eventName = "Processamento de Sistema";
