@@ -10,7 +10,7 @@ import { PoolNextMatches } from '@/components/dashboard/PoolNextMatches';
 import { PoolRulesDialog } from '@/components/pools/PoolRulesDialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { 
-    AlertCircle, Copy, Check, Trophy, Target, AlertTriangle, 
+    AlertCircle, Copy, Check, Trophy, Target, 
     Calculator, ListChecks, BarChart2, Users, Info, Eye, Settings, ShieldCheck, BookOpen
 } from 'lucide-react'; 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -20,7 +20,6 @@ import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
-// Interface completa para evitar erros de tipagem
 interface PoolHeaderData {
   id: string;
   name: string;
@@ -28,7 +27,6 @@ interface PoolHeaderData {
   description?: string | null;
   owner_id: string;
   championship_id: string;
-  
   entry_fee: number;
   admin_fee_percent: number;
   prize_percent_1st: number;
@@ -36,8 +34,6 @@ interface PoolHeaderData {
   prize_percent_3rd: number;
   punishment_description?: string | null;
   enable_punishment?: boolean;
-
-  // Pontuação (Todos os campos)
   points_exact_score: number;
   points_winner_diff: number;
   points_winner: number;
@@ -53,7 +49,6 @@ interface PoolHeaderData {
   points_fourth_place: number;
   points_final_score: number;
   points_top4_bonus: number;
-  
   is_public: boolean;
 }
 
@@ -74,10 +69,9 @@ const PoolDashboard = () => {
       
       const fetchPoolDetails = async () => {
         try {
-            // CORREÇÃO: Select limpo e sem duplicatas
             const { data, error } = await supabase
             .from('pools')
-            .select('*') // Traz tudo para evitar esquecer campos novos (ideal para dashboard principal)
+            .select('*')
             .eq('id', poolId)
             .single();
             
@@ -108,15 +102,12 @@ const PoolDashboard = () => {
 
   const isOwner = user?.id && poolDetails?.owner_id && user.id === poolDetails.owner_id;
 
-  // 1. Primeiro, separamos apenas os participantes reais (tira Admin e IA)
+  // Lógica de Ranking Limpa (Remove Admin e IA)
   const humanParticipants = ranking.filter(p => !p.is_ai && !p.is_admin);
-  
-  // 2. Calculamos os dados baseados APENAS na lista de participantes reais
   const myRankData = humanParticipants.find(p => p.id === user?.id);
   const myHumanIndex = humanParticipants.findIndex(p => p.id === user?.id);
-  const myDisplayRank = myHumanIndex !== -1 ? myHumanIndex + 1 : '-'; // Posição real ignorando admin
+  const myDisplayRank = myHumanIndex !== -1 ? myHumanIndex + 1 : '-';
   
-  // 3. O líder agora é o primeiro da lista de humanos
   const leaderPoints = humanParticipants.length > 0 ? humanParticipants[0].points : 0;
   const myPoints = myRankData?.points || 0;
   const pointsToLeader = leaderPoints - myPoints;
@@ -165,7 +156,7 @@ const PoolDashboard = () => {
 
       <div className="container mx-auto px-4 py-8 space-y-8">
 
-            {/* ESTATÍSTICAS PESSOAIS */}
+        {/* ESTATÍSTICAS PESSOAIS */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <StatCard title="Minha Pontuação" value={myPoints} icon={<Target className="h-5 w-5 text-blue-500" />} />
             <StatCard title="Minha Posição" value={`${myDisplayRank}º`} icon={<Trophy className="h-5 w-5 text-yellow-500" />} highlight />
@@ -276,7 +267,7 @@ const PoolDashboard = () => {
   );
 };
 
-// Componentes auxiliares (mantidos)
+// Componentes auxiliares
 const StatCard = ({ title, value, icon, subtext, highlight = false }: any) => (
     <Card className={`${highlight ? 'border-fifa-gold bg-yellow-50/30' : ''} shadow-sm`}>
         <CardContent className="p-4 flex flex-col items-center text-center justify-center h-full">
