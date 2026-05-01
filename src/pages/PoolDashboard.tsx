@@ -172,6 +172,7 @@ const PoolDashboard = () => {
             <ActionButton icon={<Trophy />} label="Ranking" onClick={() => navigate(`/pool/${poolId}/ranking`)} />
             <ActionButton icon={<Calculator />} label="Simulador" onClick={() => navigate(`/pool/${poolId}/simulador`)} />
             <ActionButton icon={<Info />} label="Participantes" onClick={() => navigate(`/pool/${poolId}/info-participantes`)} />
+            <ActionButton icon={<FileSearch />} label="Auditoria" onClick={() => navigate(`/pool/${poolId}/auditoria`)} />
             
             {/* BOTÃO DE CRITÉRIOS */}
             {poolDetails && (

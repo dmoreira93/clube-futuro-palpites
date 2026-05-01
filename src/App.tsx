@@ -72,7 +72,7 @@ function App() {
             <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
             <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
             <Route path="/noticias" element={<ProtectedRoute><NoticiasPage /></ProtectedRoute>} />
-            <Route path="/auditoria" element={<ProtectedRoute><AuditoriaPontos /></ProtectedRoute>} />
+            <Route path="/pool/:poolId/auditoria" element={<ProtectedRoute><AuditoriaPontos /></ProtectedRoute>} />
             
             {/* Rota antiga /join-pool removida em favor das novas /join */}
             <Route path="/create-pool" element={<ProtectedRoute><CreatePoolPage /></ProtectedRoute>} />
