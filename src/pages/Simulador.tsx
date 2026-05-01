@@ -46,7 +46,6 @@ const Simulador = () => {
         `)
         .order('match_date', { ascending: true });
 
-      // Filtra pelo campeonato atual
       if (poolWithChamp?.championship_id) {
           query = query.eq('championship_id', poolWithChamp.championship_id);
       }
@@ -59,7 +58,6 @@ const Simulador = () => {
       }
 
       if (data) {
-        // Formata com segurança caso o Supabase devolva arrays ou nulos
         const getTeamName = (teamData: any) => {
            if (!teamData) return 'A Definir';
            if (Array.isArray(teamData)) return teamData[0]?.name || 'A Definir';
@@ -174,7 +172,39 @@ const Simulador = () => {
 
   return (
     <>
-      <div className="container mx-auto p-4 md:p-6 lg:p-8 space-y-8 print:hidden">
+      {/* 
+        ================================================================
+        CSS MÁGICO DE IMPRESSÃO
+        Isso impede que a cor branca do sistema "suma" no papel branco.
+        ================================================================
+      */}
+      <style>{`
+        @media screen {
+          #print-section { display: none !important; }
+        }
+        @media print {
+          #screen-section { display: none !important; }
+          body, html, #root {
+            background-color: white !important;
+            color: black !important;
+          }
+          #print-section {
+            display: block !important;
+            background: white !important;
+            color: black !important;
+            width: 100%;
+          }
+          #print-section * {
+            color: black !important;
+          }
+          .force-border {
+            border-color: black !important;
+          }
+        }
+      `}</style>
+
+      {/* ===== ÁREA DE TELA (Oculta na impressão) ===== */}
+      <div id="screen-section" className="container mx-auto p-4 md:p-6 lg:p-8 space-y-8">
         <Card className="text-center">
           <CardHeader>
             <CardTitle className="text-2xl md:text-3xl font-bold text-fifa-blue">Simulador de Bolão</CardTitle>
@@ -224,25 +254,24 @@ const Simulador = () => {
         )}
       </div>
 
-      {/* ÁREA DE IMPRESSÃO (Força a exibição de cores e bordas independentemente da preferência do navegador) */}
-      <div 
-        className="hidden print:block p-8 bg-white text-black min-h-screen font-sans" 
-        style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}
-      >
+      {/* ===== ÁREA DE IMPRESSÃO (Força a exibição de cores e bordas) ===== */}
+      <div id="print-section" className="p-8 font-sans">
+        
+        {/* Folha 1: FASE DE GRUPOS */}
         <div className={simulatedResults ? "break-after-page" : ""}>
-          <div className="text-center mb-8 border-b-4 border-black pb-4">
+          <div className="text-center mb-8 border-b-4 force-border pb-4">
             <h1 className="text-3xl font-black uppercase">Revista de Palpites - {pool?.name}</h1>
-            <p className="text-lg text-gray-700 mt-2 font-semibold">Folha de rascunho para a Fase de Grupos</p>
+            <p className="text-lg mt-2 font-semibold">Folha de rascunho para a Fase de Grupos</p>
           </div>
           
           <div className="grid grid-cols-2 gap-x-12 gap-y-4">
             {printableMatches.map((match, idx) => (
-              <div key={idx} className="flex justify-between items-center border-b-2 border-gray-300 pb-2">
+              <div key={idx} className="flex justify-between items-center border-b-2 force-border pb-2">
                 <span className="w-5/12 text-right font-bold truncate pr-2 text-sm">{match.home_team?.name}</span>
                 <span className="flex items-center gap-2">
-                  <div className="w-8 h-8 border-[3px] border-black rounded flex items-center justify-center"></div>
-                  <span className="font-black text-gray-800">X</span>
-                  <div className="w-8 h-8 border-[3px] border-black rounded flex items-center justify-center"></div>
+                  <div className="w-8 h-8 border-[3px] force-border rounded flex items-center justify-center"></div>
+                  <span className="font-black">X</span>
+                  <div className="w-8 h-8 border-[3px] force-border rounded flex items-center justify-center"></div>
                 </span>
                 <span className="w-5/12 text-left font-bold truncate pl-2 text-sm">{match.away_team?.name}</span>
               </div>
@@ -250,34 +279,35 @@ const Simulador = () => {
           </div>
         </div>
 
+        {/* Folha 2: MATA-MATA (Só aparece na impressão se o usuário tiver clicado em Simular) */}
         {simulatedResults && (
           <div className="pt-8">
-             <div className="text-center mb-8 border-b-4 border-black pb-4">
+             <div className="text-center mb-8 border-b-4 force-border pb-4">
               <h1 className="text-3xl font-black uppercase">Chaveamento Mata-Mata</h1>
-              <p className="text-lg text-gray-700 mt-2 font-semibold">Preencha quem avança até o título!</p>
+              <p className="text-lg mt-2 font-semibold">Preencha quem avança até o título!</p>
             </div>
 
             <div className="grid grid-cols-4 gap-4 mb-10">
               {simulatedResults.map((group) => (
-                <div key={group.id} className="border-2 border-black p-2 text-sm rounded-md shadow-sm">
-                  <div className="font-black bg-gray-200 text-center mb-2 pb-1 border-b border-black">{group.name}</div>
-                  <div className="font-semibold text-gray-800">1º {group.standings[0]?.name}</div>
-                  <div className="font-semibold text-gray-800">2º {group.standings[1]?.name}</div>
+                <div key={group.id} className="border-2 force-border p-2 text-sm rounded-md shadow-sm">
+                  <div className="font-black text-center mb-2 pb-1 border-b force-border">{group.name}</div>
+                  <div className="font-semibold">1º {group.standings[0]?.name}</div>
+                  <div className="font-semibold">2º {group.standings[1]?.name}</div>
                 </div>
               ))}
             </div>
 
             <div className="space-y-6 max-w-2xl mx-auto mt-12">
               {[...Array(8)].map((_, i) => (
-                <div key={i} className="flex justify-between items-center p-4 border-2 border-black rounded-lg bg-gray-50">
-                  <div className="w-5/12 h-[3px] bg-black"></div>
-                  <div className="font-black text-black text-xl px-4">X</div>
-                  <div className="w-5/12 h-[3px] bg-black"></div>
+                <div key={i} className="flex justify-between items-center p-4 border-2 force-border rounded-lg">
+                  <div className="w-5/12 h-[3px] bg-black force-border border-b-4"></div>
+                  <div className="font-black text-xl px-4">X</div>
+                  <div className="w-5/12 h-[3px] bg-black force-border border-b-4"></div>
                 </div>
               ))}
             </div>
             
-            <div className="mt-12 text-center text-sm font-bold text-gray-500">
+            <div className="mt-12 text-center text-sm font-bold">
               * Lembre-se de repassar seus rascunhos para a plataforma antes do prazo oficial!
             </div>
           </div>
