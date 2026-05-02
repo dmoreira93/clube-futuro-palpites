@@ -222,19 +222,24 @@ const PoolDashboard = () => {
 
                         {/* ÁREA DE PUNIÇÃO */}
                         {showPunishment && lastPlace && (
-                            <div className="mt-6 pt-4 border-t flex items-center justify-between bg-red-50 p-3 rounded-lg animate-in fade-in">
-                                <div className="flex items-center gap-3">
-                                    <span className="text-2xl">🐢</span>
-                                    <div>
-                                        <p className="text-sm font-bold text-red-700">Zona de Punição</p>
-                                        <p className="text-xs text-red-600">Último colocado: <span className="font-bold">{lastPlace.name}</span></p>
-                                    </div>
-                                </div>
-                                <Badge variant="destructive" className="bg-red-100 text-red-700 hover:bg-red-200 border-red-200 max-w-[200px] truncate" title={poolDetails?.punishment_description || ""}>
-                                    {poolDetails?.punishment_description || "Pagar a prenda!"}
-                                </Badge>
-                            </div>
-                        )}
+                         <div className="mt-6 pt-4 border-t flex items-center justify-between bg-red-50 p-3 rounded-lg animate-in fade-in gap-4">
+                         <div className="flex items-center gap-3 flex-shrink-0">
+                         <span className="text-2xl">🐢</span>
+                        <div>
+                          <p className="text-sm font-bold text-red-700">Zona de Punição</p>
+                          <p className="text-xs text-red-600">Último colocado: <span className="font-bold">{lastPlace.name}</span></p>
+                        </div>
+                    </div>
+
+        {/* Ajuste: removido 'max-w' e 'truncate', adicionado 'h-auto' e 'whitespace-normal' */}
+        <Badge 
+            variant="destructive" 
+            className="bg-red-100 text-red-700 hover:bg-red-200 border-red-200 h-auto py-1.5 px-3 text-right whitespace-normal leading-tight"
+        >
+            {poolDetails?.punishment_description || "Pagar a prenda!"}
+        </Badge>
+    </div>
+)}
                     </CardContent>
                 </Card>
 
