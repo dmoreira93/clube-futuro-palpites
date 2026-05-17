@@ -392,57 +392,79 @@ const Palpites = () => {
                 </TabsContent>
 
                 {/* --- ABA 2: GRUPOS --- */}
-                {champRules.has_groups && (
-                    <TabsContent value="groups" className="space-y-6">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            {groups.map(group => {
-                                const p = groupPredictions[group.id] || { group_id: group.id, predicted_first_team_id: null, predicted_second_team_id: null };
-                                return (
-                                    <Card key={group.id} className="border-t-4 border-t-fifa-blue">
-                                        <CardHeader className="pb-2">
-                                            <CardTitle className="text-lg">{group.name}</CardTitle>
-                                            <CardDescription>Quem passa de fase?</CardDescription>
-                                        </CardHeader>
-                                        <CardContent className="space-y-4">
-                                            <div className="space-y-2">
-                                                <label className="text-sm font-bold text-gray-600 flex items-center gap-2"><Trophy className="h-4 w-4 text-yellow-500"/> 1º Colocado</label>
-                                                <Select 
-                                                    disabled={isLocked} 
-                                                    value={p.predicted_first_team_id || ''} 
-                                                    onValueChange={(val) => setGroupPredictions(prev => ({...prev, [group.id]: {...prev[group.id], predicted_first_team_id: val}}))}
-                                                >
-                                                    <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
-                                                    <SelectContent>
-                                                        {teams.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
-                                                    </SelectContent>
-                                                </Select>
-                                            </div>
-                                            <div className="space-y-2">
-                                                <label className="text-sm font-bold text-gray-600 flex items-center gap-2"><Medal className="h-4 w-4 text-gray-400"/> 2º Colocado</label>
-                                                <Select 
-                                                    disabled={isLocked} 
-                                                    value={p.predicted_second_team_id || ''} 
-                                                    onValueChange={(val) => setGroupPredictions(prev => ({...prev, [group.id]: {...prev[group.id], predicted_second_team_id: val}}))}
-                                                >
-                                                    <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
-                                                    <SelectContent>
-                                                        {teams.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
-                                                    </SelectContent>
-                                                </Select>
-                                            </div>
-                                            {!isLocked && (
-                                                <Button className="w-full mt-2" onClick={() => handleGroupSave(group.id)} disabled={submittingId === group.id}>
-                                                    {submittingId === group.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Save className="mr-2 h-4 w-4"/>} 
-                                                    Salvar Grupo
-                                                </Button>
-                                            )}
-                                        </CardContent>
-                                    </Card>
-                                )
-                            })}
-                        </div>
-                    </TabsContent>
-                )}
+{champRules.has_groups && (
+    <TabsContent value="groups" className="space-y-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {groups.map(group => {
+                const p = groupPredictions[group.id] || { group_id: group.id, predicted_first_team_id: null, predicted_second_team_id: null };
+
+                // FILTRO DINÂMICO: Busca os times que possuem jogos mapeados para este grupo específico
+                const teamsInThisGroup = useMemo(() => {
+                    const groupTeamsMap = new Map<string, Team>();
+                    
+                    allMatches.forEach(match => {
+                        // Altere 'match.group_id' ou 'match.group_name' conforme a coluna real do seu banco
+                        if (match.group_id === group.id || match.group_name === group.name) {
+                            if (match.home_team) groupTeamsMap.set(match.home_team.id, match.home_team);
+                            if (match.away_team) groupTeamsMap.set(match.away_team.id, match.away_team);
+                        }
+                    });
+                    
+                    return Array.from(groupTeamsMap.values()).sort((a, b) => a.name.localeCompare(b.name));
+                }, [allMatches, group.id, group.name]);
+
+                return (
+                    <Card key={group.id} className="border-t-4 border-t-fifa-blue">
+                        <CardHeader className="pb-2">
+                            <CardTitle className="text-lg">{group.name}</CardTitle>
+                            <CardDescription>Quem passa de fase?</CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                            <div className="space-y-2">
+                                <label className="text-sm font-bold text-gray-600 flex items-center gap-2">
+                                    <Trophy className="h-4 w-4 text-yellow-500"/> 1º Colocado
+                                </label>
+                                <Select 
+                                    disabled={isLocked} 
+                                    value={p.predicted_first_team_id || ''} 
+                                    onValueChange={(val) => setGroupPredictions(prev => ({...prev, [group.id]: {...prev[group.id], predicted_first_team_id: val}}))}
+                                >
+                                    <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                                    <SelectContent>
+                                        {/* Usa a lista filtrada do grupo atual */}
+                                        {teamsInThisGroup.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-sm font-bold text-gray-600 flex items-center gap-2">
+                                    <Medal className="h-4 w-4 text-gray-400"/> 2º Colocado
+                                </label>
+                                <Select 
+                                    disabled={isLocked} 
+                                    value={p.predicted_second_team_id || ''} 
+                                    onValueChange={(val) => setGroupPredictions(prev => ({...prev, [group.id]: {...prev[group.id], predicted_second_team_id: val}}))}
+                                >
+                                    <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                                    <SelectContent>
+                                        {/* Usa a lista filtrada do grupo atual */}
+                                        {teamsInThisGroup.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            {!isLocked && (
+                                <Button className="w-full mt-2" onClick={() => handleGroupSave(group.id)} disabled={submittingId === group.id}>
+                                    {submittingId === group.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Save className="mr-2 h-4 w-4"/>} 
+                                    Salvar Grupo
+                                </Button>
+                            )}
+                        </CardContent>
+                    </Card>
+                );
+            })}
+        </div>
+    </TabsContent>
+)}
 
                 {/* --- ABA 3: FINAL --- */}
                 {champRules.has_final && (
