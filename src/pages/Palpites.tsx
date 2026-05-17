@@ -398,16 +398,10 @@ const Palpites = () => {
             {groups.map(group => {
                 const p = groupPredictions[group.id] || { group_id: group.id, predicted_first_team_id: null, predicted_second_team_id: null };
 
-                // Correção: Criamos a lista filtrada sem usar Hooks dentro do .map
-                const groupTeamsMap = new Map<string, Team>();
-                allMatches.forEach(match => {
-                    // Compara tanto por ID quanto por Nome para garantir o match do grupo
-                    if (match.group_id === group.id || match.group_name === group.name) {
-                        if (match.home_team) groupTeamsMap.set(match.home_team.id, match.home_team);
-                        if (match.away_team) groupTeamsMap.set(match.away_team.id, match.away_team);
-                    }
-                });
-                const teamsInThisGroup = Array.from(groupTeamsMap.values()).sort((a, b) => a.name.localeCompare(b.name));
+                // FILTRO DIRETO E LIMPO: Busca na tabela de times apenas quem pertence a este grupo
+                const teamsInThisGroup = teams
+                    .filter(t => t.group_id === group.id)
+                    .sort((a, b) => a.name.localeCompare(b.name));
 
                 return (
                     <Card key={group.id} className="border-t-4 border-t-fifa-blue">
@@ -416,6 +410,8 @@ const Palpites = () => {
                             <CardDescription>Quem passa de fase?</CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-4">
+                            
+                            {/* 1º COLOCADO */}
                             <div className="space-y-2">
                                 <label className="text-sm font-bold text-gray-600 flex items-center gap-2">
                                     <Trophy className="h-4 w-4 text-yellow-500"/> 1º Colocado
@@ -423,7 +419,15 @@ const Palpites = () => {
                                 <Select 
                                     disabled={isLocked} 
                                     value={p.predicted_first_team_id || ''} 
-                                    onValueChange={(val) => setGroupPredictions(prev => ({...prev, [group.id]: {...prev[group.id], predicted_first_team_id: val}}))}
+                                    onValueChange={(val) => setGroupPredictions(prev => ({
+                                        ...prev, 
+                                        [group.id]: {
+                                            ...(prev[group.id] || { group_id: group.id }), 
+                                            predicted_first_team_id: val,
+                                            // Se o usuário mudar o 1º colocado para o mesmo time que estava no 2º, limpa o 2º
+                                            predicted_second_team_id: prev[group.id]?.predicted_second_team_id === val ? null : prev[group.id]?.predicted_second_team_id
+                                        }
+                                    }))}
                                 >
                                     <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
                                     <SelectContent>
@@ -434,20 +438,37 @@ const Palpites = () => {
                                 </Select>
                             </div>
                             
+                            {/* 2º COLOCADO (Com regra de bloqueio visual) */}
                             <div className="space-y-2">
                                 <label className="text-sm font-bold text-gray-600 flex items-center gap-2">
                                     <Medal className="h-4 w-4 text-gray-400"/> 2º Colocado
                                 </label>
                                 <Select 
-                                    disabled={isLocked} 
+                                    disabled={isLocked || !p.predicted_first_team_id} 
                                     value={p.predicted_second_team_id || ''} 
-                                    onValueChange={(val) => setGroupPredictions(prev => ({...prev, [group.id]: {...prev[group.id], predicted_second_team_id: val}}))}
+                                    onValueChange={(val) => setGroupPredictions(prev => ({
+                                        ...prev, 
+                                        [group.id]: {
+                                            ...(prev[group.id] || { group_id: group.id }), 
+                                            predicted_second_team_id: val
+                                        }
+                                    }))}
                                 >
-                                    <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                                    <SelectTrigger><SelectValue placeholder={p.predicted_first_team_id ? "Selecione..." : "Selecione o 1º..."} /></SelectTrigger>
                                     <SelectContent>
-                                        {teamsInThisGroup.map(t => (
-                                            <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
-                                        ))}
+                                        {teamsInThisGroup.map(t => {
+                                            const isSelectedAsFirst = t.id === p.predicted_first_team_id;
+                                            return (
+                                                <SelectItem 
+                                                    key={t.id} 
+                                                    value={t.id}
+                                                    disabled={isSelectedAsFirst}
+                                                    className={isSelectedAsFirst ? "opacity-40 line-through pointer-events-none" : ""}
+                                                >
+                                                    {t.name} {isSelectedAsFirst && " (Já selecionado)"}
+                                                </SelectItem>
+                                            );
+                                        })}
                                     </SelectContent>
                                 </Select>
                             </div>
