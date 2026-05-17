@@ -607,5 +607,6 @@ const Palpites = () => {
             </CardContent>
         </Card>
     </TabsContent>
-)}
+)};
+
 export default Palpites;
