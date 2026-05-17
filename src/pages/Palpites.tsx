@@ -487,87 +487,125 @@ const Palpites = () => {
     </TabsContent>
 )}
 
-                {/* --- ABA 3: FINAL --- */}
-                {champRules.has_final && (
-                    <TabsContent value="final">
-                        <Card className="border-t-4 border-t-fifa-gold shadow-lg">
-                            <CardHeader>
-                                <CardTitle className="flex items-center gap-2 text-2xl text-fifa-blue"><Trophy className="h-8 w-8 text-yellow-500"/> O Grande Final</CardTitle>
-                                <CardDescription>Quem levará a taça? Defina o pódio e o placar da finalíssima.</CardDescription>
-                            </CardHeader>
-                            <CardContent className="space-y-8">
-                                
-                                {/* PÓDIO */}
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                    <div className="space-y-4">
-                                        <h3 className="font-bold text-gray-700 border-b pb-2">Pódio do Campeonato</h3>
-                                        <div className="space-y-3">
-                                            {[
-                                                { label: "Campeão", icon: <Trophy className="h-4 w-4 text-yellow-500"/>, field: 'champion_id' },
-                                                { label: "Vice-Campeão", icon: <Medal className="h-4 w-4 text-gray-400"/>, field: 'runner_up_id' },
-                                                { label: "3º Lugar", icon: <Medal className="h-4 w-4 text-orange-400"/>, field: 'third_place_id' },
-                                                { label: "4º Lugar", icon: <Medal className="h-4 w-4 text-blue-300"/>, field: 'fourth_place_id' },
-                                            ].map((item: any) => (
-                                                <div key={item.field}>
-                                                    <label className="text-sm font-medium text-gray-600 flex items-center gap-2 mb-1">{item.icon} {item.label}</label>
-                                                    <Select 
-                                                        disabled={isLocked}
-                                                        value={finalPrediction[item.field as keyof FinalPredictionState] as string || ''}
-                                                        onValueChange={(val) => setFinalPrediction(prev => ({...prev, [item.field]: val}))}
-                                                    >
-                                                        <SelectTrigger><SelectValue placeholder="Selecione o time..." /></SelectTrigger>
-                                                        <SelectContent>{teams.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}</SelectContent>
-                                                    </Select>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
+{/* --- ABA 3: FINAL --- */}
+{champRules.has_final && (
+    <TabsContent value="final">
+        <Card className="border-t-4 border-t-fifa-gold shadow-lg">
+            <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-2xl text-fifa-blue">
+                    <Trophy className="h-8 w-8 text-yellow-500"/> O Grande Final
+                </CardTitle>
+                <CardDescription>Quem levará a taça? Defina o pódio e o placar da finalíssima.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-8">
+                
+                {/* PÓDIO */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-4">
+                        <h3 className="font-bold text-gray-700 border-b pb-2">Pódio do Campeonato</h3>
+                        <div className="space-y-3">
+                            {[
+                                { label: "Campeão", icon: <Trophy className="h-4 w-4 text-yellow-500"/>, field: 'champion_id' },
+                                { label: "Vice-Campeão", icon: <Medal className="h-4 w-4 text-gray-400"/>, field: 'runner_up_id' },
+                                { label: "3º Lugar", icon: <Medal className="h-4 w-4 text-orange-400"/>, field: 'third_place_id' },
+                                { label: "4º Lugar", icon: <Medal className="h-4 w-4 text-blue-300"/>, field: 'fourth_place_id' },
+                            ].map((item: any) => {
+                                // 1. FILTRO: Puxa apenas os times que pertencem a este campeonato específico
+                                const championshipTeams = teams
+                                    .filter(t => t.championship_id === pool?.championship_id)
+                                    .sort((a, b) => a.name.localeCompare(b.name));
 
-                                    {/* PLACAR DA FINAL */}
-                                    <div className="space-y-4">
-                                        <h3 className="font-bold text-gray-700 border-b pb-2">Placar da Final</h3>
-                                        <div className="bg-gray-50 p-6 rounded-xl border border-gray-100 text-center">
-                                            <p className="text-sm text-gray-500 mb-4">Qual será o resultado exato do jogo final?</p>
-                                            <div className="flex items-center justify-center gap-4">
-                                                <div className="flex flex-col items-center gap-2">
-                                                    <span className="text-xs font-bold text-gray-400 uppercase">Campeão</span>
-                                                    <Input 
-                                                        type="number" min="0" className="w-20 text-center text-2xl h-14 font-bold" 
-                                                        value={finalPrediction.final_home_score}
-                                                        onChange={(e) => setFinalPrediction(prev => ({...prev, final_home_score: e.target.value}))}
-                                                        disabled={isLocked}
-                                                    />
-                                                </div>
-                                                <span className="text-2xl font-light text-gray-300">X</span>
-                                                <div className="flex flex-col items-center gap-2">
-                                                    <span className="text-xs font-bold text-gray-400 uppercase">Vice</span>
-                                                    <Input 
-                                                        type="number" min="0" className="w-20 text-center text-2xl h-14 font-bold" 
-                                                        value={finalPrediction.final_away_score}
-                                                        onChange={(e) => setFinalPrediction(prev => ({...prev, final_away_score: e.target.value}))}
-                                                        disabled={isLocked}
-                                                    />
-                                                </div>
-                                            </div>
-                                        </div>
+                                return (
+                                    <div key={item.field}>
+                                        <label className="text-sm font-medium text-gray-600 flex items-center gap-2 mb-1">
+                                            {item.icon} {item.label}
+                                        </label>
+                                        <Select 
+                                            disabled={isLocked}
+                                            value={finalPrediction[item.field as keyof FinalPredictionState] as string || ''}
+                                            onValueChange={(val) => setFinalPrediction(prev => {
+                                                const updated = { ...prev, [item.field]: val };
+                                                
+                                                // Limpeza automática se o usuário selecionar o mesmo time em outra posição do pódio
+                                                if (item.field !== 'champion_id' && updated.champion_id === val) updated.champion_id = null;
+                                                if (item.field !== 'runner_up_id' && updated.runner_up_id === val) updated.runner_up_id = null;
+                                                if (item.field !== 'third_place_id' && updated.third_place_id === val) updated.third_place_id = null;
+                                                if (item.field !== 'fourth_place_id' && updated.fourth_place_id === val) updated.fourth_place_id = null;
+                                                
+                                                // Restaura o valor que o usuário acabou de clicar para não ser apagado pela limpeza
+                                                updated[item.field as keyof FinalPredictionState] = val as any;
+                                                return updated;
+                                            })}
+                                        >
+                                            <SelectTrigger><SelectValue placeholder="Selecione o time..." /></SelectTrigger>
+                                            <SelectContent>
+                                                {championshipTeams.map(t => {
+                                                    // 2. BLOQUEIO: Verifica se a seleção já ocupa outro lugar do pódio
+                                                    const isUsedElsewhere = 
+                                                        (item.field !== 'champion_id' && finalPrediction.champion_id === t.id) ||
+                                                        (item.field !== 'runner_up_id' && finalPrediction.runner_up_id === t.id) ||
+                                                        (item.field !== 'third_place_id' && finalPrediction.third_place_id === t.id) ||
+                                                        (item.field !== 'fourth_place_id' && finalPrediction.fourth_place_id === t.id);
+
+                                                    return (
+                                                        <SelectItem 
+                                                            key={t.id} 
+                                                            value={t.id}
+                                                            disabled={isUsedElsewhere}
+                                                            className={isUsedElsewhere ? "opacity-40 line-through pointer-events-none" : ""}
+                                                        >
+                                                            {t.name} {isUsedElsewhere && " (Já selecionado)"}
+                                                        </SelectItem>
+                                                    );
+                                                })}
+                                            </SelectContent>
+                                        </Select>
                                     </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+
+                    {/* PLACAR DA FINAL */}
+                    <div className="space-y-4">
+                        <h3 className="font-bold text-gray-700 border-b pb-2">Placar da Final</h3>
+                        <div className="bg-gray-50 p-6 rounded-xl border border-gray-100 text-center">
+                            <p className="text-sm text-gray-500 mb-4">Qual será o resultado exato do jogo final?</p>
+                            <div className="flex items-center justify-center gap-4">
+                                <div className="flex flex-col items-center gap-2">
+                                    <span className="text-xs font-bold text-gray-400 uppercase">Campeão</span>
+                                    <Input 
+                                        type="number" min="0" className="w-20 text-center text-2xl h-14 font-bold" 
+                                        value={finalPrediction.final_home_score}
+                                        onChange={(e) => setFinalPrediction(prev => ({...prev, final_home_score: e.target.value}))}
+                                        disabled={isLocked}
+                                    />
                                 </div>
+                                <span className="text-2xl font-light text-gray-300">X</span>
+                                <div className="flex flex-col items-center gap-2">
+                                    <span className="text-xs font-bold text-gray-400 uppercase">Vice</span>
+                                    <Input 
+                                        type="number" min="0" className="w-20 text-center text-2xl h-14 font-bold" 
+                                        value={finalPrediction.final_away_score}
+                                        onChange={(e) => setFinalPrediction(prev => ({...prev, final_away_score: e.target.value}))}
+                                        disabled={isLocked}
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
 
-                                {!isLocked && (
-                                    <div className="flex justify-end pt-4 border-t">
-                                        <Button size="lg" className="w-full md:w-auto bg-green-600 hover:bg-green-700 text-white font-bold" onClick={handleFinalSave} disabled={submittingId === 'final'}>
-                                            {submittingId === 'final' ? <Loader2 className="mr-2 h-5 w-5 animate-spin"/> : <Save className="mr-2 h-5 w-5"/>}
-                                            Salvar Palpite Final
-                                        </Button>
-                                    </div>
-                                )}
-                            </CardContent>
-                        </Card>
-                    </TabsContent>
+                {!isLocked && (
+                    <div className="flex justify-end pt-4 border-t">
+                        <Button size="lg" className="w-full md:w-auto bg-green-600 hover:bg-green-700 text-white font-bold" onClick={handleFinalSave} disabled={submittingId === 'final'}>
+                            {submittingId === 'final' ? <Loader2 className="mr-2 h-5 w-5 animate-spin"/> : <Save className="mr-2 h-5 w-5"/>}
+                            Salvar Palpite Final
+                        </Button>
+                    </div>
                 )}
-            </Tabs>
-        </div>
-    );
-};
-
+            </CardContent>
+        </Card>
+    </TabsContent>
+)}
 export default Palpites;
