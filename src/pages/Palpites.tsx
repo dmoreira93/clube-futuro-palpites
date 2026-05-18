@@ -211,8 +211,8 @@ const Palpites = () => {
     const handleGroupSave = async (groupId: string) => {
         if (isLocked) return;
         const p = groupPredictions[groupId];
-        if (!p || !p.predicted_first_team_id || !p.predicted_second_team_id) return toast({ title: "Selecione os dois times", variant: "destructive" });
-        if (p.predicted_first_team_id === p.predicted_second_team_id) return toast({ title: "Times iguais", description: "Selecione times diferentes para 1º e 2º.", variant: "destructive" });
+        if (!p || !p.first_team_id || !p.second_team_id) return toast({ title: "Selecione os dois times", variant: "destructive" });
+        if (p.first_team_id === p.second_team_id) return toast({ title: "Times iguais", description: "Selecione times diferentes para 1º e 2º.", variant: "destructive" });
 
         setSubmittingId(groupId);
         try {
@@ -220,8 +220,8 @@ const Palpites = () => {
                 group_id: groupId,
                 user_id: user!.id,
                 pool_id: pool!.id,
-                predicted_first_team_id: p.predicted_first_team_id,
-                predicted_second_team_id: p.predicted_second_team_id
+                first_team_id: p.first_team_id,
+                second_team_id: p.second_team_id
             }, { onConflict: 'user_id, pool_id, group_id' });
 
             if (error) throw error;
