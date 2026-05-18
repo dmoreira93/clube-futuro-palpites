@@ -379,7 +379,7 @@ const Palpites = () => {
                     <TabsContent value="groups" className="space-y-6">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             {groups.map(group => {
-                                const p = groupPredictions[group.id] || { group_id: group.id, predicted_first_team_id: null, predicted_second_team_id: null };
+                                const p = groupPredictions[group.id] || { group_id: group.id, first_team_id: null, second_team_id: null };
 
                                 const teamsInThisGroup = teams
                                     .filter(t => t.group_id === group.id)
@@ -398,13 +398,13 @@ const Palpites = () => {
                                                 </label>
                                                 <Select 
                                                     disabled={isLocked} 
-                                                    value={p.predicted_first_team_id || ''} 
+                                                    value={p.first_team_id || ''} 
                                                     onValueChange={(val) => setGroupPredictions(prev => ({
                                                         ...prev, 
                                                         [group.id]: {
                                                             ...(prev[group.id] || { group_id: group.id }), 
-                                                            predicted_first_team_id: val,
-                                                            predicted_second_team_id: prev[group.id]?.predicted_second_team_id === val ? null : prev[group.id]?.predicted_second_team_id
+                                                            first_team_id: val,
+                                                            second_team_id: prev[group.id]?.second_team_id === val ? null : prev[group.id]?.second_team_id
                                                         }
                                                     }))}
                                                 >
@@ -421,20 +421,20 @@ const Palpites = () => {
                                                     <Medal className="h-4 w-4 text-gray-400"/> 2º Colocado
                                                 </label>
                                                 <Select 
-                                                    disabled={isLocked || !p.predicted_first_team_id} 
-                                                    value={p.predicted_second_team_id || ''} 
+                                                    disabled={isLocked || !p.first_team_id} 
+                                                    value={p.second_team_id || ''} 
                                                     onValueChange={(val) => setGroupPredictions(prev => ({
                                                         ...prev, 
                                                         [group.id]: {
                                                             ...(prev[group.id] || { group_id: group.id }), 
-                                                            predicted_second_team_id: val
+                                                            second_team_id: val
                                                         }
                                                     }))}
                                                 >
-                                                    <SelectTrigger><SelectValue placeholder={p.predicted_first_team_id ? "Selecione..." : "Selecione o 1º..."} /></SelectTrigger>
+                                                    <SelectTrigger><SelectValue placeholder={p.first_team_id ? "Selecione..." : "Selecione o 1º..."} /></SelectTrigger>
                                                     <SelectContent>
                                                         {teamsInThisGroup.map(t => {
-                                                            const isSelectedAsFirst = t.id === p.predicted_first_team_id;
+                                                            const isSelectedAsFirst = t.id === p.first_team_id;
                                                             return (
                                                                 <SelectItem 
                                                                     key={t.id} 
