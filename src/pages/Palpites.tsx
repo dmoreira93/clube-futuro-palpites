@@ -23,8 +23,8 @@ interface LocalPrediction {
 }
 interface GroupPredictionState {
   group_id: string;
-  predicted_first_team_id: string | null;
-  predicted_second_team_id: string | null;
+  first_team_id: string | null;
+  second_team_id: string | null;
   prediction_id?: string;
 }
 interface FinalPredictionState {
@@ -151,8 +151,8 @@ const Palpites = () => {
                     const loadedGroupPreds: any = {};
                     gPreds?.forEach(p => loadedGroupPreds[p.group_id] = {
                         group_id: p.group_id,
-                        predicted_first_team_id: p.predicted_first_team_id,
-                        predicted_second_team_id: p.predicted_second_team_id,
+                        first_team_id: p.first_team_id,
+                        second_team_id: p.second_team_id,
                         prediction_id: p.id
                     });
                     setGroupPredictions(loadedGroupPreds);
