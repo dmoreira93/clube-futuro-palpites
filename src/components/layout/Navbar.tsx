@@ -7,19 +7,19 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "@/dropdown-menu";
 import {
   Avatar,
   AvatarFallback,
   AvatarImage,
 } from "@/components/ui/avatar";
 import {
-  LogOut, User, Loader2, FileText,
-  ListChecks, Shield, Trophy, Calculator, BarChart3, ChevronDown
+  LogOut, User, Loader2, ListChecks, Shield, Trophy, Calculator, BarChart3, ChevronDown
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useMyPools } from "@/hooks/useMyPools";
 import { Skeleton } from "../ui/skeleton";
+import { BotaoComprovante } from "./BotaoComprovante";
 
 const Navbar = () => {
   const { isAuthenticated, isAdmin, user, signOut, loading } = useAuth();
@@ -36,10 +36,8 @@ const Navbar = () => {
   };
 
   const renderUserActions = () => {
-    // 1. Carregando: Mostra Spinner
     if (loading) return <Loader2 className="h-6 w-6 animate-spin text-white" />;
 
-    // 2. Não Logado: Mostra Botões (exceto nas páginas de auth)
     if (!isAuthenticated || !user) {
        const noAuthButtonPages = ['/login', '/admin-login', '/cadastro'];
        const shouldHideButtons = noAuthButtonPages.some(path => location.pathname.startsWith(path));
@@ -54,33 +52,37 @@ const Navbar = () => {
       );
     }
 
-    // 3. Logado: Mostra Menu do Usuário (Avatar)
     return (
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant="ghost" className="relative h-10 w-10 rounded-full">
-            <Avatar className="h-10 w-10 border-2 border-fifa-gold">
-                <AvatarImage src={user.avatar_url || undefined} alt={user.name || 'Avatar'} />
-                <AvatarFallback className="bg-fifa-blue text-fifa-gold">
-                    {user.name ? user.name.substring(0, 2).toUpperCase() : <User />}
-                </AvatarFallback>
-            </Avatar>
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent className="w-56" align="end" forceMount>
-          <DropdownMenuLabel className="font-normal">
-            <div className="flex flex-col space-y-1">
-                <p className="text-sm font-medium leading-none">{user.name}</p>
-                <p className="text-xs leading-none text-muted-foreground">{user.email}</p>
-            </div>
-          </DropdownMenuLabel>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onSelect={() => navigate('/profile')}><User className="mr-2 h-4 w-4" /><span>Meu Perfil</span></DropdownMenuItem>
-          {isAdmin && (<DropdownMenuItem onSelect={() => navigate('/admin')}><Shield className="mr-2 h-4 w-4" /><span>Painel Admin</span></DropdownMenuItem>)}
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onSelect={handleLogout}><LogOut className="mr-2 h-4 w-4" /><span>Sair</span></DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+      <div className="flex items-center gap-3">
+        {/* Injeção automatizada do botão de comprovante na barra superior */}
+        <BotaoComprovante />
+
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" className="relative h-10 w-10 rounded-full">
+              <Avatar className="h-10 w-10 border-2 border-fifa-gold">
+                  <AvatarImage src={user.avatar_url || undefined} alt={user.name || 'Avatar'} />
+                  <AvatarFallback className="bg-fifa-blue text-fifa-gold">
+                      {user.name ? user.name.substring(0, 2).toUpperCase() : <User />}
+                  </AvatarFallback>
+              </Avatar>
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent className="w-56" align="end" forceMount>
+            <DropdownMenuLabel className="font-normal">
+              <div className="flex flex-col space-y-1">
+                  <p className="text-sm font-medium leading-none">{user.name}</p>
+                  <p className="text-xs leading-none text-muted-foreground">{user.email}</p>
+              </div>
+            </DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onSelect={() => navigate('/profile')}><User className="mr-2 h-4 w-4" /><span>Meu Perfil</span></DropdownMenuItem>
+            {isAdmin && (<DropdownMenuItem onSelect={() => navigate('/admin')}><Shield className="mr-2 h-4 w-4" /><span>Painel Admin</span></DropdownMenuItem>)}
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onSelect={handleLogout}><LogOut className="mr-2 h-4 w-4" /><span>Sair</span></DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
     );
   };
 
@@ -128,7 +130,6 @@ const Navbar = () => {
                 )}
             </div>
 
-            {/* AÇÕES DO USUÁRIO (LOGIN OU MENU) */}
             <div className="flex items-center">{renderUserActions()}</div>
             </div>
         </div>

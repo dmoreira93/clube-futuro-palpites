@@ -35,6 +35,7 @@ import Simulador from "./pages/Simulador";
 import InfoParticipantes from "./pages/InfoParticipantes";
 import PoolCriteriaSetup from "./pages/PoolCriteriaSetup";
 import DailyMatchesAndPredictions from "./pages/DailyMatchesAndPredictions";
+import ImprimirComprovante from './pages/imprimir';
 
 // Admin
 import Admin from "./pages/Admin";
@@ -47,62 +48,70 @@ function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
-        <Layout>
-          <Routes>
-            {/* --- Rotas Públicas --- */}
-            <Route path="/" element={<HomePage />} />
-            <Route path="/login" element={<Login />} />
-            <Route path="/cadastro" element={<Cadastro />} />
-            <Route path="/cadastro/:inviteCode" element={<Cadastro />} />
-            <Route path="/criterios" element={<Criterios />} />
-            <Route path="/PrivacyPolicy" element={<PrivacyPolicy />} />
-            <Route path="/TermsOfUse" element={<TermsOfUse />} />
-            
-            {/* ROTAS DE ENTRADA (JOIN) 
-                Ficam fora do ProtectedRoute porque a própria página gerencia 
-                se mostra o botão de Login Google ou o botão de Entrar.
-            */}
-            <Route path="/join" element={<JoinPoolPage />} />
-            <Route path="/join/:code" element={<JoinPoolPage />} />
+        <Routes>
+          {/* ROTA ISOLADA: Fica fora do <Layout> para não renderizar cabeçalhos e menus 
+            do sistema na hora de gerar a folha de impressão.
+          */}
+          <Route path="/comprovante/imprimir" element={<ProtectedRoute><ImprimirComprovante /></ProtectedRoute>} />
 
-            {/* --- Rotas Semi-Protegidas --- */}
-            <Route path="/complete-profile" element={<ProtectedRoute><CompleteProfile /></ProtectedRoute>} />
-            
-            {/* --- Rotas Protegidas (Gerais) --- */}
-            <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-            <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
-            <Route path="/noticias" element={<ProtectedRoute><NoticiasPage /></ProtectedRoute>} />
-            <Route path="/pool/:poolId/auditoria" element={<ProtectedRoute><AuditoriaPontos /></ProtectedRoute>} />
-            
-            {/* Rota antiga /join-pool removida em favor das novas /join */}
-            <Route path="/create-pool" element={<ProtectedRoute><CreatePoolPage /></ProtectedRoute>} />
-            <Route path="/change-password" element={<ProtectedRoute><ChangePassword /></ProtectedRoute>} />
-            
-            {/* --- Rotas de Contexto do Bolão (Aninhadas) --- */}
-            <Route path="/pool/:poolId" element={<ProtectedRoute><PoolDashboard /></ProtectedRoute>} />
-            <Route path="/pool/:poolId/palpites" element={<ProtectedRoute><Palpites /></ProtectedRoute>} />
-            <Route path="/pool/:poolId/ranking" element={<ProtectedRoute><RankingPage /></ProtectedRoute>} />
-            <Route path="/pool/:poolId/resultados" element={<ProtectedRoute><Resultados /></ProtectedRoute>} />
-            <Route path="/pool/:poolId/simulador" element={<ProtectedRoute><Simulador /></ProtectedRoute>} />
-            <Route path="/pool/:poolId/settings" element={<ProtectedRoute><PoolSettingsPage /></ProtectedRoute>} />
-            <Route path="/pool/:poolId/info-participantes" element={<ProtectedRoute><InfoParticipantes /></ProtectedRoute>} />
+          {/* Demais rotas que pertencem à interface visual do sistema */}
+          <Route
+            path="*"
+            element={
+              <Layout>
+                <Routes>
+                  {/* --- Rotas Públicas --- */}
+                  <Route path="/" element={<HomePage />} />
+                  <Route path="/login" element={<Login />} />
+                  <Route path="/cadastro" element={<Cadastro />} />
+                  <Route path="/cadastro/:inviteCode" element={<Cadastro />} />
+                  <Route path="/criterios" element={<Criterios />} />
+                  <Route path="/PrivacyPolicy" element={<PrivacyPolicy />} />
+                  <Route path="/TermsOfUse" element={<TermsOfUse />} />
+                  
+                  {/* ROTAS DE ENTRADA (JOIN) */}
+                  <Route path="/join" element={<JoinPoolPage />} />
+                  <Route path="/join/:code" element={<JoinPoolPage />} />
 
-            {/* Redirecionamentos de compatibilidade */}
-            <Route path="/palpites" element={<Navigate to="/dashboard" replace />} />
-            <Route path="/ranking" element={<Navigate to="/dashboard" replace />} />
-            <Route path="/resultados" element={<Navigate to="/dashboard" replace />} />
-            <Route path="/simulador" element={<Navigate to="/dashboard" replace />} />
-            <Route path="/pool/:poolId/criteria-setup" element={<ProtectedRoute><PoolCriteriaSetup /></ProtectedRoute>} />
-            <Route path="/pool/:poolId/palpites-galera" element={<ProtectedRoute><DailyMatchesAndPredictions /></ProtectedRoute>}/>            
+                  {/* --- Rotas Semi-Protegidas --- */}
+                  <Route path="/complete-profile" element={<ProtectedRoute><CompleteProfile /></ProtectedRoute>} />
+                  
+                  {/* --- Rotas Protegidas (Gerais) --- */}
+                  <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+                  <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
+                  <Route path="/noticias" element={<ProtectedRoute><NoticiasPage /></ProtectedRoute>} />
+                  <Route path="/pool/:poolId/auditoria" element={<ProtectedRoute><AuditoriaPontos /></ProtectedRoute>} />
+                  <Route path="/create-pool" element={<ProtectedRoute><CreatePoolPage /></ProtectedRoute>} />
+                  <Route path="/change-password" element={<ProtectedRoute><ChangePassword /></ProtectedRoute>} />
+                  
+                  {/* --- Rotas de Contexto do Bolão (Aninhadas) --- */}
+                  <Route path="/pool/:poolId" element={<ProtectedRoute><PoolDashboard /></ProtectedRoute>} />
+                  <Route path="/pool/:poolId/palpites" element={<ProtectedRoute><Palpites /></ProtectedRoute>} />
+                  <Route path="/pool/:poolId/ranking" element={<ProtectedRoute><RankingPage /></ProtectedRoute>} />
+                  <Route path="/pool/:poolId/resultados" element={<ProtectedRoute><Resultados /></ProtectedRoute>} />
+                  <Route path="/pool/:poolId/simulador" element={<ProtectedRoute><Simulador /></ProtectedRoute>} />
+                  <Route path="/pool/:poolId/settings" element={<ProtectedRoute><PoolSettingsPage /></ProtectedRoute>} />
+                  <Route path="/pool/:poolId/info-participantes" element={<ProtectedRoute><InfoParticipantes /></ProtectedRoute>} />
 
-            {/* --- Rotas de Admin --- */}
-            <Route path="/admin-login" element={<AdminLogin />} />
-            <Route path="/admin" element={<ProtectedRoute adminOnly={true}><Admin /></ProtectedRoute>} />
+                  {/* Redirecionamentos de compatibilidade */}
+                  <Route path="/palpites" element={<Navigate to="/dashboard" replace />} />
+                  <Route path="/ranking" element={<Navigate to="/dashboard" replace />} />
+                  <Route path="/resultados" element={<Navigate to="/dashboard" replace />} />
+                  <Route path="/simulador" element={<Navigate to="/dashboard" replace />} />
+                  <Route path="/pool/:poolId/criteria-setup" element={<ProtectedRoute><PoolCriteriaSetup /></ProtectedRoute>} />
+                  <Route path="/pool/:poolId/palpites-galera" element={<ProtectedRoute><DailyMatchesAndPredictions /></ProtectedRoute>}/>            
 
-            {/* --- 404 --- */}
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </Layout>
+                  {/* --- Rotas de Admin --- */}
+                  <Route path="/admin-login" element={<AdminLogin />} />
+                  <Route path="/admin" element={<ProtectedRoute adminOnly={true}><Admin /></ProtectedRoute>} />
+
+                  {/* --- 404 --- */}
+                  <Route path="*" element={<NotFound />} />
+                </Routes>
+              </Layout>
+            }
+          />
+        </Routes>
       </BrowserRouter>
     </AuthProvider>
   );
