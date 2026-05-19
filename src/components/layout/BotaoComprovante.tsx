@@ -19,8 +19,11 @@ export function BotaoComprovante({ poolId }: BotaoComprovanteProps) {
       }
       
       try {
-        // Passamos o poolId para a RPC caso seu banco precise filtrar por bolão
-        const { data, error } = await supabase.rpc('check_comprovante_status');
+        // Envia o ID do bolão atual para o banco calcular as metas dinamicamente
+        const { data, error } = await supabase.rpc('check_comprovante_status', { 
+          p_pool_id: poolId 
+        });
+        
         if (!error && data && data.length > 0) {
           setPodeEmitir(data[0].pode_emitir || false);
         }
