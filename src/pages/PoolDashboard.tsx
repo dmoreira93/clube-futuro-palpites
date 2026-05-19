@@ -19,6 +19,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { BotaoComprovante } from '@/components/layout/BotaoComprovante';
 
 interface PoolHeaderData {
   id: string;
@@ -102,7 +103,6 @@ const PoolDashboard = () => {
 
   const isOwner = user?.id && poolDetails?.owner_id && user.id === poolDetails.owner_id;
 
-  // Lógica de Ranking Limpa (Remove Admin e IA)
   const humanParticipants = ranking.filter(p => !p.is_ai && !p.is_admin);
   const myRankData = humanParticipants.find(p => p.id === user?.id);
   const myHumanIndex = humanParticipants.findIndex(p => p.id === user?.id);
@@ -164,7 +164,7 @@ const PoolDashboard = () => {
             <StatCard title="Placares Exatos" value={myRankData?.exactscores || 0} icon={<Target className="h-5 w-5 text-purple-500" />} />
         </div>
 
-        {/* MENUS / BOTÕES */}
+        {/* MENUS / BOTÕES DE AÇÃO */}
         <div className="flex flex-wrap gap-3">
             <ActionButton icon={<ListChecks />} label="Meus Palpites" onClick={() => navigate(`/pool/${poolId}/palpites`)} primary />
             <ActionButton icon={<Eye />} label="Palpites da Galera" onClick={() => navigate(`/pool/${poolId}/palpites-galera`)} />
@@ -174,6 +174,9 @@ const PoolDashboard = () => {
             <ActionButton icon={<Info />} label="Participantes" onClick={() => navigate(`/pool/${poolId}/info-participantes`)} />
             <ActionButton icon={<FileSearch />} label="Auditoria" onClick={() => navigate(`/pool/${poolId}/auditoria`)} />
             
+            {/* NOVO: Botão de comprovante em linha, totalmente focado no contexto do Bolão */}
+            {poolId && <BotaoComprovante poolId={poolId} />}
+
             {/* BOTÃO DE CRITÉRIOS */}
             {poolDetails && (
                 <PoolRulesDialog 
@@ -231,15 +234,14 @@ const PoolDashboard = () => {
                         </div>
                     </div>
 
-        {/* Ajuste: removido 'max-w' e 'truncate', adicionado 'h-auto' e 'whitespace-normal' */}
-        <Badge 
-            variant="destructive" 
-            className="bg-red-100 text-red-700 hover:bg-red-200 border-red-200 h-auto py-1.5 px-3 text-right whitespace-normal leading-tight"
-        >
-            {poolDetails?.punishment_description || "Pagar a prenda!"}
-        </Badge>
-    </div>
-)}
+                    <Badge 
+                        variant="destructive" 
+                        className="bg-red-100 text-red-700 hover:bg-red-200 border-red-200 h-auto py-1.5 px-3 text-right whitespace-normal leading-tight"
+                    >
+                        {poolDetails?.punishment_description || "Pagar a prenda!"}
+                    </Badge>
+                </div>
+            )}
                     </CardContent>
                 </Card>
 

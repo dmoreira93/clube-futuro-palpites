@@ -19,7 +19,6 @@ import {
 import { useAuth } from "@/contexts/AuthContext";
 import { useMyPools } from "@/hooks/useMyPools";
 import { Skeleton } from "../ui/skeleton";
-import { BotaoComprovante } from "./BotaoComprovante";
 
 const Navbar = () => {
   const { isAuthenticated, isAdmin, user, signOut, loading } = useAuth();
@@ -54,9 +53,7 @@ const Navbar = () => {
 
     return (
       <div className="flex items-center gap-3">
-        {/* Injeção automatizada do botão de comprovante na barra superior */}
-        <BotaoComprovante />
-
+        {/* Botão de comprovante removido daqui com sucesso */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" className="relative h-10 w-10 rounded-full">
