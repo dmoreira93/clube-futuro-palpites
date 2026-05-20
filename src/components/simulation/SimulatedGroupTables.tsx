@@ -3,12 +3,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Button } from '@/components/ui/button';
 import { SimulatedGroup } from '@/lib/simulationEngine';
 import { Save } from 'lucide-react';
+import { toast } from 'sonner';
 
-// 1. ATUALIZANDO A INTERFACE
 interface Props {
   simulatedGroups: SimulatedGroup[];
   onAdoptPrediction: (groupId: string, firstTeamId: string, secondTeamId: string) => void;
-  isDeadlinePassed: boolean; // <-- Prop adicionada
+  isDeadlinePassed: boolean;
 }
 
 const SimulatedGroupTables = ({ simulatedGroups, onAdoptPrediction, isDeadlinePassed }: Props) => {
@@ -17,6 +17,14 @@ const SimulatedGroupTables = ({ simulatedGroups, onAdoptPrediction, isDeadlinePa
       {simulatedGroups.map((group) => {
         const first = group.standings[0];
         const second = group.standings[1];
+        
+        const handleAdoptClick = () => {
+          if (!first?.teamId || !second?.teamId) {
+            return toast.error("Por favor, preencha os placares dos jogos para calcular as posições do grupo antes de adotar.");
+          }
+          onAdoptPrediction(group.groupId, first.teamId, second.teamId);
+        };
+
         return (
           <Card key={group.groupId} className="print:shadow-none print:border print:break-inside-avoid">
             <CardHeader className="print:p-2">
@@ -52,12 +60,11 @@ const SimulatedGroupTables = ({ simulatedGroups, onAdoptPrediction, isDeadlinePa
                 </TableBody>
               </Table>
               <div className="mt-3 text-right print:hidden">
-                {/* 2. ATUALIZANDO O BOTÃO */}
                 <Button
                   size="sm"
                   variant="outline"
                   className="border-blue-500 text-blue-500 hover:bg-blue-500 hover:text-white"
-                  onClick={() => onAdoptPrediction(group.groupId, first.teamId, second.teamId)}
+                  onClick={handleAdoptClick}
                   disabled={isDeadlinePassed}
                 >
                   <Save className="h-4 w-4 mr-1" /> 
