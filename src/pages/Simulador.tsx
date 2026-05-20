@@ -32,7 +32,6 @@ const Simulador = () => {
     : false;
 
   useEffect(() => {
-    // Busca e Agrupa os Jogos para Impressão da Folha em Branco
     const fetchMatchesForPrint = async () => {
       const poolWithChamp = pool as any;
       if (!poolWithChamp?.championship_id) return;
@@ -156,14 +155,26 @@ const Simulador = () => {
       if (teamId) newState[matchId] = teamId;
       else delete newState[matchId];
       
+      // Mapeamento estendido para suportar o cascade a partir do Round of 32 (Fase de 32 times)
       const cascadeClearMap: { [key: string]: string[] } = {
-        'r16-1': ['qf-1', 'sf-1', 'final', 'third_place'], 'r16-2': ['qf-1', 'sf-1', 'final', 'third_place'],
-        'r16-3': ['qf-2', 'sf-1', 'final', 'third_place'], 'r16-4': ['qf-2', 'sf-1', 'final', 'third_place'],
-        'r16-5': ['qf-3', 'sf-2', 'final', 'third_place'], 'r16-6': ['qf-3', 'sf-2', 'final', 'third_place'],
-        'r16-7': ['qf-4', 'sf-2', 'final', 'third_place'], 'r16-8': ['qf-4', 'sf-2', 'final', 'third_place'],
-        'qf-1': ['sf-1', 'final', 'third_place'], 'qf-2': ['sf-1', 'final', 'third_place'],
-        'qf-3': ['sf-2', 'final', 'third_place'], 'qf-4': ['sf-2', 'final', 'third_place'],
-        'sf-1': ['final', 'third_place'], 'sf-2': ['final', 'third_place'],
+        'r32-1': ['r16-1', 'qf-1', 'sf-1', 'final', 'third_place'],
+        'r32-2': ['r16-1', 'qf-1', 'sf-1', 'final', 'third_place'],
+        'r32-3': ['r16-2', 'qf-1', 'sf-1', 'final', 'third_place'],
+        'r32-4': ['r16-2', 'qf-1', 'sf-1', 'final', 'third_place'],
+        'r16-1': ['qf-1', 'sf-1', 'final', 'third_place'], 
+        'r16-2': ['qf-1', 'sf-1', 'final', 'third_place'],
+        'r16-3': ['qf-2', 'sf-1', 'final', 'third_place'], 
+        'r16-4': ['qf-2', 'sf-1', 'final', 'third_place'],
+        'r16-5': ['qf-3', 'sf-2', 'final', 'third_place'], 
+        'r16-6': ['qf-3', 'sf-2', 'final', 'third_place'],
+        'r16-7': ['qf-4', 'sf-2', 'final', 'third_place'], 
+        'r16-8': ['qf-4', 'sf-2', 'final', 'third_place'],
+        'qf-1': ['sf-1', 'final', 'third_place'], 
+        'qf-2': ['sf-1', 'final', 'third_place'],
+        'qf-3': ['sf-2', 'final', 'third_place'], 
+        'qf-4': ['sf-2', 'final', 'third_place'],
+        'sf-1': ['final', 'third_place'], 
+        'sf-2': ['final', 'third_place'],
       };
       const downstreamMatchesToClear = cascadeClearMap[matchId as keyof typeof cascadeClearMap];
       if (downstreamMatchesToClear) downstreamMatchesToClear.forEach(idToClear => { delete newState[idToClear]; });
@@ -171,28 +182,41 @@ const Simulador = () => {
     });
   }, []);
 
+  // CORRIGIDO E INTEGRADO: Agora usa a nossa RPC em lote para salvar as posições de 1º e 2º de forma instantânea
   const handleAdoptGroupPrediction = async (groupId: string, firstTeamId: string, secondTeamId: string) => {
-    if (!user) return;
+    if (!user || !pool) return;
     if (firstTeamId === secondTeamId) return toast.error("Você não pode escolher o mesmo time como 1º e 2º lugar.");
-    const toastId = toast.loading('Salvando palpites do grupo...');
+    
+    // Procura o nome do grupo nas tabelas simuladas para enviar o rótulo correto
+    const currentSimGroup = simulatedResults?.find(g => g.groupId === groupId);
+    const labelGrupo = currentSimGroup ? (currentSimGroup.groupName || 'A').replace('Grupo ', '') : 'A';
+
+    const toastId = toast.loading('Salvando posições estruturadas no banco...');
     try {
-      const { error } = await supabase.from('group_predictions').upsert({
-        user_id: user.id, group_id: groupId, predicted_first_team_id: firstTeamId, predicted_second_team_id: secondTeamId,
-      }, { onConflict: 'user_id, group_id' });
+      const dadosClassificacao = [
+        { group_name: labelGrupo, team_id: firstTeamId, position: 1 },
+        { group_name: labelGrupo, team_id: secondTeamId, position: 2 }
+      ];
+
+      const { data, error } = await supabase.rpc('adotar_posicoes_grupo', {
+        p_pool_id: pool.id,
+        p_classificacoes: dadosClassificacao
+      });
+
       if (error) throw error;
-      toast.success("Palpites do grupo salvos com sucesso!", { id: toastId });
+      toast.success(`Palpites do Grupo ${labelGrupo} adotados e consolidados com sucesso!`, { id: toastId });
     } catch (error: any) {
       toast.error(`Erro ao salvar: ${error.message}`, { id: toastId });
     }
   };
 
   const handleAdoptFinalPredictions = async (championId: string, runnerUpId: string, thirdPlaceId: string, fourthPlaceId: string, finalHomeScore: number, finalAwayScore: number) => {
-    if (!user) return;
+    if (!user || !pool) return;
     const toastId = toast.loading('Salvando palpites finais...');
     try {
       const { error } = await supabase.from('final_predictions').upsert({
-        user_id: user.id, champion_id: championId, runner_up_id: runnerUpId, third_place_id: thirdPlaceId, fourth_place_id: fourthPlaceId, final_home_score: finalHomeScore, final_away_score: finalAwayScore,
-      }, { onConflict: 'user_id' });
+        user_id: user.id, pool_id: pool.id, champion_id: championId, runner_up_id: runnerUpId, third_place_id: thirdPlaceId, fourth_place_id: fourthPlaceId, final_home_score: finalHomeScore, final_away_score: finalAwayScore,
+      }, { onConflict: 'user_id, pool_id' });
       if (error) throw error;
       toast.success('Palpites finais salvos com sucesso!', { id: toastId });
     } catch (error: any) {
@@ -287,72 +311,68 @@ const Simulador = () => {
         return `${pos === 0 ? '1º' : '2º'} Grupo ${letter}`;
     };
 
-    const matchups = [
-        { id: 'Oitavas 1', t1: getTeamByLetter('A', 0), t2: getTeamByLetter('B', 1) },
-        { id: 'Oitavas 2', t1: getTeamByLetter('C', 0), t2: getTeamByLetter('D', 1) },
-        { id: 'Oitavas 3', t1: getTeamByLetter('E', 0), t2: getTeamByLetter('F', 1) },
-        { id: 'Oitavas 4', t1: getTeamByLetter('G', 0), t2: getTeamByLetter('H', 1) },
-        { id: 'Oitavas 5', t1: getTeamByLetter('B', 0), t2: getTeamByLetter('A', 1) },
-        { id: 'Oitavas 6', t1: getTeamByLetter('D', 0), t2: getTeamByLetter('C', 1) },
-        { id: 'Oitavas 7', t1: getTeamByLetter('F', 0), t2: getTeamByLetter('E', 1) },
-        { id: 'Oitavas 8', t1: getTeamByLetter('H', 0), t2: getTeamByLetter('G', 1) },
+    // Mapeamento Expandido: Gerando os confrontos de 16-avos de final conforme a regra oficial da FIFA 2026
+    const roundOf32Matches = [
+        { id: 'Jogo 1', t1: getTeamByLetter('A', 0), t2: '3º C/D/I' },
+        { id: 'Jogo 2', t1: getTeamByLetter('E', 0), t2: getTeamByLetter('A', 1) },
+        { id: 'Jogo 3', t1: getTeamByLetter('F', 0), t2: getTeamByLetter('B', 1) },
+        { id: 'Jogo 4', t1: getTeamByLetter('C', 0), t2: '3º F/G/T' },
+        { id: 'Jogo 5', t1: getTeamByLetter('B', 0), t2: '3º E/H/J' },
+        { id: 'Jogo 6', t1: getTeamByLetter('D', 0), t2: getTeamByLetter('C', 1) },
+        { id: 'Jogo 7', t1: getTeamByLetter('G', 0), t2: getTeamByLetter('D', 1) },
+        { id: 'Jogo 8', t1: getTeamByLetter('H', 0), t2: getTeamByLetter('E', 1) },
     ];
 
     const html = `
       <!DOCTYPE html>
       <html>
       <head>
-        <title>Chaveamento Simulado</title>
+        <title>Chaveamento Simulado FIFA 2026</title>
         <style>
-          body { font-family: Arial, sans-serif; padding: 20px; color: black; background: white; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-          .header { text-align: center; border-bottom: 3px solid black; padding-bottom: 10px; margin-bottom: 20px; }
-          .title { font-size: 24px; font-weight: 900; text-transform: uppercase; margin: 0; }
-          .subtitle { font-size: 14px; color: #444; margin-top: 5px; }
+          body { font-family: Arial, sans-serif; padding: 15px; color: black; background: white; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          .header { text-align: center; border-bottom: 3px solid black; padding-bottom: 5px; margin-bottom: 15px; }
+          .title { font-size: 20px; font-weight: 900; text-transform: uppercase; margin: 0; }
+          .subtitle { font-size: 12px; color: #444; margin-top: 3px; }
 
-          /* Resumo dos Grupos */
-          .group-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 30px; }
-          .group-card { border: 2px solid black; border-radius: 6px; overflow: hidden; page-break-inside: avoid; }
-          .group-name { font-weight: 900; background: #eee; text-align: center; padding: 4px; border-bottom: 2px solid black; font-size: 14px; text-transform: uppercase; }
-          .team-line { font-weight: bold; font-size: 12px; padding: 6px 8px; border-bottom: 1px solid #ccc; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;}
-          .team-line:last-child { border-bottom: none; }
+          .group-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; margin-bottom: 20px; }
+          .group-card { border: 1.5px solid black; border-radius: 4px; overflow: hidden; page-break-inside: avoid; }
+          .group-name { font-weight: 900; background: #eee; text-align: center; padding: 2px; border-bottom: 1.5px solid black; font-size: 11px; text-transform: uppercase; }
+          .team-line { font-weight: bold; font-size: 10px; padding: 4px 6px; border-bottom: 1px solid #ccc; text-overflow: ellipsis; overflow: hidden; }
 
-          /* Títulos das Colunas (Separados para não quebrar o alinhamento das caixas) */
-          .bracket-titles { display: flex; justify-content: space-between; gap: 15px; margin-top: 30px; margin-bottom: 10px; }
-          .col-title { flex: 1; text-align: center; font-weight: 900; font-size: 14px; text-transform: uppercase; }
+          /* Layout Expandido de 5 Colunas para caber a Rodada de 32 times */
+          .bracket-titles { display: flex; justify-content: space-between; gap: 10px; margin-top: 20px; margin-bottom: 5px; }
+          .col-title { flex: 1; text-align: center; font-weight: 900; font-size: 11px; text-transform: uppercase; background:#1a202c; color:white; padding:3px 0; border-radius:2px; }
 
-          /* Bracket Layout 4 Colunas */
-          .bracket-container { display: flex; justify-content: space-between; gap: 15px; page-break-inside: avoid; }
+          .bracket-container { display: flex; justify-content: space-between; gap: 10px; page-break-inside: avoid; }
           .column { display: flex; flex-direction: column; justify-content: space-around; flex: 1; }
 
-          .match-box { border: 2px solid #ccc; border-radius: 6px; margin-bottom: 12px; background: #fff; overflow: hidden; box-shadow: 2px 2px 0px #eee; }
-          .match-header { background: #f9f9f9; font-size: 11px; font-weight: bold; padding: 4px 8px; border-bottom: 1px solid #eee; color: #555; text-transform: uppercase;}
-          .team-slot { height: 28px; padding: 0 8px; display: flex; align-items: center; font-size: 12px; font-weight: bold; border-bottom: 1px dashed #eee; color: black; }
+          .match-box { border: 1.5px solid #000; border-radius: 4px; margin-bottom: 8px; background: #fff; overflow: hidden; }
+          .match-header { background: #f1f5f9; font-size: 9px; font-weight: bold; padding: 2px 6px; border-bottom: 1px solid #000; color: #1e293b; text-transform: uppercase;}
+          .team-slot { height: 24px; padding: 0 6px; display: flex; align-items: center; font-size: 10px; font-weight: bold; border-bottom: 1px dashed #eee; color: black; }
           .team-slot:last-child { border-bottom: none; }
-          
-          /* Estilo para orientar quem venceu qual jogo */
-          .empty-slot { color: #888; font-weight: normal; font-size: 11px; font-style: italic; }
+          .empty-slot { color: #64748b; font-weight: normal; font-size: 9px; font-style: italic; }
 
-          .footer { margin-top: 30px; text-align: center; font-size: 12px; font-weight: bold; color: #555; }
+          .footer { margin-top: 25px; text-align: center; font-size: 11px; font-weight: bold; color: #475569; }
         </style>
       </head>
       <body>
         <div class="header">
-          <h1 class="title">Chaveamento Mata-Mata - ${pool?.name || ''}</h1>
-          <p class="subtitle">Com base na sua simulação da Fase de Grupos. Preencha quem avança até o título!</p>
+          <h1 class="title">Chaveamento Expandido - ${pool?.name || ''}</h1>
+          <p class="subtitle">Modelo Regulamentar Oficial Copa do Mundo 2026 (Fase de 32, Oitavas, Quartas, Semi e Final)</p>
         </div>
 
         <div class="group-grid">
-          ${simulatedResults?.map((g: any) => `
+          ${simulatedResults?.slice(0, 12).map((g: any) => `
             <div class="group-card">
-              <div class="group-name">${getGroupName(g)}</div>
+              <div class="group-name">${getGroupName(g).replace('Grupo ', '')}</div>
               <div class="team-line">1º ${getTeamName(g.standings[0])}</div>
               <div class="team-line">2º ${getTeamName(g.standings[1])}</div>
             </div>
           `).join('')}
         </div>
 
-        <!-- Títulos Fixos em cima -->
         <div class="bracket-titles">
+          <div class="col-title">Fase de 32</div>
           <div class="col-title">Oitavas</div>
           <div class="col-title">Quartas</div>
           <div class="col-title">Semifinais</div>
@@ -360,64 +380,60 @@ const Simulador = () => {
         </div>
 
         <div class="bracket-container">
-          <!-- Oitavas de Final -->
           <div class="column">
-            ${matchups.map(m => `
-              <div class="match-box" style="border-color: black;">
+            ${roundOf32Matches.map(m => `
+              <div class="match-box">
                 <div class="match-header">${m.id}</div>
                 <div class="team-slot ${m.t1.includes('Grupo') ? 'empty-slot' : ''}">${m.t1}</div>
-                <div class="team-slot ${m.t2.includes('Grupo') ? 'empty-slot' : ''}">${m.t2}</div>
+                <div class="team-slot ${m.t2.includes('Grupo') || m.t2.includes('3º') ? 'empty-slot' : ''}">${m.t2}</div>
               </div>
             `).join('')}
           </div>
 
-          <!-- Quartas de Final -->
           <div class="column">
-            ${[
-              {id: 1, t1: 'Venc. Oitavas 1', t2: 'Venc. Oitavas 2'},
-              {id: 2, t1: 'Venc. Oitavas 3', t2: 'Venc. Oitavas 4'},
-              {id: 3, t1: 'Venc. Oitavas 5', t2: 'Venc. Oitavas 6'},
-              {id: 4, t1: 'Venc. Oitavas 7', t2: 'Venc. Oitavas 8'}
-            ].map(q => `
+            ${[1, 2, 3, 4].map(i => `
               <div class="match-box">
-                <div class="match-header">Quartas ${q.id}</div>
-                <div class="team-slot empty-slot">${q.t1}</div>
-                <div class="team-slot empty-slot">${q.t2}</div>
+                <div class="match-header">Oitavas ${i}</div>
+                <div class="team-slot empty-slot">Venc. Jogo ${i*2 - 1}</div>
+                <div class="team-slot empty-slot">Venc. Jogo ${i*2}</div>
               </div>
             `).join('')}
           </div>
 
-          <!-- Semifinais -->
           <div class="column">
-            ${[
-              {id: 1, t1: 'Venc. Quartas 1', t2: 'Venc. Quartas 2'},
-              {id: 2, t1: 'Venc. Quartas 3', t2: 'Venc. Quartas 4'}
-            ].map(s => `
+            ${[1, 2].map(i => `
               <div class="match-box">
-                <div class="match-header">Semi ${s.id}</div>
-                <div class="team-slot empty-slot">${s.t1}</div>
-                <div class="team-slot empty-slot">${s.t2}</div>
+                <div class="match-header">Quartas ${i}</div>
+                <div class="team-slot empty-slot">Venc. Oitavas ${i*2 - 1}</div>
+                <div class="team-slot empty-slot">Venc. Oitavas ${i*2}</div>
               </div>
             `).join('')}
           </div>
 
-          <!-- Finais -->
-          <div class="column" style="justify-content: center; gap: 40px;">
+          <div class="column">
             <div class="match-box">
-              <div class="match-header">GRANDE FINAL</div>
-              <div class="team-slot empty-slot">Venc. Semi 1</div>
-              <div class="team-slot empty-slot">Venc. Semi 2</div>
+              <div class="match-header">Semifinal 1</div>
+              <div class="team-slot empty-slot">Venc. Quartas 1</div>
+              <div class="team-slot empty-slot">Venc. Quartas 2</div>
+            </div>
+          </div>
+
+          <div class="column" style="justify-content: center; gap: 20px;">
+            <div class="match-box" style="border-color: #16a34a;">
+              <div class="match-header" style="background:#dcfce7;">GRANDE FINAL</div>
+              <div class="team-slot empty-slot">Finalista 1</div>
+              <div class="team-slot empty-slot">Finalista 2</div>
             </div>
             <div class="match-box">
-              <div class="match-header">Disputa 3º Lugar</div>
-              <div class="team-slot empty-slot">Perd. Semi 1</div>
-              <div class="team-slot empty-slot">Perd. Semi 2</div>
+              <div class="match-header">3º Lugar</div>
+              <div class="team-slot empty-slot">Perdedor Semi 1</div>
+              <div class="team-slot empty-slot">Perdedor Semi 2</div>
             </div>
           </div>
         </div>
 
         <div class="footer">
-          * Rascunho de preenchimento. Lembre-se de repassar seus palpites do mata-mata para o sistema oficial antes do prazo!
+          * Salve suas previsões do chaveamento de 32 times no sistema antes do prazo regulamentar.
         </div>
         <script>
           setTimeout(() => { window.print(); window.close(); }, 800);
