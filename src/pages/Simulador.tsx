@@ -8,7 +8,7 @@ import { Loader2, PlayCircle, Printer, FileText } from 'lucide-react';
 import { toast } from 'sonner';
 import { calculateGroupStandings, SimulatedGroup, SimulatedTeamStats } from '@/lib/simulationEngine';
 import SimulatedGroupTables from '@/components/simulation/SimulatedGroupTables';
-import KnockoutBracket from '@/components/simulation/KnockoutBracket';
+import KnockoutBracket, { obterMelhoresTerceiros } from '@/components/simulation/KnockoutBracket';
 import { isAfter } from 'date-fns';
 
 interface Team {
@@ -281,40 +281,64 @@ const Simulador = () => {
     printWindow.document.close();
   };
 
-  const handlePrintSimulated = () => {
+const handlePrintSimulated = () => {
     const printWindow = window.open('', '_blank');
     if (!printWindow) {
       toast.error("Permita os pop-ups no seu navegador para poder imprimir.");
       return;
     }
 
-    const getGroupName = (g: any) => g?.groupName || g?.group_name || g?.name || g?.group?.name || 'Grupo';
+    // Funções utilitárias de busca de nome
     const getTeamName = (t: any) => t?.teamName || t?.team_name || t?.name || t?.team?.name || 'A Definir';
 
-    const getTeamByLetter = (letter: string, pos: number) => {
-        const group: any = simulatedResults?.find((g: any) => {
-            const name = getGroupName(g).toUpperCase().trim();
-            return name === `GRUPO ${letter}` || name.endsWith(` ${letter}`) || name === letter;
-        });
-        
-        if (group && group.standings && group.standings[pos]) {
-            const teamName = getTeamName(group.standings[pos]);
-            if (teamName && teamName !== 'A Definir') return teamName;
-        }
-        return `${pos === 0 ? '1º' : '2º'} Grupo ${letter}`;
+    const getTeam = (groupLetter: string, position: number) => {
+      const group: any = simulatedResults?.find((g: any) => {
+        const name = (g?.groupName || g?.group_name || g?.name || '').toUpperCase().trim();
+        return name === `GRUPO ${groupLetter}` || name.endsWith(` ${groupLetter}`) || name === groupLetter;
+      });
+      return group?.standings[position - 1];
     };
 
-    // Mapeamento Expandido: Gerando os confrontos de 16-avos de final conforme a regra oficial da FIFA 2026
-    const roundOf32Matches = [
-        { id: 'Jogo 1', t1: getTeamByLetter('A', 0), t2: '3º C/D/I' },
-        { id: 'Jogo 2', t1: getTeamByLetter('E', 0), t2: getTeamByLetter('A', 1) },
-        { id: 'Jogo 3', t1: getTeamByLetter('F', 0), t2: getTeamByLetter('B', 1) },
-        { id: 'Jogo 4', t1: getTeamByLetter('C', 0), t2: '3º F/G/T' },
-        { id: 'Jogo 5', t1: getTeamByLetter('B', 0), t2: '3º E/H/J' },
-        { id: 'Jogo 6', t1: getTeamByLetter('D', 0), t2: getTeamByLetter('C', 1) },
-        { id: 'Jogo 7', t1: getTeamByLetter('G', 0), t2: getTeamByLetter('D', 1) },
-        { id: 'Jogo 8', t1: getTeamByLetter('H', 0), t2: getTeamByLetter('E', 1) },
+    // 1. Puxa os 8 melhores terceiros usando a mesma inteligência da tela
+    const { teams: melhoresTerceiros } = obterMelhoresTerceiros(simulatedResults || []);
+    let terceirosDisponiveis = [...melhoresTerceiros];
+
+    // Drenagem exclusiva para a impressão
+    const drenarMelhorTerceiro = (letrasPermitidas: string[], fallbackIndex: number) => {
+      const idx = terceirosDisponiveis.findIndex(t => letrasPermitidas.includes(t.groupLetter));
+      if (idx !== -1) return terceirosDisponiveis.splice(idx, 1)[0];
+      return melhoresTerceiros[fallbackIndex] || { teamName: 'A Definir' };
+    };
+
+    // 2. Mapeia a Segunda Fase (32) dinamicamente para o papel
+    const r32 = [
+      { id: '1', t1: getTeam('E', 1), t2: drenarMelhorTerceiro(['A','B','C','D','F'], 0) },
+      { id: '2', t1: getTeam('I', 1), t2: drenarMelhorTerceiro(['C','D','F','G','H'], 1) },
+      { id: '3', t1: getTeam('A', 2), t2: getTeam('B', 2) },
+      { id: '4', t1: getTeam('F', 1), t2: getTeam('C', 2) },
+      { id: '5', t1: getTeam('K', 2), t2: getTeam('L', 2) },
+      { id: '6', t1: getTeam('H', 1), t2: getTeam('J', 2) },
+      { id: '7', t1: getTeam('D', 1), t2: drenarMelhorTerceiro(['B','E','F','I','J'], 2) },
+      { id: '8', t1: getTeam('G', 1), t2: drenarMelhorTerceiro(['A','E','H','I','J'], 3) },
+      { id: '9', t1: getTeam('C', 1), t2: getTeam('F', 2) },
+      { id: '10', t1: getTeam('E', 2), t2: getTeam('I', 2) },
+      { id: '11', t1: getTeam('A', 1), t2: drenarMelhorTerceiro(['C','E','F','H','I'], 4) },
+      { id: '12', t1: getTeam('L', 1), t2: drenarMelhorTerceiro(['E','H','I','J','K'], 5) },
+      { id: '13', t1: getTeam('J', 1), t2: getTeam('H', 2) },
+      { id: '14', t1: getTeam('D', 2), t2: getTeam('G', 2) },
+      { id: '15', t1: getTeam('B', 1), t2: drenarMelhorTerceiro(['E','F','G','I','J'], 6) },
+      { id: '16', t1: getTeam('K', 1), t2: drenarMelhorTerceiro(['D','E','I','J','L'], 7) },
     ];
+
+    // Traz o nome do time que o usuário selecionou nos selects do mata-mata, se houver
+    const getSelection = (matchId: string, fallback: string) => {
+      const selectedId = knockoutSelections[matchId];
+      if (selectedId) {
+        const team = allTeams.find(t => t.teamId === selectedId);
+        if (team) return team.teamName;
+      }
+      return fallback;
+    };
 
     const html = `
       <!DOCTYPE html>
@@ -322,63 +346,89 @@ const Simulador = () => {
       <head>
         <title>Chaveamento Simulado FIFA 2026</title>
         <style>
-          body { font-family: Arial, sans-serif; padding: 15px; color: black; background: white; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-          .header { text-align: center; border-bottom: 3px solid black; padding-bottom: 5px; margin-bottom: 15px; }
-          .title { font-size: 20px; font-weight: 900; text-transform: uppercase; margin: 0; }
-          .subtitle { font-size: 12px; color: #444; margin-top: 3px; }
+          /* Força a folha para Paisagem para caber todas as 5 colunas com perfeição */
+          @page { size: landscape; margin: 8mm; }
+          body { font-family: Arial, sans-serif; padding: 0; margin: 0; color: black; background: white; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          .header { text-align: center; border-bottom: 2px solid black; padding-bottom: 8px; margin-bottom: 12px; }
+          .title { font-size: 16px; font-weight: 900; text-transform: uppercase; margin: 0; }
+          .subtitle { font-size: 10px; color: #444; margin-top: 3px; }
 
-          .group-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; margin-bottom: 20px; }
-          .group-card { border: 1.5px solid black; border-radius: 4px; overflow: hidden; page-break-inside: avoid; }
-          .group-name { font-weight: 900; background: #eee; text-align: center; padding: 2px; border-bottom: 1.5px solid black; font-size: 11px; text-transform: uppercase; }
-          .team-line { font-weight: bold; font-size: 10px; padding: 4px 6px; border-bottom: 1px solid #ccc; text-overflow: ellipsis; overflow: hidden; }
+          /* Tabela de 12 Grupos: 2 linhas de 6 */
+          .group-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; margin-bottom: 10px; }
+          .group-card { border: 1.5px solid black; border-radius: 4px; overflow: hidden; }
+          .group-name { font-weight: 900; background: #eee; text-align: center; padding: 2px; border-bottom: 1.5px solid black; font-size: 9px; text-transform: uppercase; }
+          .team-line { font-weight: bold; font-size: 8px; padding: 2px 4px; border-bottom: 1px solid #ccc; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+          .team-line:last-child { border-bottom: none; }
 
-          /* Layout Expandido de 5 Colunas para caber a Rodada de 32 times */
-          .bracket-titles { display: flex; justify-content: space-between; gap: 10px; margin-top: 20px; margin-bottom: 5px; }
-          .col-title { flex: 1; text-align: center; font-weight: 900; font-size: 11px; text-transform: uppercase; background:#1a202c; color:white; padding:3px 0; border-radius:2px; }
+          /* Caixa dos Melhores Terceiros */
+          .thirds-box { border: 1.5px solid #1e293b; background: #f8fafc; border-radius: 4px; padding: 5px; margin-bottom: 12px; text-align: center; }
+          .thirds-title { font-size: 9px; font-weight: 900; color: #0f172a; text-transform: uppercase; margin-bottom: 3px; }
+          .thirds-list { font-size: 8px; font-weight: bold; color: #334155; }
 
-          .bracket-container { display: flex; justify-content: space-between; gap: 10px; page-break-inside: avoid; }
+          /* Bracket Layout 5 Colunas */
+          .bracket-titles { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 5px; }
+          .col-title { flex: 1; text-align: center; font-weight: 900; font-size: 9px; text-transform: uppercase; background:#1a202c; color:white; padding:3px 0; border-radius:3px; }
+
+          .bracket-container { display: flex; justify-content: space-between; gap: 8px; }
           .column { display: flex; flex-direction: column; justify-content: space-around; flex: 1; }
 
-          .match-box { border: 1.5px solid #000; border-radius: 4px; margin-bottom: 8px; background: #fff; overflow: hidden; }
-          .match-header { background: #f1f5f9; font-size: 9px; font-weight: bold; padding: 2px 6px; border-bottom: 1px solid #000; color: #1e293b; text-transform: uppercase;}
-          .team-slot { height: 24px; padding: 0 6px; display: flex; align-items: center; font-size: 10px; font-weight: bold; border-bottom: 1px dashed #eee; color: black; }
+          .match-box { border: 1.5px solid #000; border-radius: 4px; margin-bottom: 3px; background: #fff; overflow: hidden; }
+          .match-header { background: #f1f5f9; font-size: 7px; font-weight: bold; padding: 2px 4px; border-bottom: 1px solid #000; color: #1e293b; text-transform: uppercase;}
+          .team-slot { height: 16px; padding: 0 4px; display: flex; align-items: center; font-size: 8px; font-weight: bold; border-bottom: 1px dashed #eee; color: black; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
           .team-slot:last-child { border-bottom: none; }
-          .empty-slot { color: #64748b; font-weight: normal; font-size: 9px; font-style: italic; }
+          .empty-slot { color: #64748b; font-weight: normal; font-style: italic; }
 
-          .footer { margin-top: 25px; text-align: center; font-size: 11px; font-weight: bold; color: #475569; }
+          .footer { margin-top: 10px; text-align: center; font-size: 8px; font-weight: bold; color: #475569; }
         </style>
       </head>
       <body>
         <div class="header">
-          <h1 class="title">Chaveamento Expandido - ${pool?.name || ''}</h1>
-          <p class="subtitle">Modelo Regulamentar Oficial Copa do Mundo 2026 (Fase de 32, Oitavas, Quartas, Semi e Final)</p>
+          <h1 class="title">Chaveamento Oficial Simulado - ${pool?.name || ''}</h1>
+          <p class="subtitle">Simulação regulamentar FIFA 2026 (12 Grupos + 8 Melhores Terceiros)</p>
         </div>
 
         <div class="group-grid">
-          ${simulatedResults?.slice(0, 12).map((g: any) => `
+          ${simulatedResults?.map((g: any) => `
             <div class="group-card">
-              <div class="group-name">${getGroupName(g).replace('Grupo ', '')}</div>
+              <div class="group-name">${(g.groupName || '').replace('Grupo ', '')}</div>
               <div class="team-line">1º ${getTeamName(g.standings[0])}</div>
               <div class="team-line">2º ${getTeamName(g.standings[1])}</div>
             </div>
           `).join('')}
         </div>
 
+        <div class="thirds-box">
+          <div class="thirds-title">Os 8 Melhores Terceiros Colocados Classificados (Critério Índice Técnico)</div>
+          <div class="thirds-list">
+            ${melhoresTerceiros.map(t => `${t.teamName} (Gr. ${t.groupLetter})`).join(' &nbsp;&bull;&nbsp; ')}
+          </div>
+        </div>
+
         <div class="bracket-titles">
-          <div class="col-title">Fase de 32</div>
-          <div class="col-title">Oitavas</div>
-          <div class="col-title">Quartas</div>
+          <div class="col-title">Segunda Fase (32)</div>
+          <div class="col-title">Oitavas de Final</div>
+          <div class="col-title">Quartas de Final</div>
           <div class="col-title">Semifinais</div>
           <div class="col-title">Finais</div>
         </div>
 
         <div class="bracket-container">
           <div class="column">
-            ${roundOf32Matches.map(m => `
+            ${r32.map(m => `
               <div class="match-box">
-                <div class="match-header">${m.id}</div>
-                <div class="team-slot ${m.t1.includes('Grupo') ? 'empty-slot' : ''}">${m.t1}</div>
-                <div class="team-slot ${m.t2.includes('Grupo') || m.t2.includes('3º') ? 'empty-slot' : ''}">${m.t2}</div>
+                <div class="match-header">Jogo ${m.id}</div>
+                <div class="team-slot">${getTeamName(m.t1)}</div>
+                <div class="team-slot">${getTeamName(m.t2)}</div>
+              </div>
+            `).join('')}
+          </div>
+
+          <div class="column">
+            ${[1, 2, 3, 4, 5, 6, 7, 8].map(i => `
+              <div class="match-box">
+                <div class="match-header">Oitavas ${i}</div>
+                <div class="team-slot ${!knockoutSelections[`r32-${i*2 - 1}`] ? 'empty-slot' : ''}">${getSelection(`r32-${i*2 - 1}`, `Venc. Jogo ${i*2 - 1}`)}</div>
+                <div class="team-slot ${!knockoutSelections[`r32-${i*2}`] ? 'empty-slot' : ''}">${getSelection(`r32-${i*2}`, `Venc. Jogo ${i*2}`)}</div>
               </div>
             `).join('')}
           </div>
@@ -386,9 +436,9 @@ const Simulador = () => {
           <div class="column">
             ${[1, 2, 3, 4].map(i => `
               <div class="match-box">
-                <div class="match-header">Oitavas ${i}</div>
-                <div class="team-slot empty-slot">Venc. Jogo ${i*2 - 1}</div>
-                <div class="team-slot empty-slot">Venc. Jogo ${i*2}</div>
+                <div class="match-header">Quartas ${i}</div>
+                <div class="team-slot ${!knockoutSelections[`r16-${i*2 - 1}`] ? 'empty-slot' : ''}">${getSelection(`r16-${i*2 - 1}`, `Venc. Oitavas ${i*2 - 1}`)}</div>
+                <div class="team-slot ${!knockoutSelections[`r16-${i*2}`] ? 'empty-slot' : ''}">${getSelection(`r16-${i*2}`, `Venc. Oitavas ${i*2}`)}</div>
               </div>
             `).join('')}
           </div>
@@ -396,26 +446,18 @@ const Simulador = () => {
           <div class="column">
             ${[1, 2].map(i => `
               <div class="match-box">
-                <div class="match-header">Quartas ${i}</div>
-                <div class="team-slot empty-slot">Venc. Oitavas ${i*2 - 1}</div>
-                <div class="team-slot empty-slot">Venc. Oitavas ${i*2}</div>
+                <div class="match-header">Semifinal ${i}</div>
+                <div class="team-slot ${!knockoutSelections[`qf-${i*2 - 1}`] ? 'empty-slot' : ''}">${getSelection(`qf-${i*2 - 1}`, `Venc. Quartas ${i*2 - 1}`)}</div>
+                <div class="team-slot ${!knockoutSelections[`qf-${i*2}`] ? 'empty-slot' : ''}">${getSelection(`qf-${i*2}`, `Venc. Quartas ${i*2}`)}</div>
               </div>
             `).join('')}
-          </div>
-
-          <div class="column">
-            <div class="match-box">
-              <div class="match-header">Semifinal 1</div>
-              <div class="team-slot empty-slot">Venc. Quartas 1</div>
-              <div class="team-slot empty-slot">Venc. Quartas 2</div>
-            </div>
           </div>
 
           <div class="column" style="justify-content: center; gap: 20px;">
             <div class="match-box" style="border-color: #16a34a;">
               <div class="match-header" style="background:#dcfce7;">GRANDE FINAL</div>
-              <div class="team-slot empty-slot">Finalista 1</div>
-              <div class="team-slot empty-slot">Finalista 2</div>
+              <div class="team-slot ${!knockoutSelections['sf-1'] ? 'empty-slot' : ''}">${getSelection('sf-1', 'Vencedor Semi 1')}</div>
+              <div class="team-slot ${!knockoutSelections['sf-2'] ? 'empty-slot' : ''}">${getSelection('sf-2', 'Vencedor Semi 2')}</div>
             </div>
             <div class="match-box">
               <div class="match-header">3º Lugar</div>
@@ -426,7 +468,7 @@ const Simulador = () => {
         </div>
 
         <div class="footer">
-          * Salve suas previsões do chaveamento de 32 times no sistema antes do prazo regulamentar.
+          * Rascunho impresso do Simulador Oficial. Não se esqueça de salvar seus palpites no sistema!
         </div>
         <script>
           setTimeout(() => { window.print(); window.close(); }, 800);
