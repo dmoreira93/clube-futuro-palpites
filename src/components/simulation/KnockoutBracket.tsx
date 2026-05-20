@@ -6,9 +6,8 @@ import { Button } from '@/components/ui/button';
 import { Save } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
-// --- MOTOR DE ÍNDICE TÉCNICO DOS MELHORES 3º COLOCADOS (REGULAMENTO FIFA 2026) ---
+// --- MOTOR DE ÍNDICE TÉCNICO COMPLETO DOS 3º COLOCADOS ---
 export function obterMelhoresTerceiros(simulatedGroups: SimulatedGroup[]): { teams: any[], hasTie: boolean } {
-  // 1. Filtra o 3º colocado de cada um dos 12 grupos da simulação atual
   const terceiros = simulatedGroups
     .map(g => {
       const terceiroDoGrupo = g.standings[2];
@@ -21,20 +20,18 @@ export function obterMelhoresTerceiros(simulatedGroups: SimulatedGroup[]): { tea
 
   let hasTie = false;
 
-  // 2. Ordenação com base estrita nos critérios da FIFA usando os palpites
   terceiros.sort((a, b) => {
-    if (b.points !== a.points) return b.points - a.points; // 1. Pontos
-    if (b.goalDifference !== a.goalDifference) return b.goalDifference - a.goalDifference; // 2. Saldo de Gols
-    if (b.goalsFor !== a.goalsFor) return b.goalsFor - a.goalsFor; // 3. Gols Pró
-    if (b.wins !== a.wins) return b.wins - a.wins; // 4. Vitórias
+    if (b.points !== a.points) return b.points - a.points;
+    if (b.goalDifference !== a.goalDifference) return b.goalDifference - a.goalDifference;
+    if (b.goalsFor !== a.goalsFor) return b.goalsFor - a.goalsFor;
+    if (b.wins !== a.wins) return b.wins - a.wins;
 
-    // Se houver igualdade em todos os critérios de palpite, sinaliza o empate técnico
     hasTie = true; 
     return 0;
   });
 
   return {
-    teams: terceiros.slice(0, 8), // Extrai os 8 melhores para o mata-mata
+    teams: terceiros,
     hasTie
   };
 }
@@ -108,39 +105,46 @@ const KnockoutBracket: React.FC<KnockoutBracketProps> = ({
     return winnerId === team1.teamId ? team2 : team1;
   };
 
-  // --- CALCULO DOS MELHORES TERCEIROS VIA HOOK MEMOIZADO ---
+  // --- BUSCA DA LISTA DE TERCEIROS ORDENADOS POR ÍNDICE TÉCNICO ---
   const { melhoresTerceiros, existeEmpateNosCriterios } = React.useMemo(() => {
     const resultado = obterMelhoresTerceiros(simulatedGroups);
     return { melhoresTerceiros: resultado.teams, existeEmpateNosCriterios: resultado.hasTie };
   }, [simulatedGroups]);
 
-  // Procura dinamicamente o terceiro colocado respeitando as restrições de chaves oficiais da FIFA
-  const obterTerceiroPorGrupo = (letrasPermitidas: string[], slotIndex: number) => {
-    const candidatos = melhoresTerceiros.filter(t => letrasPermitidas.includes(t.groupLetter));
-    return candidatos[0] || melhoresTerceiros[slotIndex] || allTeams[slotIndex];
+  // CORREÇÃO CIRÚRGICA: Filtra estritamente pelas letras válidas do regulamento daquela chave
+  const obterTerceiroPorGrupo = (letrasPermitidas: string[], prioridadeFallbackIndex: number) => {
+    const candidatosValidos = melhoresTerceiros.filter(t => letrasPermitidas.includes(t.groupLetter));
+    
+    // Retorna o melhor classificado técnico que atenda ao critério de grupo
+    if (candidatosValidos.length > 0) {
+      return candidatosValidos[0];
+    }
+    
+    // Proteção se a simulação de grupos não tiver sido processada
+    return melhoresTerceiros[prioridadeFallbackIndex] || allTeams[prioridadeFallbackIndex];
   };
 
-  // --- O MAPA DEFINITIVO E CORRIGIDO DA SEGUNDA FASE (FIFA 2026 / GLOBO ESPORTE) ---
+  // --- ALINHAMENTO COM A SUA TABELA OFICIAL (JOGOS 1 ATÉ 16) ---
   const r32 = React.useMemo(() => [
-    { id: 'r32-1', title: 'Segunda Fase 1', team1: getTeam('E', 1), team2: obterTerceiroPorGrupo(['A','B','C','D','F'], 0) },
-    { id: 'r32-2', title: 'Segunda Fase 2', team1: getTeam('I', 1), team2: obterTerceiroPorGrupo(['C','D','F','G','H'], 1) },
-    { id: 'r32-3', title: 'Segunda Fase 3', team1: getTeam('A', 2), team2: getTeam('B', 2) },
-    { id: 'r32-4', title: 'Segunda Fase 4', team1: getTeam('F', 1), team2: getTeam('C', 2) },
-    { id: 'r32-5', title: 'Segunda Fase 5', team1: getTeam('K', 2), team2: getTeam('L', 2) },
-    { id: 'r32-6', title: 'Segunda Fase 6', team1: getTeam('H', 1), team2: getTeam('J', 2) },
-    { id: 'r32-7', title: 'Segunda Fase 7', team1: getTeam('D', 1), team2: obterTerceiroPorGrupo(['B','E','F','I','J'], 2) },
-    { id: 'r32-8', title: 'Segunda Fase 8', team1: getTeam('G', 1), team2: obterTerceiroPorGrupo(['A','E','H','I','J'], 3) },
-    { id: 'r32-9', title: 'Segunda Fase 9', team1: getTeam('C', 1), team2: getTeam('F', 2) },
-    { id: 'r32-10', title: 'Segunda Fase 10', team1: getTeam('E', 2), team2: getTeam('I', 2) },
-    { id: 'r32-11', title: 'Segunda Fase 11', team1: getTeam('A', 1), team2: obterTerceiroPorGrupo(['C','E','F','H','I'], 4) },
-    { id: 'r32-12', title: 'Segunda Fase 12', team1: getTeam('L', 1), team2: obterTerceiroPorGrupo(['E','H','I','J','K'], 5) },
-    { id: 'r32-13', title: 'Segunda Fase 13', team1: getTeam('J', 1), team2: getTeam('H', 2) },
-    { id: 'r32-14', title: 'Segunda Fase 14', team1: getTeam('D', 2), team2: getTeam('G', 2) },
-    { id: 'r32-15', title: 'Segunda Fase 15', team1: getTeam('B', 1), team2: obterTerceiroPorGrupo(['E','F','G','I','J'], 6) },
-    { id: 'r32-16', title: 'Segunda Fase 16', team1: getTeam('K', 1), team2: obterTerceiroPorGrupo(['D','E','I','J','L'], 7) },
+    { id: 'r32-1', title: 'Jogo 1', team1: getTeam('E', 1), team2: obterTerceiroPorGrupo(['A','B','C','D','F'], 0) },
+    { id: 'r32-2', title: 'Jogo 2', team1: getTeam('I', 1), team2: obterTerceiroPorGrupo(['C','D','F','G','H'], 1) },
+    { id: 'r32-3', title: 'Jogo 3', team1: getTeam('A', 2), team2: getTeam('B', 2) },
+    { id: 'r32-4', title: 'Jogo 4', team1: getTeam('F', 1), team2: getTeam('C', 2) },
+    { id: 'r32-5', title: 'Jogo 5', team1: getTeam('K', 2), team2: getTeam('L', 2) },
+    { id: 'r32-6', title: 'Jogo 6', team1: getTeam('H', 1), team2: getTeam('J', 2) },
+    { id: 'r32-7', title: 'Jogo 7', team1: getTeam('D', 1), team2: obterTerceiroPorGrupo(['B','E','F','I','J'], 2) },
+    { id: 'r32-8', title: 'Jogo 8', team1: getTeam('G', 1), team2: obterTerceiroPorGrupo(['A','E','H','I','J'], 3) },
+    { id: 'r32-9', title: 'Jogo 9', team1: getTeam('C', 1), team2: getTeam('F', 2) },
+    { id: 'r32-10', title: 'Jogo 10', team1: getTeam('E', 2), team2: getTeam('I', 2) },
+    { id: 'r32-11', title: 'Jogo 11', team1: getTeam('A', 1), team2: obterTerceiroPorGrupo(['C','E','F','H','I'], 4) },
+    { id: 'r32-12', title: 'Jogo 12', team1: getTeam('L', 1), team2: obterTerceiroPorGrupo(['E','H','I','J','K'], 5) },
+    { id: 'r32-13', title: 'Jogo 13', team1: getTeam('J', 1), team2: getTeam('H', 2) },
+    { id: 'r32-14', title: 'Jogo 14', team1: getTeam('D', 2), team2: getTeam('G', 2) },
+    { id: 'r32-15', title: 'Jogo 15', team1: getTeam('B', 1), team2: obterTerceiroPorGrupo(['E','F','G','I','J'], 6) },
+    { id: 'r32-16', title: 'Jogo 16', team1: getTeam('K', 1), team2: obterTerceiroPorGrupo(['D','E','I','J','L'], 7) },
   ], [simulatedGroups, melhoresTerceiros, allTeams]);
 
-  // --- CONFIGURAÇÃO EM ÁRVORE DAS FASES SEGUINTES ---
+  // --- MAPEAMENTO DAS OITAVAS SEGUINDO A SUA PLANILHA (Venc. Jogo X vs Venc. Jogo Y) ---
   const r16_teams = React.useMemo(() => ({
     'r16-1': [findTeamById(knockoutSelections['r32-1']), findTeamById(knockoutSelections['r32-2'])],
     'r16-2': [findTeamById(knockoutSelections['r32-3']), findTeamById(knockoutSelections['r32-4'])],
@@ -201,10 +205,9 @@ const KnockoutBracket: React.FC<KnockoutBracketProps> = ({
       </CardHeader>
 
       <CardContent className="overflow-x-auto pb-4">
-        {/* ELEMENTO DO ALERTA DE EMPATE DE ÍNDICE TÉCNICO */}
         {existeEmpateNosCriterios && (
-          <div className="bg-amber-50 border border-amber-200 text-amber-800 text-xs p-3 rounded-md mb-4 animate-in fade-in">
-            ⚠️ <strong>Empate Técnico nos Terceiros Colocados:</strong> Dois ou mais times possuem o mesmo número de pontos, saldo e gols marcados nos seus palpites de grupo. O sistema aplicou a ordem base, mas o desempate final fica a seu critério nos blocos!
+          <div className="bg-amber-50 border border-amber-200 text-amber-800 text-xs p-3 rounded-md mb-4">
+            ⚠️ <strong>Empate de Índice Técnico Detectado:</strong> Dois ou mais times possuem a mesma pontuação, saldo e gols marcados. O sistema aplicou a ordem base, mas você pode definir quem avança nos blocos!
           </div>
         )}
 
