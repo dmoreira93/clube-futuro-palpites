@@ -183,28 +183,21 @@ const Simulador = () => {
   }, []);
 
   // CORRIGIDO E INTEGRADO: Agora usa a nossa RPC em lote para salvar as posições de 1º e 2º de forma instantânea
-  const handleAdoptGroupPrediction = async (groupId: string, firstTeamId: string, secondTeamId: string) => {
+    const handleAdoptGroupPrediction = async (groupId: string, firstTeamId: string, secondTeamId: string) => {
     if (!user || !pool) return;
     if (firstTeamId === secondTeamId) return toast.error("Você não pode escolher o mesmo time como 1º e 2º lugar.");
     
-    // Procura o nome do grupo nas tabelas simuladas para enviar o rótulo correto
-    const currentSimGroup = simulatedResults?.find(g => g.groupId === groupId);
-    const labelGrupo = currentSimGroup ? (currentSimGroup.groupName || 'A').replace('Grupo ', '') : 'A';
-
-    const toastId = toast.loading('Salvando posições estruturadas no banco...');
+    const toastId = toast.loading('Salvando palpites do grupo...');
     try {
-      const dadosClassificacao = [
-        { group_name: labelGrupo, team_id: firstTeamId, position: 1 },
-        { group_name: labelGrupo, team_id: secondTeamId, position: 2 }
-      ];
-
-      const { data, error } = await supabase.rpc('adotar_posicoes_grupo', {
+      const { error } = await supabase.rpc('adotar_posicoes_grupo', {
         p_pool_id: pool.id,
-        p_classificacoes: dadosClassificacao
+        p_group_id: groupId,
+        p_first_team_id: firstTeamId,
+        p_second_team_id: secondTeamId
       });
 
       if (error) throw error;
-      toast.success(`Palpites do Grupo ${labelGrupo} adotados e consolidados com sucesso!`, { id: toastId });
+      toast.success("Posições adotadas e salvas com sucesso!", { id: toastId });
     } catch (error: any) {
       toast.error(`Erro ao salvar: ${error.message}`, { id: toastId });
     }
