@@ -34,7 +34,7 @@ const Matchup: React.FC<MatchupProps> = ({ title, matchId, team1, team2, selecte
     const canSelect = team1 && team2 && team1.teamId !== team2.teamId;
     return (
       <div className="border p-2 rounded-md bg-gray-50 dark:bg-gray-800/50 text-sm h-[68px] flex flex-col justify-center my-1">
-        <p className="font-bold text-gray-600 dark:text-gray-300 mb-1 text-[11px] uppercase">{title}</p>
+        <p className="font-bold text-gray-600 dark:text-gray-300 mb-1 text-[10px] uppercase truncate">{title}</p>
         <Select onValueChange={onSelect} value={selectedValue || ""} disabled={!canSelect}>
           <SelectTrigger className="w-full h-8 text-xs">
             <SelectValue placeholder={canSelect ? "Escolha quem avança" : "Aguardando..."} />
@@ -58,6 +58,7 @@ const KnockoutBracket: React.FC<KnockoutBracketProps> = ({
   allTeams,
   isDeadlinePassed,
 }) => {
+  // Captura o time simulado de forma flexível e resiliente com o nome do grupo
   const getTeam = (groupLetter: string, position: number) => {
     const group = simulatedGroups.find(g => {
       const name = g.groupName?.toUpperCase() || "";
@@ -66,6 +67,13 @@ const KnockoutBracket: React.FC<KnockoutBracketProps> = ({
     return group?.standings[position - 1];
   };
 
+  // Coleta dinamicamente todos os times que terminaram em 3º lugar na sua simulação atual
+  const thirdPlacedTeams = React.useMemo(() => {
+    return simulatedGroups
+      .map(g => g.standings[2])
+      .filter((t): t is SimulatedTeamStats => !!t && !!t.teamId);
+  }, [simulatedGroups]);
+
   const findTeamById = (teamId?: string) => teamId ? allTeams.find(t => t.teamId === teamId) : undefined;
   
   const getLoser = (team1?: SimulatedTeamStats, team2?: SimulatedTeamStats, winnerId?: string) => {
@@ -73,28 +81,27 @@ const KnockoutBracket: React.FC<KnockoutBracketProps> = ({
     return winnerId === team1.teamId ? team2 : team1;
   };
 
-  // --- CRUZAMENTO CONFIGURADO DA FASE DE 32 SELEÇÕES (1º vs 2º alternados) ---
+  // --- O MAPA DEFINITIVO DA SEGUNDA FASE (FIFA 2026) ---
   const r32 = React.useMemo(() => [
-    { id: 'r32-1', title: 'Jogo 1', team1: getTeam('A', 1), team2: getTeam('B', 2) },
-    { id: 'r32-2', title: 'Jogo 2', team1: getTeam('C', 1), team2: getTeam('D', 2) },
-    { id: 'r32-3', title: 'Jogo 3', team1: getTeam('E', 1), team2: getTeam('F', 2) },
-    { id: 'r32-4', title: 'Jogo 4', team1: getTeam('G', 1), team2: getTeam('H', 2) },
-    { id: 'r32-5', title: 'Jogo 5', team1: getTeam('I', 1), team2: getTeam('J', 2) },
-    { id: 'r32-6', title: 'Jogo 6', team1: getTeam('K', 1), team2: getTeam('L', 2) },
-    { id: 'r32-7', title: 'Jogo 7', team1: getTeam('B', 1), team2: getTeam('A', 2) },
-    { id: 'r32-8', title: 'Jogo 8', team1: getTeam('D', 1), team2: getTeam('C', 2) },
-    { id: 'r32-9', title: 'Jogo 9', team1: getTeam('F', 1), team2: getTeam('E', 2) },
-    { id: 'r32-10', title: 'Jogo 10', team1: getTeam('H', 1), team2: getTeam('G', 2) },
-    { id: 'r32-11', title: 'Jogo 11', team1: getTeam('J', 1), team2: getTeam('I', 2) },
-    { id: 'r32-12', title: 'Jogo 12', team1: getTeam('L', 1), team2: getTeam('K', 2) },
-    // Slots para os melhores 3º colocados cruzarem com os cabeças de chave restantes
-    { id: 'r32-13', title: 'Jogo 13 (3º colocado)', team1: getTeam('A', 1), team2: allTeams[0] },
-    { id: 'r32-14', title: 'Jogo 14 (3º colocado)', team1: getTeam('B', 1), team2: allTeams[1] },
-    { id: 'r32-15', title: 'Jogo 15 (3º colocado)', team1: getTeam('C', 1), team2: allTeams[2] },
-    { id: 'r32-16', title: 'Jogo 16 (3º colocado)', team1: getTeam('D', 1), team2: allTeams[3] },
-  ], [simulatedGroups, allTeams]);
+    { id: 'r32-1', title: 'Segunda Fase 1', team1: getTeam('E', 1), team2: thirdPlacedTeams.find(t => ['A','B','C','D','F'].includes(t.groupName?.replace('Grupo ','') || '')) || thirdPlacedTeams[0] },
+    { id: 'r32-2', title: 'Segunda Fase 2', team1: getTeam('I', 1), team2: thirdPlacedTeams.find(t => ['C','D','F','G','H'].includes(t.groupName?.replace('Grupo ','') || '')) || thirdPlacedTeams[1] },
+    { id: 'r32-3', title: 'Segunda Fase 3', team1: getTeam('A', 2), team2: getTeam('B', 2) },
+    { id: 'r32-4', title: 'Segunda Fase 4', team1: getTeam('F', 1), team2: getTeam('C', 2) },
+    { id: 'r32-5', title: 'Segunda Fase 5', team1: getTeam('K', 2), team2: getTeam('L', 2) },
+    { id: 'r32-6', title: 'Segunda Fase 6', team1: getTeam('H', 1), team2: getTeam('J', 2) },
+    { id: 'r32-7', title: 'Segunda Fase 7', team1: getTeam('D', 1), team2: thirdPlacedTeams.find(t => ['B','E','F','I','J'].includes(t.groupName?.replace('Grupo ','') || '')) || thirdPlacedTeams[2] },
+    { id: 'r32-8', title: 'Segunda Fase 8', team1: getTeam('G', 1), team2: thirdPlacedTeams.find(t => ['A','E','H','I','J'].includes(t.groupName?.replace('Grupo ','') || '')) || thirdPlacedTeams[3] },
+    { id: 'r32-9', title: 'Segunda Fase 9', team1: getTeam('C', 1), team2: getTeam('F', 2) },
+    { id: 'r32-10', title: 'Segunda Fase 10', team1: getTeam('E', 2), team2: getTeam('I', 2) },
+    { id: 'r32-11', title: 'Segunda Fase 11', team1: getTeam('A', 1), team2: thirdPlacedTeams.find(t => ['C','E','F','H','I'].includes(t.groupName?.replace('Grupo ','') || '')) || thirdPlacedTeams[4] },
+    { id: 'r32-12', title: 'Segunda Fase 12', team1: getTeam('L', 1), team2: thirdPlacedTeams.find(t => ['E','H','I','J','K'].includes(t.groupName?.replace('Grupo ','') || '')) || thirdPlacedTeams[5] },
+    { id: 'r32-13', title: 'Segunda Fase 13', team1: getTeam('J', 1), team2: getTeam('H', 2) },
+    { id: 'r32-14', title: 'Segunda Fase 14', team1: getTeam('D', 2), team2: getTeam('G', 2) },
+    { id: 'r32-15', title: 'Segunda Fase 15', team1: getTeam('B', 1), team2: thirdPlacedTeams.find(t => ['E','F','G','I','J'].includes(t.groupName?.replace('Grupo ','') || '')) || thirdPlacedTeams[6] },
+    { id: 'r32-16', title: 'Segunda Fase 16', team1: getTeam('K', 1), team2: thirdPlacedTeams.find(t => ['D','E','I','J','L'].includes(t.groupName?.replace('Grupo ','') || '')) || thirdPlacedTeams[7] },
+  ], [simulatedGroups, thirdPlacedTeams]);
 
-  // --- AS OITAVAS DE FINAL HERDAM OS VENCEDORES SELECIONADOS NA FASE DE 32 ---
+  // --- AS OITAVAS SEGUEM O FLUXO DO CHAVEAMENTO EM ÁRVORE ---
   const r16_teams = React.useMemo(() => ({
     'r16-1': [findTeamById(knockoutSelections['r32-1']), findTeamById(knockoutSelections['r32-2'])],
     'r16-2': [findTeamById(knockoutSelections['r32-3']), findTeamById(knockoutSelections['r32-4'])],
@@ -153,11 +160,11 @@ const KnockoutBracket: React.FC<KnockoutBracketProps> = ({
       </CardHeader>
 
       <CardContent className="overflow-x-auto pb-4">
-        <div className="flex gap-4 min-w-[1200px] justify-between">
+        <div className="flex gap-4 min-w-[1300px] justify-between">
           
-          {/* FASE DE 32 SELEÇÕES */}
+          {/* COLUNA 1: SEGUNDA FASE (32 TIMES) */}
           <div className="flex flex-col w-1/5 space-y-1">
-            <h3 className="text-xs font-black text-center bg-slate-950 text-white py-1 rounded uppercase">Fase de 32</h3>
+            <h3 className="text-xs font-black text-center bg-slate-950 text-white py-1 rounded uppercase">Segunda Fase</h3>
             {r32.map(match => (
               <Matchup
                 key={match.id}
@@ -171,31 +178,31 @@ const KnockoutBracket: React.FC<KnockoutBracketProps> = ({
             ))}
           </div>
 
-          {/* OITAVAS DE FINAL */}
+          {/* COLUNA 2: OITAVAS DE FINAL */}
           <div className="flex flex-col w-1/5 justify-around">
             <h3 className="text-xs font-black text-center bg-fifa-blue text-white py-1 rounded uppercase mb-2">Oitavas</h3>
             {Object.entries(r16_teams).map(([id, teams]) => (
-              <Matchup key={id} matchId={id} title={`Oitavas ${id.slice(-1)}`} team1={teams[0]} team2={teams[1]} selectedValue={knockoutSelections[id]} onSelect={(val) => onSelectionChange(id, val)} />
+              <Matchup key={id} matchId={id} title={`Oitavas ${id.replace('r16-', '')}`} team1={teams[0]} team2={teams[1]} selectedValue={knockoutSelections[id]} onSelect={(val) => onSelectionChange(id, val)} />
             ))}
           </div>
 
-          {/* QUARTAS DE FINAL */}
+          {/* COLUNA 3: QUARTAS DE FINAL */}
           <div className="flex flex-col w-1/5 justify-around">
             <h3 className="text-xs font-black text-center bg-slate-800 text-white py-1 rounded uppercase mb-2">Quartas</h3>
             {Object.entries(qf_teams).map(([id, teams]) => (
-              <Matchup key={id} matchId={id} title={`Quartas ${id.slice(-1)}`} team1={teams[0]} team2={teams[1]} selectedValue={knockoutSelections[id]} onSelect={(val) => onSelectionChange(id, val)} />
+              <Matchup key={id} matchId={id} title={`Quartas ${id.replace('qf-', '')}`} team1={teams[0]} team2={teams[1]} selectedValue={knockoutSelections[id]} onSelect={(val) => onSelectionChange(id, val)} />
             ))}
           </div>
 
-          {/* SEMIFINAIS */}
+          {/* COLUNA 4: SEMIFINAIS */}
           <div className="flex flex-col w-1/5 justify-around">
             <h3 className="text-xs font-black text-center bg-slate-700 text-white py-1 rounded uppercase mb-2">Semifinais</h3>
             {Object.entries(sf_teams).map(([id, teams]) => (
-              <Matchup key={id} matchId={id} title={`Semi ${id.slice(-1)}`} team1={teams[0]} team2={teams[1]} selectedValue={knockoutSelections[id]} onSelect={(val) => onSelectionChange(id, val)} />
+              <Matchup key={id} matchId={id} title={`Semi ${id.replace('sf-', '')}`} team1={teams[0]} team2={teams[1]} selectedValue={knockoutSelections[id]} onSelect={(val) => onSelectionChange(id, val)} />
             ))}
           </div>
           
-          {/* FINAIS */}
+          {/* COLUNA 5: FINAIS */}
           <div className="flex flex-col w-1/5 justify-center gap-4 border-l pl-2 border-dashed border-gray-300">
             <h3 className="text-xs font-black text-center bg-emerald-600 text-white py-1 rounded uppercase">Finais</h3>
             <Matchup matchId='final' title='🥇 Final' team1={final_teams[0]} team2={final_teams[1]} selectedValue={knockoutSelections['final']} onSelect={(val) => onSelectionChange('final', val)} />
