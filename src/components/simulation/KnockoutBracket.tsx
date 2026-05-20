@@ -111,40 +111,49 @@ const KnockoutBracket: React.FC<KnockoutBracketProps> = ({
     return { melhoresTerceiros: resultado.teams, existeEmpateNosCriterios: resultado.hasTie };
   }, [simulatedGroups]);
 
-  // CORREÇÃO CIRÚRGICA: Filtra estritamente pelas letras válidas do regulamento daquela chave
-  const obterTerceiroPorGrupo = (letrasPermitidas: string[], prioridadeFallbackIndex: number) => {
-    const candidatosValidos = melhoresTerceiros.filter(t => letrasPermitidas.includes(t.groupLetter));
-    
-    // Retorna o melhor classificado técnico que atenda ao critério de grupo
-    if (candidatosValidos.length > 0) {
-      return candidatosValidos[0];
-    }
-    
-    // Proteção se a simulação de grupos não tiver sido processada
-    return melhoresTerceiros[prioridadeFallbackIndex] || allTeams[prioridadeFallbackIndex];
-  };
+  // --- O MAPA DEFINITIVO COM GARANTIA DE EXCLUSIVIDADE (DRENAGEM DE DUPLICATAS) ---
+  const r32 = React.useMemo(() => {
+    // Cria uma cópia mutável da lista de terceiros ordenados por índice técnico
+    // À medida que um time for alocado, nós o removemos daqui para não repetir em outro jogo
+    let terceirosDisponiveis = [...melhoresTerceiros];
 
-  // --- ALINHAMENTO COM A SUA TABELA OFICIAL (JOGOS 1 ATÉ 16) ---
-  const r32 = React.useMemo(() => [
-    { id: 'r32-1', title: 'Jogo 1', team1: getTeam('E', 1), team2: obterTerceiroPorGrupo(['A','B','C','D','F'], 0) },
-    { id: 'r32-2', title: 'Jogo 2', team1: getTeam('I', 1), team2: obterTerceiroPorGrupo(['C','D','F','G','H'], 1) },
-    { id: 'r32-3', title: 'Jogo 3', team1: getTeam('A', 2), team2: getTeam('B', 2) },
-    { id: 'r32-4', title: 'Jogo 4', team1: getTeam('F', 1), team2: getTeam('C', 2) },
-    { id: 'r32-5', title: 'Jogo 5', team1: getTeam('K', 2), team2: getTeam('L', 2) },
-    { id: 'r32-6', title: 'Jogo 6', team1: getTeam('H', 1), team2: getTeam('J', 2) },
-    { id: 'r32-7', title: 'Jogo 7', team1: getTeam('D', 1), team2: obterTerceiroPorGrupo(['B','E','F','I','J'], 2) },
-    { id: 'r32-8', title: 'Jogo 8', team1: getTeam('G', 1), team2: obterTerceiroPorGrupo(['A','E','H','I','J'], 3) },
-    { id: 'r32-9', title: 'Jogo 9', team1: getTeam('C', 1), team2: getTeam('F', 2) },
-    { id: 'r32-10', title: 'Jogo 10', team1: getTeam('E', 2), team2: getTeam('I', 2) },
-    { id: 'r32-11', title: 'Jogo 11', team1: getTeam('A', 1), team2: obterTerceiroPorGrupo(['C','E','F','H','I'], 4) },
-    { id: 'r32-12', title: 'Jogo 12', team1: getTeam('L', 1), team2: obterTerceiroPorGrupo(['E','H','I','J','K'], 5) },
-    { id: 'r32-13', title: 'Jogo 13', team1: getTeam('J', 1), team2: getTeam('H', 2) },
-    { id: 'r32-14', title: 'Jogo 14', team1: getTeam('D', 2), team2: getTeam('G', 2) },
-    { id: 'r32-15', title: 'Jogo 15', team1: getTeam('B', 1), team2: obterTerceiroPorGrupo(['E','F','G','I','J'], 6) },
-    { id: 'r32-16', title: 'Jogo 16', team1: getTeam('K', 1), team2: obterTerceiroPorGrupo(['D','E','I','J','L'], 7) },
-  ], [simulatedGroups, melhoresTerceiros, allTeams]);
+    // Função interna para capturar o melhor terceiro permitido e removê-lo do bolo
+    const drenarMelhorTerceiro = (letrasPermitidas: string[], prioridadeFallbackIndex: number) => {
+      // Procura o primeiro time (melhor campanha) que pertença aos grupos permitidos
+      const indexEncontrado = terceirosDisponiveis.findIndex(t => letrasPermitidas.includes(t.groupLetter));
+      
+      if (indexEncontrado !== -1) {
+        // Remove do array de disponíveis para ninguém mais usar e retorna o time
+        const timeAlocado = terceirosDisponiveis.splice(indexEncontrado, 1)[0];
+        return timeAlocado;
+      }
+      
+      // Fallback de segurança se esgotar ou a simulação estiver vazia
+      return melhoresTerceiros[prioridadeFallbackIndex] || allTeams[prioridadeFallbackIndex];
+    };
 
-  // --- MAPEAMENTO DAS OITAVAS SEGUINDO A SUA PLANILHA (Venc. Jogo X vs Venc. Jogo Y) ---
+    // Monta o array exatamente na ordem dos confrontos, aplicando a drenagem dinâmica nos jogos de 3º colocado
+    return [
+      { id: 'r32-1', title: 'Jogo 1', team1: getTeam('E', 1), team2: drenarMelhorTerceiro(['A','B','C','D','F'], 0) },
+      { id: 'r32-2', title: 'Jogo 2', team1: getTeam('I', 1), team2: drenarMelhorTerceiro(['C','D','F','G','H'], 1) },
+      { id: 'r32-3', title: 'Jogo 3', team1: getTeam('A', 2), team2: getTeam('B', 2) },
+      { id: 'r32-4', title: 'Jogo 4', team1: getTeam('F', 1), team2: getTeam('C', 2) },
+      { id: 'r32-5', title: 'Jogo 5', team1: getTeam('K', 2), team2: getTeam('L', 2) },
+      { id: 'r32-6', title: 'Jogo 6', team1: getTeam('H', 1), team2: getTeam('J', 2) },
+      { id: 'r32-7', title: 'Jogo 7', team1: getTeam('D', 1), team2: drenarMelhorTerceiro(['B','E','F','I','J'], 2) },
+      { id: 'r32-8', title: 'Jogo 8', team1: getTeam('G', 1), team2: drenarMelhorTerceiro(['A','E','H','I','J'], 3) },
+      { id: 'r32-9', title: 'Jogo 9', team1: getTeam('C', 1), team2: getTeam('F', 2) },
+      { id: 'r32-10', title: 'Jogo 10', team1: getTeam('E', 2), team2: getTeam('I', 2) },
+      { id: 'r32-11', title: 'Jogo 11', team1: getTeam('A', 1), team2: drenarMelhorTerceiro(['C','E','F','H','I'], 4) },
+      { id: 'r32-12', title: 'Jogo 12', team1: getTeam('L', 1), team2: drenarMelhorTerceiro(['E','H','I','J','K'], 5) },
+      { id: 'r32-13', title: 'Jogo 13', team1: getTeam('J', 1), team2: getTeam('H', 2) },
+      { id: 'r32-14', title: 'Jogo 14', team1: getTeam('D', 2), team2: getTeam('G', 2) },
+      { id: 'r32-15', title: 'Jogo 15', team1: getTeam('B', 1), team2: drenarMelhorTerceiro(['E','F','G','I','J'], 6) },
+      { id: 'r32-16', title: 'Jogo 16', team1: getTeam('K', 1), team2: drenarMelhorTerceiro(['D','E','I','J','L'], 7) },
+    ];
+  }, [simulatedGroups, melhoresTerceiros, allTeams]);
+
+  // --- MAPEAMENTO DAS OITAVAS SEGUINDO A PLANILHA OFICIAL ---
   const r16_teams = React.useMemo(() => ({
     'r16-1': [findTeamById(knockoutSelections['r32-1']), findTeamById(knockoutSelections['r32-2'])],
     'r16-2': [findTeamById(knockoutSelections['r32-3']), findTeamById(knockoutSelections['r32-4'])],
