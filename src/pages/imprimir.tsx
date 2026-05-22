@@ -17,7 +17,7 @@ interface MatchPrediction {
 }
 
 export default function ImprimirComprovante() {
-  // 1. Captura híbrida do poolId para contornar qualquer cache ou mudança de rotas
+  // 1. Captura híbrida do poolId (Parâmetro de rota ou Query String)
   const { poolId: routePoolId } = useParams<{ poolId: string }>();
   const [searchParams] = useSearchParams();
   const queryPoolId = searchParams.get("pool");
@@ -29,7 +29,8 @@ export default function ImprimirComprovante() {
   const [userData, setUserData] = useState<{ name: string } | null>(null);
   const [predictions, setPredictions] = useState<MatchPrediction[]>([]);
   const [finalPrediction, setFinalPrediction] = useState<any>(null);
-  const [emissionDate, setEmissionDate] = useState(""); // Corrigida a inicialização inválida do estado
+  const [emissionDate, setEmissionDate] = useState("");
+  const [hasPrinted, setHasPrinted] = useState(false); // Evita loops infinitos de impressão
 
   useEffect(() => {
     // Define a data de emissão no cliente
@@ -48,7 +49,7 @@ export default function ImprimirComprovante() {
       }
 
       try {
-        // 1. Busca as informações do usuário autenticado atual
+        // 1. Busca as informações do usuário atual
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) throw new Error("Usuário não autenticado");
 
@@ -61,7 +62,7 @@ export default function ImprimirComprovante() {
         if (profileError) console.error("Erro ao buscar perfil:", profileError);
         setUserData(profile);
 
-        // 2. Busca os palpites brutos de jogos deste bolão
+        // 2. Busca os palpites brutos de jogos deste bolão (Evita Joins complexos que travam a query)
         const { data: matchPreds, error: matchError } = await supabase
           .from("match_predictions")
           .select("id, home_score, away_score, updated_at, match_id")
@@ -70,7 +71,7 @@ export default function ImprimirComprovante() {
                                     
         if (matchError) throw matchError;
 
-        // Estrutura segura mapeando os objetos esperados pela tabela
+        // Formata os dados para simular o nó de matches esperado pelo HTML
         const formattedPredictions = (matchPreds || []).map(pred => ({
           id: pred.id,
           home_score: pred.home_score,
@@ -99,23 +100,26 @@ export default function ImprimirComprovante() {
       } catch (error) {
         console.error("Erro crítico no fluxo do comprovante:", error);
       } finally {
-        // Garante a saída do Loading sob qualquer circunstância
+        // Força a saída do loading sob qualquer circunstância
         setLoading(false);
       }
     }
 
-    // Chamada executada corretamente DENTRO do escopo do useEffect
+    // Executa a função assíncrona corretamente de dentro do useEffect
     fetchDadosComprovante();
   }, [poolId]);
 
-  // Dispara a impressão nativa assim que os dados terminarem de carregar com sucesso
+  // Dispara a janela de impressão nativa apenas após o layout estar renderizado por completo
   useEffect(() => {
-    if (!loading && predictions.length > 0) {
-      setTimeout(() => {
+    if (!loading && predictions.length > 0 && !hasPrinted) {
+      setHasPrinted(true);
+      const timer = setTimeout(() => {
         window.print();
-      }, 500);
+      }, 1000); // 1 segundo de folga para o React desenhar a lista antes do congelamento do print()
+
+      return () => clearTimeout(timer);
     }
-  }, [loading, predictions]);
+  }, [loading, predictions, hasPrinted]);
 
   if (loading) {
     return (
@@ -139,7 +143,7 @@ export default function ImprimirComprovante() {
 
   return (
     <div className="comprovante-print-root bg-white p-4 max-w-[210mm] mx-auto">
-      {/* Estilos CSS específicos para impressão injetados via tag style local */}
+      {/* Estilos CSS de Impressão */}
       <style>{`
         @page {
           size: A4;
@@ -157,7 +161,7 @@ export default function ImprimirComprovante() {
       <div className="flex justify-between items-center bg-[#1a202c] text-white p-4 mb-4 rounded-md">
         <div>
           <h1 className="text-lg font-bold uppercase tracking-wide">Comprovante Oficial de Palpites</h1>
-          <p className="text-xs text-gray-400">Bolão Expandido Copa do Mundo 2026</p>
+          <p className="text-xs text-gray-400">Bolão Box - Copa do Mundo 2026</p>
         </div>
         <div className="text-right bg-[#2d3748] px-3 py-1.5 border-l-4 border-emerald-500">
           <span className="block text-[10px] uppercase text-gray-400">Participante</span>
@@ -165,7 +169,7 @@ export default function ImprimirComprovante() {
         </div>
       </div>
 
-      {/* CORPO: PALPITES */}
+      {/* CORPO: LISTAGEM DE JOGOS */}
       <div className="mb-6">
         <h2 className="text-sm font-bold uppercase border-b-2 border-gray-200 pb-1 mb-3 text-gray-800">1. Fase de Grupos (Partidas Salvas)</h2>
         <div className="grid grid-cols-2 gap-x-6 gap-y-4">
@@ -188,7 +192,7 @@ export default function ImprimirComprovante() {
         </div>
       </div>
 
-      {/* PÓDIO E FINAL */}
+      {/* SEÇÃO: PÓDIO E FINAL */}
       <div className="page-break mt-6">
         <h2 className="text-sm font-bold uppercase border-b-2 border-gray-200 pb-1 mb-3 text-gray-800">2. Previsão do Pódio & Placar da Final</h2>
         <div className="grid grid-cols-2 gap-4">
@@ -220,7 +224,7 @@ export default function ImprimirComprovante() {
         </div>
       </div>
 
-      {/* RODAPÉ DO DOCUMENTO */}
+      {/* RODAPÉ */}
       <div className="mt-8 pt-4 border-t border-gray-200 flex justify-between items-center text-[7.5pt] text-gray-400">
         <span>Emissão: {emissionDate}</span>
         <span className="font-mono text-[7pt]">Autenticação Base: SHA256_SECURE_VERIFIED</span>
