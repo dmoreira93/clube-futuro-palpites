@@ -49,19 +49,21 @@ function App() {
     <AuthProvider>
       <BrowserRouter>
         <Routes>
-          {/* 1. ROTA DE IMPRESSÃO (Nível Raiz)
-              Fora do Layout para manter a página em branco pura na impressão.
+          {/* 1. ROTAS DE IMPRESSÃO (Nível Raiz e Blindadas contra Cache)
+            Mapeamos os dois formatos de URL possíveis para garantir que, independente 
+            de o componente ler por useParams ou useSearchParams, a página carregue 
+            sem dar 404 Not Found.
           */}
           <Route 
             path="/comprovante/imprimir/:poolId" 
-            element={
-              <ProtectedRoute>
-                <ImprimirComprovante />
-              </ProtectedRoute>
-            } 
+            element={<ProtectedRoute><ImprimirComprovante /></ProtectedRoute>} 
+          />
+          <Route 
+            path="/comprovante/imprimir" 
+            element={<ProtectedRoute><ImprimirComprovante /></ProtectedRoute>} 
           />
 
-          {/* 2. DEMAIS ROTAS DA APLICAÇÃO (Envolvidas pelo Layout do Sistema) */}
+          {/* 2. DEMAIS ROTAS DA APLICAÇÃO (Layout Visual do Sistema) */}
           <Route
             path="/*"
             element={
