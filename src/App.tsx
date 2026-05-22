@@ -49,12 +49,20 @@ function App() {
     <AuthProvider>
       <BrowserRouter>
         <Routes>
-          {/* ROTA ISOLADA: Fica fora do <Layout> para não renderizar cabeçalhos e menus 
-            do sistema na hora de gerar a folha de impressão.
+          {/* ROTA ISOLADA: Fica fora do <Layout> e sem cabeçalhos ou menus do sistema.
+            Usa a estrutura com parâmetro limpo (:poolId) para casar perfeitamente 
+            com o useParams() que está dentro do arquivo 'imprimir.tsx'.
           */}
-          <Route path="/comprovante/imprimir" element={<ProtectedRoute><ImprimirComprovante /></ProtectedRoute>} />
+          <Route 
+            path="/comprovante/imprimir/:poolId" 
+            element={
+              <ProtectedRoute>
+                <ImprimirComprovante />
+              </ProtectedRoute>
+            } 
+          />
 
-          {/* Demais rotas que pertencem à interface visual do sistema */}
+          {/* Demais rotas que pertencem à interface visual e layout do sistema */}
           <Route
             path="*"
             element={
