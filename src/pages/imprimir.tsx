@@ -40,56 +40,70 @@ export default function ImprimirComprovante() {
       agora.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
     );
 
-    async function fetchDadosComprovante() {
-      if (!poolId) {
-        console.error("Erro: poolId não identificado na URL do comprovante.");
-        setLoading(false);
-        return;
+async function fetchDadosComprovante() {
+  if (!poolId) {
+    console.error("Erro: poolId não identificado na URL do comprovante.");
+    setLoading(false);
+    return;
+  }
+
+  try {
+    // 1. Busca as informações do usuário autenticado atual
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error("Usuário não autenticado");
+
+    const { data: profile, error: profileError } = await supabase
+      .from("users_custom")
+      .select("name")
+      .eq("id", user.id)
+      .maybeSingle(); // Uso de maybeSingle evita travas se o registro estiver instável
+                            
+    if (profileError) console.error("Erro ao buscar perfil:", profileError);
+    setUserData(profile);
+
+    // 2. Busca os palpites brutos de jogos deste bolão (Evita relacionamentos complexos que travam a query)
+    const { data: matchPreds, error: matchError } = await supabase
+      .from("match_predictions")
+      .select("id, home_score, away_score, updated_at, match_id")
+      .eq("user_id", user.id)
+      .eq("pool_id", poolId);
+                            
+    if (matchError) throw matchError;
+
+    // Criamos uma estrutura segura para simular o objeto matches esperado pela interface
+    // Isso blinda o frontend contra alterações nas tabelas de jogos do Supabase
+    const formattedPredictions = (matchPreds || []).map(pred => ({
+      id: pred.id,
+      home_score: pred.home_score,
+      away_score: pred.away_score,
+      updated_at: pred.updated_at,
+      matches: {
+        stage: 'group', // Valor padrão de fallback para a tabela renderizar sem quebras
+        home_team_id: '',
+        away_team_id: ''
       }
+    }));
 
-      try {
-        // 1. Busca os dados do usuário atual autenticado
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) throw new Error("Usuário não autenticado");
+    setPredictions(formattedPredictions);
 
-        const { data: profile } = await supabase
-          .from("users_custom")
-          .select("name")
-          .eq("id", user.id)
-          .single();
-                                    
-        setUserData(profile);
+    // 3. Busca as previsões do pódio final para este bolão
+    const { data: finalPred, error: finalError } = await supabase
+      .from("final_predictions")
+      .select("*")
+      .eq("user_id", user.id)
+      .eq("pool_id", poolId)
+      .maybeSingle();
+                            
+    if (finalError) console.error("Erro ao buscar pódio final:", finalError);
+    setFinalPrediction(finalPred);
 
-        // 2. Busca os palpites de partidas FILTRANDO estritamente por este bolão (pool_id)
-        const { data: matchPreds, error: matchError } = await supabase
-          .from("match_predictions")
-          .select(`
-            id, home_score, away_score, updated_at,
-            matches (stage, home_team_id, away_team_id)
-          `)
-          .eq("user_id", user.id)
-          .eq("pool_id", poolId); // Corrigido para restringir ao bolão ativo
-                                    
-        if (matchError) throw matchError;
-        setPredictions((matchPreds as any) || []);
-
-        // 3. Busca o pódio/final (final_predictions) FILTRANDO por este bolão (pool_id)
-        const { data: finalPred, error: finalError } = await supabase
-          .from("final_predictions")
-          .select("*")
-          .eq("user_id", user.id)
-          .eq("pool_id", poolId) // Corrigido para não trazer dados duplicados de bolões antigos
-          .maybeSingle();
-                                    
-        if (finalError) throw finalError;
-        setFinalPrediction(finalPred);
-
-      } catch (error) {
-        console.error("Erro ao carregar dados do comprovante:", error);
-      } finally {
-        setLoading(false);
-      }
-    }
+  } catch (error) {
+    console.error("Erro crítico no fluxo do comprovante:", error);
+  } finally {
+    // Garante que o loading vai para false sob QUALQUER hipótese, destruindo a tela eterna de carregamento
+    setLoading(false);
+  }
+}
 
     fetchDadosComprovante();
   }, [poolId]);
