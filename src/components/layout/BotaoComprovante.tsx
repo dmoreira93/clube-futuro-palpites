@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom'; // Importado para substituir o window.open
 import { supabase } from '@/integrations/supabase/client';
 import { FileText, Loader2, Lock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -8,6 +9,7 @@ interface BotaoComprovanteProps {
 }
 
 export function BotaoComprovante({ poolId }: BotaoComprovanteProps) {
+  const navigate = useNavigate(); // Inicializado o hook de navegação segura do React Router
   const [loading, setLoading] = useState(true);
   const [podeEmitir, setPodeEmitir] = useState(false);
 
@@ -47,11 +49,10 @@ export function BotaoComprovante({ poolId }: BotaoComprovanteProps) {
 
   const emitirComprovante = () => {
     if (!podeEmitir) return;
-    // Passa o poolId na rota de impressão para o comprovante saber de qual bolão puxar
-    const printWindow = window.open(`/comprovante/imprimir?pool=${poolId}`, '_blank');
-    if (printWindow) {
-      printWindow.focus();
-    }
+    
+    // Navega na mesma aba usando a rota limpa configurada no seu App.tsx.
+    // Isso impede de forma absoluta que o navegador barre a ação por bloqueador de pop-ups.
+    navigate(`/comprovante/imprimir/${poolId}`);
   };
 
   return (
