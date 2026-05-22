@@ -166,7 +166,7 @@ export default function ImprimirComprovante() {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50 gap-3">
         <Loader2 className="h-8 w-8 animate-spin text-emerald-600" />
-        <p className="text-sm text-gray-500 font-medium">Buscando e consolidando todos os seus palpites...</p>
+        <p className="text-sm text-gray-500 font-medium">Buscando e consolidating todos os seus palpites...</p>
       </div>
     );
   }
@@ -191,28 +191,50 @@ export default function ImprimirComprovante() {
           margin: 12mm 10mm 15mm 10mm;
         }
         @media print {
-          /* Reseta de forma absoluta heranças globais do app que causam telas brancas */
-          html, body, #root, [data-reactroot] {
+          /* 1. ESCONDE ABSOLUTAMENTE TUDO NO BODY */
+          body * {
+            visibility: hidden !important;
+          }
+          
+          /* 2. EXCEÇÃO DE VISIBILIDADE: TORNA SÓ O CONTAINER E SEUS FILHOS VISÍVEIS */
+          .comprovante-print-page, .comprovante-print-page * {
+            visibility: visible !important;
+          }
+          
+          /* 3. ARRANCA O COMPROVANTE DE FLUXOS TRAVADOS E FIXA NO TOPO DA PÁGINA */
+          .comprovante-print-page {
+            position: absolute !important;
+            left: 0 !important;
+            top: 0 !important;
+            width: 100% !important;
+            max-width: none !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            box-shadow: none !important;
             background-color: #ffffff !important;
             color: #1a202c !important;
+          }
+
+          /* 4. RESET TOTAL DE OVERFLOWS E ALTURAS NOS ELEMENTOS ANCESTRAIS */
+          html, body, #root, [data-reactroot], main, div {
             height: auto !important;
             min-height: 0 !important;
             overflow: visible !important;
             position: static !important;
+            background-color: #ffffff !important;
           }
-          .no-print { display: none !important; }
-          .comprovante-print-page {
-            padding: 0 !important;
-            margin: 0 !important;
-            width: 100% !important;
-            max-width: none !important;
-            box-shadow: none !important;
-            overflow: visible !important;
+
+          /* Oculta totalmente a barra de navegação/ações local */
+          .no-print { 
+            display: none !important; 
           }
-          .page-break { page-break-before: auto; }
+          
+          .page-break { 
+            page-break-before: auto; 
+          }
         }
         .match-table td { padding: 5px 6px; border-bottom: 1px dashed #e2e8f0; font-size: 8.5pt; vertical-align: middle; }
-        .score-box { text-align: center; font-weight: bold; background-color: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 4px; padding: 2px 8px; font-mono; }
+        .score-box { text-align: center; font-weight: bold; background-color: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 4px; padding: 2px 8px; font-family: monospace; }
       `}} />
 
       {/* BARRA DE AÇÕES EXCLUSIVA TELA (Oculta na Impressora) */}
