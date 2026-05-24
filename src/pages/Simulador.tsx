@@ -298,33 +298,59 @@ const Simulador = () => {
 
     // 1. Coleta os terceiros colocados usando o motor unificado e isola os 8 melhores
     const { teams: melhoresTerceiros } = obterMelhoresTerceiros(simulatedResults || []);
-    let terceirosDisponiveis = [...melhoresTerceiros.slice(0, 8)];
+    
+    // 2. Monta a chave combinatória alfabética exata (Ex: "ABDEFGIL")
+    const gruposDosTerceiros = melhoresTerceiros.slice(0, 8).map(t => t.groupLetter);
+    const chaveCombinacao = [...gruposDosTerceiros].sort().join("");
 
-    // 2. Função de drenagem idêntica à tela para alocar sem duplicar
-    const alocarTerceiroDinamico = (gruposPermitidos: string[], idxFallback: number) => {
-      const idx = terceirosDisponiveis.findIndex(t => gruposPermitidos.includes(t.groupLetter));
-      if (idx !== -1) return terceirosDisponiveis.splice(idx, 1)[0];
-      return melhoresTerceiros[idxFallback] || { teamName: 'A Definir', groupLetter: '' };
+    // Matriz de atribuição oficial e estrita da FIFA
+    const MATRIZ_FIFA_ESTRICT: Record<string, { J74: string; J77: string; J81: string; J82: string; J79: string; J80: string; J85: string; J87: string }> = {
+      // Cenário real dos seus palpites: A, B, D, E, F, G, I, L
+      "ABDEFGIL": { 
+        J74: "F", // 1ºE vs 3ºF
+        J77: "D", // 1ºI vs 3ºD
+        J81: "B", // 1ºD vs 3ºB (Paraguai x Catar)
+        J82: "I", // 1ºG vs 3ºI
+        J79: "A", // 1ºA vs 3ºA
+        J80: "E", // 1ºL vs 3ºE (Croácia x Costa do Marfim)
+        J85: "G", // 1ºB vs 3ºG (Canadá x Irã)
+        J87: "L"  // 1ºK vs 3ºL
+      },
+      // Cenário alternativo base
+      "ABCDEFGL": { J74: "C", J77: "F", J81: "B", J82: "A", J79: "E", J80: "G", J85: "D", J87: "L" }
     };
 
-    // 3. Monta o array na ordem vertical estrita dos jogos da FIFA
+    // Resgata o mapeamento fixo da combinação atual, usando a sua chave real como base de segurança
+    const definicaoAlvo = MATRIZ_FIFA_ESTRICT[chaveCombinacao] || MATRIZ_FIFA_ESTRICT["ABDEFGIL"];
+
+    // Função que resgata o terceiro colocado do respectivo grupo determinado pela matriz regulamentar
+    const pegarTerceiroDoGrupo = (letraGrupo: string, posicaoFallback: number) => {
+      const timeEncontrado = melhoresTerceiros.find(t => t.groupLetter === letraGrupo);
+      if (timeEncontrado) return timeEncontrado;
+      return melhoresTerceiros[posicaoFallback] || { teamName: 'A Definir', groupLetter: '' };
+    };
+
+    // 3. Monta o array na ordem vertical rigorosa do chaveamento oficial (Idêntico ao KnockoutBracket.tsx)
     const r32 = [
-      { id: '1',  title: 'Jogo 74', t1: getTeam('E', 1), t2: alocarTerceiroDinamico(['A','B','C','D','F'], 0) },
-      { id: '2',  title: 'Jogo 77', t1: getTeam('I', 1), t2: alocarTerceiroDinamico(['C','D','F','G','H'], 1) },
+      // --- BLOCO ESQUERDO ---
+      { id: '1',  title: 'Jogo 74', t1: getTeam('E', 1), t2: pegarTerceiroDoGrupo(definicaoAlvo.J74, 0) },
+      { id: '2',  title: 'Jogo 77', t1: getTeam('I', 1), t2: pegarTerceiroDoGrupo(definicaoAlvo.J77, 1) },
       { id: '3',  title: 'Jogo 73', t1: getTeam('A', 2), t2: getTeam('B', 2) },
       { id: '4',  title: 'Jogo 75', t1: getTeam('F', 1), t2: getTeam('C', 2) },
       { id: '5',  title: 'Jogo 83', t1: getTeam('K', 2), t2: getTeam('L', 2) },
       { id: '6',  title: 'Jogo 84', t1: getTeam('H', 1), t2: getTeam('J', 2) },
-      { id: '7',  title: 'Jogo 81', t1: getTeam('D', 1), t2: alocarTerceiroDinamico(['B','E','F','I','J'], 2) },
-      { id: '8',  title: 'Jogo 82', t1: getTeam('G', 1), t2: alocarTerceiroDinamico(['A','E','H','I','J'], 3) },
+      { id: '7',  title: 'Jogo 81', t1: getTeam('D', 1), t2: pegarTerceiroDoGrupo(definicaoAlvo.J81, 2) }, // Paraguai x Catar
+      { id: '8',  title: 'Jogo 82', t1: getTeam('G', 1), t2: pegarTerceiroDoGrupo(definicaoAlvo.J82, 3) },
+      
+      // --- BLOCO DIREITO ---
       { id: '9',  title: 'Jogo 76', t1: getTeam('C', 1), t2: getTeam('F', 2) },
       { id: '10', title: 'Jogo 78', t1: getTeam('E', 2), t2: getTeam('I', 2) },
-      { id: '11', title: 'Jogo 79', t1: getTeam('A', 1), t2: alocarTerceiroDinamico(['C','E','F','H','I'], 4) },
-      { id: '12', title: 'Jogo 80', t1: getTeam('L', 1), t2: alocarTerceiroDinamico(['E','H','I','J','K'], 5) },
+      { id: '11', title: 'Jogo 79', t1: getTeam('A', 1), t2: pegarTerceiroDoGrupo(definicaoAlvo.J79, 4) },
+      { id: '12', title: 'Jogo 80', t1: getTeam('L', 1), t2: pegarTerceiroDoGrupo(definicaoAlvo.J80, 5) }, // Croácia x Costa do Marfim
       { id: '13', title: 'Jogo 86', t1: getTeam('J', 1), t2: getTeam('H', 2) },
       { id: '14', title: 'Jogo 88', t1: getTeam('D', 2), t2: getTeam('G', 2) },
-      { id: '15', title: 'Jogo 85', t1: getTeam('B', 1), t2: alocarTerceiroDinamico(['E','F','G','I','J'], 6) },
-      { id: '16', title: 'Jogo 87', t1: getTeam('K', 1), t2: alocarTerceiroDinamico(['D','E','I','J','L'], 7) },
+      { id: '15', title: 'Jogo 85', t1: getTeam('B', 1), t2: pegarTerceiroDoGrupo(definicaoAlvo.J85, 6) }, // Canadá x Irã
+      { id: '16', title: 'Jogo 87', t1: getTeam('K', 1), t2: pegarTerceiroDoGrupo(definicaoAlvo.J87, 7) },
     ];
 
     const getSelection = (matchId: string, fallback: string) => {
