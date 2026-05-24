@@ -155,7 +155,6 @@ const Simulador = () => {
       if (teamId) newState[matchId] = teamId;
       else delete newState[matchId];
       
-      // Mapeamento estendido para suportar o cascade a partir do Round of 32 (Fase de 32 times)
       const cascadeClearMap: { [key: string]: string[] } = {
         'r32-1': ['r16-1', 'qf-1', 'sf-1', 'final', 'third_place'],
         'r32-2': ['r16-1', 'qf-1', 'sf-1', 'final', 'third_place'],
@@ -182,8 +181,7 @@ const Simulador = () => {
     });
   }, []);
 
-  // CORRIGIDO E INTEGRADO: Agora usa a nossa RPC em lote para salvar as posições de 1º e 2º de forma instantânea
-    const handleAdoptGroupPrediction = async (groupId: string, firstTeamId: string, secondTeamId: string) => {
+  const handleAdoptGroupPrediction = async (groupId: string, firstTeamId: string, secondTeamId: string) => {
     if (!user || !pool) return;
     if (firstTeamId === secondTeamId) return toast.error("Você não pode escolher o mesmo time como 1º e 2º lugar.");
     
@@ -281,30 +279,12 @@ const Simulador = () => {
     printWindow.document.close();
   };
 
-const handlePrintSimulated = () => {
+  const handlePrintSimulated = () => {
     const printWindow = window.open('', '_blank');
     if (!printWindow) {
       toast.error("Permita os pop-ups no seu navegador para poder imprimir.");
       return;
     }
-
-    // Matriz Combinatória Regulamentar da FIFA (Copa do Mundo 2026) com chaves de Jogo
-    const TABELA_TERCEIROS_FIFA: Record<string, { J74: string; J77: string; J81: string; J82: string; J79: string; J80: string; J85: string; J87: string }> = {
-      "ABCDEFGL": { J74: "C", J77: "F", J81: "B", J82: "A", J79: "E", J80: "G", J85: "D", J87: "L" },
-      "ABCDEFGH": { J74: "C", J77: "D", J81: "A", J82: "B", J79: "E", J80: "F", J85: "G", J87: "H" },
-      "ABCDEFGI": { J74: "C", J77: "D", J81: "A", J82: "B", J79: "E", J80: "F", J85: "G", J87: "I" },
-      "ABCDEFGJ": { J74: "C", J77: "D", J81: "A", J82: "B", J79: "E", J80: "F", J85: "G", J87: "J" },
-      "ABCDEFGK": { J74: "C", J77: "D", J81: "A", J82: "B", J79: "E", J80: "F", J85: "G", J87: "K" },
-      "ABCDEFHI": { J74: "C", J77: "D", J81: "A", J82: "B", J79: "E", J80: "F", J85: "H", J87: "I" },
-      "ABCDEFHJ": { J74: "C", J77: "D", J81: "A", J82: "B", J79: "E", J80: "F", J85: "H", J87: "J" },
-      "ABCDEFHK": { J74: "C", J77: "D", J81: "A", J82: "B", J79: "E", J80: "F", J85: "H", J87: "K" },
-      "ABCDEFHL": { J74: "C", J77: "D", J81: "A", J82: "B", J79: "E", J80: "F", J85: "H", J87: "L" },
-      "ABCDEFIJ": { J74: "C", J77: "D", J81: "A", J82: "B", J79: "E", J80: "F", J85: "I", J87: "J" },
-      "ABCDEFIK": { J74: "C", J77: "D", J81: "A", J82: "B", J79: "E", J80: "F", J85: "I", J87: "K" },
-      "ABCDEFIL": { J74: "C", J77: "D", J81: "A", J82: "B", J79: "E", J80: "F", J85: "I", J87: "L" },
-      "EFGHIJKL": { J74: "E", J77: "I", J81: "F", J82: "H", J79: "J", J80: "G", J85: "K", J87: "L" },
-      "DEFGHIJKL": { J74: "E", J77: "G", J81: "J", J82: "D", J79: "H", J80: "F", J85: "L", J87: "K" }
-    };
 
     const getTeamName = (t: any) => t?.teamName || t?.team_name || t?.name || t?.team?.name || 'A Definir';
 
@@ -316,41 +296,35 @@ const handlePrintSimulated = () => {
       return group?.standings[position - 1];
     };
 
-    // 1. Puxa os terceiros colocados usando a inteligência unificada do componente
+    // 1. Coleta os terceiros colocados usando o motor unificado e isola os 8 melhores
     const { teams: melhoresTerceiros } = obterMelhoresTerceiros(simulatedResults || []);
-    
-    // 2. Monta a chave combinatória alfabética (Ex: "ABCDEFGL")
-    const gruposDosTerceiros = melhoresTerceiros.slice(0, 8).map(t => t.groupLetter);
-    const chaveCombinacao = [...gruposDosTerceiros].sort().join("");
-    const definicaoAlvo = TABELA_TERCEIROS_FIFA[chaveCombinacao];
+    let terceirosDisponiveis = [...melhoresTerceiros.slice(0, 8)];
 
-    // Função de busca que garante o terceiro correto por grupo
-    const pegarTerceiroDoGrupo = (letraGrupo: string | undefined, posicaoFallback: number) => {
-      if (letraGrupo) {
-        const timeEncontrado = melhoresTerceiros.find(t => t.groupLetter === letraGrupo);
-        if (timeEncontrado) return timeEncontrado;
-      }
-      return melhoresTerceiros[posicaoFallback] || { teamName: 'A Definir' };
+    // 2. Função de drenagem idêntica à tela para alocar sem duplicar
+    const alocarTerceiroDinamico = (gruposPermitidos: string[], idxFallback: number) => {
+      const idx = terceirosDisponiveis.findIndex(t => gruposPermitidos.includes(t.groupLetter));
+      if (idx !== -1) return terceirosDisponiveis.splice(idx, 1)[0];
+      return melhoresTerceiros[idxFallback] || { teamName: 'A Definir', groupLetter: '' };
     };
 
-    // 3. Organização dos 16 confrontos na mesma ordem vertical da tela e da FIFA
+    // 3. Monta o array na ordem vertical estrita dos jogos da FIFA
     const r32 = [
-      { id: '1',  title: 'Jogo 74', t1: getTeam('E', 1), t2: pegarTerceiroDoGrupo(definicaoAlvo?.J74, 0) }, // Alemanha x Costa do Marfim
-      { id: '2',  title: 'Jogo 77', t1: getTeam('I', 1), t2: pegarTerceiroDoGrupo(definicaoAlvo?.J77, 1) },
+      { id: '1',  title: 'Jogo 74', t1: getTeam('E', 1), t2: alocarTerceiroDinamico(['A','B','C','D','F'], 0) },
+      { id: '2',  title: 'Jogo 77', t1: getTeam('I', 1), t2: alocarTerceiroDinamico(['C','D','F','G','H'], 1) },
       { id: '3',  title: 'Jogo 73', t1: getTeam('A', 2), t2: getTeam('B', 2) },
       { id: '4',  title: 'Jogo 75', t1: getTeam('F', 1), t2: getTeam('C', 2) },
       { id: '5',  title: 'Jogo 83', t1: getTeam('K', 2), t2: getTeam('L', 2) },
       { id: '6',  title: 'Jogo 84', t1: getTeam('H', 1), t2: getTeam('J', 2) },
-      { id: '7',  title: 'Jogo 81', t1: getTeam('D', 1), t2: pegarTerceiroDoGrupo(definicaoAlvo?.J81, 2) }, // Paraguai x Catar
-      { id: '8',  title: 'Jogo 82', t1: getTeam('G', 1), t2: pegarTerceiroDoGrupo(definicaoAlvo?.J82, 3) },
+      { id: '7',  title: 'Jogo 81', t1: getTeam('D', 1), t2: alocarTerceiroDinamico(['B','E','F','I','J'], 2) },
+      { id: '8',  title: 'Jogo 82', t1: getTeam('G', 1), t2: alocarTerceiroDinamico(['A','E','H','I','J'], 3) },
       { id: '9',  title: 'Jogo 76', t1: getTeam('C', 1), t2: getTeam('F', 2) },
       { id: '10', title: 'Jogo 78', t1: getTeam('E', 2), t2: getTeam('I', 2) },
-      { id: '11', title: 'Jogo 79', t1: getTeam('A', 1), t2: pegarTerceiroDoGrupo(definicaoAlvo?.J79, 4) },
-      { id: '12', title: 'Jogo 80', t1: getTeam('L', 1), t2: pegarTerceiroDoGrupo(definicaoAlvo?.J80, 5) },
+      { id: '11', title: 'Jogo 79', t1: getTeam('A', 1), t2: alocarTerceiroDinamico(['C','E','F','H','I'], 4) },
+      { id: '12', title: 'Jogo 80', t1: getTeam('L', 1), t2: alocarTerceiroDinamico(['E','H','I','J','K'], 5) },
       { id: '13', title: 'Jogo 86', t1: getTeam('J', 1), t2: getTeam('H', 2) },
       { id: '14', title: 'Jogo 88', t1: getTeam('D', 2), t2: getTeam('G', 2) },
-      { id: '15', title: 'Jogo 85', t1: getTeam('B', 1), t2: pegarTerceiroDoGrupo(definicaoAlvo?.J85, 6) },
-      { id: '16', title: 'Jogo 87', t1: getTeam('K', 1), t2: pegarTerceiroDoGrupo(definicaoAlvo?.J87, 7) }, // Onde Gana vai cair
+      { id: '15', title: 'Jogo 85', t1: getTeam('B', 1), t2: alocarTerceiroDinamico(['E','F','G','I','J'], 6) },
+      { id: '16', title: 'Jogo 87', t1: getTeam('K', 1), t2: alocarTerceiroDinamico(['D','E','I','J','L'], 7) },
     ];
 
     const getSelection = (matchId: string, fallback: string) => {
@@ -418,7 +392,7 @@ const handlePrintSimulated = () => {
         <div class="thirds-box">
           <div class="thirds-title">Os 8 Melhores Terceiros Colocados Classificados (Critério Índice Técnico)</div>
           <div class="thirds-list">
-            ${melhoresTerceiros.slice(0, 8).map(t => `${t.teamName} (Gr. ${t.groupLetter})`).join(' &nbsp;&bull;&nbsp; ')}
+            ${melhoresTerceiros.slice(0, 8).map(t => `${getTeamName(t)} (Gr. ${t.groupLetter || ''})`).join(' &nbsp;&bull;&nbsp; ')}
           </div>
         </div>
 
@@ -450,8 +424,8 @@ const handlePrintSimulated = () => {
               return `
                 <div class="match-box">
                   <div class="match-header">Jogo ${jNum}</div>
-                  <div class="team-slot ${!knockoutSelections[r32Keys[0]] ? 'empty-slot' : ''}">${getSelection(r32Keys[0], `Venc. Jogo ${r32[parseInt(r32Keys[0].replace('r32-',''))-1].title}`)}</div>
-                  <div class="team-slot ${!knockoutSelections[r32Keys[1]] ? 'empty-slot' : ''}">${getSelection(r32Keys[1], `Venc. Jogo ${r32[parseInt(r32Keys[1].replace('r32-',''))-1].title}`)}</div>
+                  <div class="team-slot ${!knockoutSelections[r32Keys[0]] ? 'empty-slot' : ''}">${getSelection(r32Keys[0], `Venc. ${r32[parseInt(r32Keys[0].replace('r32-',''))-1].title}`)}</div>
+                  <div class="team-slot ${!knockoutSelections[r32Keys[1]] ? 'empty-slot' : ''}">${getSelection(r32Keys[1], `Venc. ${r32[parseInt(r32Keys[1].replace('r32-',''))-1].title}`)}</div>
                 </div>
               `;
             }).join('')}

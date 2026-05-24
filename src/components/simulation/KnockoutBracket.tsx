@@ -6,37 +6,20 @@ import { Button } from '@/components/ui/button';
 import { Save } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
-// --- MATRIZ COMBINATÓRIA REGULAMENTAR DA FIFA (COPA DO MUNDO 2026) ---
-// Chave: Junção ordenada alfabeticamente dos 8 grupos que avançaram em 3º lugar.
-// Valor: Objeto contendo estritamente qual grupo vai para cada jogo de 3º colocado.
-const TABELA_TERCEIROS_FIFA: Record<string, { J74: string; J77: string; J81: string; J82: string; J79: string; J80: string; J85: string; J87: string }> = {
-  // Cenário dos seus prints (Terceiros de: A, B, C, D, E, F, G, L):
-  "ABCDEFGL": { J74: "C", J77: "F", J81: "B", J82: "A", J79: "E", J80: "G", J85: "D", J87: "L" },
-  
-  // Outras combinações oficiais do regulamento para prevenção de falhas do usuário:
-  "ABCDEFGH": { J74: "C", J77: "D", J81: "A", J82: "B", J79: "E", J80: "F", J85: "G", J87: "H" },
-  "ABCDEFGI": { J74: "C", J77: "D", J81: "A", J82: "B", J79: "E", J80: "F", J85: "G", J87: "I" },
-  "ABCDEFGJ": { J74: "C", J77: "D", J81: "A", J82: "B", J79: "E", J80: "F", J85: "G", J87: "J" },
-  "ABCDEFGK": { J74: "C", J77: "D", J81: "A", J82: "B", J79: "E", J80: "F", J85: "G", J87: "K" },
-  "ABCDEFHI": { J74: "C", J77: "D", J81: "A", J82: "B", J79: "E", J80: "F", J85: "H", J87: "I" },
-  "ABCDEFHJ": { J74: "C", J77: "D", J81: "A", J82: "B", J79: "E", J80: "F", J85: "H", J87: "J" },
-  "ABCDEFHK": { J74: "C", J77: "D", J81: "A", J82: "B", J79: "E", J80: "F", J85: "H", J87: "K" },
-  "ABCDEFHL": { J74: "C", J77: "D", J81: "A", J82: "B", J79: "E", J80: "F", J85: "H", J87: "L" },
-  "ABCDEFIJ": { J74: "C", J77: "D", J81: "A", J82: "B", J79: "E", J80: "F", J85: "I", J87: "J" },
-  "ABCDEFIK": { J74: "C", J77: "D", J81: "A", J82: "B", J79: "E", J80: "F", J85: "I", J87: "K" },
-  "ABCDEFIL": { J74: "C", J77: "D", J81: "A", J82: "B", J79: "E", J80: "F", J85: "I", J87: "L" },
-  "EFGHIJKL": { J74: "E", J77: "I", J81: "F", J82: "H", J79: "J", J80: "G", J85: "K", J87: "L" },
-  "DEFGHIJKL": { J74: "E", J77: "G", J81: "J", J82: "D", J79: "H", J80: "F", J85: "L", J87: "K" }
-};
-
 // --- MOTOR DE ÍNDICE TÉCNICO COMPLETO DOS 3º COLOCADOS ---
 export function obterMelhoresTerceiros(simulatedGroups: SimulatedGroup[]): { teams: any[], hasTie: boolean } {
   const terceiros = simulatedGroups
     .map(g => {
       const terceiroDoGrupo = g.standings[2];
+      // Garante a extração limpa da letra do grupo
+      const nomeLimpo = (g.groupName || '').trim().toUpperCase();
+      const letra = nomeLimpo.startsWith('GRUPO') || nomeLimpo.startsWith('GROUP') 
+        ? nomeLimpo.split(' ').pop() || '' 
+        : nomeLimpo;
+
       return terceiroDoGrupo ? { 
         ...terceiroDoGrupo, 
-        groupLetter: (g.groupName || '').replace('Grupo ', '').trim().toUpperCase() 
+        groupLetter: letra.trim()
       } : null;
     })
     .filter((t): t is any => t !== null && t !== undefined);
@@ -53,10 +36,7 @@ export function obterMelhoresTerceiros(simulatedGroups: SimulatedGroup[]): { tea
     return 0;
   });
 
-  return {
-    teams: terceiros,
-    hasTie
-  };
+  return { teams: terceiros, hasTie };
 }
 
 interface KnockoutBracketProps {
@@ -128,77 +108,70 @@ const KnockoutBracket: React.FC<KnockoutBracketProps> = ({
     return winnerId === team1.teamId ? team2 : team1;
   };
 
-  // --- BUSCA DA LISTA DE TERCEIROS ORDENADOS POR ÍNDICE TÉCNICO ---
   const { melhoresTerceiros, existeEmpateNosCriterios } = React.useMemo(() => {
     const resultado = obterMelhoresTerceiros(simulatedGroups);
     return { melhoresTerceiros: resultado.teams, existeEmpateNosCriterios: resultado.hasTie };
   }, [simulatedGroups]);
 
-  // --- O MAPA DEFINITIVO EXCLUSIVO E CORRIGIDO DA SEGUNDA FASE (32 ENTRADAS) ---
+  // --- ALOCAÇÃO DINÂMICA COMPATÍVEL COM O CHAVEAMENTO FIFA 2026 ---
   const r32 = React.useMemo(() => {
-    // 1. Coleta os grupos dos 8 terceiros colocados que avançaram
-    const gruposDosTerceiros = melhoresTerceiros.slice(0, 8).map(t => t.groupLetter);
-    const chaveCombinacao = [...gruposDosTerceiros].sort().join("");
+    // Isola apenas os 8 melhores terceiros da classificação geral
+    let terceirosDisponiveis = [...melhoresTerceiros.slice(0, 8)];
 
-    // 2. Coleta os alvos específicos da tabela da FIFA
-    const definicaoAlvo = TABELA_TERCEIROS_FIFA[chaveCombinacao];
-
-    // Função de varredura que encontra o terceiro colocado daquele respectivo grupo
-    const pegarTerceiroDoGrupo = (letraGrupo: string | undefined, posicaoFallback: number) => {
-      if (letraGrupo) {
-        const timeEncontrado = melhoresTerceiros.find(t => t.groupLetter === letraGrupo);
-        if (timeEncontrado) return timeEncontrado;
+    const alocarTerceiroDinamico = (gruposPermitidos: string[], idxFallback: number) => {
+      const idx = terceirosDisponiveis.findIndex(t => gruposPermitidos.includes(t.groupLetter));
+      if (idx !== -1) {
+        return terceirosDisponiveis.splice(idx, 1)[0];
       }
-      return melhoresTerceiros[posicaoFallback] || allTeams[posicaoFallback];
+      return melhoresTerceiros[idxFallback] || allTeams[idxFallback];
     };
 
-    // 3. Organização vertical rigorosa espelhando de cima a baixo a imagem da FIFA
-    console.log("CHAVE GERADA NO MEU APP:", chaveCombinacao);
+    // Definição dos confrontos respeitando a ordem e elegibilidade exata da imagem image_9ceced.png
     return [
-      // --- LADO ESQUERDO DO DESIGN DA CHAVE ---
-      { id: 'r32-1',  title: 'Jogo 74', team1: getTeam('E', 1), team2: pegarTerceiroDoGrupo(definicaoAlvo?.J74, 0) }, // 1ºE vs 3º C (Alemanha x Costa do Marfim)
-      { id: 'r32-2',  title: 'Jogo 77', team1: getTeam('I', 1), team2: pegarTerceiroDoGrupo(definicaoAlvo?.J77, 1) }, // 1ºI vs 3º F
-      { id: 'r32-3',  title: 'Jogo 73', team1: getTeam('A', 2), team2: getTeam('B', 2) },                             // 2ºA vs 2ºB
-      { id: 'r32-4',  title: 'Jogo 75', team1: getTeam('F', 1), team2: getTeam('C', 2) },                             // 1ºF vs 2ºC
-      { id: 'r32-5',  title: 'Jogo 83', team1: getTeam('K', 2), team2: getTeam('L', 2) },                             // 2ºK vs 2ºL
-      { id: 'r32-6',  title: 'Jogo 84', team1: getTeam('H', 1), team2: getTeam('J', 2) },                             // 1ºH vs 2ºJ
-      { id: 'r32-7',  title: 'Jogo 81', team1: getTeam('D', 1), team2: pegarTerceiroDoGrupo(definicaoAlvo?.J81, 2) }, // 1ºD vs 3º B (Paraguai x Catar)
-      { id: 'r32-8',  title: 'Jogo 82', team1: getTeam('G', 1), team2: pegarTerceiroDoGrupo(definicaoAlvo?.J82, 3) }, // 1ºG vs 3º A
+      // --- LADO ESQUERDO DO MATA-MATA (Top para Bottom) ---
+      { id: 'r32-1',  title: 'Jogo 74', team1: getTeam('E', 1), team2: alocarTerceiroDinamico(['A','B','C','D','F'], 0) },
+      { id: 'r32-2',  title: 'Jogo 77', team1: getTeam('I', 1), team2: alocarTerceiroDinamico(['C','D','F','G','H'], 1) },
+      { id: 'r32-3',  title: 'Jogo 73', team1: getTeam('A', 2), team2: getTeam('B', 2) },
+      { id: 'r32-4',  title: 'Jogo 75', team1: getTeam('F', 1), team2: getTeam('C', 2) },
+      { id: 'r32-5',  title: 'Jogo 83', team1: getTeam('K', 2), team2: getTeam('L', 2) },
+      { id: 'r32-6',  title: 'Jogo 84', team1: getTeam('H', 1), team2: getTeam('J', 2) },
+      { id: 'r32-7',  title: 'Jogo 81', team1: getTeam('D', 1), team2: alocarTerceiroDinamico(['B','E','F','I','J'], 2) },
+      { id: 'r32-8',  title: 'Jogo 82', team1: getTeam('G', 1), team2: alocarTerceiroDinamico(['A','E','H','I','J'], 3) },
 
-      // --- LADO DIREITO DO DESIGN DA CHAVE ---
-      { id: 'r32-9',  title: 'Jogo 76', team1: getTeam('C', 1), team2: getTeam('F', 2) },                             // 1ºC vs 2ºF
-      { id: 'r32-10', title: 'Jogo 78', team1: getTeam('E', 2), team2: getTeam('I', 2) },                             // 2ºE vs 2ºI
-      { id: 'r32-11', title: 'Jogo 79', team1: getTeam('A', 1), team2: pegarTerceiroDoGrupo(definicaoAlvo?.J79, 4) }, // 1ºA vs 3º E
-      { id: 'r32-12', title: 'Jogo 80', team1: getTeam('L', 1), team2: pegarTerceiroDoGrupo(definicaoAlvo?.J80, 5) }, // 1ºL vs 3º G
-      { id: 'r32-13', title: 'Jogo 86', team1: getTeam('J', 1), team2: getTeam('H', 2) },                             // 1ºJ vs 2ºH
-      { id: 'r32-14', title: 'Jogo 88', team1: getTeam('D', 2), team2: getTeam('G', 2) },                             // 2ºD vs 2ºG
-      { id: 'r32-15', title: 'Jogo 85', team1: getTeam('B', 1), team2: pegarTerceiroDoGrupo(definicaoAlvo?.J85, 6) }, // 1ºB vs 3º D
-      { id: 'r32-16', title: 'Jogo 87', team1: getTeam('K', 1), team2: pegarTerceiroDoGrupo(definicaoAlvo?.J87, 7) }, // 1ºK vs 3º L (Gana realocada aqui!)
+      // --- LADO DIREITO DO MATA-MATA (Top para Bottom) ---
+      { id: 'r32-9',  title: 'Jogo 76', team1: getTeam('C', 1), team2: getTeam('F', 2) },
+      { id: 'r32-10', title: 'Jogo 78', team1: getTeam('E', 2), team2: getTeam('I', 2) },
+      { id: 'r32-11', title: 'Jogo 79', team1: getTeam('A', 1), team2: alocarTerceiroDinamico(['C','E','F','H','I'], 4) },
+      { id: 'r32-12', title: 'Jogo 80', team1: getTeam('L', 1), team2: alocarTerceiroDinamico(['E','H','I','J','K'], 5) },
+      { id: 'r32-13', title: 'Jogo 86', team1: getTeam('J', 1), team2: getTeam('H', 2) },
+      { id: 'r32-14', title: 'Jogo 88', team1: getTeam('D', 2), team2: getTeam('G', 2) },
+      { id: 'r32-15', title: 'Jogo 85', team1: getTeam('B', 1), team2: alocarTerceiroDinamico(['E','F','G','I','J'], 6) },
+      { id: 'r32-16', title: 'Jogo 87', team1: getTeam('K', 1), team2: alocarTerceiroDinamico(['D','E','I','J','L'], 7) },
     ];
   }, [simulatedGroups, melhoresTerceiros, allTeams]);
 
-  // --- MAPEAMENTO SEQUENCIAL DAS OITAVAS BASEADO NOS JOGOS PAIS ---
+  // --- MAPEAMENTO DAS OITAVAS E ADIANTE ---
   const r16_teams = React.useMemo(() => ({
-    'r16-1': [findTeamById(knockoutSelections['r32-1']), findTeamById(knockoutSelections['r32-2'])], // J74 x J77 -> J89
-    'r16-2': [findTeamById(knockoutSelections['r32-3']), findTeamById(knockoutSelections['r32-4'])], // J73 x J75 -> J90
-    'r16-3': [findTeamById(knockoutSelections['r32-5']), findTeamById(knockoutSelections['r32-6'])], // J83 x J84 -> J93
-    'r16-4': [findTeamById(knockoutSelections['r32-7']), findTeamById(knockoutSelections['r32-8'])], // J81 x J82 -> J94
-    'r16-5': [findTeamById(knockoutSelections['r32-9']), findTeamById(knockoutSelections['r32-10'])], // J76 x J78 -> J91
-    'r16-6': [findTeamById(knockoutSelections['r32-11']), findTeamById(knockoutSelections['r32-12'])], // J79 x J80 -> J92
-    'r16-7': [findTeamById(knockoutSelections['r32-13']), findTeamById(knockoutSelections['r32-14'])], // J86 x J88 -> J95
-    'r16-8': [findTeamById(knockoutSelections['r32-15']), findTeamById(knockoutSelections['r32-16'])], // J85 x J87 -> J96
+    'r16-1': [findTeamById(knockoutSelections['r32-1']), findTeamById(knockoutSelections['r32-2'])],
+    'r16-2': [findTeamById(knockoutSelections['r32-3']), findTeamById(knockoutSelections['r32-4'])],
+    'r16-3': [findTeamById(knockoutSelections['r32-5']), findTeamById(knockoutSelections['r32-6'])],
+    'r16-4': [findTeamById(knockoutSelections['r32-7']), findTeamById(knockoutSelections['r32-8'])],
+    'r16-5': [findTeamById(knockoutSelections['r32-9']), findTeamById(knockoutSelections['r32-10'])],
+    'r16-6': [findTeamById(knockoutSelections['r32-11']), findTeamById(knockoutSelections['r32-12'])],
+    'r16-7': [findTeamById(knockoutSelections['r32-13']), findTeamById(knockoutSelections['r32-14'])],
+    'r16-8': [findTeamById(knockoutSelections['r32-15']), findTeamById(knockoutSelections['r32-16'])],
   }), [knockoutSelections, allTeams]);
 
   const qf_teams = React.useMemo(() => ({
-    'qf-1': [findTeamById(knockoutSelections['r16-1']), findTeamById(knockoutSelections['r16-2'])], // J89 x J90 -> J97
-    'qf-2': [findTeamById(knockoutSelections['r16-3']), findTeamById(knockoutSelections['r16-4'])], // J93 x J94 -> J98
-    'qf-3': [findTeamById(knockoutSelections['r16-5']), findTeamById(knockoutSelections['r16-6'])], // J91 x J92 -> J99
-    'qf-4': [findTeamById(knockoutSelections['r16-7']), findTeamById(knockoutSelections['r16-8'])], // J95 x J96 -> J100
+    'qf-1': [findTeamById(knockoutSelections['r16-1']), findTeamById(knockoutSelections['r16-2'])],
+    'qf-2': [findTeamById(knockoutSelections['r16-3']), findTeamById(knockoutSelections['r16-4'])],
+    'qf-3': [findTeamById(knockoutSelections['r16-5']), findTeamById(knockoutSelections['r16-6'])],
+    'qf-4': [findTeamById(knockoutSelections['r16-7']), findTeamById(knockoutSelections['r16-8'])],
   }), [knockoutSelections, allTeams]);
 
   const sf_teams = React.useMemo(() => ({
-    'sf-1': [findTeamById(knockoutSelections['qf-1']), findTeamById(knockoutSelections['qf-2'])], // J97 x J98 -> J101 Lado Esq
-    'sf-2': [findTeamById(knockoutSelections['qf-3']), findTeamById(knockoutSelections['qf-4'])], // J99 x J100 -> J102 Lado Dir
+    'sf-1': [findTeamById(knockoutSelections['qf-1']), findTeamById(knockoutSelections['qf-2'])],
+    'sf-2': [findTeamById(knockoutSelections['qf-3']), findTeamById(knockoutSelections['qf-4'])],
   }), [knockoutSelections, allTeams]);
 
   const final_teams = React.useMemo(() => [
