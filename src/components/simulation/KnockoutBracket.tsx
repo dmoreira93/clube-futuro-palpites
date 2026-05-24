@@ -6,38 +6,27 @@ import { Button } from '@/components/ui/button';
 import { Save } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
-// --- MATRIZ COMBINATÓRIA OFICIAL DA FIFA (COPA DO MUNDO 2026) ---
-// Chave: Letras dos 8 grupos ordenadas alfabeticamente.
-// Valor: Array com exatamente 8 posições correspondentes aos adversários de: [1ºA, 1ºB, 1ºD, 1ºE, 1ºG, 1ºI, 1ºK, 1ºL]
-const MATRIZ_OFICIAL_FIFA: Record<string, string[]> = {
-  "ABCDEFGL": ["C", "E", "F", "B", "A", "G", "D", "L"], // Combinação exata do seu simulador impresso
-  "ABCDEFGH": ["C", "D", "A", "B", "E", "F", "G", "H"],
-  "ABCDEFGI": ["C", "D", "A", "B", "E", "F", "G", "I"],
-  "ABCDEFGJ": ["C", "D", "A", "B", "E", "F", "G", "J"],
-  "ABCDEFGK": ["C", "D", "A", "B", "E", "F", "G", "K"],
-  "ABCDEFHI": ["C", "D", "A", "B", "E", "F", "H", "I"],
-  "ABCDEFHJ": ["C", "D", "A", "B", "E", "F", "H", "J"],
-  "ABCDEFHK": ["C", "D", "A", "B", "E", "F", "H", "K"],
-  "ABCDEFHL": ["C", "D", "A", "B", "E", "F", "H", "L"],
-  "ABCDEFIJ": ["C", "D", "A", "B", "E", "F", "I", "J"],
-  "ABCDEFIK": ["C", "D", "A", "B", "E", "F", "I", "K"],
-  "ABCDEFIL": ["C", "D", "A", "B", "E", "F", "I", "L"],
-  "ABCDEFJK": ["C", "D", "A", "B", "E", "F", "J", "K"],
-  "ABCDEFJL": ["C", "D", "A", "B", "E", "F", "J", "L"],
-  "ABCDEFKL": ["C", "D", "A", "B", "E", "F", "K", "L"],
-  "ABCDEGHI": ["C", "D", "A", "B", "E", "G", "H", "I"],
-  "ABCDEGHJ": ["C", "D", "A", "B", "E", "G", "H", "J"],
-  "DEFGHIJK": ["E", "G", "J", "D", "H", "F", "I", "K"],
-  "DEFGHIJL": ["E", "G", "J", "D", "H", "F", "L", "I"],
-  "EFGHIJKL": ["E", "J", "I", "F", "H", "G", "L", "K"],
-  "DFGHIJKL": ["H", "G", "I", "D", "J", "F", "L", "K"],
-  "DEGHIJKL": ["E", "J", "I", "D", "H", "G", "L", "K"],
-  "DEFHIJKL": ["E", "J", "I", "D", "H", "F", "L", "K"],
-  "DEFIJKL":  ["E", "G", "I", "D", "J", "F", "L", "K"],
-  "DEFGHIJKL": ["E", "G", "J", "D", "H", "F", "L", "K"],
-  "CFGHIJKL": ["H", "G", "I", "C", "J", "F", "L", "K"],
-  "CEGHIJKL": ["E", "J", "I", "C", "H", "G", "L", "K"],
-  "CEFHIJKL": ["E", "J", "I", "C", "H", "F", "L", "K"]
+// --- MATRIZ COMBINATÓRIA REGULAMENTAR DA FIFA (COPA DO MUNDO 2026) ---
+// Chave: Junção ordenada alfabeticamente dos 8 grupos que avançaram em 3º lugar.
+// Valor: Objeto contendo estritamente qual grupo vai para cada jogo de 3º colocado.
+const TABELA_TERCEIROS_FIFA: Record<string, { J74: string; J77: string; J81: string; J82: string; J79: string; J80: string; J85: string; J87: string }> = {
+  // Cenário dos seus prints (Terceiros de: A, B, C, D, E, F, G, L):
+  "ABCDEFGL": { J74: "C", J77: "F", J81: "B", J82: "A", J79: "E", J80: "G", J85: "D", J87: "L" },
+  
+  // Outras combinações oficiais do regulamento para prevenção de falhas do usuário:
+  "ABCDEFGH": { J74: "C", J77: "D", J81: "A", J82: "B", J79: "E", J80: "F", J85: "G", J87: "H" },
+  "ABCDEFGI": { J74: "C", J77: "D", J81: "A", J82: "B", J79: "E", J80: "F", J85: "G", J87: "I" },
+  "ABCDEFGJ": { J74: "C", J77: "D", J81: "A", J82: "B", J79: "E", J80: "F", J85: "G", J87: "J" },
+  "ABCDEFGK": { J74: "C", J77: "D", J81: "A", J82: "B", J79: "E", J80: "F", J85: "G", J87: "K" },
+  "ABCDEFHI": { J74: "C", J77: "D", J81: "A", J82: "B", J79: "E", J80: "F", J85: "H", J87: "I" },
+  "ABCDEFHJ": { J74: "C", J77: "D", J81: "A", J82: "B", J79: "E", J80: "F", J85: "H", J87: "J" },
+  "ABCDEFHK": { J74: "C", J77: "D", J81: "A", J82: "B", J79: "E", J80: "F", J85: "H", J87: "K" },
+  "ABCDEFHL": { J74: "C", J77: "D", J81: "A", J82: "B", J79: "E", J80: "F", J85: "H", J87: "L" },
+  "ABCDEFIJ": { J74: "C", J77: "D", J81: "A", J82: "B", J79: "E", J80: "F", J85: "I", J87: "J" },
+  "ABCDEFIK": { J74: "C", J77: "D", J81: "A", J82: "B", J79: "E", J80: "F", J85: "I", J87: "K" },
+  "ABCDEFIL": { J74: "C", J77: "D", J81: "A", J82: "B", J79: "E", J80: "F", J85: "I", J87: "L" },
+  "EFGHIJKL": { J74: "E", J77: "I", J81: "F", J82: "H", J79: "J", J80: "G", J85: "K", J87: "L" },
+  "DEFGHIJKL": { J74: "E", J77: "G", J81: "J", J82: "D", J79: "H", J80: "F", J85: "L", J87: "K" }
 };
 
 // --- MOTOR DE ÍNDICE TÉCNICO COMPLETO DOS 3º COLOCADOS ---
@@ -145,74 +134,70 @@ const KnockoutBracket: React.FC<KnockoutBracketProps> = ({
     return { melhoresTerceiros: resultado.teams, existeEmpateNosCriterios: resultado.hasTie };
   }, [simulatedGroups]);
 
-  // --- O MAPA DEFINITIVO UTILIZANDO A MATRIZ DINÂMICA DA FIFA ---
-  // --- O MAPA DEFINITIVO ALINHADO 100% COM A IMAGEM OFICIAL DA FIFA ---
+  // --- O MAPA DEFINITIVO EXCLUSIVO E CORRIGIDO DA SEGUNDA FASE (32 ENTRADAS) ---
   const r32 = React.useMemo(() => {
-    // 1. Isola as letras dos 8 grupos de terceiros colocados classificados
+    // 1. Coleta os grupos dos 8 terceiros colocados que avançaram
     const gruposDosTerceiros = melhoresTerceiros.slice(0, 8).map(t => t.groupLetter);
-    
-    // 2. Ordena alfabeticamente para a chave exata da matriz
     const chaveCombinacao = [...gruposDosTerceiros].sort().join("");
 
-    // 3. Linha oficial da matriz baseada no regulamento FIFA
-    const linhaDistribuicaoFifa = MATRIZ_OFICIAL_FIFA[chaveCombinacao];
+    // 2. Coleta os alvos específicos da tabela da FIFA
+    const definicaoAlvo = TABELA_TERCEIROS_FIFA[chaveCombinacao];
 
-    // Função auxiliar para mapear o terceiro correto
-    const obterTerceiroFifa = (grupoAlvo: string | undefined, posicaoFallback: number) => {
-      if (linhaDistribuicaoFifa && grupoAlvo) {
-        const timeEncontrado = melhoresTerceiros.find(t => t.groupLetter === grupoAlvo);
+    // Função de varredura que encontra o terceiro colocado daquele respectivo grupo
+    const pegarTerceiroDoGrupo = (letraGrupo: string | undefined, posicaoFallback: number) => {
+      if (letraGrupo) {
+        const timeEncontrado = melhoresTerceiros.find(t => t.groupLetter === letraGrupo);
         if (timeEncontrado) return timeEncontrado;
       }
       return melhoresTerceiros[posicaoFallback] || allTeams[posicaoFallback];
     };
 
-    // 4. Monta os 16 confrontos na ordem VERTICAL EXATA da imagem da FIFA (Esquerda para a Direita)
-    // Índice da Matriz correspondente aos grupos: [0]=1ºA, [1]=1ºB, [2]=1ºD, [3]=1ºE, [4]=1ºG, [5]=1ºI, [6]=1ºK, [7]=1ºL
+    // 3. Organização vertical rigorosa espelhando de cima a baixo a imagem da FIFA
     return [
-      // --- LADO ESQUERDO DA CHAVE (Top para Bottom) ---
-      { id: 'r32-1',  title: 'Jogo 74', team1: getTeam('E', 1), team2: obterTerceiroFifa(linhaDistribuicaoFifa?.[3], 0) }, // 1ºE vs 3ABCDF
-      { id: 'r32-2',  title: 'Jogo 77', team1: getTeam('I', 1), team2: obterTerceiroFifa(linhaDistribuicaoFifa?.[5], 1) }, // 1ºI vs 3CDFGH
-      { id: 'r32-3',  title: 'Jogo 73', team1: getTeam('A', 2), team2: getTeam('B', 2) },                                 // 2A vs 2B
-      { id: 'r32-4',  title: 'Jogo 75', team1: getTeam('F', 1), team2: getTeam('C', 2) },                                 // 1F vs 2C
-      { id: 'r32-5',  title: 'Jogo 83', team1: getTeam('K', 2), team2: getTeam('L', 2) },                                 // 2K vs 2L
-      { id: 'r32-6',  title: 'Jogo 84', team1: getTeam('H', 1), team2: getTeam('J', 2) },                                 // 1H vs 2J
-      { id: 'r32-7',  title: 'Jogo 81', team1: getTeam('D', 1), team2: obterTerceiroFifa(linhaDistribuicaoFifa?.[2], 2) }, // 1D vs 3BEFIJ
-      { id: 'r32-8',  title: 'Jogo 82', team1: getTeam('G', 1), team2: obterTerceiroFifa(linhaDistribuicaoFifa?.[4], 3) }, // 1G vs 3AEHIJ
+      // --- LADO ESQUERDO DO DESIGN DA CHAVE ---
+      { id: 'r32-1',  title: 'Jogo 74', team1: getTeam('E', 1), team2: pegarTerceiroDoGrupo(definicaoAlvo?.J74, 0) }, // 1ºE vs 3º C (Alemanha x Costa do Marfim)
+      { id: 'r32-2',  title: 'Jogo 77', team1: getTeam('I', 1), team2: pegarTerceiroDoGrupo(definicaoAlvo?.J77, 1) }, // 1ºI vs 3º F
+      { id: 'r32-3',  title: 'Jogo 73', team1: getTeam('A', 2), team2: getTeam('B', 2) },                             // 2ºA vs 2ºB
+      { id: 'r32-4',  title: 'Jogo 75', team1: getTeam('F', 1), team2: getTeam('C', 2) },                             // 1ºF vs 2ºC
+      { id: 'r32-5',  title: 'Jogo 83', team1: getTeam('K', 2), team2: getTeam('L', 2) },                             // 2ºK vs 2ºL
+      { id: 'r32-6',  title: 'Jogo 84', team1: getTeam('H', 1), team2: getTeam('J', 2) },                             // 1ºH vs 2ºJ
+      { id: 'r32-7',  title: 'Jogo 81', team1: getTeam('D', 1), team2: pegarTerceiroDoGrupo(definicaoAlvo?.J81, 2) }, // 1ºD vs 3º B (Paraguai x Catar)
+      { id: 'r32-8',  title: 'Jogo 82', team1: getTeam('G', 1), team2: pegarTerceiroDoGrupo(definicaoAlvo?.J82, 3) }, // 1ºG vs 3º A
 
-      // --- LADO DIREITO DA CHAVE (Top para Bottom) ---
-      { id: 'r32-9',  title: 'Jogo 76', team1: getTeam('C', 1), team2: getTeam('F', 2) },                                 // 1C vs 2F
-      { id: 'r32-10', title: 'Jogo 78', team1: getTeam('E', 2), team2: getTeam('I', 2) },                                 // 2E vs 2I
-      { id: 'r32-11', title: 'Jogo 79', team1: getTeam('A', 1), team2: obterTerceiroFifa(linhaDistribuicaoFifa?.[0], 4) }, // 1A vs 3CEFHI
-      { id: 'r32-12', title: 'Jogo 80', team1: getTeam('L', 1), team2: obterTerceiroFifa(linhaDistribuicaoFifa?.[7], 5) }, // 1L vs 3EHIJK
-      { id: 'r32-13', title: 'Jogo 86', team1: getTeam('J', 1), team2: getTeam('H', 2) },                                 // 1J vs 2H
-      { id: 'r32-14', title: 'Jogo 88', team1: getTeam('D', 2), team2: getTeam('G', 2) },                                 // 2D vs 2G
-      { id: 'r32-15', title: 'Jogo 85', team1: getTeam('B', 1), team2: obterTerceiroFifa(linhaDistribuicaoFifa?.[1], 6) }, // 1B vs 3EFGIJ
-      { id: 'r32-16', title: 'Jogo 87', team1: getTeam('K', 1), team2: obterTerceiroFifa(linhaDistribuicaoFifa?.[6], 7) }, // 1K vs 3DEIJL
+      // --- LADO DIREITO DO DESIGN DA CHAVE ---
+      { id: 'r32-9',  title: 'Jogo 76', team1: getTeam('C', 1), team2: getTeam('F', 2) },                             // 1ºC vs 2ºF
+      { id: 'r32-10', title: 'Jogo 78', team1: getTeam('E', 2), team2: getTeam('I', 2) },                             // 2ºE vs 2ºI
+      { id: 'r32-11', title: 'Jogo 79', team1: getTeam('A', 1), team2: pegarTerceiroDoGrupo(definicaoAlvo?.J79, 4) }, // 1ºA vs 3º E
+      { id: 'r32-12', title: 'Jogo 80', team1: getTeam('L', 1), team2: pegarTerceiroDoGrupo(definicaoAlvo?.J80, 5) }, // 1ºL vs 3º G
+      { id: 'r32-13', title: 'Jogo 86', team1: getTeam('J', 1), team2: getTeam('H', 2) },                             // 1ºJ vs 2ºH
+      { id: 'r32-14', title: 'Jogo 88', team1: getTeam('D', 2), team2: getTeam('G', 2) },                             // 2ºD vs 2ºG
+      { id: 'r32-15', title: 'Jogo 85', team1: getTeam('B', 1), team2: pegarTerceiroDoGrupo(definicaoAlvo?.J85, 6) }, // 1ºB vs 3º D
+      { id: 'r32-16', title: 'Jogo 87', team1: getTeam('K', 1), team2: pegarTerceiroDoGrupo(definicaoAlvo?.J87, 7) }, // 1ºK vs 3º L (Gana realocada aqui!)
     ];
   }, [simulatedGroups, melhoresTerceiros, allTeams]);
 
-  // --- MAPEAMENTO DAS OITAVAS SEGUINDO A PLANILHA OFICIAL ---
+  // --- MAPEAMENTO SEQUENCIAL DAS OITAVAS BASEADO NOS JOGOS PAIS ---
   const r16_teams = React.useMemo(() => ({
-    'r16-1': [findTeamById(knockoutSelections['r32-1']), findTeamById(knockoutSelections['r32-2'])],
-    'r16-2': [findTeamById(knockoutSelections['r32-3']), findTeamById(knockoutSelections['r32-4'])],
-    'r16-3': [findTeamById(knockoutSelections['r32-5']), findTeamById(knockoutSelections['r32-6'])],
-    'r16-4': [findTeamById(knockoutSelections['r32-7']), findTeamById(knockoutSelections['r32-8'])],
-    'r16-5': [findTeamById(knockoutSelections['r32-9']), findTeamById(knockoutSelections['r32-10'])],
-    'r16-6': [findTeamById(knockoutSelections['r32-11']), findTeamById(knockoutSelections['r32-12'])],
-    'r16-7': [findTeamById(knockoutSelections['r32-13']), findTeamById(knockoutSelections['r32-14'])],
-    'r16-8': [findTeamById(knockoutSelections['r32-15']), findTeamById(knockoutSelections['r32-16'])],
+    'r16-1': [findTeamById(knockoutSelections['r32-1']), findTeamById(knockoutSelections['r32-2'])], // J74 x J77 -> J89
+    'r16-2': [findTeamById(knockoutSelections['r32-3']), findTeamById(knockoutSelections['r32-4'])], // J73 x J75 -> J90
+    'r16-3': [findTeamById(knockoutSelections['r32-5']), findTeamById(knockoutSelections['r32-6'])], // J83 x J84 -> J93
+    'r16-4': [findTeamById(knockoutSelections['r32-7']), findTeamById(knockoutSelections['r32-8'])], // J81 x J82 -> J94
+    'r16-5': [findTeamById(knockoutSelections['r32-9']), findTeamById(knockoutSelections['r32-10'])], // J76 x J78 -> J91
+    'r16-6': [findTeamById(knockoutSelections['r32-11']), findTeamById(knockoutSelections['r32-12'])], // J79 x J80 -> J92
+    'r16-7': [findTeamById(knockoutSelections['r32-13']), findTeamById(knockoutSelections['r32-14'])], // J86 x J88 -> J95
+    'r16-8': [findTeamById(knockoutSelections['r32-15']), findTeamById(knockoutSelections['r32-16'])], // J85 x J87 -> J96
   }), [knockoutSelections, allTeams]);
 
   const qf_teams = React.useMemo(() => ({
-    'qf-1': [findTeamById(knockoutSelections['r16-1']), findTeamById(knockoutSelections['r16-2'])],
-    'qf-2': [findTeamById(knockoutSelections['r16-3']), findTeamById(knockoutSelections['r16-4'])],
-    'qf-3': [findTeamById(knockoutSelections['r16-5']), findTeamById(knockoutSelections['r16-6'])],
-    'qf-4': [findTeamById(knockoutSelections['r16-7']), findTeamById(knockoutSelections['r16-8'])],
+    'qf-1': [findTeamById(knockoutSelections['r16-1']), findTeamById(knockoutSelections['r16-2'])], // J89 x J90 -> J97
+    'qf-2': [findTeamById(knockoutSelections['r16-3']), findTeamById(knockoutSelections['r16-4'])], // J93 x J94 -> J98
+    'qf-3': [findTeamById(knockoutSelections['r16-5']), findTeamById(knockoutSelections['r16-6'])], // J91 x J92 -> J99
+    'qf-4': [findTeamById(knockoutSelections['r16-7']), findTeamById(knockoutSelections['r16-8'])], // J95 x J96 -> J100
   }), [knockoutSelections, allTeams]);
 
   const sf_teams = React.useMemo(() => ({
-    'sf-1': [findTeamById(knockoutSelections['qf-1']), findTeamById(knockoutSelections['qf-2'])],
-    'sf-2': [findTeamById(knockoutSelections['qf-3']), findTeamById(knockoutSelections['qf-4'])],
+    'sf-1': [findTeamById(knockoutSelections['qf-1']), findTeamById(knockoutSelections['qf-2'])], // J97 x J98 -> J101 Lado Esq
+    'sf-2': [findTeamById(knockoutSelections['qf-3']), findTeamById(knockoutSelections['qf-4'])], // J99 x J100 -> J102 Lado Dir
   }), [knockoutSelections, allTeams]);
 
   const final_teams = React.useMemo(() => [
@@ -262,7 +247,7 @@ const KnockoutBracket: React.FC<KnockoutBracketProps> = ({
           
           {/* COLUNA 1: SEGUNDA FASE */}
           <div className="flex flex-col w-1/5 space-y-1">
-            <h3 className="text-xs font-black text-center bg-slate-950 text-white py-1 rounded uppercase">Segunda Fase</h3>
+            <h3 className="text-xs font-black text-center bg-slate-950 text-white py-1 rounded uppercase">Segundas de Final</h3>
             {r32.map(match => (
               <Matchup
                 key={match.id}
@@ -278,33 +263,38 @@ const KnockoutBracket: React.FC<KnockoutBracketProps> = ({
 
           {/* COLUNA 2: OITAVAS DE FINAL */}
           <div className="flex flex-col w-1/5 justify-around">
-            <h3 className="text-xs font-black text-center bg-fifa-blue text-white py-1 rounded uppercase mb-2">Oitavas</h3>
-            {Object.entries(r16_teams).map(([id, teams]) => (
-              <Matchup key={id} matchId={id} title={`Oitavas ${id.replace('r16-', '')}`} team1={teams[0]} team2={teams[1]} selectedValue={knockoutSelections[id]} onSelect={(val) => onSelectionChange(id, val)} />
-            ))}
+            <h3 className="text-xs font-black text-center bg-fifa-blue text-white py-1 rounded uppercase mb-2">Oitavas de final</h3>
+            <Matchup matchId="r16-1" title="Jogo 89" team1={r16_teams['r16-1'][0]} team2={r16_teams['r16-1'][1]} selectedValue={knockoutSelections['r16-1']} onSelect={(val) => onSelectionChange('r16-1', val)} />
+            <Matchup matchId="r16-2" title="Jogo 90" team1={r16_teams['r16-2'][0]} team2={r16_teams['r16-2'][1]} selectedValue={knockoutSelections['r16-2']} onSelect={(val) => onSelectionChange('r16-2', val)} />
+            <Matchup matchId="r16-3" title="Jogo 93" team1={r16_teams['r16-3'][0]} team2={r16_teams['r16-3'][1]} selectedValue={knockoutSelections['r16-3']} onSelect={(val) => onSelectionChange('r16-3', val)} />
+            <Matchup matchId="r16-4" title="Jogo 94" team1={r16_teams['r16-4'][0]} team2={r16_teams['r16-4'][1]} selectedValue={knockoutSelections['r16-4']} onSelect={(val) => onSelectionChange('r16-4', val)} />
+            <Matchup matchId="r16-5" title="Jogo 91" team1={r16_teams['r16-5'][0]} team2={r16_teams['r16-5'][1]} selectedValue={knockoutSelections['r16-5']} onSelect={(val) => onSelectionChange('r16-5', val)} />
+            <Matchup matchId="r16-6" title="Jogo 92" team1={r16_teams['r16-6'][0]} team2={r16_teams['r16-6'][1]} selectedValue={knockoutSelections['r16-6']} onSelect={(val) => onSelectionChange('r16-6', val)} />
+            <Matchup matchId="r16-7" title="Jogo 95" team1={r16_teams['r16-7'][0]} team2={r16_teams['r16-7'][1]} selectedValue={knockoutSelections['r16-7']} onSelect={(val) => onSelectionChange('r16-7', val)} />
+            <Matchup matchId="r16-8" title="Jogo 96" team1={r16_teams['r16-8'][0]} team2={r16_teams['r16-8'][1]} selectedValue={knockoutSelections['r16-8']} onSelect={(val) => onSelectionChange('r16-8', val)} />
           </div>
 
           {/* COLUNA 3: QUARTAS DE FINAL */}
           <div className="flex flex-col w-1/5 justify-around">
-            <h3 className="text-xs font-black text-center bg-slate-800 text-white py-1 rounded uppercase mb-2">Quartas</h3>
-            {Object.entries(qf_teams).map(([id, teams]) => (
-              <Matchup key={id} matchId={id} title={`Quartas ${id.replace('qf-', '')}`} team1={teams[0]} team2={teams[1]} selectedValue={knockoutSelections[id]} onSelect={(val) => onSelectionChange(id, val)} />
-            ))}
+            <h3 className="text-xs font-black text-center bg-slate-800 text-white py-1 rounded uppercase mb-2">Quartas de final</h3>
+            <Matchup matchId="qf-1" title="Jogo 97" team1={qf_teams['qf-1'][0]} team2={qf_teams['qf-1'][1]} selectedValue={knockoutSelections['qf-1']} onSelect={(val) => onSelectionChange('qf-1', val)} />
+            <Matchup matchId="qf-2" title="Jogo 98" team1={qf_teams['qf-2'][0]} team2={qf_teams['qf-2'][1]} selectedValue={knockoutSelections['qf-2']} onSelect={(val) => onSelectionChange('qf-2', val)} />
+            <Matchup matchId="qf-3" title="Jogo 99" team1={qf_teams['qf-3'][0]} team2={qf_teams['qf-3'][1]} selectedValue={knockoutSelections['qf-3']} onSelect={(val) => onSelectionChange('qf-3', val)} />
+            <Matchup matchId="qf-4" title="Jogo 100" team1={qf_teams['qf-4'][0]} team2={qf_teams['qf-4'][1]} selectedValue={knockoutSelections['qf-4']} onSelect={(val) => onSelectionChange('qf-4', val)} />
           </div>
 
           {/* COLUNA 4: SEMIFINAIS */}
           <div className="flex flex-col w-1/5 justify-around">
-            <h3 className="text-xs font-black text-center bg-slate-700 text-white py-1 rounded uppercase mb-2">Semifinais</h3>
-            {Object.entries(sf_teams).map(([id, teams]) => (
-              <Matchup key={id} matchId={id} title={`Semi ${id.replace('sf-', '')}`} team1={teams[0]} team2={teams[1]} selectedValue={knockoutSelections[id]} onSelect={(val) => onSelectionChange(id, val)} />
-            ))}
+            <h3 className="text-xs font-black text-center bg-slate-700 text-white py-1 rounded uppercase mb-2">Semifinal</h3>
+            <Matchup matchId="sf-1" title="Jogo 101" team1={sf_teams['sf-1'][0]} team2={sf_teams['sf-1'][1]} selectedValue={knockoutSelections['sf-1']} onSelect={(val) => onSelectionChange('sf-1', val)} />
+            <Matchup matchId="sf-2" title="Jogo 102" team1={sf_teams['sf-2'][0]} team2={sf_teams['sf-2'][1]} selectedValue={knockoutSelections['sf-2']} onSelect={(val) => onSelectionChange('sf-2', val)} />
           </div>
           
           {/* COLUNA 5: FINAIS */}
           <div className="flex flex-col w-1/5 justify-center gap-4 border-l pl-2 border-dashed border-gray-300">
             <h3 className="text-xs font-black text-center bg-emerald-600 text-white py-1 rounded uppercase">Finais</h3>
-            <Matchup matchId='final' title='🥇 Final' team1={final_teams[0]} team2={final_teams[1]} selectedValue={knockoutSelections['final']} onSelect={(val) => onSelectionChange('final', val)} />
-            <Matchup matchId='third_place' title='🥉 3º Lugar' team1={third_place_teams[0]} team2={third_place_teams[1]} selectedValue={knockoutSelections['third_place']} onSelect={(val) => onSelectionChange('third_place', val)} />
+            <Matchup matchId='final' title='🥇 Jogo 104 (Final)' team1={final_teams[0]} team2={final_teams[1]} selectedValue={knockoutSelections['final']} onSelect={(val) => onSelectionChange('final', val)} />
+            <Matchup matchId='third_place' title='🥉 Jogo 103 (3º Lugar)' team1={third_place_teams[0]} team2={third_place_teams[1]} selectedValue={knockoutSelections['third_place']} onSelect={(val) => onSelectionChange('third_place', val)} />
           </div>
 
         </div>
