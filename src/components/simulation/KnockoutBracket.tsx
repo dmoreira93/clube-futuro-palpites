@@ -146,45 +146,48 @@ const KnockoutBracket: React.FC<KnockoutBracketProps> = ({
   }, [simulatedGroups]);
 
   // --- O MAPA DEFINITIVO UTILIZANDO A MATRIZ DINÂMICA DA FIFA ---
+  // --- O MAPA DEFINITIVO ALINHADO 100% COM A IMAGEM OFICIAL DA FIFA ---
   const r32 = React.useMemo(() => {
-    // 1. Isola os 8 grupos que se classificaram através dos melhores terceiros colocados
+    // 1. Isola as letras dos 8 grupos de terceiros colocados classificados
     const gruposDosTerceiros = melhoresTerceiros.slice(0, 8).map(t => t.groupLetter);
     
-    // 2. Ordena alfabeticamente para gerar a chave de busca exata (Ex: "ABCDEFGL")
+    // 2. Ordena alfabeticamente para a chave exata da matriz
     const chaveCombinacao = [...gruposDosTerceiros].sort().join("");
 
-    // 3. Busca a linha correspondente de confrontos da FIFA
+    // 3. Linha oficial da matriz baseada no regulamento FIFA
     const linhaDistribuicaoFifa = MATRIZ_OFICIAL_FIFA[chaveCombinacao];
 
-    // Função auxiliar interna para mapear o terceiro colocado correto baseado no grupo alvo ditado pela FIFA
+    // Função auxiliar para mapear o terceiro correto
     const obterTerceiroFifa = (grupoAlvo: string | undefined, posicaoFallback: number) => {
       if (linhaDistribuicaoFifa && grupoAlvo) {
         const timeEncontrado = melhoresTerceiros.find(t => t.groupLetter === grupoAlvo);
         if (timeEncontrado) return timeEncontrado;
       }
-      // Fallback resiliente de segurança
       return melhoresTerceiros[posicaoFallback] || allTeams[posicaoFallback];
     };
 
-    // Monta os 16 confrontos mapeando perfeitamente os alvos matemáticos da FIFA
-    // Ordem da linha da Matriz: [0]=1ºA, [1]=1ºB, [2]=1ºD, [3]=1ºE, [4]=1ºG, [5]=1ºI, [6]=1ºK, [7]=1ºL
+    // 4. Monta os 16 confrontos na ordem VERTICAL EXATA da imagem da FIFA (Esquerda para a Direita)
+    // Índice da Matriz correspondente aos grupos: [0]=1ºA, [1]=1ºB, [2]=1ºD, [3]=1ºE, [4]=1ºG, [5]=1ºI, [6]=1ºK, [7]=1ºL
     return [
-      { id: 'r32-1',  title: 'Jogo 1',  team1: getTeam('E', 1), team2: obterTerceiroFifa(linhaDistribuicaoFifa?.[3], 0) },
-      { id: 'r32-2',  title: 'Jogo 2',  team1: getTeam('I', 1), team2: obterTerceiroFifa(linhaDistribuicaoFifa?.[5], 1) },
-      { id: 'r32-3',  title: 'Jogo 3',  team1: getTeam('A', 2), team2: getTeam('B', 2) },
-      { id: 'r32-4',  title: 'Jogo 4',  team1: getTeam('F', 1), team2: getTeam('C', 2) },
-      { id: 'r32-5',  title: 'Jogo 5',  team1: getTeam('K', 2), team2: getTeam('L', 2) },
-      { id: 'r32-6',  title: 'Jogo 6',  team1: getTeam('H', 1), team2: getTeam('J', 2) },
-      { id: 'r32-7',  title: 'Jogo 7',  team1: getTeam('D', 1), team2: obterTerceiroFifa(linhaDistribuicaoFifa?.[2], 2) },
-      { id: 'r32-8',  title: 'Jogo 8',  team1: getTeam('G', 1), team2: obterTerceiroFifa(linhaDistribuicaoFifa?.[4], 3) },
-      { id: 'r32-9',  title: 'Jogo 9',  team1: getTeam('C', 1), team2: getTeam('F', 2) },
-      { id: 'r32-10', title: 'Jogo 10', team1: getTeam('E', 2), team2: getTeam('I', 2) },
-      { id: 'r32-11', title: 'Jogo 11', team1: getTeam('A', 1), team2: obterTerceiroFifa(linhaDistribuicaoFifa?.[0], 4) },
-      { id: 'r32-12', title: 'Jogo 12', team1: getTeam('L', 1), team2: obterTerceiroFifa(linhaDistribuicaoFifa?.[7], 5) },
-      { id: 'r32-13', title: 'Jogo 13', team1: getTeam('J', 1), team2: getTeam('H', 2) },
-      { id: 'r32-14', title: 'Jogo 14', team1: getTeam('D', 2), team2: getTeam('G', 2) },
-      { id: 'r32-15', title: 'Jogo 15', team1: getTeam('B', 1), team2: obterTerceiroFifa(linhaDistribuicaoFifa?.[1], 6) },
-      { id: 'r32-16', title: 'Jogo 16', team1: getTeam('K', 1), team2: obterTerceiroFifa(linhaDistribuicaoFifa?.[6], 7) },
+      // --- LADO ESQUERDO DA CHAVE (Top para Bottom) ---
+      { id: 'r32-1',  title: 'Jogo 74', team1: getTeam('E', 1), team2: obterTerceiroFifa(linhaDistribuicaoFifa?.[3], 0) }, // 1ºE vs 3ABCDF
+      { id: 'r32-2',  title: 'Jogo 77', team1: getTeam('I', 1), team2: obterTerceiroFifa(linhaDistribuicaoFifa?.[5], 1) }, // 1ºI vs 3CDFGH
+      { id: 'r32-3',  title: 'Jogo 73', team1: getTeam('A', 2), team2: getTeam('B', 2) },                                 // 2A vs 2B
+      { id: 'r32-4',  title: 'Jogo 75', team1: getTeam('F', 1), team2: getTeam('C', 2) },                                 // 1F vs 2C
+      { id: 'r32-5',  title: 'Jogo 83', team1: getTeam('K', 2), team2: getTeam('L', 2) },                                 // 2K vs 2L
+      { id: 'r32-6',  title: 'Jogo 84', team1: getTeam('H', 1), team2: getTeam('J', 2) },                                 // 1H vs 2J
+      { id: 'r32-7',  title: 'Jogo 81', team1: getTeam('D', 1), team2: obterTerceiroFifa(linhaDistribuicaoFifa?.[2], 2) }, // 1D vs 3BEFIJ
+      { id: 'r32-8',  title: 'Jogo 82', team1: getTeam('G', 1), team2: obterTerceiroFifa(linhaDistribuicaoFifa?.[4], 3) }, // 1G vs 3AEHIJ
+
+      // --- LADO DIREITO DA CHAVE (Top para Bottom) ---
+      { id: 'r32-9',  title: 'Jogo 76', team1: getTeam('C', 1), team2: getTeam('F', 2) },                                 // 1C vs 2F
+      { id: 'r32-10', title: 'Jogo 78', team1: getTeam('E', 2), team2: getTeam('I', 2) },                                 // 2E vs 2I
+      { id: 'r32-11', title: 'Jogo 79', team1: getTeam('A', 1), team2: obterTerceiroFifa(linhaDistribuicaoFifa?.[0], 4) }, // 1A vs 3CEFHI
+      { id: 'r32-12', title: 'Jogo 80', team1: getTeam('L', 1), team2: obterTerceiroFifa(linhaDistribuicaoFifa?.[7], 5) }, // 1L vs 3EHIJK
+      { id: 'r32-13', title: 'Jogo 86', team1: getTeam('J', 1), team2: getTeam('H', 2) },                                 // 1J vs 2H
+      { id: 'r32-14', title: 'Jogo 88', team1: getTeam('D', 2), team2: getTeam('G', 2) },                                 // 2D vs 2G
+      { id: 'r32-15', title: 'Jogo 85', team1: getTeam('B', 1), team2: obterTerceiroFifa(linhaDistribuicaoFifa?.[1], 6) }, // 1B vs 3EFGIJ
+      { id: 'r32-16', title: 'Jogo 87', team1: getTeam('K', 1), team2: obterTerceiroFifa(linhaDistribuicaoFifa?.[6], 7) }, // 1K vs 3DEIJL
     ];
   }, [simulatedGroups, melhoresTerceiros, allTeams]);
 
