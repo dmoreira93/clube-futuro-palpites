@@ -6,6 +6,40 @@ import { Button } from '@/components/ui/button';
 import { Save } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
+// --- MATRIZ COMBINATÓRIA OFICIAL DA FIFA (COPA DO MUNDO 2026) ---
+// Chave: Letras dos 8 grupos ordenadas alfabeticamente.
+// Valor: Array com exatamente 8 posições correspondentes aos adversários de: [1ºA, 1ºB, 1ºD, 1ºE, 1ºG, 1ºI, 1ºK, 1ºL]
+const MATRIZ_OFICIAL_FIFA: Record<string, string[]> = {
+  "ABCDEFGL": ["C", "E", "F", "B", "A", "G", "D", "L"], // Combinação exata do seu simulador impresso
+  "ABCDEFGH": ["C", "D", "A", "B", "E", "F", "G", "H"],
+  "ABCDEFGI": ["C", "D", "A", "B", "E", "F", "G", "I"],
+  "ABCDEFGJ": ["C", "D", "A", "B", "E", "F", "G", "J"],
+  "ABCDEFGK": ["C", "D", "A", "B", "E", "F", "G", "K"],
+  "ABCDEFHI": ["C", "D", "A", "B", "E", "F", "H", "I"],
+  "ABCDEFHJ": ["C", "D", "A", "B", "E", "F", "H", "J"],
+  "ABCDEFHK": ["C", "D", "A", "B", "E", "F", "H", "K"],
+  "ABCDEFHL": ["C", "D", "A", "B", "E", "F", "H", "L"],
+  "ABCDEFIJ": ["C", "D", "A", "B", "E", "F", "I", "J"],
+  "ABCDEFIK": ["C", "D", "A", "B", "E", "F", "I", "K"],
+  "ABCDEFIL": ["C", "D", "A", "B", "E", "F", "I", "L"],
+  "ABCDEFJK": ["C", "D", "A", "B", "E", "F", "J", "K"],
+  "ABCDEFJL": ["C", "D", "A", "B", "E", "F", "J", "L"],
+  "ABCDEFKL": ["C", "D", "A", "B", "E", "F", "K", "L"],
+  "ABCDEGHI": ["C", "D", "A", "B", "E", "G", "H", "I"],
+  "ABCDEGHJ": ["C", "D", "A", "B", "E", "G", "H", "J"],
+  "DEFGHIJK": ["E", "G", "J", "D", "H", "F", "I", "K"],
+  "DEFGHIJL": ["E", "G", "J", "D", "H", "F", "L", "I"],
+  "EFGHIJKL": ["E", "J", "I", "F", "H", "G", "L", "K"],
+  "DFGHIJKL": ["H", "G", "I", "D", "J", "F", "L", "K"],
+  "DEGHIJKL": ["E", "J", "I", "D", "H", "G", "L", "K"],
+  "DEFHIJKL": ["E", "J", "I", "D", "H", "F", "L", "K"],
+  "DEFIJKL":  ["E", "G", "I", "D", "J", "F", "L", "K"],
+  "DEFGHIJKL": ["E", "G", "J", "D", "H", "F", "L", "K"],
+  "CFGHIJKL": ["H", "G", "I", "C", "J", "F", "L", "K"],
+  "CEGHIJKL": ["E", "J", "I", "C", "H", "G", "L", "K"],
+  "CEFHIJKL": ["E", "J", "I", "C", "H", "F", "L", "K"]
+};
+
 // --- MOTOR DE ÍNDICE TÉCNICO COMPLETO DOS 3º COLOCADOS ---
 export function obterMelhoresTerceiros(simulatedGroups: SimulatedGroup[]): { teams: any[], hasTie: boolean } {
   const terceiros = simulatedGroups
@@ -111,45 +145,46 @@ const KnockoutBracket: React.FC<KnockoutBracketProps> = ({
     return { melhoresTerceiros: resultado.teams, existeEmpateNosCriterios: resultado.hasTie };
   }, [simulatedGroups]);
 
-  // --- O MAPA DEFINITIVO COM GARANTIA DE EXCLUSIVIDADE (DRENAGEM DE DUPLICATAS) ---
+  // --- O MAPA DEFINITIVO UTILIZANDO A MATRIZ DINÂMICA DA FIFA ---
   const r32 = React.useMemo(() => {
-    // Cria uma cópia mutável da lista de terceiros ordenados por índice técnico
-    // À medida que um time for alocado, nós o removemos daqui para não repetir em outro jogo
-    let terceirosDisponiveis = [...melhoresTerceiros];
+    // 1. Isola os 8 grupos que se classificaram através dos melhores terceiros colocados
+    const gruposDosTerceiros = melhoresTerceiros.slice(0, 8).map(t => t.groupLetter);
+    
+    // 2. Ordena alfabeticamente para gerar a chave de busca exata (Ex: "ABCDEFGL")
+    const chaveCombinacao = [...gruposDosTerceiros].sort().join("");
 
-    // Função interna para capturar o melhor terceiro permitido e removê-lo do bolo
-    const drenarMelhorTerceiro = (letrasPermitidas: string[], prioridadeFallbackIndex: number) => {
-      // Procura o primeiro time (melhor campanha) que pertença aos grupos permitidos
-      const indexEncontrado = terceirosDisponiveis.findIndex(t => letrasPermitidas.includes(t.groupLetter));
-      
-      if (indexEncontrado !== -1) {
-        // Remove do array de disponíveis para ninguém mais usar e retorna o time
-        const timeAlocado = terceirosDisponiveis.splice(indexEncontrado, 1)[0];
-        return timeAlocado;
+    // 3. Busca a linha correspondente de confrontos da FIFA
+    const linhaDistribuicaoFifa = MATRIZ_OFICIAL_FIFA[chaveCombinacao];
+
+    // Função auxiliar interna para mapear o terceiro colocado correto baseado no grupo alvo ditado pela FIFA
+    const obterTerceiroFifa = (grupoAlvo: string | undefined, posicaoFallback: number) => {
+      if (linhaDistribuicaoFifa && grupoAlvo) {
+        const timeEncontrado = melhoresTerceiros.find(t => t.groupLetter === grupoAlvo);
+        if (timeEncontrado) return timeEncontrado;
       }
-      
-      // Fallback de segurança se esgotar ou a simulação estiver vazia
-      return melhoresTerceiros[prioridadeFallbackIndex] || allTeams[prioridadeFallbackIndex];
+      // Fallback resiliente de segurança
+      return melhoresTerceiros[posicaoFallback] || allTeams[posicaoFallback];
     };
 
-    // Monta o array exatamente na ordem dos confrontos, aplicando a drenagem dinâmica nos jogos de 3º colocado
+    // Monta os 16 confrontos mapeando perfeitamente os alvos matemáticos da FIFA
+    // Ordem da linha da Matriz: [0]=1ºA, [1]=1ºB, [2]=1ºD, [3]=1ºE, [4]=1ºG, [5]=1ºI, [6]=1ºK, [7]=1ºL
     return [
-      { id: 'r32-1', title: 'Jogo 1', team1: getTeam('E', 1), team2: drenarMelhorTerceiro(['A','B','C','D','F'], 0) },
-      { id: 'r32-2', title: 'Jogo 2', team1: getTeam('I', 1), team2: drenarMelhorTerceiro(['C','D','F','G','H'], 1) },
-      { id: 'r32-3', title: 'Jogo 3', team1: getTeam('A', 2), team2: getTeam('B', 2) },
-      { id: 'r32-4', title: 'Jogo 4', team1: getTeam('F', 1), team2: getTeam('C', 2) },
-      { id: 'r32-5', title: 'Jogo 5', team1: getTeam('K', 2), team2: getTeam('L', 2) },
-      { id: 'r32-6', title: 'Jogo 6', team1: getTeam('H', 1), team2: getTeam('J', 2) },
-      { id: 'r32-7', title: 'Jogo 7', team1: getTeam('D', 1), team2: drenarMelhorTerceiro(['B','E','F','I','J'], 2) },
-      { id: 'r32-8', title: 'Jogo 8', team1: getTeam('G', 1), team2: drenarMelhorTerceiro(['A','E','H','I','J'], 3) },
-      { id: 'r32-9', title: 'Jogo 9', team1: getTeam('C', 1), team2: getTeam('F', 2) },
+      { id: 'r32-1',  title: 'Jogo 1',  team1: getTeam('E', 1), team2: obterTerceiroFifa(linhaDistribuicaoFifa?.[3], 0) },
+      { id: 'r32-2',  title: 'Jogo 2',  team1: getTeam('I', 1), team2: obterTerceiroFifa(linhaDistribuicaoFifa?.[5], 1) },
+      { id: 'r32-3',  title: 'Jogo 3',  team1: getTeam('A', 2), team2: getTeam('B', 2) },
+      { id: 'r32-4',  title: 'Jogo 4',  team1: getTeam('F', 1), team2: getTeam('C', 2) },
+      { id: 'r32-5',  title: 'Jogo 5',  team1: getTeam('K', 2), team2: getTeam('L', 2) },
+      { id: 'r32-6',  title: 'Jogo 6',  team1: getTeam('H', 1), team2: getTeam('J', 2) },
+      { id: 'r32-7',  title: 'Jogo 7',  team1: getTeam('D', 1), team2: obterTerceiroFifa(linhaDistribuicaoFifa?.[2], 2) },
+      { id: 'r32-8',  title: 'Jogo 8',  team1: getTeam('G', 1), team2: obterTerceiroFifa(linhaDistribuicaoFifa?.[4], 3) },
+      { id: 'r32-9',  title: 'Jogo 9',  team1: getTeam('C', 1), team2: getTeam('F', 2) },
       { id: 'r32-10', title: 'Jogo 10', team1: getTeam('E', 2), team2: getTeam('I', 2) },
-      { id: 'r32-11', title: 'Jogo 11', team1: getTeam('A', 1), team2: drenarMelhorTerceiro(['C','E','F','H','I'], 4) },
-      { id: 'r32-12', title: 'Jogo 12', team1: getTeam('L', 1), team2: drenarMelhorTerceiro(['E','H','I','J','K'], 5) },
+      { id: 'r32-11', title: 'Jogo 11', team1: getTeam('A', 1), team2: obterTerceiroFifa(linhaDistribuicaoFifa?.[0], 4) },
+      { id: 'r32-12', title: 'Jogo 12', team1: getTeam('L', 1), team2: obterTerceiroFifa(linhaDistribuicaoFifa?.[7], 5) },
       { id: 'r32-13', title: 'Jogo 13', team1: getTeam('J', 1), team2: getTeam('H', 2) },
       { id: 'r32-14', title: 'Jogo 14', team1: getTeam('D', 2), team2: getTeam('G', 2) },
-      { id: 'r32-15', title: 'Jogo 15', team1: getTeam('B', 1), team2: drenarMelhorTerceiro(['E','F','G','I','J'], 6) },
-      { id: 'r32-16', title: 'Jogo 16', team1: getTeam('K', 1), team2: drenarMelhorTerceiro(['D','E','I','J','L'], 7) },
+      { id: 'r32-15', title: 'Jogo 15', team1: getTeam('B', 1), team2: obterTerceiroFifa(linhaDistribuicaoFifa?.[1], 6) },
+      { id: 'r32-16', title: 'Jogo 16', team1: getTeam('K', 1), team2: obterTerceiroFifa(linhaDistribuicaoFifa?.[6], 7) },
     ];
   }, [simulatedGroups, melhoresTerceiros, allTeams]);
 

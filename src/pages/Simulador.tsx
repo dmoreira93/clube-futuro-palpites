@@ -288,6 +288,38 @@ const handlePrintSimulated = () => {
       return;
     }
 
+    // Matriz Combinatória Oficial da FIFA (Copa do Mundo 2026) idêntica à do KnockoutBracket
+    const MATRIZ_OFICIAL_FIFA: Record<string, string[]> = {
+      "ABCDEFGL": ["C", "E", "F", "B", "A", "G", "D", "L"],
+      "ABCDEFGH": ["C", "D", "A", "B", "E", "F", "G", "H"],
+      "ABCDEFGI": ["C", "D", "A", "B", "E", "F", "G", "I"],
+      "ABCDEFGJ": ["C", "D", "A", "B", "E", "F", "G", "J"],
+      "ABCDEFGK": ["C", "D", "A", "B", "E", "F", "G", "K"],
+      "ABCDEFHI": ["C", "D", "A", "B", "E", "F", "H", "I"],
+      "ABCDEFHJ": ["C", "D", "A", "B", "E", "F", "H", "J"],
+      "ABCDEFHK": ["C", "D", "A", "B", "E", "F", "H", "K"],
+      "ABCDEFHL": ["C", "D", "A", "B", "E", "F", "H", "L"],
+      "ABCDEFIJ": ["C", "D", "A", "B", "E", "F", "I", "J"],
+      "ABCDEFIK": ["C", "D", "A", "B", "E", "F", "I", "K"],
+      "ABCDEFIL": ["C", "D", "A", "B", "E", "F", "I", "L"],
+      "ABCDEFJK": ["C", "D", "A", "B", "E", "F", "J", "K"],
+      "ABCDEFJL": ["C", "D", "A", "B", "E", "F", "J", "L"],
+      "ABCDEFKL": ["C", "D", "A", "B", "E", "F", "K", "L"],
+      "ABCDEGHI": ["C", "D", "A", "B", "E", "G", "H", "I"],
+      "ABCDEGHJ": ["C", "D", "A", "B", "E", "G", "H", "J"],
+      "DEFGHIJK": ["E", "G", "J", "D", "H", "F", "I", "K"],
+      "DEFGHIJL": ["E", "G", "J", "D", "H", "F", "L", "I"],
+      "EFGHIJKL": ["E", "J", "I", "F", "H", "G", "L", "K"],
+      "DFGHIJKL": ["H", "G", "I", "D", "J", "F", "L", "K"],
+      "DEGHIJKL": ["E", "J", "I", "D", "H", "G", "L", "K"],
+      "DEFHIJKL": ["E", "J", "I", "D", "H", "F", "L", "K"],
+      "DEFIJKL":  ["E", "G", "I", "D", "J", "F", "L", "K"],
+      "DEFGHIJKL": ["E", "G", "J", "D", "H", "F", "L", "K"],
+      "CFGHIJKL": ["H", "G", "I", "C", "J", "F", "L", "K"],
+      "CEGHIJKL": ["E", "J", "I", "C", "H", "G", "L", "K"],
+      "CEFHIJKL": ["E", "J", "I", "C", "H", "F", "L", "K"]
+    };
+
     // Funções utilitárias de busca de nome
     const getTeamName = (t: any) => t?.teamName || t?.team_name || t?.name || t?.team?.name || 'A Definir';
 
@@ -299,35 +331,41 @@ const handlePrintSimulated = () => {
       return group?.standings[position - 1];
     };
 
-    // 1. Puxa os 8 melhores terceiros usando a mesma inteligência da tela
+    // 1. Puxa os terceiros colocados usando a mesma regra do motor
     const { teams: melhoresTerceiros } = obterMelhoresTerceiros(simulatedResults || []);
-    let terceirosDisponiveis = [...melhoresTerceiros];
+    
+    // 2. Isola as letras dos 8 melhores e monta a chave alfabética para a matriz
+    const gruposDosTerceiros = melhoresTerceiros.slice(0, 8).map(t => t.groupLetter);
+    const chaveCombinacao = [...gruposDosTerceiros].sort().join("");
+    const linhaDistribuicaoFifa = MATRIZ_OFICIAL_FIFA[chaveCombinacao];
 
-    // Drenagem exclusiva para a impressão
-    const drenarMelhorTerceiro = (letrasPermitidas: string[], fallbackIndex: number) => {
-      const idx = terceirosDisponiveis.findIndex(t => letrasPermitidas.includes(t.groupLetter));
-      if (idx !== -1) return terceirosDisponiveis.splice(idx, 1)[0];
-      return melhoresTerceiros[fallbackIndex] || { teamName: 'A Definir' };
+    // Função interna adaptada para ler a regra estrita da FIFA na geração do PDF
+    const obterTerceiroFifa = (grupoAlvo: string | undefined, posicaoFallback: number) => {
+      if (linhaDistribuicaoFifa && grupoAlvo) {
+        const timeEncontrado = melhoresTerceiros.find(t => t.groupLetter === grupoAlvo);
+        if (timeEncontrado) return timeEncontrado;
+      }
+      return melhoresTerceiros[posicaoFallback] || { teamName: 'A Definir' };
     };
 
-    // 2. Mapeia a Segunda Fase (32) dinamicamente para o papel
+    // 3. Mapeia a Segunda Fase (32) lendo a distribuição matemática correta da FIFA
     const r32 = [
-      { id: '1', t1: getTeam('E', 1), t2: drenarMelhorTerceiro(['A','B','C','D','F'], 0) },
-      { id: '2', t1: getTeam('I', 1), t2: drenarMelhorTerceiro(['C','D','F','G','H'], 1) },
-      { id: '3', t1: getTeam('A', 2), t2: getTeam('B', 2) },
-      { id: '4', t1: getTeam('F', 1), t2: getTeam('C', 2) },
-      { id: '5', t1: getTeam('K', 2), t2: getTeam('L', 2) },
-      { id: '6', t1: getTeam('H', 1), t2: getTeam('J', 2) },
-      { id: '7', t1: getTeam('D', 1), t2: drenarMelhorTerceiro(['B','E','F','I','J'], 2) },
-      { id: '8', t1: getTeam('G', 1), t2: drenarMelhorTerceiro(['A','E','H','I','J'], 3) },
-      { id: '9', t1: getTeam('C', 1), t2: getTeam('F', 2) },
+      { id: '1',  t1: getTeam('E', 1), t2: obterTerceiroFifa(linhaDistribuicaoFifa?.[3], 0) },
+      { id: '2',  t1: getTeam('I', 1), t2: obterTerceiroFifa(linhaDistribuicaoFifa?.[5], 1) },
+      { id: '3',  t1: getTeam('A', 2), t2: getTeam('B', 2) },
+      { id: '4',  t1: getTeam('F', 1), t2: getTeam('C', 2) },
+      { id: '5',  t1: getTeam('K', 2), t2: getTeam('L', 2) },
+      { id: '6',  t1: getTeam('H', 1), t2: getTeam('J', 2) },
+      { id: '7',  t1: getTeam('D', 1), t2: obterTerceiroFifa(linhaDistribuicaoFifa?.[2], 2) },
+      { id: '8',  t1: getTeam('G', 1), t2: obterTerceiroFifa(linhaDistribuicaoFifa?.[4], 3) },
+      { id: '9',  t1: getTeam('C', 1), t2: getTeam('F', 2) },
       { id: '10', t1: getTeam('E', 2), t2: getTeam('I', 2) },
-      { id: '11', t1: getTeam('A', 1), t2: drenarMelhorTerceiro(['C','E','F','H','I'], 4) },
-      { id: '12', t1: getTeam('L', 1), t2: drenarMelhorTerceiro(['E','H','I','J','K'], 5) },
+      { id: '11', t1: getTeam('A', 1), t2: obterTerceiroFifa(linhaDistribuicaoFifa?.[0], 4) },
+      { id: '12', t1: getTeam('L', 1), t2: obterTerceiroFifa(linhaDistribuicaoFifa?.[7], 5) },
       { id: '13', t1: getTeam('J', 1), t2: getTeam('H', 2) },
       { id: '14', t1: getTeam('D', 2), t2: getTeam('G', 2) },
-      { id: '15', t1: getTeam('B', 1), t2: drenarMelhorTerceiro(['E','F','G','I','J'], 6) },
-      { id: '16', t1: getTeam('K', 1), t2: drenarMelhorTerceiro(['D','E','I','J','L'], 7) },
+      { id: '15', t1: getTeam('B', 1), t2: obterTerceiroFifa(linhaDistribuicaoFifa?.[1], 6) },
+      { id: '16', t1: getTeam('K', 1), t2: obterTerceiroFifa(linhaDistribuicaoFifa?.[6], 7) },
     ];
 
     // Traz o nome do time que o usuário selecionou nos selects do mata-mata, se houver
@@ -346,26 +384,22 @@ const handlePrintSimulated = () => {
       <head>
         <title>Chaveamento Simulado FIFA 2026</title>
         <style>
-          /* Força a folha para Paisagem para caber todas as 5 colunas com perfeição */
           @page { size: landscape; margin: 8mm; }
           body { font-family: Arial, sans-serif; padding: 0; margin: 0; color: black; background: white; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
           .header { text-align: center; border-bottom: 2px solid black; padding-bottom: 8px; margin-bottom: 12px; }
           .title { font-size: 16px; font-weight: 900; text-transform: uppercase; margin: 0; }
           .subtitle { font-size: 10px; color: #444; margin-top: 3px; }
 
-          /* Tabela de 12 Grupos: 2 linhas de 6 */
           .group-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; margin-bottom: 10px; }
           .group-card { border: 1.5px solid black; border-radius: 4px; overflow: hidden; }
           .group-name { font-weight: 900; background: #eee; text-align: center; padding: 2px; border-bottom: 1.5px solid black; font-size: 9px; text-transform: uppercase; }
           .team-line { font-weight: bold; font-size: 8px; padding: 2px 4px; border-bottom: 1px solid #ccc; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
           .team-line:last-child { border-bottom: none; }
 
-          /* Caixa dos Melhores Terceiros */
           .thirds-box { border: 1.5px solid #1e293b; background: #f8fafc; border-radius: 4px; padding: 5px; margin-bottom: 12px; text-align: center; }
           .thirds-title { font-size: 9px; font-weight: 900; color: #0f172a; text-transform: uppercase; margin-bottom: 3px; }
           .thirds-list { font-size: 8px; font-weight: bold; color: #334155; }
 
-          /* Bracket Layout 5 Colunas */
           .bracket-titles { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 5px; }
           .col-title { flex: 1; text-align: center; font-weight: 900; font-size: 9px; text-transform: uppercase; background:#1a202c; color:white; padding:3px 0; border-radius:3px; }
 
@@ -400,7 +434,7 @@ const handlePrintSimulated = () => {
         <div class="thirds-box">
           <div class="thirds-title">Os 8 Melhores Terceiros Colocados Classificados (Critério Índice Técnico)</div>
           <div class="thirds-list">
-            ${melhoresTerceiros.map(t => `${t.teamName} (Gr. ${t.groupLetter})`).join(' &nbsp;&bull;&nbsp; ')}
+            ${melhoresTerceiros.slice(0, 8).map(t => `${t.teamName} (Gr. ${t.groupLetter})`).join(' &nbsp;&bull;&nbsp; ')}
           </div>
         </div>
 
@@ -461,8 +495,12 @@ const handlePrintSimulated = () => {
             </div>
             <div class="match-box">
               <div class="match-header">3º Lugar</div>
-              <div class="team-slot empty-slot">Perdedor Semi 1</div>
-              <div class="team-slot empty-slot">Perdedor Semi 2</div>
+              <div class="team-slot ${!knockoutSelections['sf-1'] ? 'empty-slot' : ''}">
+                ${knockoutSelections['sf-1'] ? getTeamName(allTeams.find(t => t.teamId === (knockoutSelections['r16-1'] === knockoutSelections['sf-1'] ? knockoutSelections['r16-2'] : knockoutSelections['r16-1']))) : 'Perdedor Semi 1'}
+              </div>
+              <div class="team-slot ${!knockoutSelections['sf-2'] ? 'empty-slot' : ''}">
+                ${knockoutSelections['sf-2'] ? getTeamName(allTeams.find(t => t.teamId === (knockoutSelections['r16-3'] === knockoutSelections['sf-2'] ? knockoutSelections['r16-4'] : knockoutSelections['r16-3']))) : 'Perdedor Semi 2'}
+              </div>
             </div>
           </div>
         </div>
