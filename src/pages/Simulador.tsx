@@ -288,39 +288,24 @@ const handlePrintSimulated = () => {
       return;
     }
 
-    // Matriz Combinatória Oficial da FIFA (Copa do Mundo 2026) idêntica à do KnockoutBracket
-    const MATRIZ_OFICIAL_FIFA: Record<string, string[]> = {
-      "ABCDEFGL": ["C", "E", "F", "B", "A", "G", "D", "L"],
-      "ABCDEFGH": ["C", "D", "A", "B", "E", "F", "G", "H"],
-      "ABCDEFGI": ["C", "D", "A", "B", "E", "F", "G", "I"],
-      "ABCDEFGJ": ["C", "D", "A", "B", "E", "F", "G", "J"],
-      "ABCDEFGK": ["C", "D", "A", "B", "E", "F", "G", "K"],
-      "ABCDEFHI": ["C", "D", "A", "B", "E", "F", "H", "I"],
-      "ABCDEFHJ": ["C", "D", "A", "B", "E", "F", "H", "J"],
-      "ABCDEFHK": ["C", "D", "A", "B", "E", "F", "H", "K"],
-      "ABCDEFHL": ["C", "D", "A", "B", "E", "F", "H", "L"],
-      "ABCDEFIJ": ["C", "D", "A", "B", "E", "F", "I", "J"],
-      "ABCDEFIK": ["C", "D", "A", "B", "E", "F", "I", "K"],
-      "ABCDEFIL": ["C", "D", "A", "B", "E", "F", "I", "L"],
-      "ABCDEFJK": ["C", "D", "A", "B", "E", "F", "J", "K"],
-      "ABCDEFJL": ["C", "D", "A", "B", "E", "F", "J", "L"],
-      "ABCDEFKL": ["C", "D", "A", "B", "E", "F", "K", "L"],
-      "ABCDEGHI": ["C", "D", "A", "B", "E", "G", "H", "I"],
-      "ABCDEGHJ": ["C", "D", "A", "B", "E", "G", "H", "J"],
-      "DEFGHIJK": ["E", "G", "J", "D", "H", "F", "I", "K"],
-      "DEFGHIJL": ["E", "G", "J", "D", "H", "F", "L", "I"],
-      "EFGHIJKL": ["E", "J", "I", "F", "H", "G", "L", "K"],
-      "DFGHIJKL": ["H", "G", "I", "D", "J", "F", "L", "K"],
-      "DEGHIJKL": ["E", "J", "I", "D", "H", "G", "L", "K"],
-      "DEFHIJKL": ["E", "J", "I", "D", "H", "F", "L", "K"],
-      "DEFIJKL":  ["E", "G", "I", "D", "J", "F", "L", "K"],
-      "DEFGHIJKL": ["E", "G", "J", "D", "H", "F", "L", "K"],
-      "CFGHIJKL": ["H", "G", "I", "C", "J", "F", "L", "K"],
-      "CEGHIJKL": ["E", "J", "I", "C", "H", "G", "L", "K"],
-      "CEFHIJKL": ["E", "J", "I", "C", "H", "F", "L", "K"]
+    // Matriz Combinatória Regulamentar da FIFA (Copa do Mundo 2026) com chaves de Jogo
+    const TABELA_TERCEIROS_FIFA: Record<string, { J74: string; J77: string; J81: string; J82: string; J79: string; J80: string; J85: string; J87: string }> = {
+      "ABCDEFGL": { J74: "C", J77: "F", J81: "B", J82: "A", J79: "E", J80: "G", J85: "D", J87: "L" },
+      "ABCDEFGH": { J74: "C", J77: "D", J81: "A", J82: "B", J79: "E", J80: "F", J85: "G", J87: "H" },
+      "ABCDEFGI": { J74: "C", J77: "D", J81: "A", J82: "B", J79: "E", J80: "F", J85: "G", J87: "I" },
+      "ABCDEFGJ": { J74: "C", J77: "D", J81: "A", J82: "B", J79: "E", J80: "F", J85: "G", J87: "J" },
+      "ABCDEFGK": { J74: "C", J77: "D", J81: "A", J82: "B", J79: "E", J80: "F", J85: "G", J87: "K" },
+      "ABCDEFHI": { J74: "C", J77: "D", J81: "A", J82: "B", J79: "E", J80: "F", J85: "H", J87: "I" },
+      "ABCDEFHJ": { J74: "C", J77: "D", J81: "A", J82: "B", J79: "E", J80: "F", J85: "H", J87: "J" },
+      "ABCDEFHK": { J74: "C", J77: "D", J81: "A", J82: "B", J79: "E", J80: "F", J85: "H", J87: "K" },
+      "ABCDEFHL": { J74: "C", J77: "D", J81: "A", J82: "B", J79: "E", J80: "F", J85: "H", J87: "L" },
+      "ABCDEFIJ": { J74: "C", J77: "D", J81: "A", J82: "B", J79: "E", J80: "F", J85: "I", J87: "J" },
+      "ABCDEFIK": { J74: "C", J77: "D", J81: "A", J82: "B", J79: "E", J80: "F", J85: "I", J87: "K" },
+      "ABCDEFIL": { J74: "C", J77: "D", J81: "A", J82: "B", J79: "E", J80: "F", J85: "I", J87: "L" },
+      "EFGHIJKL": { J74: "E", J77: "I", J81: "F", J82: "H", J79: "J", J80: "G", J85: "K", J87: "L" },
+      "DEFGHIJKL": { J74: "E", J77: "G", J81: "J", J82: "D", J79: "H", J80: "F", J85: "L", J87: "K" }
     };
 
-    // Funções utilitárias de busca de nome
     const getTeamName = (t: any) => t?.teamName || t?.team_name || t?.name || t?.team?.name || 'A Definir';
 
     const getTeam = (groupLetter: string, position: number) => {
@@ -331,44 +316,43 @@ const handlePrintSimulated = () => {
       return group?.standings[position - 1];
     };
 
-    // 1. Puxa os terceiros colocados usando a mesma regra do motor
+    // 1. Puxa os terceiros colocados usando a inteligência unificada do componente
     const { teams: melhoresTerceiros } = obterMelhoresTerceiros(simulatedResults || []);
     
-    // 2. Isola as letras dos 8 melhores e monta a chave alfabética para a matriz
+    // 2. Monta a chave combinatória alfabética (Ex: "ABCDEFGL")
     const gruposDosTerceiros = melhoresTerceiros.slice(0, 8).map(t => t.groupLetter);
     const chaveCombinacao = [...gruposDosTerceiros].sort().join("");
-    const linhaDistribuicaoFifa = MATRIZ_OFICIAL_FIFA[chaveCombinacao];
+    const definicaoAlvo = TABELA_TERCEIROS_FIFA[chaveCombinacao];
 
-    // Função interna adaptada para ler a regra estrita da FIFA na geração do PDF
-    const obterTerceiroFifa = (grupoAlvo: string | undefined, posicaoFallback: number) => {
-      if (linhaDistribuicaoFifa && grupoAlvo) {
-        const timeEncontrado = melhoresTerceiros.find(t => t.groupLetter === grupoAlvo);
+    // Função de busca que garante o terceiro correto por grupo
+    const pegarTerceiroDoGrupo = (letraGrupo: string | undefined, posicaoFallback: number) => {
+      if (letraGrupo) {
+        const timeEncontrado = melhoresTerceiros.find(t => t.groupLetter === letraGrupo);
         if (timeEncontrado) return timeEncontrado;
       }
       return melhoresTerceiros[posicaoFallback] || { teamName: 'A Definir' };
     };
 
-    // 3. Mapeia a Segunda Fase (32) lendo a distribuição matemática correta da FIFA
+    // 3. Organização dos 16 confrontos na mesma ordem vertical da tela e da FIFA
     const r32 = [
-      { id: '1',  t1: getTeam('E', 1), t2: obterTerceiroFifa(linhaDistribuicaoFifa?.[3], 0) },
-      { id: '2',  t1: getTeam('I', 1), t2: obterTerceiroFifa(linhaDistribuicaoFifa?.[5], 1) },
-      { id: '3',  t1: getTeam('A', 2), t2: getTeam('B', 2) },
-      { id: '4',  t1: getTeam('F', 1), t2: getTeam('C', 2) },
-      { id: '5',  t1: getTeam('K', 2), t2: getTeam('L', 2) },
-      { id: '6',  t1: getTeam('H', 1), t2: getTeam('J', 2) },
-      { id: '7',  t1: getTeam('D', 1), t2: obterTerceiroFifa(linhaDistribuicaoFifa?.[2], 2) },
-      { id: '8',  t1: getTeam('G', 1), t2: obterTerceiroFifa(linhaDistribuicaoFifa?.[4], 3) },
-      { id: '9',  t1: getTeam('C', 1), t2: getTeam('F', 2) },
-      { id: '10', t1: getTeam('E', 2), t2: getTeam('I', 2) },
-      { id: '11', t1: getTeam('A', 1), t2: obterTerceiroFifa(linhaDistribuicaoFifa?.[0], 4) },
-      { id: '12', t1: getTeam('L', 1), t2: obterTerceiroFifa(linhaDistribuicaoFifa?.[7], 5) },
-      { id: '13', t1: getTeam('J', 1), t2: getTeam('H', 2) },
-      { id: '14', t1: getTeam('D', 2), t2: getTeam('G', 2) },
-      { id: '15', t1: getTeam('B', 1), t2: obterTerceiroFifa(linhaDistribuicaoFifa?.[1], 6) },
-      { id: '16', t1: getTeam('K', 1), t2: obterTerceiroFifa(linhaDistribuicaoFifa?.[6], 7) },
+      { id: '1',  title: 'Jogo 74', t1: getTeam('E', 1), t2: pegarTerceiroDoGrupo(definicaoAlvo?.J74, 0) }, // Alemanha x Costa do Marfim
+      { id: '2',  title: 'Jogo 77', t1: getTeam('I', 1), t2: pegarTerceiroDoGrupo(definicaoAlvo?.J77, 1) },
+      { id: '3',  title: 'Jogo 73', t1: getTeam('A', 2), t2: getTeam('B', 2) },
+      { id: '4',  title: 'Jogo 75', t1: getTeam('F', 1), t2: getTeam('C', 2) },
+      { id: '5',  title: 'Jogo 83', t1: getTeam('K', 2), t2: getTeam('L', 2) },
+      { id: '6',  title: 'Jogo 84', t1: getTeam('H', 1), t2: getTeam('J', 2) },
+      { id: '7',  title: 'Jogo 81', t1: getTeam('D', 1), t2: pegarTerceiroDoGrupo(definicaoAlvo?.J81, 2) }, // Paraguai x Catar
+      { id: '8',  title: 'Jogo 82', t1: getTeam('G', 1), t2: pegarTerceiroDoGrupo(definicaoAlvo?.J82, 3) },
+      { id: '9',  title: 'Jogo 76', t1: getTeam('C', 1), t2: getTeam('F', 2) },
+      { id: '10', title: 'Jogo 78', t1: getTeam('E', 2), t2: getTeam('I', 2) },
+      { id: '11', title: 'Jogo 79', t1: getTeam('A', 1), t2: pegarTerceiroDoGrupo(definicaoAlvo?.J79, 4) },
+      { id: '12', title: 'Jogo 80', t1: getTeam('L', 1), t2: pegarTerceiroDoGrupo(definicaoAlvo?.J80, 5) },
+      { id: '13', title: 'Jogo 86', t1: getTeam('J', 1), t2: getTeam('H', 2) },
+      { id: '14', title: 'Jogo 88', t1: getTeam('D', 2), t2: getTeam('G', 2) },
+      { id: '15', title: 'Jogo 85', t1: getTeam('B', 1), t2: pegarTerceiroDoGrupo(definicaoAlvo?.J85, 6) },
+      { id: '16', title: 'Jogo 87', t1: getTeam('K', 1), t2: pegarTerceiroDoGrupo(definicaoAlvo?.J87, 7) }, // Onde Gana vai cair
     ];
 
-    // Traz o nome do time que o usuário selecionou nos selects do mata-mata, se houver
     const getSelection = (matchId: string, fallback: string) => {
       const selectedId = knockoutSelections[matchId];
       if (selectedId) {
@@ -439,7 +423,7 @@ const handlePrintSimulated = () => {
         </div>
 
         <div class="bracket-titles">
-          <div class="col-title">Segunda Fase (32)</div>
+          <div class="col-title">Segundas de Final</div>
           <div class="col-title">Oitavas de Final</div>
           <div class="col-title">Quartas de Final</div>
           <div class="col-title">Semifinais</div>
@@ -450,7 +434,7 @@ const handlePrintSimulated = () => {
           <div class="column">
             ${r32.map(m => `
               <div class="match-box">
-                <div class="match-header">Jogo ${m.id}</div>
+                <div class="match-header">${m.title}</div>
                 <div class="team-slot">${getTeamName(m.t1)}</div>
                 <div class="team-slot">${getTeamName(m.t2)}</div>
               </div>
@@ -458,49 +442,61 @@ const handlePrintSimulated = () => {
           </div>
 
           <div class="column">
-            ${[1, 2, 3, 4, 5, 6, 7, 8].map(i => `
-              <div class="match-box">
-                <div class="match-header">Oitavas ${i}</div>
-                <div class="team-slot ${!knockoutSelections[`r32-${i*2 - 1}`] ? 'empty-slot' : ''}">${getSelection(`r32-${i*2 - 1}`, `Venc. Jogo ${i*2 - 1}`)}</div>
-                <div class="team-slot ${!knockoutSelections[`r32-${i*2}`] ? 'empty-slot' : ''}">${getSelection(`r32-${i*2}`, `Venc. Jogo ${i*2}`)}</div>
-              </div>
-            `).join('')}
+            ${[89, 90, 93, 94, 91, 92, 95, 96].map((jNum, idx) => {
+              const r32Keys = [
+                ['r32-1', 'r32-2'], ['r32-3', 'r32-4'], ['r32-5', 'r32-6'], ['r32-7', 'r32-8'],
+                ['r32-9', 'r32-10'], ['r32-11', 'r32-12'], ['r32-13', 'r32-14'], ['r32-15', 'r32-16']
+              ][idx];
+              return `
+                <div class="match-box">
+                  <div class="match-header">Jogo ${jNum}</div>
+                  <div class="team-slot ${!knockoutSelections[r32Keys[0]] ? 'empty-slot' : ''}">${getSelection(r32Keys[0], `Venc. Jogo ${r32[parseInt(r32Keys[0].replace('r32-',''))-1].title}`)}</div>
+                  <div class="team-slot ${!knockoutSelections[r32Keys[1]] ? 'empty-slot' : ''}">${getSelection(r32Keys[1], `Venc. Jogo ${r32[parseInt(r32Keys[1].replace('r32-',''))-1].title}`)}</div>
+                </div>
+              `;
+            }).join('')}
           </div>
 
           <div class="column">
-            ${[1, 2, 3, 4].map(i => `
-              <div class="match-box">
-                <div class="match-header">Quartas ${i}</div>
-                <div class="team-slot ${!knockoutSelections[`r16-${i*2 - 1}`] ? 'empty-slot' : ''}">${getSelection(`r16-${i*2 - 1}`, `Venc. Oitavas ${i*2 - 1}`)}</div>
-                <div class="team-slot ${!knockoutSelections[`r16-${i*2}`] ? 'empty-slot' : ''}">${getSelection(`r16-${i*2}`, `Venc. Oitavas ${i*2}`)}</div>
-              </div>
-            `).join('')}
+            ${[97, 98, 99, 100].map((jNum, idx) => {
+              const r16Keys = [['r16-1', 'r16-2'], ['r16-3', 'r16-4'], ['r16-5', 'r16-6'], ['r16-7', 'r16-8']][idx];
+              const label1 = ['Jogo 89', 'Jogo 93', 'Jogo 91', 'Jogo 95'][idx];
+              const label2 = ['Jogo 90', 'Jogo 94', 'Jogo 92', 'Jogo 96'][idx];
+              return `
+                <div class="match-box">
+                  <div class="match-header">Jogo ${jNum}</div>
+                  <div class="team-slot ${!knockoutSelections[r16Keys[0]] ? 'empty-slot' : ''}">${getSelection(r16Keys[0], `Venc. ${label1}`)}</div>
+                  <div class="team-slot ${!knockoutSelections[r16Keys[1]] ? 'empty-slot' : ''}">${getSelection(r16Keys[1], `Venc. ${label2}`)}</div>
+                </div>
+              `;
+            }).join('')}
           </div>
 
           <div class="column">
-            ${[1, 2].map(i => `
-              <div class="match-box">
-                <div class="match-header">Semifinal ${i}</div>
-                <div class="team-slot ${!knockoutSelections[`qf-${i*2 - 1}`] ? 'empty-slot' : ''}">${getSelection(`qf-${i*2 - 1}`, `Venc. Quartas ${i*2 - 1}`)}</div>
-                <div class="team-slot ${!knockoutSelections[`qf-${i*2}`] ? 'empty-slot' : ''}">${getSelection(`qf-${i*2}`, `Venc. Quartas ${i*2}`)}</div>
-              </div>
-            `).join('')}
+            ${[101, 102].map((jNum, idx) => {
+              const qfKeys = [['qf-1', 'qf-2'], ['qf-3', 'qf-4']][idx];
+              const label1 = idx === 0 ? 'Jogo 97' : 'Jogo 99';
+              const label2 = idx === 0 ? 'Jogo 98' : 'Jogo 100';
+              return `
+                <div class="match-box">
+                  <div class="match-header">Jogo ${jNum}</div>
+                  <div class="team-slot ${!knockoutSelections[qfKeys[0]] ? 'empty-slot' : ''}">${getSelection(qfKeys[0], `Venc. ${label1}`)}</div>
+                  <div class="team-slot ${!knockoutSelections[qfKeys[1]] ? 'empty-slot' : ''}">${getSelection(qfKeys[1], `Venc. ${label2}`)}</div>
+                </div>
+              `;
+            }).join('')}
           </div>
 
           <div class="column" style="justify-content: center; gap: 20px;">
             <div class="match-box" style="border-color: #16a34a;">
-              <div class="match-header" style="background:#dcfce7;">GRANDE FINAL</div>
-              <div class="team-slot ${!knockoutSelections['sf-1'] ? 'empty-slot' : ''}">${getSelection('sf-1', 'Vencedor Semi 1')}</div>
-              <div class="team-slot ${!knockoutSelections['sf-2'] ? 'empty-slot' : ''}">${getSelection('sf-2', 'Vencedor Semi 2')}</div>
+              <div class="match-header" style="background:#dcfce7;">JOGO 104 (FINAL)</div>
+              <div class="team-slot ${!knockoutSelections['sf-1'] ? 'empty-slot' : ''}">${getSelection('sf-1', 'Vencedor Jogo 101')}</div>
+              <div class="team-slot ${!knockoutSelections['sf-2'] ? 'empty-slot' : ''}">${getSelection('sf-2', 'Vencedor Jogo 102')}</div>
             </div>
             <div class="match-box">
-              <div class="match-header">3º Lugar</div>
-              <div class="team-slot ${!knockoutSelections['sf-1'] ? 'empty-slot' : ''}">
-                ${knockoutSelections['sf-1'] ? getTeamName(allTeams.find(t => t.teamId === (knockoutSelections['r16-1'] === knockoutSelections['sf-1'] ? knockoutSelections['r16-2'] : knockoutSelections['r16-1']))) : 'Perdedor Semi 1'}
-              </div>
-              <div class="team-slot ${!knockoutSelections['sf-2'] ? 'empty-slot' : ''}">
-                ${knockoutSelections['sf-2'] ? getTeamName(allTeams.find(t => t.teamId === (knockoutSelections['r16-3'] === knockoutSelections['sf-2'] ? knockoutSelections['r16-4'] : knockoutSelections['r16-3']))) : 'Perdedor Semi 2'}
-              </div>
+              <div class="match-header">Jogo 103 (3º Lugar)</div>
+              <div class="team-slot empty-slot">Perdedor Jogo 101</div>
+              <div class="team-slot empty-slot">Perdedor Jogo 102</div>
             </div>
           </div>
         </div>
