@@ -153,6 +153,7 @@ const KnockoutBracket: React.FC<KnockoutBracketProps> = ({
     };
 
     // 3. Organização vertical rigorosa espelhando de cima a baixo a imagem da FIFA
+    console.log("CHAVE GERADA NO MEU APP:", chaveCombinacao);
     return [
       // --- LADO ESQUERDO DO DESIGN DA CHAVE ---
       { id: 'r32-1',  title: 'Jogo 74', team1: getTeam('E', 1), team2: pegarTerceiroDoGrupo(definicaoAlvo?.J74, 0) }, // 1ºE vs 3º C (Alemanha x Costa do Marfim)
