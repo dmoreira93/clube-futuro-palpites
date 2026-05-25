@@ -306,6 +306,7 @@ const Simulador = () => {
     };
 
     // 1. Calcula internamente os jogos na ordem correta de prioridades da FIFA
+// Dentro de handlePrintSimulated no seu Simulador.tsx, corrija para isto:
     const jogosCalculados: Record<string, { id: string; title: string; t1: any; t2: any }> = {
       'J73': { id: '3',  title: 'Jogo 73', t1: getTeam('A', 2), t2: getTeam('B', 2) },
       'J74': { id: '1',  title: 'Jogo 74', t1: getTeam('E', 1), t2: alocarTerceiroUniversal(['A','B','C','D','F'], 0) },
@@ -318,7 +319,7 @@ const Simulador = () => {
       'J81': { id: '7',  title: 'Jogo 81', t1: getTeam('D', 1), t2: alocarTerceiroUniversal(['B','E','F','I','J'], 2) },
       'J82': { id: '8',  title: 'Jogo 82', t1: getTeam('G', 1), t2: alocarTerceiroUniversal(['A','E','H','I','J'], 3) },
       'J83': { id: '5',  title: 'Jogo 83', t1: getTeam('K', 2), t2: getTeam('L', 2) },
-      { id: '6',  title: 'Jogo 84', t1: getTeam('H', 1), t2: getTeam('J', 2) },
+      'J84': { id: '6',  title: 'Jogo 84', t1: getTeam('H', 1), t2: getTeam('J', 2) }, // <-- CORRIGIDO AQUI!
       'J85': { id: '15', title: 'Jogo 85', t1: getTeam('B', 1), t2: alocarTerceiroUniversal(['E','F','G','I','J'], 6) },
       'J86': { id: '13', title: 'Jogo 86', t1: getTeam('J', 1), t2: getTeam('H', 2) },
       'J87': { id: '16', title: 'Jogo 87', t1: getTeam('K', 1), t2: alocarTerceiroUniversal(['D','E','I','J','L'], 7) },
