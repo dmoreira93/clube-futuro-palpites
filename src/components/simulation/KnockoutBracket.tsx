@@ -132,26 +132,24 @@ const KnockoutBracket: React.FC<KnockoutBracketProps> = ({
     };
 
     // Alocação sequencial com base nas travas de elegibilidade do regulamento oficial da Copa de 2026
+// Monta os confrontos ordenados rigorosamente pela numeração sequencial dos jogos oficiais da FIFA
     return [
-      // --- LADO ESQUERDO DO DESIGN DA CHAVE ---
-      { id: 'r32-1',  title: 'Jogo 74', team1: getTeam('E', 1), team2: alocarTerceiroUniversal(['A','B','C','D','F'], 0) }, // 1E vs 3ABCDF
-      { id: 'r32-2',  title: 'Jogo 77', team1: getTeam('I', 1), team2: alocarTerceiroUniversal(['C','D','F','G','H'], 1) }, // 1I vs 3CDFGH
       { id: 'r32-3',  title: 'Jogo 73', team1: getTeam('A', 2), team2: getTeam('B', 2) },                             // 2A vs 2B
+      { id: 'r32-1',  title: 'Jogo 74', team1: getTeam('E', 1), team2: alocarTerceiroUniversal(['A','B','C','D','F'], 0) }, // 1E vs 3ABCDF
       { id: 'r32-4',  title: 'Jogo 75', team1: getTeam('F', 1), team2: getTeam('C', 2) },                             // 1F vs 2C
-      { id: 'r32-5',  title: 'Jogo 83', team1: getTeam('K', 2), team2: getTeam('L', 2) },                             // 2K vs 2L
-      { id: 'r32-6',  title: 'Jogo 84', team1: getTeam('H', 1), team2: getTeam('J', 2) },                             // 1H vs 2J
-      { id: 'r32-7',  title: 'Jogo 81', team1: getTeam('D', 1), team2: alocarTerceiroUniversal(['B','E','F','I','J'], 2) }, // 1D vs 3BEFIJ
-      { id: 'r32-8',  title: 'Jogo 82', team1: getTeam('G', 1), team2: alocarTerceiroUniversal(['A','E','H','I','J'], 3) }, // 1G vs 3AEHIJ
-
-      // --- LADO DIREITO DO DESIGN DA CHAVE ---
       { id: 'r32-9',  title: 'Jogo 76', team1: getTeam('C', 1), team2: getTeam('F', 2) },                             // 1C vs 2F
+      { id: 'r32-2',  title: 'Jogo 77', team1: getTeam('I', 1), team2: alocarTerceiroUniversal(['C','D','F','G','H'], 1) }, // 1I vs 3CDFGH
       { id: 'r32-10', title: 'Jogo 78', team1: getTeam('E', 2), team2: getTeam('I', 2) },                             // 2E vs 2I
       { id: 'r32-11', title: 'Jogo 79', team1: getTeam('A', 1), team2: alocarTerceiroUniversal(['C','E','F','H','I'], 4) }, // 1A vs 3CEFHI
       { id: 'r32-12', title: 'Jogo 80', team1: getTeam('L', 1), team2: alocarTerceiroUniversal(['E','H','I','J','K'], 5) }, // 1L vs 3EHIJK
-      { id: 'r32-13', title: 'Jogo 86', team1: getTeam('J', 1), team2: getTeam('H', 2) },                             // 1J vs 2H
-      { id: 'r32-14', title: 'Jogo 88', team1: getTeam('D', 2), team2: getTeam('G', 2) },                             // 2D vs 2G
+      { id: 'r32-7',  title: 'Jogo 81', team1: getTeam('D', 1), team2: alocarTerceiroUniversal(['B','E','F','I','J'], 2) }, // 1D vs 3BEFIJ
+      { id: 'r32-8',  title: 'Jogo 82', team1: getTeam('G', 1), team2: alocarTerceiroUniversal(['A','E','H','I','J'], 3) }, // 1G vs 3AEHIJ
+      { id: 'r32-5',  title: 'Jogo 83', team1: getTeam('K', 2), team2: getTeam('L', 2) },                             // 2K vs 2L
+      { id: 'r32-6',  title: 'Jogo 84', team1: getTeam('H', 1), team2: getTeam('J', 2) },                             // 1H vs 2J
       { id: 'r32-15', title: 'Jogo 85', team1: getTeam('B', 1), team2: alocarTerceiroUniversal(['E','F','G','I','J'], 6) }, // 1B vs 3EFGIJ
+      { id: 'r32-13', title: 'Jogo 86', team1: getTeam('J', 1), team2: getTeam('H', 2) },                             // 1J vs 2H
       { id: 'r32-16', title: 'Jogo 87', team1: getTeam('K', 1), team2: alocarTerceiroUniversal(['D','E','I','J','L'], 7) }, // 1K vs 3DEIJL
+      { id: 'r32-14', title: 'Jogo 88', team1: getTeam('D', 2), team2: getTeam('G', 2) },                             // 2D vs 2G
     ];
   }, [simulatedGroups, melhoresTerceiros, allTeams]);
 
