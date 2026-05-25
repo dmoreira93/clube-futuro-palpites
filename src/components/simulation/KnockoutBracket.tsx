@@ -6,12 +6,10 @@ import { Button } from '@/components/ui/button';
 import { Save } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
-// --- MOTOR DE ÍNDICE TÉCNICO COMPLETO DOS 3º COLOCADOS ---
 export function obterMelhoresTerceiros(simulatedGroups: SimulatedGroup[]): { teams: any[], hasTie: boolean } {
   const terceiros = simulatedGroups
     .map(g => {
       const terceiroDoGrupo = g.standings[2];
-      // Garante a extração limpa da letra do grupo independente do formato da string
       const nomeLimpo = (g.groupName || '').trim().toUpperCase();
       const letra = nomeLimpo.startsWith('GRUPO') || nomeLimpo.startsWith('GROUP') 
         ? nomeLimpo.split(' ').pop() || '' 
@@ -36,10 +34,7 @@ export function obterMelhoresTerceiros(simulatedGroups: SimulatedGroup[]): { tea
     return 0;
   });
 
-  return {
-    teams: terceiros,
-    hasTie
-  };
+  return { teams: terceiros, hasTie };
 }
 
 interface KnockoutBracketProps {
@@ -111,18 +106,15 @@ const KnockoutBracket: React.FC<KnockoutBracketProps> = ({
     return winnerId === team1.teamId ? team2 : team1;
   };
 
-  // --- BUSCA DA LISTA DE TERCEIROS ORDENADOS POR ÍNDICE TÉCNICO ---
   const { melhoresTerceiros, existeEmpateNosCriterios } = React.useMemo(() => {
     const resultado = obterMelhoresTerceiros(simulatedGroups);
     return { melhoresTerceiros: resultado.teams, existeEmpateNosCriterios: resultado.hasTie };
   }, [simulatedGroups]);
 
-  // --- MOTOR ALGORÍTMICO DINÂMICO DA FIFA (PROJETADO PARA AS 495 COMBINAÇÕES COMBINATÓRIAS) ---
+  // --- SEPARAÇÃO MATEMÁTICA: CALCULA EM ORDEM DA FIFA E RENDERIZA NA ORDEM VISUAL ---
   const r32 = React.useMemo(() => {
-    // Isola unicamente os 8 melhores terceiros colocados da classificação geral
     let terceirosDisponiveis = [...melhoresTerceiros.slice(0, 8)];
 
-    // Varre e drena o melhor terceiro elegível respeitando a prioridade vertical de chaves da FIFA
     const alocarTerceiroUniversal = (gruposPermitidos: string[], idxFallback: number) => {
       const idx = terceirosDisponiveis.findIndex(t => gruposPermitidos.includes(t.groupLetter));
       if (idx !== -1) {
@@ -131,38 +123,60 @@ const KnockoutBracket: React.FC<KnockoutBracketProps> = ({
       return melhoresTerceiros[idxFallback] || allTeams[idxFallback];
     };
 
-    // Alocação sequencial com base nas travas de elegibilidade do regulamento oficial da Copa de 2026
-// Monta os confrontos ordenados rigorosamente pela numeração sequencial dos jogos oficiais da FIFA
+    // 1. O motor roda o cálculo EXATAMENTE na ordem numérica sequencial dos jogos oficiais da FIFA para garantir o dreno correto
+    const jogosCalculados: Record<string, { id: string; title: string; team1: any; team2: any }> = {
+      'J73': { id: 'r32-3',  title: 'Jogo 73', team1: getTeam('A', 2), team2: getTeam('B', 2) },
+      'J74': { id: 'r32-1',  title: 'Jogo 74', team1: getTeam('E', 1), team2: alocarTerceiroUniversal(['A','B','C','D','F'], 0) },
+      'J75': { id: 'r32-4',  title: 'Jogo 75', team1: getTeam('F', 1), team2: getTeam('C', 2) },
+      'J76': { id: 'r32-9',  title: 'Jogo 76', team1: getTeam('C', 1), team2: getTeam('F', 2) },
+      'J77': { id: 'r32-2',  title: 'Jogo 77', team1: getTeam('I', 1), team2: alocarTerceiroUniversal(['C','D','F','G','H'], 1) },
+      'J78': { id: 'r32-10', title: 'Jogo 78', team1: getTeam('E', 2), team2: getTeam('I', 2) },
+      'J79': { id: 'r32-11', title: 'Jogo 79', team1: getTeam('A', 1), team2: alocarTerceiroUniversal(['C','E','F','H','I'], 4) },
+      'J80': { id: 'r32-12', title: 'Jogo 80', team1: getTeam('L', 1), team2: alocarTerceiroUniversal(['E','H','I','J','K'], 5) },
+      'J81': { id: 'r32-7',  title: 'Jogo 81', team1: getTeam('D', 1), team2: alocarTerceiroUniversal(['B','E','F','I','J'], 2) },
+      'J82': { id: 'r32-8',  title: 'Jogo 82', team1: getTeam('G', 1), team2: alocarTerceiroUniversal(['A','E','H','I','J'], 3) },
+      'J83': { id: 'r32-5',  title: 'Jogo 83', team1: getTeam('K', 2), team2: getTeam('L', 2) },
+      'J84': { id: 'r32-6',  title: 'Jogo 84', team1: getTeam('H', 1), team2: getTeam('J', 2) },
+      'J85': { id: 'r32-15', title: 'Jogo 85', team1: getTeam('B', 1), team2: alocarTerceiroUniversal(['E','F','G','I','J'], 6) },
+      'J86': { id: 'r32-13', title: 'Jogo 86', team1: getTeam('J', 1), team2: getTeam('H', 2) },
+      'J87': { id: 'r32-16', title: 'Jogo 87', team1: getTeam('K', 1), team2: alocarTerceiroUniversal(['D','E','I','J','L'], 7) },
+      'J88': { id: 'r32-14', title: 'Jogo 88', team1: getTeam('D', 2), team2: getTeam('G', 2) },
+    };
+
+    // 2. Retorna a lista reorganizada na ordem de visualização exata exigida pelo layout do seu bracket (imagem image_9ed5aa.png)!
     return [
-      { id: 'r32-3',  title: 'Jogo 73', team1: getTeam('A', 2), team2: getTeam('B', 2) },                             // 2A vs 2B
-      { id: 'r32-1',  title: 'Jogo 74', team1: getTeam('E', 1), team2: alocarTerceiroUniversal(['A','B','C','D','F'], 0) }, // 1E vs 3ABCDF
-      { id: 'r32-4',  title: 'Jogo 75', team1: getTeam('F', 1), team2: getTeam('C', 2) },                             // 1F vs 2C
-      { id: 'r32-9',  title: 'Jogo 76', team1: getTeam('C', 1), team2: getTeam('F', 2) },                             // 1C vs 2F
-      { id: 'r32-2',  title: 'Jogo 77', team1: getTeam('I', 1), team2: alocarTerceiroUniversal(['C','D','F','G','H'], 1) }, // 1I vs 3CDFGH
-      { id: 'r32-10', title: 'Jogo 78', team1: getTeam('E', 2), team2: getTeam('I', 2) },                             // 2E vs 2I
-      { id: 'r32-11', title: 'Jogo 79', team1: getTeam('A', 1), team2: alocarTerceiroUniversal(['C','E','F','H','I'], 4) }, // 1A vs 3CEFHI
-      { id: 'r32-12', title: 'Jogo 80', team1: getTeam('L', 1), team2: alocarTerceiroUniversal(['E','H','I','J','K'], 5) }, // 1L vs 3EHIJK
-      { id: 'r32-7',  title: 'Jogo 81', team1: getTeam('D', 1), team2: alocarTerceiroUniversal(['B','E','F','I','J'], 2) }, // 1D vs 3BEFIJ
-      { id: 'r32-8',  title: 'Jogo 82', team1: getTeam('G', 1), team2: alocarTerceiroUniversal(['A','E','H','I','J'], 3) }, // 1G vs 3AEHIJ
-      { id: 'r32-5',  title: 'Jogo 83', team1: getTeam('K', 2), team2: getTeam('L', 2) },                             // 2K vs 2L
-      { id: 'r32-6',  title: 'Jogo 84', team1: getTeam('H', 1), team2: getTeam('J', 2) },                             // 1H vs 2J
-      { id: 'r32-15', title: 'Jogo 85', team1: getTeam('B', 1), team2: alocarTerceiroUniversal(['E','F','G','I','J'], 6) }, // 1B vs 3EFGIJ
-      { id: 'r32-13', title: 'Jogo 86', team1: getTeam('J', 1), team2: getTeam('H', 2) },                             // 1J vs 2H
-      { id: 'r32-16', title: 'Jogo 87', team1: getTeam('K', 1), team2: alocarTerceiroUniversal(['D','E','I','J','L'], 7) }, // 1K vs 3DEIJL
-      { id: 'r32-14', title: 'Jogo 88', team1: getTeam('D', 2), team2: getTeam('G', 2) },                             // 2D vs 2G
+      // LADO ESQUERDO DO BRAQUETE
+      jogosCalculados['J74'], // Jogo 74
+      jogosCalculados['J77'], // Jogo 77 -> Juntos alimentam o Jogo 89 nas Oitavas
+      jogosCalculados['J73'], // Jogo 73
+      jogosCalculados['J75'], // Jogo 75 -> Juntos alimentam o Jogo 90 nas Oitavas
+      jogosCalculados['J83'], // Jogo 83
+      jogosCalculados['J84'], // Jogo 84 -> Juntos alimentam o Jogo 93 nas Oitavas
+      jogosCalculados['J81'], // Jogo 81
+      jogosCalculados['J82'], // Jogo 82 -> Juntos alimentam o Jogo 94 nas Oitavas
+
+      // LADO DIREITO DO BRAQUETE
+      jogosCalculados['J76'], // Jogo 76
+      jogosCalculados['J78'], // Jogo 78 -> Juntos alimentam o Jogo 91 nas Oitavas
+      jogosCalculados['J79'], // Jogo 79
+      jogosCalculados['J80'], // Jogo 80 -> Juntos alimentam o Jogo 92 nas Oitavas
+      jogosCalculados['J86'], // Jogo 86
+      jogosCalculados['J88'], // Jogo 88 -> Juntos alimentam o Jogo 95 nas Oitavas
+      jogosCalculados['J85'], // Jogo 85
+      jogosCalculados['J87'], // Jogo 87 -> Juntos alimentam o Jogo 96 nas Oitavas
     ];
   }, [simulatedGroups, melhoresTerceiros, allTeams]);
 
-  // --- MAPEAMENTO DAS OITAVAS SEGUINDO A PLANILHA OFICIAL ---
+  // --- MAPEAMENTO DAS OITAVAS BASEADO NOS IDS CORRETOS ---
   const r16_teams = React.useMemo(() => ({
-    'r16-1': [findTeamById(knockoutSelections['r32-1']), findTeamById(knockoutSelections['r32-2'])],
-    'r16-2': [findTeamById(knockoutSelections['r32-3']), findTeamById(knockoutSelections['r32-4'])],
-    'r16-3': [findTeamById(knockoutSelections['r32-5']), findTeamById(knockoutSelections['r32-6'])],
-    'r16-4': [findTeamById(knockoutSelections['r32-7']), findTeamById(knockoutSelections['r32-8'])],
-    'r16-5': [findTeamById(knockoutSelections['r32-9']), findTeamById(knockoutSelections['r32-10'])],
-    'r16-6': [findTeamById(knockoutSelections['r32-11']), findTeamById(knockoutSelections['r32-12'])],
-    'r16-7': [findTeamById(knockoutSelections['r32-13']), findTeamById(knockoutSelections['r32-14'])],
-    'r16-8': [findTeamById(knockoutSelections['r32-15']), findTeamById(knockoutSelections['r32-16'])],
+    'r16-1': [findTeamById(knockoutSelections['r32-1']), findTeamById(knockoutSelections['r32-2'])], // J74 x J77 -> J89
+    'r16-2': [findTeamById(knockoutSelections['r32-3']), findTeamById(knockoutSelections['r32-4'])], // J73 x J75 -> J90
+    'r16-3': [findTeamById(knockoutSelections['r32-5']), findTeamById(knockoutSelections['r32-6'])], // J83 x J84 -> J93
+    'r16-4': [findTeamById(knockoutSelections['r32-7']), findTeamById(knockoutSelections['r32-8'])], // J81 x J82 -> J94
+    'r16-5': [findTeamById(knockoutSelections['r32-9']), findTeamById(knockoutSelections['r32-10'])], // J76 x J78 -> J91
+    'r16-6': [findTeamById(knockoutSelections['r32-11']), findTeamById(knockoutSelections['r32-12'])], // J79 x J80 -> J92
+    'r16-7': [findTeamById(knockoutSelections['r32-13']), findTeamById(knockoutSelections['r32-14'])], // J86 x J88 -> J95
+    'r16-8': [findTeamById(knockoutSelections['r32-15']), findTeamById(knockoutSelections['r32-16'])], // J85 x J87 -> J96
   }), [knockoutSelections, allTeams]);
 
   const qf_teams = React.useMemo(() => ({

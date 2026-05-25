@@ -296,36 +296,53 @@ const Simulador = () => {
       return group?.standings[position - 1];
     };
 
-    // 1. Coleta os terceiros colocados usando o motor unificado e isola os 8 melhores
     const { teams: melhoresTerceiros } = obterMelhoresTerceiros(simulatedResults || []);
     let terceirosDisponiveis = [...melhoresTerceiros.slice(0, 8)];
 
-    // 2. Fila de drenagem dinâmica universal da FIFA para evitar duplicatas no PDF
     const alocarTerceiroUniversal = (gruposPermitidos: string[], idxFallback: number) => {
       const idx = terceirosDisponiveis.findIndex(t => gruposPermitidos.includes(t.groupLetter));
       if (idx !== -1) return terceirosDisponiveis.splice(idx, 1)[0];
       return melhoresTerceiros[idxFallback] || { teamName: 'A Definir', groupLetter: '' };
     };
 
-    // 3. Monta o array na ordem vertical estrita para a impressão do HTML
-// Monta o array na ordem numérica sequencial dos jogos da FIFA para a impressão do HTML
-    const r32 = [
-      { id: '3',  title: 'Jogo 73', t1: getTeam('A', 2), t2: getTeam('B', 2) },
-      { id: '1',  title: 'Jogo 74', t1: getTeam('E', 1), t2: alocarTerceiroUniversal(['A','B','C','D','F'], 0) },
-      { id: '4',  title: 'Jogo 75', t1: getTeam('F', 1), t2: getTeam('C', 2) },
-      { id: '9',  title: 'Jogo 76', t1: getTeam('C', 1), t2: getTeam('F', 2) },
-      { id: '2',  title: 'Jogo 77', t1: getTeam('I', 1), t2: alocarTerceiroUniversal(['C','D','F','G','H'], 1) },
-      { id: '10', title: 'Jogo 78', t1: getTeam('E', 2), t2: getTeam('I', 2) },
-      { id: '11', title: 'Jogo 79', t1: getTeam('A', 1), t2: alocarTerceiroUniversal(['C','E','F','H','I'], 4) },
-      { id: '12', title: 'Jogo 80', t1: getTeam('L', 1), t2: alocarTerceiroUniversal(['E','H','I','J','K'], 5) },
-      { id: '7',  title: 'Jogo 81', t1: getTeam('D', 1), t2: alocarTerceiroUniversal(['B','E','F','I','J'], 2) },
-      { id: '8',  title: 'Jogo 82', t1: getTeam('G', 1), t2: alocarTerceiroUniversal(['A','E','H','I','J'], 3) },
-      { id: '5',  title: 'Jogo 83', t1: getTeam('K', 2), t2: getTeam('L', 2) },
+    // 1. Calcula internamente os jogos na ordem correta de prioridades da FIFA
+    const jogosCalculados: Record<string, { id: string; title: string; t1: any; t2: any }> = {
+      'J73': { id: '3',  title: 'Jogo 73', t1: getTeam('A', 2), t2: getTeam('B', 2) },
+      'J74': { id: '1',  title: 'Jogo 74', t1: getTeam('E', 1), t2: alocarTerceiroUniversal(['A','B','C','D','F'], 0) },
+      'J75': { id: '4',  title: 'Jogo 75', t1: getTeam('F', 1), t2: getTeam('C', 2) },
+      'J76': { id: '9',  title: 'Jogo 76', t1: getTeam('C', 1), t2: getTeam('F', 2) },
+      'J77': { id: '2',  title: 'Jogo 77', t1: getTeam('I', 1), t2: alocarTerceiroUniversal(['C','D','F','G','H'], 1) },
+      'J78': { id: '10', title: 'Jogo 78', t1: getTeam('E', 2), t2: getTeam('I', 2) },
+      'J79': { id: '11', title: 'Jogo 79', t1: getTeam('A', 1), t2: alocarTerceiroUniversal(['C','E','F','H','I'], 4) },
+      'J80': { id: '12', title: 'Jogo 80', t1: getTeam('L', 1), t2: alocarTerceiroUniversal(['E','H','I','J','K'], 5) },
+      'J81': { id: '7',  title: 'Jogo 81', t1: getTeam('D', 1), t2: alocarTerceiroUniversal(['B','E','F','I','J'], 2) },
+      'J82': { id: '8',  title: 'Jogo 82', t1: getTeam('G', 1), t2: alocarTerceiroUniversal(['A','E','H','I','J'], 3) },
+      'J83': { id: '5',  title: 'Jogo 83', t1: getTeam('K', 2), t2: getTeam('L', 2) },
       { id: '6',  title: 'Jogo 84', t1: getTeam('H', 1), t2: getTeam('J', 2) },
-      { id: '15', title: 'Jogo 85', t1: getTeam('B', 1), t2: alocarTerceiroUniversal(['E','F','G','I','J'], 6) },
-      { id: '13', title: 'Jogo 86', t1: getTeam('J', 1), t2: getTeam('H', 2) },
-      { id: '16', title: 'Jogo 87', t1: getTeam('K', 1), t2: alocarTerceiroUniversal(['D','E','I','J','L'], 7) },
-      { id: '14', title: 'Jogo 88', t1: getTeam('D', 2), t2: getTeam('G', 2) },
+      'J85': { id: '15', title: 'Jogo 85', t1: getTeam('B', 1), t2: alocarTerceiroUniversal(['E','F','G','I','J'], 6) },
+      'J86': { id: '13', title: 'Jogo 86', t1: getTeam('J', 1), t2: getTeam('H', 2) },
+      'J87': { id: '16', title: 'Jogo 87', t1: getTeam('K', 1), t2: alocarTerceiroUniversal(['D','E','I','J','L'], 7) },
+      'J88': { id: '14', title: 'Jogo 88', t1: getTeam('D', 2), t2: getTeam('G', 2) },
+    };
+
+    // 2. Organiza o array final na ordem estrita de visualização vertical do PDF
+    const r32 = [
+      jogosCalculados['J74'],
+      jogosCalculados['J77'],
+      jogosCalculados['J73'],
+      jogosCalculados['J75'],
+      jogosCalculados['J83'],
+      jogosCalculados['J84'],
+      jogosCalculados['J81'],
+      jogosCalculados['J82'],
+      jogosCalculados['J76'],
+      jogosCalculados['J78'],
+      jogosCalculados['J79'],
+      jogosCalculados['J80'],
+      jogosCalculados['J86'],
+      jogosCalculados['J88'],
+      jogosCalculados['J85'],
+      jogosCalculados['J87'],
     ];
 
     const getSelection = (matchId: string, fallback: string) => {
