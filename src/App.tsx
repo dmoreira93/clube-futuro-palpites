@@ -1,5 +1,6 @@
 // src/App.tsx
 
+import { useEffect } from "react"; // 🌟 Importado para gerenciar o listener global
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
 import Layout from "./components/layout/Layout";
@@ -45,14 +46,42 @@ import AdminLogin from "./pages/AdminLogin";
 import { ProtectedRoute } from "./components/auth/ProtectedRoute";
 
 function App() {
+  // 🌟 TRAVA DE SEGURANÇA CONTRA TELA INIFINITA DE CACHE (VITE/PWA)
+  useEffect(() => {
+    const handleGlobalError = (e: ErrorEvent) => {
+      // Captura o erro clássico do Vite quando um arquivo JS antigo some do servidor pós-deploy
+      if (
+        e.message?.includes('Failed to fetch dynamically imported module') || 
+        e.message?.includes('error loading dynamically imported module')
+      ) {
+        console.warn('⚠️ Detectada quebra de cache do Vite! Limpando Service Worker e atualizando...');
+        
+        // 1. Localiza e desinstala ativamente os service workers antigos para limpar as rotas presas
+        if ('serviceWorker' in navigator) {
+          navigator.serviceWorker.getRegistrations().then((registrations) => {
+            for (const registration of registrations) {
+              registration.unregister();
+            }
+          });
+        }
+        
+        // 2. Força um reload completo limpando o cache HTTP local para trazer a versão nova da Vercel
+        window.location.reload();
+      }
+    };
+
+    window.addEventListener('error', handleGlobalError);
+    return () => window.removeEventListener('error', handleGlobalError);
+  }, []);
+
   return (
     <AuthProvider>
       <BrowserRouter>
         <Routes>
           {/* 1. ROTAS DE IMPRESSÃO (Nível Raiz e Blindadas contra Cache)
-            Mapeamos os dois formatos de URL possíveis para garantir que, independente 
-            de o componente ler por useParams ou useSearchParams, a página carregue 
-            sem dar 404 Not Found.
+             Mapeamos os dois formatos de URL possíveis para garantir que, independente 
+             de o componente ler por useParams ou useSearchParams, a página carregue 
+             sem dar 404 Not Found.
           */}
           <Route 
             path="/comprovante/imprimir/:poolId" 
