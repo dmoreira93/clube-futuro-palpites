@@ -47,16 +47,24 @@ import { ProtectedRoute } from "./components/auth/ProtectedRoute";
 
 function App() {
   // 🌟 TRAVA DE SEGURANÇA CONTRA TELA INIFINITA DE CACHE (VITE/PWA)
+  // Trava de segurança contra tela infinita de cache e interferência de extensões
   useEffect(() => {
     const handleGlobalError = (e: ErrorEvent) => {
-      // Captura o erro clássico do Vite quando um arquivo JS antigo some do servidor pós-deploy
+      // 1. IGNORAR ERROS DE EXTENSÕES: Se o erro vier de um arquivo que não é do seu app, cancela a propagação
+      if (e.filename && (e.filename.includes('chrome-extension://') || e.filename.includes('pinComponent'))) {
+        e.preventDefault();
+        e.stopPropagation();
+        console.warn('⚡ Interferência de extensão de navegador ignorada para evitar travamento.');
+        return;
+      }
+
+      // 2. CORREÇÃO DE CACHE: Captura o erro clássico do Vite pós-deploy
       if (
         e.message?.includes('Failed to fetch dynamically imported module') || 
         e.message?.includes('error loading dynamically imported module')
       ) {
         console.warn('⚠️ Detectada quebra de cache do Vite! Limpando Service Worker e atualizando...');
         
-        // 1. Localiza e desinstala ativamente os service workers antigos para limpar as rotas presas
         if ('serviceWorker' in navigator) {
           navigator.serviceWorker.getRegistrations().then((registrations) => {
             for (const registration of registrations) {
@@ -65,13 +73,12 @@ function App() {
           });
         }
         
-        // 2. Força um reload completo limpando o cache HTTP local para trazer a versão nova da Vercel
         window.location.reload();
       }
     };
 
-    window.addEventListener('error', handleGlobalError);
-    return () => window.removeEventListener('error', handleGlobalError);
+    window.addEventListener('error', handleGlobalError, true); // Adicionado 'true' para capturar na fase de capture
+    return () => window.removeEventListener('error', handleGlobalError, true);
   }, []);
 
   return (
