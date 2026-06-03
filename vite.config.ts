@@ -1,5 +1,4 @@
-// vite.config.ts (VERSÃO FINAL)
-
+// vite.config.ts
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
@@ -13,13 +12,17 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      registerType: 'prompt', // <-- MUDANÇA PRINCIPAL: Nos dá controle total sobre o prompt.
+      // 🌟 MUDANÇA 1: Atualiza automaticamente sem travar a tela esperando um prompt manual
+      registerType: 'autoUpdate', 
       strategies: 'injectManifest',
       srcDir: 'src',
       filename: 'sw-push-listener.js',
       
-      workbox: {
-        globPatterns: ['**/*.{js,css,html,ico,png,svg}']
+      // 🌟 MUDANÇA 2: Quando usamos injectManifest, o objeto correto se chama injectManifest, e não workbox!
+      injectManifest: {
+        globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
+        // Garante que o novo service worker mate o cache antigo e assuma o controle na hora
+        dontCacheBustURLsMatching: /assets\//,
       },
 
       manifest: {
