@@ -114,7 +114,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         ...sessionUser, 
         username: profile?.username,
         name: profile?.name,
-        is_admin: profile?.is_admin,
+        is_admin: !!profile?.is_admin, // Garante booleano estrito
         first_login: profile?.first_login,
         avatar_url: profile?.avatar_url
       };
@@ -176,6 +176,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       } catch (err) {
         console.error("Erro na carga inicial da sessão:", err);
       } finally {
+        // 🌟 GARANTIA 1: Destrava a tela na montagem inicial aconteça o que acontecer
         if (mounted) setLoading(false);
       }
     };
@@ -187,18 +188,23 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
         console.log(`🔔 Auth Event: ${event}`);
         
-        if (event === 'SIGNED_OUT') {
-            setUser(null);
-            userRef.current = null;
-            setActivePool(null);
-            setUserParticipations([]);
-            setLoading(false);
-        } 
-        else if (session?.user && (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED')) {
-            await fetchAndSyncProfile(session.user);
-            // CORREÇÃO 1: Desbloqueia a tela caso o login venha de um provedor como o Google
-            if (mounted) setLoading(false); 
-        } 
+        try {
+            if (event === 'SIGNED_OUT') {
+                setUser(null);
+                userRef.current = null;
+                setActivePool(null);
+                setUserParticipations([]);
+            } 
+            else if (session?.user && (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED')) {
+                await fetchAndSyncProfile(session.user);
+            }
+        } catch (err) {
+            console.error("Erro ao processar alteração de autenticação:", err);
+        } finally {
+            // 🌟 GARANTIA 2: Move o recuo do loading para um bloco global finally.
+            // Isso impede que qualquer rota ou perfil sem bolão associado cause congelamento visual.
+            if (mounted) setLoading(false);
+        }
     });
 
     return () => { 
@@ -208,17 +214,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, [fetchAndSyncProfile]);
 
   // --- 4. ACTIONS ---
-  // Troque a palavra "email" por "identifier" (que pode ser o usuário ou e-mail real)
   const login = async (identifier: string, password: string) => {
     setLoading(true);
     try {
-        // O TRUQUE: Se não tiver '@', o sistema adiciona o domínio fantasma automaticamente.
         const formatIdentifier = identifier.trim().toLowerCase();
         const emailToLogin = formatIdentifier.includes('@') 
             ? formatIdentifier 
-            : `${formatIdentifier}@app.com`; // Você pode mudar "@app.com" para o que quiser
+            : `${formatIdentifier}@app.com`;
 
-        // Usa a nova variável formatada para logar
         const { data, error } = await supabase.auth.signInWithPassword({ 
             email: emailToLogin, 
             password 
@@ -230,18 +233,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         }
 
         if (data.session?.user) {
-            const profile = await fetchAndSyncProfile(data.session.user);
-            if (!profile) {
-                setLoading(false);
-                return { success: false, error: new Error("Falha ao carregar perfil.") };
-            }
+            await fetchAndSyncProfile(data.session.user);
         }
         
-        setLoading(false); 
         return { success: true, error: null };
     } catch (err) {
-        setLoading(false);
         return { success: false, error: err };
+    } finally {
+        if (userRef.current) setLoading(false);
     }
   };
 
