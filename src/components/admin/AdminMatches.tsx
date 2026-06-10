@@ -129,7 +129,10 @@ export default function AdminMatches() {
           if (error) throw error;
 
           // 2. Dispara Pontuação
-          const { error: rpcError } = await supabase.rpc('update_user_points_for_match', { match_id_param: selectedMatch.id });
+//  COLE ESTE TRECHO ATUALIZADO:
+const { error: rpcError } = await supabase.rpc('calculate_match_score', { 
+    p_match_id: selectedMatch.id 
+});
           
           if (rpcError) throw rpcError;
 
