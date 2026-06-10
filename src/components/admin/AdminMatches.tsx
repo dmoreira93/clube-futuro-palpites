@@ -118,29 +118,34 @@ export default function AdminMatches() {
 
       setProcessing(true);
       try {
-          // 1. Atualiza Match
+          // 1. Atualiza Match (REMOVIDO O is_finished QUE CAUSAVA O ERRO 400)
           const { error } = await supabase.from("matches").update({
               home_score: hScore,
               away_score: aScore,
-              is_finished: true,
-              status: 'finished'
+              status: 'finished' // <- O banco usa apenas esta coluna para o status!
           }).eq("id", selectedMatch.id);
 
-          if (error) throw error;
+          if (error) {
+              console.error("Erro no Supabase ao dar UPDATE na partida:", error);
+              throw new Error(`Erro ao salvar partida: ${error.message}`);
+          }
 
-          // 2. Dispara Pontuação
-//  COLE ESTE TRECHO ATUALIZADO:
-const { error: rpcError } = await supabase.rpc('calculate_match_score', { 
-    p_match_id: selectedMatch.id 
-});
+          // 2. Dispara Pontuação usando a RPC corrigida
+          const { error: rpcError } = await supabase.rpc('calculate_match_score', { 
+              p_match_id: selectedMatch.id 
+          });
           
-          if (rpcError) throw rpcError;
+          if (rpcError) {
+              console.error("Erro na função de calcular pontos (RPC):", rpcError);
+              throw new Error(`Placar salvo, mas erro ao calcular pontos: ${rpcError.message}`);
+          }
 
           toast.success("Resultado salvo e pontos calculados!");
           setIsResultDialogOpen(false);
           fetchMatches();
       } catch (err: any) {
-          toast.error("Erro: " + err.message);
+          console.error("Erro completo da operação:", err);
+          toast.error(err.message || "Erro desconhecido ao salvar o resultado.");
       } finally {
           setProcessing(false);
       }
