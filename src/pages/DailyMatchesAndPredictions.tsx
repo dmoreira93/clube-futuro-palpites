@@ -11,7 +11,7 @@ import { SupabaseMatchPrediction, User } from '@/utils/pointsCalculator/types';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/tabs";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"; // 💻 CORRIGIDO: pasta /ui/tabs
 import { Badge } from '@/components/ui/badge';
 
 // Tipos auxiliares estruturados
@@ -40,7 +40,7 @@ const DailyMatchesAndPredictions: React.FC = () => {
   const [poolParticipants, setPoolParticipants] = useState<User[]>([]);
   const [currentDate, setCurrentDate] = useState(new Date());
   
-  // Estado para armazenar a data do primeiro jogo do campeonato
+  // Data do primeiro jogo do campeonato
   const [firstMatchOfTournament, setFirstMatchOfTournament] = useState<Date | null>(null);
 
   const loadAllData = useCallback(async () => {
@@ -50,7 +50,7 @@ const DailyMatchesAndPredictions: React.FC = () => {
     setError(null);
     
     try {
-      // 1. Busca todos os participantes atrelados a este bolão (Sem esconder o admin do painel visual)
+      // 1. Busca todos os participantes vinculados a este bolão
       const { data: participantsData, error: partError } = await supabase
         .from('participations')
         .select(`
@@ -66,7 +66,7 @@ const DailyMatchesAndPredictions: React.FC = () => {
       setPoolParticipants(validUsers);
       const validUserIds = new Set(validUsers.map(u => u.id));
 
-      // 2. Busca a data do primeiro jogo absoluto do campeonato ativo (championship_id)
+      // 2. Busca a data do primeiro jogo do campeonato ativo
       const currentChampionshipId = activePool.championship_id || (activePool as any).tournament_id;
       const { data: championshipMatches } = await supabase
         .from('matches')
@@ -79,7 +79,7 @@ const DailyMatchesAndPredictions: React.FC = () => {
         setFirstMatchOfTournament(new Date(championshipMatches[0].match_date));
       }
 
-      // 3. Busca os jogos cadastrados no dia selecionado
+      // 3. Busca os jogos do dia selecionado
       const utcStartString = startOfDay(currentDate).toISOString();
       const utcEndString = endOfDay(currentDate).toISOString();
       
@@ -128,13 +128,13 @@ const DailyMatchesAndPredictions: React.FC = () => {
         setDailyPredictions([]);
       }
 
-      // 5. LEITURA DIRETA E SEGURA DA TABELA FINAL_PREDICTIONS (Mapeando os nomes dos times)
+      // 5. LEITURA DA TABELA FINAL_PREDICTIONS COM TIPAGEM RESILIENTE CONFORME RETORNO DO SUPABASE
       const { data: rawFinals, error: finalError } = await supabase
         .from('final_predictions')
         .select(`
           user_id,
-          final_home_score:home_score,
-          final_away_score:away_score,
+          home_score,
+          away_score,
           champion:champion_id(name),
           runner_up:runner_up_id(name),
           third_place:third_place_id(name),
@@ -146,16 +146,23 @@ const DailyMatchesAndPredictions: React.FC = () => {
 
       const formattedFinals: FinalPrediction[] = (rawFinals || []).map((f: any) => {
         const pUser = validUsers.find(u => u.id === f.user_id);
+        
+        // Evita quebra de tipagem forçando os encadeamentos nulos de objetos aninhados retornados pela subquery
+        const champName = f.champion && !Array.isArray(f.champion) ? (f.champion as any).name : 'Não selecionado';
+        const runnerName = f.runner_up && !Array.isArray(f.runner_up) ? (f.runner_up as any).name : 'Não selecionado';
+        const thirdName = f.third_place && !Array.isArray(f.third_place) ? (f.third_place as any).name : 'Não selecionado';
+        const fourthName = f.fourth_place && !Array.isArray(f.fourth_place) ? (f.fourth_place as any).name : 'Não selecionado';
+
         return {
           user_id: f.user_id,
           user_name: pUser?.name || 'Participante',
           user_avatar: pUser?.avatar_url || '',
-          champion_name: f.champion?.name || 'Não selecionado',
-          runner_up_name: f.runner_up?.name || 'Não selecionado',
-          third_place_name: f.third_place?.name || 'Não selecionado',
-          fourth_place_name: f.fourth_place?.name || 'Não selecionado',
-          final_home_score: f.final_home_score !== null ? f.final_home_score : 0,
-          final_away_score: f.final_away_score !== null ? f.final_away_score : 0
+          champion_name: champName,
+          runner_up_name: runnerName,
+          third_place_name: thirdName,
+          fourth_place_name: fourthName,
+          final_home_score: f.home_score !== null ? f.home_score : 0,
+          final_away_score: f.away_score !== null ? f.away_score : 0
         };
       });
 
@@ -183,7 +190,7 @@ const DailyMatchesAndPredictions: React.FC = () => {
     setCurrentDate(newDate);
   };
 
-  // --- TRAVA ABA DO DIA (Bloqueia dinamicamente até o horário de início da rodada do dia) ---
+  // --- TRAVA DO DIA ---
   const isDailyLocked = useMemo(() => {
     if (!activePool) return true;
     if (activePool.prediction_deadline) {
@@ -196,7 +203,7 @@ const DailyMatchesAndPredictions: React.FC = () => {
     return false;
   }, [activePool, dailyMatches]);
 
-  // --- TRAVA GRUPOS E FINAIS (Libera permanentemente assim que o 1º jogo do campeonato começa) ---
+  // --- TRAVA GRUPOS E FINAIS ---
   const isTournamentStarted = useMemo(() => {
     if (!activePool) return false;
     if (activePool.prediction_deadline) {
@@ -251,7 +258,7 @@ const DailyMatchesAndPredictions: React.FC = () => {
   return (
     <div className="container mx-auto px-2 sm:px-4 py-8 max-w-6xl">
       
-      {/* Cabeçalho da Página */}
+      {/* Cabeçalho */}
       <div className="text-center mb-8 space-y-2">
         <h1 className="text-3xl font-bold text-fifa-blue flex items-center justify-center gap-3">
             <Users className="h-8 w-8 text-fifa-gold" />
@@ -271,8 +278,6 @@ const DailyMatchesAndPredictions: React.FC = () => {
 
         {/* --- ABA 1: JOGOS DO DIA --- */}
         <TabsContent value="daily" className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
-            
-            {/* Navegador de Datas */}
             <div className="flex justify-center items-center gap-2 sm:gap-6 bg-white p-3 rounded-xl shadow-sm border border-gray-100 max-w-md mx-auto mb-8">
                 <Button variant="ghost" size="icon" onClick={() => handleDateChange(-1)} className="hover:text-fifa-blue hover:bg-blue-50">
                     <ChevronLeft className="h-6 w-6" />
@@ -477,6 +482,5 @@ const DailyMatchesAndPredictions: React.FC = () => {
     </div>
   );
 };
-
 
 export default DailyMatchesAndPredictions;
