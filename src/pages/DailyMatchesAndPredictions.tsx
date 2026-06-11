@@ -11,7 +11,7 @@ import { SupabaseMatchPrediction, User } from '@/utils/pointsCalculator/types';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"; // 💻 CORRIGIDO: pasta /ui/tabs
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from '@/components/ui/badge';
 
 // Tipos auxiliares estruturados
@@ -39,8 +39,6 @@ const DailyMatchesAndPredictions: React.FC = () => {
 
   const [poolParticipants, setPoolParticipants] = useState<User[]>([]);
   const [currentDate, setCurrentDate] = useState(new Date());
-  
-  // Data do primeiro jogo do campeonato
   const [firstMatchOfTournament, setFirstMatchOfTournament] = useState<Date | null>(null);
 
   const loadAllData = useCallback(async () => {
@@ -50,14 +48,10 @@ const DailyMatchesAndPredictions: React.FC = () => {
     setError(null);
     
     try {
-      // 1. Busca todos os participantes vinculados a este bolão
+      // 1. Busca participantes do Bolão
       const { data: participantsData, error: partError } = await supabase
         .from('participations')
-        .select(`
-            user:users_custom!inner (
-                id, name, username, avatar_url, is_admin, is_ai
-            )
-        `)
+        .select(`user:users_custom!inner (id, name, username, avatar_url, is_admin, is_ai)`)
         .eq('pool_id', activePool.id);
 
       if (partError) throw partError;
@@ -66,7 +60,15 @@ const DailyMatchesAndPredictions: React.FC = () => {
       setPoolParticipants(validUsers);
       const validUserIds = new Set(validUsers.map(u => u.id));
 
-      // 2. Busca a data do primeiro jogo do campeonato ativo
+      // 2. Mapeamento de cache de times para evitar erros de Foreign Key nas tabelas aninhadas
+      const { data: allTeams, error: teamsError } = await supabase
+        .from('teams')
+        .select('id, name');
+        
+      if (teamsError) throw teamsError;
+      const teamsMap = new Map<string, string>((allTeams || []).map(t => [t.id, t.name]));
+
+      // 3. Busca a data do primeiro jogo do campeonato ativo
       const currentChampionshipId = activePool.championship_id || (activePool as any).tournament_id;
       const { data: championshipMatches } = await supabase
         .from('matches')
@@ -79,18 +81,14 @@ const DailyMatchesAndPredictions: React.FC = () => {
         setFirstMatchOfTournament(new Date(championshipMatches[0].match_date));
       }
 
-      // 3. Busca os jogos do dia selecionado
+      // 4. Busca os jogos do dia selecionado
       const utcStartString = startOfDay(currentDate).toISOString();
       const utcEndString = endOfDay(currentDate).toISOString();
       
       const { data: matchesData, error: matchesError } = await supabase
         .from('matches')
         .select(`
-          id,
-          match_date,
-          home_score,
-          away_score,
-          status,
+          id, match_date, home_score, away_score, status,
           home_team:teams!matches_home_team_id_fkey(name, code, flag_url),
           away_team:teams!matches_away_team_id_fkey(name, code, flag_url)
         `)
@@ -113,54 +111,33 @@ const DailyMatchesAndPredictions: React.FC = () => {
 
       setDailyMatches(formattedMatches);
 
-      // 4. Busca os palpites dos confrontos do dia
+      // 5. Busca os palpites dos confrontos do dia
       if (formattedMatches.length > 0) {
         const matchIds = formattedMatches.map(match => match.id);
         const allPreds = await fetchMatchPredictionsForMatches(matchIds);
-        
-        const filteredPreds = allPreds.filter(p => 
-            p.pool_id === activePool.id && 
-            validUserIds.has(p.user_id)
-        );
-        
-        setDailyPredictions(filteredPreds);
+        setDailyPredictions(allPreds.filter(p => p.pool_id === activePool.id && validUserIds.has(p.user_id)));
       } else {
         setDailyPredictions([]);
       }
 
-      // 5. LEITURA DA TABELA FINAL_PREDICTIONS COM TIPAGEM RESILIENTE CONFORME RETORNO DO SUPABASE
+      // 6. BUSCA DIRETA EM TEXTO DA FINAL_PREDICTIONS (Livre de Erros de Relacionamento/400)
       const { data: rawFinals, error: finalError } = await supabase
         .from('final_predictions')
-        .select(`
-          user_id,
-          home_score,
-          away_score,
-          champion:champion_id(name),
-          runner_up:runner_up_id(name),
-          third_place:third_place_id(name),
-          fourth_place:fourth_place_id(name)
-        `)
+        .select('user_id, home_score, away_score, champion_id, runner_up_id, third_place_id, fourth_place_id')
         .eq('pool_id', activePool.id);
 
       if (finalError) throw finalError;
 
       const formattedFinals: FinalPrediction[] = (rawFinals || []).map((f: any) => {
         const pUser = validUsers.find(u => u.id === f.user_id);
-        
-        // Evita quebra de tipagem forçando os encadeamentos nulos de objetos aninhados retornados pela subquery
-        const champName = f.champion && !Array.isArray(f.champion) ? (f.champion as any).name : 'Não selecionado';
-        const runnerName = f.runner_up && !Array.isArray(f.runner_up) ? (f.runner_up as any).name : 'Não selecionado';
-        const thirdName = f.third_place && !Array.isArray(f.third_place) ? (f.third_place as any).name : 'Não selecionado';
-        const fourthName = f.fourth_place && !Array.isArray(f.fourth_place) ? (f.fourth_place as any).name : 'Não selecionado';
-
         return {
           user_id: f.user_id,
           user_name: pUser?.name || 'Participante',
           user_avatar: pUser?.avatar_url || '',
-          champion_name: champName,
-          runner_up_name: runnerName,
-          third_place_name: thirdName,
-          fourth_place_name: fourthName,
+          champion_name: teamsMap.get(f.champion_id) || 'Não selecionado',
+          runner_up_name: teamsMap.get(f.runner_up_id) || 'Não selecionado',
+          third_place_name: teamsMap.get(f.third_place_id) || 'Não selecionado',
+          fourth_place_name: teamsMap.get(f.fourth_place_id) || 'Não selecionado',
           final_home_score: f.home_score !== null ? f.home_score : 0,
           final_away_score: f.away_score !== null ? f.away_score : 0
         };
@@ -168,7 +145,7 @@ const DailyMatchesAndPredictions: React.FC = () => {
 
       setFinalPredictions(formattedFinals.filter(f => validUserIds.has(f.user_id)));
 
-      // 6. Busca os palpites das fases de grupos via RPC
+      // 7. Busca os palpites das fases de grupos via RPC
       const groupPredsResult = await supabase.rpc('get_all_group_predictions', { p_pool_id: activePool.id });
       setGroupPredictions((groupPredsResult.data || []).filter((p: GroupPrediction) => validUserIds.has(p.user_id)));
 
@@ -190,7 +167,6 @@ const DailyMatchesAndPredictions: React.FC = () => {
     setCurrentDate(newDate);
   };
 
-  // --- TRAVA DO DIA ---
   const isDailyLocked = useMemo(() => {
     if (!activePool) return true;
     if (activePool.prediction_deadline) {
@@ -203,7 +179,6 @@ const DailyMatchesAndPredictions: React.FC = () => {
     return false;
   }, [activePool, dailyMatches]);
 
-  // --- TRAVA GRUPOS E FINAIS ---
   const isTournamentStarted = useMemo(() => {
     if (!activePool) return false;
     if (activePool.prediction_deadline) {
@@ -257,8 +232,6 @@ const DailyMatchesAndPredictions: React.FC = () => {
 
   return (
     <div className="container mx-auto px-2 sm:px-4 py-8 max-w-6xl">
-      
-      {/* Cabeçalho */}
       <div className="text-center mb-8 space-y-2">
         <h1 className="text-3xl font-bold text-fifa-blue flex items-center justify-center gap-3">
             <Users className="h-8 w-8 text-fifa-gold" />
@@ -317,10 +290,7 @@ const DailyMatchesAndPredictions: React.FC = () => {
                                     <div className="flex items-center gap-3 flex-1">
                                         <div className="text-right flex-1 font-bold text-gray-800 text-sm sm:text-base">{match.home_team?.name}</div>
                                         <div className="bg-fifa-blue text-white px-3 py-1 rounded-md font-mono font-bold text-sm shadow-sm whitespace-nowrap">
-                                            {match.is_finished 
-                                                ? `${match.home_score} - ${match.away_score}`
-                                                : "vs"
-                                            }
+                                            {match.is_finished ? `${match.home_score} - ${match.away_score}` : "vs"}
                                         </div>
                                         <div className="text-left flex-1 font-bold text-gray-800 text-sm sm:text-base">{match.away_team?.name}</div>
                                     </div>
