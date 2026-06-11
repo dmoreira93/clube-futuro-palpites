@@ -1,99 +1,129 @@
-// src/pages/Ranking.tsx
-
 import { useAuth } from "@/contexts/AuthContext";
 import useParticipantsRanking, { Participant } from "@/hooks/useParticipantsRanking";
 import RankingRow from "@/components/ranking/RankingRow";
-import {
-  Table,
-  TableBody,
-  TableHead,
-  TableHeader,
-  TableRow,
-  TableCell,
+import { 
+  Table, 
+  TableBody, 
+  TableHead, 
+  TableHeader, 
+  TableRow, 
 } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2, Trophy, AlertTriangle } from "lucide-react";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Loader2, Trophy } from "lucide-react";
 import { useMemo } from "react";
 
 // Função auxiliar para verificar se é IA
 const isAIParticipant = (p: Participant) => p.name?.startsWith('IA ') || p.username?.startsWith('GPT');
 
-const calculatePrize = (rank: number, participant: Participant, totalHumanParticipants: number, pool: any): string => {
-  if (!pool || isAIParticipant(participant) || participant.is_admin) {
+// Função para calcular prêmios e punições
+const calculatePrize = (rank: number, participant: Participant, totalHumanParticipants: number, pool: any): string => { 
+  if (!pool || isAIParticipant(participant) || participant.is_admin) { 
     return "";
-  }
+  } 
   
   const totalPot = (pool.entry_fee || 0) * totalHumanParticipants;
 
-  if (pool.entry_fee > 0) {
+  if (pool.entry_fee > 0) { 
     if (rank === 1 && pool.prize_percent_1st > 0) return `R$ ${(totalPot * pool.prize_percent_1st / 100).toFixed(2).replace('.', ',')}`;
     if (rank === 2 && pool.prize_percent_2nd > 0) return `R$ ${(totalPot * pool.prize_percent_2nd / 100).toFixed(2).replace('.', ',')}`;
     if (rank === 3 && pool.prize_percent_3rd > 0) return `R$ ${(totalPot * pool.prize_percent_3rd / 100).toFixed(2).replace('.', ',')}`;
-  }
+  } 
   
-  if (pool.enable_punishment && rank === totalHumanParticipants && totalHumanParticipants > 3) {
+  if (pool.enable_punishment && rank === totalHumanParticipants && totalHumanParticipants > 3) { 
     return pool.punishment_description || "Pagar a prenda!";
-  }
-  return "";
+  } 
+  return ""; 
 };
 
-const RankingPage = () => {
-  const { activePool: pool } = useAuth(); 
+const RankingPage = () => { 
+  const { activePool: pool } = useAuth();
   const { participants, loading, error } = useParticipantsRanking();
 
-  const rankedParticipants = useMemo(() => {
+  const rankedParticipants = useMemo(() => { 
     if (!participants || !pool) return [];
 
-    // 1. Filtra a lista removendo o admin e as IAs completamente
-    const validParticipants = participants.filter(p => !p.is_admin && !isAIParticipant(p));
+    // 1. Filtra a lista removendo o admin e as IAs completamente [cite: 150]
+    const validParticipants = participants.filter(p => !p.is_admin && !isAIParticipant(p)); 
     
-    // 2. Mapeia a lista limpa. O 'index' dita o rank real agora.
-    return validParticipants.map((participant, index) => {
-      const realRank = index + 1; // Como a lista já vem ordenada, o index dita o rank perfeito (1, 2, 3...)
+    // 2. Mapeia a lista aplicando o rank real e formatando a precisão vinda do banco
+    return validParticipants.map((participant, index) => { 
+      const realRank = index + 1; // Como a lista já vem ordenada pelo RPC, o index dita o rank [cite: 150]
       
-      const prize = calculatePrize(realRank, participant, validParticipants.length, pool);
+      const prize = calculatePrize(realRank, participant, validParticipants.length, pool); 
       
-      // Sobrescreve o 'rank' que veio do banco pelo 'realRank' que acabamos de calcular
-      return { ...participant, rank: realRank, prize };
-    });
+      // Captura o accuracy do banco, garante que é número e formata com '%'. Ex: 25.0 -> "25,0%"
+      const rawAccuracy = Number(participant.accuracy) || 0;
+      const formattedAccuracy = rawAccuracy > 0 ? `${rawAccuracy.toFixed(1).replace('.', ',')}%` : "0,0%";
+
+      // Sobrescreve o 'rank' e injeta a precisão formatada para o RankingRow
+      return { 
+        ...participant, 
+        rank: realRank, 
+        accuracy: formattedAccuracy, // Agora vai string mastigada para o componente visual
+        prize 
+      }; 
+    }); 
   }, [participants, pool]);
 
-  if (loading) return <div className="flex justify-center items-center h-screen"><Loader2 className="h-8 w-8 animate-spin text-fifa-blue" /></div>;
-  if (error) return <div className="container mx-auto p-4 text-center"><Alert variant="destructive" className="max-w-lg mx-auto"><AlertTriangle className="h-4 w-4" /><AlertTitle>Erro ao Carregar</AlertTitle><AlertDescription>{error}</AlertDescription></Alert></div>;
-
-  return (
-    <div className="container mx-auto px-2 sm:px-4 py-8">
-      <div className="text-center mb-6">
-        <h1 className="text-3xl sm:text-4xl font-bold text-fifa-blue">Ranking do Bolão</h1>
-        {pool?.name && <p className="text-lg text-muted-foreground">{pool.name}</p>}
+  if (loading) {
+    return (
+      <div className="flex h-[60vh] items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-fifa-blue" />
       </div>
-      <Card className="max-w-5xl mx-auto shadow-lg">
-        <CardHeader><CardTitle className="flex items-center gap-2"><Trophy className="text-yellow-500" />Classificação Geral</CardTitle></CardHeader>
-        <CardContent>
-          <div className="border rounded-md">
-            <Table>
-              <TableHeader>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-4 text-center text-red-500">
+        Erro ao Carregar o Ranking. Por favor, tente novamente.
+      </div>
+    );
+  }
+
+  return ( 
+    <div className="container mx-auto max-w-5xl p-4 space-y-6">
+      <div className="flex flex-col space-y-1">
+        <h1 className="text-3xl font-bold tracking-tight text-gray-900 dark:text-white flex items-center gap-2">
+          <Trophy className="h-8 w-8 text-yellow-500" /> Ranking do Bolão
+        </h1>
+        {pool?.name && <p className="text-muted-foreground text-lg">Visualizando: {pool.name}</p>}
+      </div>
+
+      <Card className="border-gray-200 shadow-md rounded-xl overflow-hidden">
+        <CardHeader className="bg-gray-50 dark:bg-zinc-900 border-b border-gray-100 dark:border-zinc-800">
+          <CardTitle className="text-xl font-semibold">Classificação Geral</CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader className="bg-gray-100/50 dark:bg-zinc-800/50">
+              <TableRow>
+                <TableHead className="w-[80px] font-bold text-center">Pos.</TableHead>
+                <TableHead className="font-bold">Participante</TableHead>
+                <TableHead className="font-bold text-center">Pontos</TableHead>
+                <TableHead className="font-bold text-center">Cravadas</TableHead>
+                <TableHead className="font-bold text-center">Precisão</TableHead>
+                <TableHead className="font-bold text-right pr-6">Prêmio/Punição</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {rankedParticipants.length > 0 ? ( 
+                rankedParticipants.map((participant, index) => ( 
+                  <RankingRow 
+                    key={participant.id || index}
+                    participant={participant}
+                    index={index}
+                  />
+                )) 
+              ) : ( 
                 <TableRow>
-                  <TableHead className="w-[50px] text-center">Pos.</TableHead>
-                  <TableHead>Participante</TableHead>
-                  <TableHead className="text-right">Pontos</TableHead>
-                  <TableHead className="hidden md:table-cell text-right">Cravadas</TableHead>
-                  <TableHead className="hidden md:table-cell text-right">Precisão</TableHead>
-                  <TableHead className="hidden md:table-cell text-right">Prêmio/Punição</TableHead>
+                  <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                    Ainda não há participantes neste bolão.
+                  </TableCell>
                 </TableRow>
-              </TableHeader>
-              <TableBody>
-                {rankedParticipants.length > 0 ? (
-                  rankedParticipants.map((participant, index) => (
-                    <RankingRow key={participant.id} participant={participant} index={index} />
-                  ))
-                ) : (
-                  <TableRow><TableCell colSpan={6} className="h-24 text-center">Ainda não há participantes neste bolão.</TableCell></TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </div>
+              )} 
+            </TableBody>
+          </Table>
         </CardContent>
       </Card>
     </div>
