@@ -60,7 +60,7 @@ const DailyMatchesAndPredictions: React.FC = () => {
       setPoolParticipants(validUsers);
       const validUserIds = new Set(validUsers.map(u => u.id));
 
-      // 2. Mapeamento de cache de times para evitar erros de Foreign Key nas tabelas aninhadas
+      // 2. Busca e mapeia a tabela de times para resolver os nomes
       const { data: allTeams, error: teamsError } = await supabase
         .from('teams')
         .select('id, name');
@@ -120,10 +120,10 @@ const DailyMatchesAndPredictions: React.FC = () => {
         setDailyPredictions([]);
       }
 
-      // 6. BUSCA DIRETA EM TEXTO DA FINAL_PREDICTIONS (Livre de Erros de Relacionamento/400)
+      // 6. BUSCA CORRIGIDA COM AS COLUNAS REAIS: final_home_score e final_away_score
       const { data: rawFinals, error: finalError } = await supabase
         .from('final_predictions')
-        .select('user_id, home_score, away_score, champion_id, runner_up_id, third_place_id, fourth_place_id')
+        .select('user_id, final_home_score, final_away_score, champion_id, runner_up_id, third_place_id, fourth_place_id')
         .eq('pool_id', activePool.id);
 
       if (finalError) throw finalError;
@@ -138,8 +138,8 @@ const DailyMatchesAndPredictions: React.FC = () => {
           runner_up_name: teamsMap.get(f.runner_up_id) || 'Não selecionado',
           third_place_name: teamsMap.get(f.third_place_id) || 'Não selecionado',
           fourth_place_name: teamsMap.get(f.fourth_place_id) || 'Não selecionado',
-          final_home_score: f.home_score !== null ? f.home_score : 0,
-          final_away_score: f.away_score !== null ? f.away_score : 0
+          final_home_score: f.final_home_score !== null ? f.final_home_score : 0,
+          final_away_score: f.final_away_score !== null ? f.final_away_score : 0
         };
       });
 
