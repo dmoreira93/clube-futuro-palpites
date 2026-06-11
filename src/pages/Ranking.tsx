@@ -31,14 +31,14 @@ const RankingPage = () => {
   const rankedParticipants = useMemo(() => { 
     if (!participants || !pool) return [];
 
-    // 1. Filtra a lista removendo o admin e as IAs completamente [cite: 150]
+    // 1. Filtra a lista removendo o admin e as IAs completamente
     const validParticipants = participants.filter(p => !p.is_admin && !isAIParticipant(p)); 
     const totalHuman = validParticipants.length;
-    const totalPot = (pool.entry_fee || 0) * totalHuman; [cite: 143]
+    const totalPot = (pool.entry_fee || 0) * totalHuman;
 
     // 2. Identificar grupos de empates perfeitos (Pontos, Cravadas e Precisão idênticos)
-    // Criamos chaves únicas para agrupar quem está rigorosamente empatado
-    const tieGroups: { [key: string]: number[] } = {};
+    // Ajustado para Record para passar liso pelo compilador de produção
+    const tieGroups: Record<string, number[]> = {};
     
     validParticipants.forEach((p, index) => {
       const tieKey = `${p.points}-${p.exactscores}-${p.accuracy}`;
@@ -74,7 +74,7 @@ const RankingPage = () => {
           prizeText = `R$ ${splitPrize.toFixed(2).replace('.', ',')} (Dividido)`;
         }
       } else {
-        // Sem empate: cálculo padrão individual [cite: 150]
+        // Sem empate: cálculo padrão individual
         const individualPrize = getBasePrizeByRank(index + 1, totalPot, pool);
         if (individualPrize > 0) {
           prizeText = `R$ ${individualPrize.toFixed(2).replace('.', ',')}`;
@@ -82,31 +82,30 @@ const RankingPage = () => {
       }
 
       // Tratamento de Punição / Lanterna com empate
-      if (pool.enable_punishment && totalHuman > 3) { [cite: 147]
+      if (pool.enable_punishment && totalHuman > 3) {
         // Se o index atual pertence ao grupo que ocupa a última posição da tabela
         const isLastPlaceGroup = groupIndexes.includes(totalHuman - 1);
         
         if (isLastPlaceGroup) {
-          const punishmentDesc = pool.punishment_description || "Pagar a prenda!"; [cite: 147]
+          const punishmentDesc = pool.punishment_description || "Pagar a prenda!";
           prizeText = isTied ? `${punishmentDesc} (Dividido)` : punishmentDesc;
         }
       }
 
-      // Formatação visual da precisão vinda do banco [cite: 220]
+      // Formatação visual da precisão vinda do banco
       const rawAccuracy = Number(participant.accuracy) || 0;
       const formattedAccuracy = rawAccuracy > 0 ? `${rawAccuracy.toFixed(1).replace('.', ',')}%` : "0,0%";
 
       return { 
         ...participant, 
-        rank: visualRank, // Aplica o rank empatado (ex: dois caras com "1º")
+        rank: visualRank, 
         accuracy: formattedAccuracy, 
-        prize: prizeText,
-        isTie: isTied // Flag extra caso queira estilizar no futuro
+        prize: prizeText
       }; 
     }); 
   }, [participants, pool]);
 
-  if (loading) { [cite: 152]
+  if (loading) {
     return (
       <div className="flex h-[60vh] items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-fifa-blue" />
@@ -114,7 +113,7 @@ const RankingPage = () => {
     );
   }
 
-  if (error) { [cite: 152]
+  if (error) {
     return (
       <div className="p-4 text-center text-red-500">
         Erro ao Carregar o Ranking. Por favor, tente novamente.
@@ -126,30 +125,30 @@ const RankingPage = () => {
     <div className="container mx-auto max-w-5xl p-4 space-y-6">
       <div className="flex flex-col space-y-1">
         <h1 className="text-3xl font-bold tracking-tight text-gray-900 dark:text-white flex items-center gap-2">
-          <Trophy className="h-8 w-8 text-yellow-500" /> Ranking do Bolão [cite: 153]
+          <Trophy className="h-8 w-8 text-yellow-500" /> Ranking do Bolão
         </h1>
-        {pool?.name && <p className="text-muted-foreground text-lg">Visualizando: {pool.name}</p>} [cite: 153]
+        {pool?.name && <p className="text-muted-foreground text-lg">Visualizando: {pool.name}</p>}
       </div>
 
-      <Card className="border-gray-200 shadow-md rounded-xl overflow-hidden"> [cite: 153]
-        <CardHeader className="bg-gray-50 dark:bg-zinc-900 border-b border-gray-100 dark:border-zinc-800"> [cite: 153]
-          <CardTitle className="text-xl font-semibold">Classificação Geral</CardTitle> [cite: 153]
+      <Card className="border-gray-200 shadow-md rounded-xl overflow-hidden">
+        <CardHeader className="bg-gray-50 dark:bg-zinc-900 border-b border-gray-100 dark:border-zinc-800">
+          <CardTitle className="text-xl font-semibold">Classificação Geral</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
-          <Table> [cite: 138]
+          <Table>
             <TableHeader className="bg-gray-100/50 dark:bg-zinc-800/50">
-              <TableRow> [cite: 138]
-                <TableHead className="w-[80px] font-bold text-center">Pos.</TableHead> [cite: 138]
-                <TableHead className="font-bold">Participante</TableHead> [cite: 138]
-                <TableHead className="font-bold text-center">Pontos</TableHead> [cite: 138]
-                <TableHead className="font-bold text-center">Cravadas</TableHead> [cite: 154]
-                <TableHead className="font-bold text-center">Precisão</TableHead> [cite: 154]
-                <TableHead className="font-bold text-right pr-6">Prêmio/Punição</TableHead> [cite: 154]
+              <TableRow>
+                <TableHead className="w-[80px] font-bold text-center">Pos.</TableHead>
+                <TableHead className="font-bold">Participante</TableHead>
+                <TableHead className="font-bold text-center">Pontos</TableHead>
+                <TableHead className="font-bold text-center">Cravadas</TableHead>
+                <TableHead className="font-bold text-center">Precisão</TableHead>
+                <TableHead className="font-bold text-right pr-6">Prêmio/Punição</TableHead>
               </TableRow>
             </TableHeader>
-            <TableBody> [cite: 138]
-              {rankedParticipants.length > 0 ? ( [cite: 154]
-                rankedParticipants.map((participant, index) => ( [cite: 154]
+            <TableBody>
+              {rankedParticipants.length > 0 ? (
+                rankedParticipants.map((participant, index) => (
                   <RankingRow 
                     key={participant.id || index}
                     participant={participant}
@@ -157,9 +156,9 @@ const RankingPage = () => {
                   />
                 )) 
               ) : ( 
-                <TableRow> [cite: 138]
-                  <TableCell colSpan={6} className="text-center py-8 text-muted-foreground"> [cite: 138]
-                    Ainda não há participantes neste bolão. [cite: 155]
+                <TableRow>
+                  <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                    Ainda não há participantes neste bolão.
                   </TableCell>
                 </TableRow>
               )} 
