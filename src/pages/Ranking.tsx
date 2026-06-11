@@ -32,12 +32,10 @@ const RankingPage = () => {
   const rankedParticipants = useMemo(() => { 
     if (!participants || !pool) return [];
 
-    // 1. Filtra a lista removendo o admin e as IAs completamente
     const validParticipants = participants.filter(p => !p.is_admin && !isAIParticipant(p)); 
     const totalHuman = validParticipants.length;
     const totalPot = (pool.entry_fee || 0) * totalHuman;
 
-    // 2. Identificar grupos de empates perfeitos (Pontos, Cravadas e Precisão original)
     const tieGroups: Record<string, number[]> = {};
     
     validParticipants.forEach((p, index) => {
@@ -48,65 +46,48 @@ const RankingPage = () => {
       tieGroups[tieKey].push(index);
     });
 
-    // 3. Mapear a lista final tratando prêmios e calculando a precisão visual
     return validParticipants.map((participant, index) => { 
       const tieKey = `${participant.points}-${participant.exactscores}-${participant.accuracy || 0}`;
       const groupIndexes = tieGroups[tieKey];
       const isTied = groupIndexes.length > 1;
-
-      // O rank visual é ditado pelo index do PRIMEIRO elemento do grupo de empate (+ 1)
       const visualRank = groupIndexes[0] + 1; 
 
       let prizeText = "";
 
-      // Se há empate e envolve posições de premiação (1º, 2º ou 3º)
       if (isTied && groupIndexes.some(idx => idx < 3)) {
         let combinedPrizePot = 0;
         groupIndexes.forEach(idx => {
           combinedPrizePot += getBasePrizeByRank(idx + 1, totalPot, pool);
         });
-
         const splitPrize = combinedPrizePot / groupIndexes.length;
-
-        if (splitPrize > 0) {
-          prizeText = `R$ ${splitPrize.toFixed(2).replace('.', ',')} (Dividido)`;
-        }
+        if (splitPrize > 0) prizeText = `R$ ${splitPrize.toFixed(2).replace('.', ',')} (Dividido)`;
       } else {
         const individualPrize = getBasePrizeByRank(index + 1, totalPot, pool);
-        if (individualPrize > 0) {
-          prizeText = `R$ ${individualPrize.toFixed(2).replace('.', ',')}`;
-        }
+        if (individualPrize > 0) prizeText = `R$ ${individualPrize.toFixed(2).replace('.', ',')}`;
       }
 
-      // Tratamento de Punição / Lanterna com empate
       if (pool.enable_punishment && totalHuman > 3) {
         const isLastPlaceGroup = groupIndexes.includes(totalHuman - 1);
-        
         if (isLastPlaceGroup) {
           const punishmentDesc = pool.punishment_description || "Pagar a prenda!";
           prizeText = isTied ? `${punishmentDesc} (Dividido)` : punishmentDesc;
         }
       }
 
-      // 🎯 --- CORREÇÃO MATEMÁTICA DA PRECISÃO NA TELA ---
-      // Se o banco mandar o valor bruto em accuracy (ex: 25.5), nós usamos diretamente.
-      // Se vier zerado/nulo (como está a acontecer), calculamos com base no total de jogos do torneio (72)
+      // 🎯 --- LÓGICA DE PRECISÃO AJUSTADA ---
+      // Se o banco trouxer um valor positivo, usamos ele.
+      // Se o valor do banco for 0, mas o usuário acertou palpites, consideramos 100% de aproveitamento nos jogos avaliados.
       const rawAccuracyFromDb = Number(participant.accuracy) || 0;
+      const cravadas = Number(participant.exactscores) || 0;
+      
       let formattedAccuracy = "0,0%";
 
       if (rawAccuracyFromDb > 0) {
         formattedAccuracy = `${rawAccuracyFromDb.toFixed(1).replace('.', ',')}%`;
-      } else {
-        const cravadas = Number(participant.exactscores) || 0;
-        if (cravadas > 0) {
-          // Exemplo: 1 cravada dividida por 72 jogos totais do campeonato = ~1.4% de precisão geral
-          // Se preferires calcular a precisão apenas sobre o número de jogos já encerrados, 
-          // podes substituir o 72 por uma contagem dinâmica ou usar as cravadas como base (ex: cravadas / cravadas * 100 = 100%)
-          const TOTAL_JOGOS_TORNEIO = 72; 
-          const calculatedAcc = (cravadas / TOTAL_JOGOS_TORNEIO) * 100;
-          
-          formattedAccuracy = `${calculatedAcc.toFixed(1).replace('.', ',')}%`;
-        }
+      } else if (cravadas > 0) {
+        // Se tem cravadas e não veio dado consolidado do banco, 
+        // assumimos 100% de precisão sobre o que foi processado até o momento.
+        formattedAccuracy = "100,0%";
       }
 
       return { 
@@ -127,11 +108,7 @@ const RankingPage = () => {
   }
 
   if (error) {
-    return (
-      <div className="p-4 text-center text-red-500">
-        Erro ao Carregar o Ranking. Por favor, tente novamente.
-      </div>
-    );
+    return <div className="p-4 text-center text-red-500">Erro ao Carregar o Ranking.</div>;
   }
 
   return ( 
