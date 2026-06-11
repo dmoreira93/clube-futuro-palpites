@@ -7,6 +7,7 @@ import {
   TableHead, 
   TableHeader, 
   TableRow, 
+  TableCell
 } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2, Trophy } from "lucide-react";
@@ -36,21 +37,20 @@ const RankingPage = () => {
     const totalHuman = validParticipants.length;
     const totalPot = (pool.entry_fee || 0) * totalHuman;
 
-    // 2. Identificar grupos de empates perfeitos (Pontos, Cravadas e Precisão idênticos)
-    // Ajustado para Record para passar liso pelo compilador de produção
+    // 2. Identificar grupos de empates perfeitos (Pontos, Cravadas e Precisão original)
     const tieGroups: Record<string, number[]> = {};
     
     validParticipants.forEach((p, index) => {
-      const tieKey = `${p.points}-${p.exactscores}-${p.accuracy}`;
+      const tieKey = `${p.points}-${p.exactscores}-${p.accuracy || 0}`;
       if (!tieGroups[tieKey]) {
         tieGroups[tieKey] = [];
       }
       tieGroups[tieKey].push(index);
     });
 
-    // 3. Mapear a lista final tratando as divisões matematicamente
+    // 3. Mapear a lista final tratando prêmios e calculando a precisão visual
     return validParticipants.map((participant, index) => { 
-      const tieKey = `${participant.points}-${participant.exactscores}-${participant.accuracy}`;
+      const tieKey = `${participant.points}-${participant.exactscores}-${participant.accuracy || 0}`;
       const groupIndexes = tieGroups[tieKey];
       const isTied = groupIndexes.length > 1;
 
@@ -61,20 +61,17 @@ const RankingPage = () => {
 
       // Se há empate e envolve posições de premiação (1º, 2º ou 3º)
       if (isTied && groupIndexes.some(idx => idx < 3)) {
-        // Somamos a premiação total destinada a todas as posições que esse grupo ocupa
         let combinedPrizePot = 0;
         groupIndexes.forEach(idx => {
           combinedPrizePot += getBasePrizeByRank(idx + 1, totalPot, pool);
         });
 
-        // Dividimos o pote combinado igualmente entre os participantes do empate
         const splitPrize = combinedPrizePot / groupIndexes.length;
 
         if (splitPrize > 0) {
           prizeText = `R$ ${splitPrize.toFixed(2).replace('.', ',')} (Dividido)`;
         }
       } else {
-        // Sem empate: cálculo padrão individual
         const individualPrize = getBasePrizeByRank(index + 1, totalPot, pool);
         if (individualPrize > 0) {
           prizeText = `R$ ${individualPrize.toFixed(2).replace('.', ',')}`;
@@ -83,7 +80,6 @@ const RankingPage = () => {
 
       // Tratamento de Punição / Lanterna com empate
       if (pool.enable_punishment && totalHuman > 3) {
-        // Se o index atual pertence ao grupo que ocupa a última posição da tabela
         const isLastPlaceGroup = groupIndexes.includes(totalHuman - 1);
         
         if (isLastPlaceGroup) {
@@ -92,9 +88,26 @@ const RankingPage = () => {
         }
       }
 
-      // Formatação visual da precisão vinda do banco
-      const rawAccuracy = Number(participant.accuracy) || 0;
-      const formattedAccuracy = rawAccuracy > 0 ? `${rawAccuracy.toFixed(1).replace('.', ',')}%` : "0,0%";
+      // 🎯 --- CORREÇÃO MATEMÁTICA DA PRECISÃO NA TELA ---
+      // Se o banco mandar o valor bruto em accuracy (ex: 25.5), nós usamos diretamente.
+      // Se vier zerado/nulo (como está a acontecer), calculamos com base no total de jogos do torneio (72)
+      const rawAccuracyFromDb = Number(participant.accuracy) || 0;
+      let formattedAccuracy = "0,0%";
+
+      if (rawAccuracyFromDb > 0) {
+        formattedAccuracy = `${rawAccuracyFromDb.toFixed(1).replace('.', ',')}%`;
+      } else {
+        const cravadas = Number(participant.exactscores) || 0;
+        if (cravadas > 0) {
+          // Exemplo: 1 cravada dividida por 72 jogos totais do campeonato = ~1.4% de precisão geral
+          // Se preferires calcular a precisão apenas sobre o número de jogos já encerrados, 
+          // podes substituir o 72 por uma contagem dinâmica ou usar as cravadas como base (ex: cravadas / cravadas * 100 = 100%)
+          const TOTAL_JOGOS_TORNEIO = 72; 
+          const calculatedAcc = (cravadas / TOTAL_JOGOS_TORNEIO) * 100;
+          
+          formattedAccuracy = `${calculatedAcc.toFixed(1).replace('.', ',')}%`;
+        }
+      }
 
       return { 
         ...participant, 
