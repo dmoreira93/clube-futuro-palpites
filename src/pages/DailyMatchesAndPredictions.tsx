@@ -48,7 +48,7 @@ const DailyMatchesAndPredictions: React.FC = () => {
     setError(null);
     
     try {
-      // 1. Busca participantes do Bolão
+      // 1. Busca todos os participantes do Bolão
       const { data: participantsData, error: partError } = await supabase
         .from('participations')
         .select(`user:users_custom!inner (id, name, username, avatar_url, is_admin, is_ai)`)
@@ -60,7 +60,7 @@ const DailyMatchesAndPredictions: React.FC = () => {
       setPoolParticipants(validUsers);
       const validUserIds = new Set(validUsers.map(u => u.id));
 
-      // 2. Busca e mapeia a tabela de times para resolver os nomes
+      // 2. Mapeia a tabela de times para resolver os nomes das seleções
       const { data: allTeams, error: teamsError } = await supabase
         .from('teams')
         .select('id, name');
@@ -111,7 +111,7 @@ const DailyMatchesAndPredictions: React.FC = () => {
 
       setDailyMatches(formattedMatches);
 
-      // 5. Busca os palpites dos confrontos do dia
+      // 5. Palpites dos confrontos do dia
       if (formattedMatches.length > 0) {
         const matchIds = formattedMatches.map(match => match.id);
         const allPreds = await fetchMatchPredictionsForMatches(matchIds);
@@ -120,7 +120,7 @@ const DailyMatchesAndPredictions: React.FC = () => {
         setDailyPredictions([]);
       }
 
-      // 6. BUSCA CORRIGIDA COM AS COLUNAS REAIS: final_home_score e final_away_score
+      // 6. BUSCA COMPLETA NA FINAL_PREDICTIONS (Traz os dados de toda a galera do bolão)
       const { data: rawFinals, error: finalError } = await supabase
         .from('final_predictions')
         .select('user_id, final_home_score, final_away_score, champion_id, runner_up_id, third_place_id, fourth_place_id')
@@ -145,7 +145,7 @@ const DailyMatchesAndPredictions: React.FC = () => {
 
       setFinalPredictions(formattedFinals.filter(f => validUserIds.has(f.user_id)));
 
-      // 7. Busca os palpites das fases de grupos via RPC
+      // 7. Palpites das fases de grupos via RPC
       const groupPredsResult = await supabase.rpc('get_all_group_predictions', { p_pool_id: activePool.id });
       setGroupPredictions((groupPredsResult.data || []).filter((p: GroupPrediction) => validUserIds.has(p.user_id)));
 
