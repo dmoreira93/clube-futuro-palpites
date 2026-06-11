@@ -478,4 +478,5 @@ const DailyMatchesAndPredictions: React.FC = () => {
   );
 };
 
+
 export default DailyMatchesAndPredictions;
