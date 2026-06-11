@@ -3,10 +3,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { format, parseISO, isAfter, startOfDay, endOfDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
-import { ChevronLeft, ChevronRight, Info, Crown, Medal, Loader2, Users, Calendar, Bot, EyeOff } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Crown, Medal, Loader2, Users, Calendar, Bot, EyeOff } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
-import { fetchMatchesInUTCRange, fetchMatchPredictionsForMatches } from '@/utils/pointsCalculator/dataAccess';
+import { fetchMatchPredictionsForMatches } from '@/utils/pointsCalculator/dataAccess';
 import { SupabaseMatchPrediction, User } from '@/utils/pointsCalculator/types';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -14,7 +14,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from '@/components/ui/badge';
 
-// Tipos auxiliares
+// Tipos auxiliares estruturados
 interface GroupPrediction { user_id: string; user_name: string; user_avatar: string; group_name: string; first_team_name: string; second_team_name: string; }
 interface FinalPrediction { user_id: string; user_name: string; user_avatar: string; champion_name: string; runner_up_name: string; third_place_name: string; fourth_place_name: string; final_home_score: number; final_away_score: number; }
 interface DisplayMatch { 
@@ -39,6 +39,9 @@ const DailyMatchesAndPredictions: React.FC = () => {
 
   const [poolParticipants, setPoolParticipants] = useState<User[]>([]);
   const [currentDate, setCurrentDate] = useState(new Date());
+  
+  // Estado para capturar o horário do primeiríssimo jogo do bolão (para travas globais de grupos/finais)
+  const [firstMatchOfTournament, setFirstMatchOfTournament] = useState<Date | null>(null);
 
   const loadAllData = useCallback(async () => {
     if (!activePool?.id) return;
@@ -47,6 +50,7 @@ const DailyMatchesAndPredictions: React.FC = () => {
     setError(null);
     
     try {
+      // 1. Busca os participantes autorizados (Ignorando Administradores)
       const { data: participantsData, error: partError } = await supabase
         .from('participations')
         .select(`
@@ -63,14 +67,55 @@ const DailyMatchesAndPredictions: React.FC = () => {
       setPoolParticipants(validUsers);
       const validUserIds = new Set(validUsers.map(u => u.id));
 
+      // 2. Captura o primeiro jogo absoluto deste campeonato (para liberar abas de Grupos/Finais)
+      const { data: championshipMatches } = await supabase
+        .from('matches')
+        .select('match_date')
+        .eq('championship_id', activePool.championship_id || activePool.tournament_id)
+        .order('match_date', { ascending: true })
+        .limit(1);
+
+      if (championshipMatches && championshipMatches.length > 0) {
+        setFirstMatchOfTournament(new Date(championshipMatches[0].match_date));
+      }
+
+      // 3. Busca jogos do dia selecionado
       const utcStartString = startOfDay(currentDate).toISOString();
       const utcEndString = endOfDay(currentDate).toISOString();
       
-      const matchesData = await fetchMatchesInUTCRange(utcStartString, utcEndString);
-      setDailyMatches(matchesData as DisplayMatch[] || []);
+      const { data: matchesData, error: matchesError } = await supabase
+        .from('matches')
+        .select(`
+          id,
+          match_date,
+          home_score,
+          away_score,
+          status,
+          home_team:teams!matches_home_team_id_fkey(name, code, flag_url),
+          away_team:teams!matches_away_team_id_fkey(name, code, flag_url)
+        `)
+        .gte('match_date', utcStartString)
+        .lte('match_date', utcEndString)
+        .eq('championship_id', activePool.championship_id || activePool.tournament_id)
+        .order('match_date', { ascending: true });
 
-      if (matchesData && matchesData.length > 0) {
-        const matchIds = matchesData.map(match => match.id);
+      if (matchesError) throw matchesError;
+
+      const formattedMatches = (matchesData || []).map((m: any) => ({
+        id: m.id,
+        home_team: m.home_team,
+        away_team: m.away_team,
+        match_date: m.match_date,
+        home_score: m.home_score,
+        away_score: m.away_score,
+        is_finished: m.status === 'finished'
+      }));
+
+      setDailyMatches(formattedMatches);
+
+      // 4. Busca palpites dos jogos do dia
+      if (formattedMatches.length > 0) {
+        const matchIds = formattedMatches.map(match => match.id);
         const allPreds = await fetchMatchPredictionsForMatches(matchIds);
         
         const filteredPreds = allPreds.filter(p => 
@@ -83,6 +128,7 @@ const DailyMatchesAndPredictions: React.FC = () => {
         setDailyPredictions([]);
       }
 
+      // 5. Consome as RPCs corrigidas passando o pool_id ativo
       const [groupPredsResult, finalPredsResult] = await Promise.all([
         supabase.rpc('get_all_group_predictions', { p_pool_id: activePool.id }),
         supabase.rpc('get_all_final_predictions', { p_pool_id: activePool.id })
@@ -97,7 +143,7 @@ const DailyMatchesAndPredictions: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [currentDate, activePool?.id]);
+  }, [currentDate, activePool]);
   
   useEffect(() => {
     loadAllData();
@@ -109,27 +155,36 @@ const DailyMatchesAndPredictions: React.FC = () => {
     setCurrentDate(newDate);
   };
 
-  // --- TRAVA DE SEGURANÇA INTEGRADA ---
-  const isVisualLocked = useMemo(() => {
+  // --- TRAVA 1: JOGOS DIÁRIOS (Trava até o início de cada rodada do dia) ---
+  const isDailyLocked = useMemo(() => {
     if (!activePool) return true;
-    
-    // 1. Se existir um prazo limite configurado no Bolão, valida por ele
     if (activePool.prediction_deadline) {
       return !isAfter(new Date(), new Date(activePool.prediction_deadline));
     }
-
-    // 2. Fallback: Se não houver prazo cadastrado, trava até o horário do primeiro jogo da lista começar
     if (dailyMatches && dailyMatches.length > 0) {
       const firstMatchDate = new Date(Math.min(...dailyMatches.map(m => new Date(m.match_date).getTime())));
       return !isAfter(new Date(), firstMatchDate);
     }
-
     return false;
   }, [activePool, dailyMatches]);
+
+  // --- TRAVA 2: GRUPOS E FINAIS (Libera de vez assim que o 1º jogo do campeonato iniciar) ---
+  const isTournamentStarted = useMemo(() => {
+    if (!activePool) return false;
+    // Se houver deadline global configurado, valida por ele
+    if (activePool.prediction_deadline) {
+      return isAfter(new Date(), new Date(activePool.prediction_deadline));
+    }
+    // Fallback: Checa se já passamos do horário do jogo de abertura do campeonato
+    if (firstMatchOfTournament) {
+      return isAfter(new Date(), firstMatchOfTournament);
+    }
+    return false;
+  }, [activePool, firstMatchOfTournament]);
     
   const deadlineFormatted = activePool?.prediction_deadline 
     ? format(new Date(activePool.prediction_deadline), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR }) 
-    : "o início dos jogos";
+    : "o início do campeonato";
 
   const groupedGroupPredictions = useMemo(() => {
     return groupPredictions.reduce((acc, pred) => {
@@ -146,7 +201,6 @@ const DailyMatchesAndPredictions: React.FC = () => {
     </div>
   );
 
-  // --- RENDERIZAÇÃO DO COMPONENTE DE BLOQUEIO DO CURIOSO ---
   const LockedCuriousView = ({ tabName }: { tabName: string }) => (
     <div className="text-center py-12 max-w-lg mx-auto">
       <Card className="shadow-md border-dashed border-2 border-gray-200">
@@ -156,7 +210,7 @@ const DailyMatchesAndPredictions: React.FC = () => {
           </div>
           <CardTitle className="text-xl font-bold text-gray-700">Seu curioso!</CardTitle>
           <p className="text-gray-500 text-sm">
-            Para garantir a integridade das apostas, os palpites de <strong>{tabName}</strong> dos seus amigos só serão visíveis após o encerramento do prazo.
+            Para garantir a integridade das apostas, os palpites de <strong>{tabName}</strong> dos seus amigos só serão visíveis após {activePool.prediction_deadline ? 'o fim do prazo' : 'o início oficial do campeonato'}.
           </p>
           <div className="pt-2">
             <Badge variant="outline" className="px-3 py-1 text-xs border-blue-200 bg-blue-50 text-blue-800 font-medium">
@@ -213,14 +267,14 @@ const DailyMatchesAndPredictions: React.FC = () => {
                     <Loader2 className="h-10 w-10 animate-spin text-fifa-blue" />
                     <p className="text-sm text-gray-400 animate-pulse">Carregando palpites...</p>
                 </div>
-            ) : isVisualLocked ? (
-                <LockedCuriousView tabName="Jogos Diários" />
             ) : dailyMatches.length === 0 ? (
                 <div className="text-center py-12 bg-gray-50 rounded-xl border-2 border-dashed border-gray-200">
                     <Calendar className="h-12 w-12 text-gray-300 mx-auto mb-3" />
                     <p className="text-gray-500 font-medium">Nenhuma partida agendada para este dia.</p>
                     <Button variant="link" onClick={() => handleDateChange(1)} className="text-fifa-blue">Ver próximo dia</Button>
                 </div>
+            ) : isDailyLocked ? (
+                <LockedCuriousView tabName="Jogos Diários" />
             ) : (
                 <div className="grid grid-cols-1 gap-6">
                     {dailyMatches.map(match => {
@@ -303,10 +357,14 @@ const DailyMatchesAndPredictions: React.FC = () => {
             )}
         </TabsContent>
         
-        {/* --- ABA 2: GRUPOS --- */}
+        {/* --- ABA 2: GRUPOS (Usa a trava isTournamentStarted) --- */}
         <TabsContent value="groups" className="animate-in fade-in slide-in-from-bottom-4">
-            {isVisualLocked ? (
+            {loading ? (
+                <div className="flex justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-fifa-blue" /></div>
+            ) : !isTournamentStarted ? (
                 <LockedCuriousView tabName="Palpites dos Grupos" />
+            ) : Object.keys(groupedGroupPredictions).length === 0 ? (
+                <div className="text-center py-12 text-gray-400">Nenhum palpite de grupo cadastrado para este bolão.</div>
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-4">
                     {Object.values(groupedGroupPredictions).map(({ user_name, user_avatar, predictions }) => (
@@ -319,7 +377,7 @@ const DailyMatchesAndPredictions: React.FC = () => {
                                 <CardTitle className="text-base text-gray-800">{user_name}</CardTitle>
                             </CardHeader>
                             <CardContent className="space-y-3 pt-4 text-sm">
-                                {predictions.length > 0 ? predictions.sort((a,b) => a.group_name.localeCompare(b.group_name)).map(p => (
+                                {predictions.sort((a,b) => a.group_name.localeCompare(b.group_name)).map(p => (
                                     <div key={p.group_name} className="flex justify-between items-center bg-gray-50 p-2 rounded border border-gray-100">
                                         <span className='font-bold text-fifa-blue w-8'>{p.group_name}</span>
                                         <div className="text-right flex-1">
@@ -327,7 +385,7 @@ const DailyMatchesAndPredictions: React.FC = () => {
                                             <div className="text-gray-500 text-xs truncate">2º {p.second_team_name}</div>
                                         </div>
                                     </div>
-                                )) : <p className="text-gray-400 italic text-center">Nenhum palpite de grupo.</p>}
+                                ))}
                             </CardContent>
                         </Card>
                     ))}
@@ -335,10 +393,14 @@ const DailyMatchesAndPredictions: React.FC = () => {
             )}
         </TabsContent>
 
-        {/* --- ABA 3: FINAIS --- */}
+        {/* --- ABA 3: FINAIS (Usa a trava isTournamentStarted) --- */}
         <TabsContent value="finals" className="animate-in fade-in slide-in-from-bottom-4">
-            {isVisualLocked ? (
+            {loading ? (
+                <div className="flex justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-fifa-blue" /></div>
+            ) : !isTournamentStarted ? (
                 <LockedCuriousView tabName="Palpites do Pódio e Final" />
+            ) : finalPredictions.length === 0 ? (
+                <div className="text-center py-12 text-gray-400">Nenhum palpite para as finais encontrado neste bolão.</div>
             ) : (
                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
                     {finalPredictions.map(p => (
@@ -382,11 +444,6 @@ const DailyMatchesAndPredictions: React.FC = () => {
                             </CardContent>
                         </Card>
                     ))}
-                    {finalPredictions.length === 0 && !loading && (
-                        <div className="col-span-full text-center py-12">
-                            <p className="text-gray-500">Nenhum palpite para as finais encontrado neste bolão.</p>
-                        </div>
-                    )}
                  </div>
             )}
         </TabsContent>
