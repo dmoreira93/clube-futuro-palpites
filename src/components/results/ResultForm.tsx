@@ -33,12 +33,12 @@ export const ResultForm = ({ match, onComplete }: ResultFormProps) => {
     try {
       // Etapa 1: Salvar o resultado na tabela 'matches'
       const { error: updateError } = await supabase
-        .from('matches')
-        .update({
-          home_score: homeScoreNum,
-          away_score: awayScoreNum,
-          is_finished: true
-        })
+  .from('matches')
+  .update({
+    home_score: homeScoreNum,
+    away_score: awayScoreNum,
+    status: 'finished' //  Alinhado com seu banco de dados
+  })
         .eq('id', match.id);
 
       if (updateError) throw updateError;

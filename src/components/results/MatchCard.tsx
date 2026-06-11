@@ -1,19 +1,17 @@
-// src/components/results/MatchCard.tsx
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { CalendarDays, ShieldCheck, Star, Loader2 } from "lucide-react"; // Ícones atualizados
+import { CalendarDays, ShieldCheck, Star, Loader2 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
-import { Match as MatchType } from "@/types/matches"; // Tipo original da partida
+import { Match as MatchType } from "@/types/matches";
 
-// Tipo para os dados da partida que o card espera, incluindo times aninhados
 type MatchCardProps = {
-  match: MatchType & { // Estende o tipo original
+  match: MatchType & {
     home_team: { name: string; flag_url?: string | null } | null;
     away_team: { name: string; flag_url?: string | null } | null;
-    // Adicione home_score e away_score aqui se não estiverem no MatchType original
     home_score?: number | null;
     away_score?: number | null;
+    status?: string | null; // Adicionado explicitamente para mapear a coluna real do banco
   };
   selected: boolean;
   onClick?: (id: string) => void;
@@ -42,7 +40,12 @@ export const MatchCard = ({ match, selected, onClick }: MatchCardProps) => {
     if (onClick) onClick(match.id);
   };
 
-  const isMatchFinished = match.is_finished && match.home_score !== null && match.away_score !== null;
+  //  CORREÇÃO: Validação baseada na coluna real 'status' ou na existência numérica dos scores
+  const isMatchFinished = 
+    match.status?.toLowerCase() === "finished" || 
+    match.status?.toLowerCase() === "encerrado" ||
+    (match.home_score !== null && match.away_score !== null && match.home_score !== undefined);
+
   const homeTeamName = match.home_team?.name || "A definir";
   const awayTeamName = match.away_team?.name || "A definir";
   const homeTeamFlag = match.home_team?.flag_url;
@@ -91,15 +94,17 @@ export const MatchCard = ({ match, selected, onClick }: MatchCardProps) => {
           <div className="flex flex-col items-center justify-center px-2">
             {isMatchFinished ? (
               <div className="text-2xl md:text-3xl font-bold text-fifa-blue tabular-nums">
-                <span>{match.home_score}</span>
+                <span>{match.home_score ?? 0}</span>
                 <span className="mx-1 md:mx-2">-</span>
-                <span>{match.away_score}</span>
+                <span>{match.away_score ?? 0}</span>
               </div>
             ) : (
               <div className="text-xl md:text-2xl font-semibold text-gray-400">VS</div>
             )}
-            {match.is_finished && !isMatchFinished && ( // Caso is_finished seja true mas placares sejam null
-                <Loader2 className="h-5 w-5 animate-spin text-gray-400 mt-1"/>
+            
+            {/* Tratamento para o estado de transição ou erro de carregamento */}
+            {(match.status?.toLowerCase() === "finished" && (match.home_score === null || match.away_score === null)) && (
+              <Loader2 className="h-5 w-5 animate-spin text-gray-400 mt-1"/>
             )}
           </div>
 
@@ -117,7 +122,7 @@ export const MatchCard = ({ match, selected, onClick }: MatchCardProps) => {
             <span className="font-medium text-sm md:text-base text-gray-800 truncate max-w-full">{awayTeamName}</span>
           </div>
         </div>
-         {selected && onClick && ( // Pequena indicação de que o card está selecionado para edição (se clicável)
+         {selected && onClick && (
           <div className="text-center mt-3">
             <Star className="h-4 w-4 text-yellow-400 inline-block" />
             <span className="text-xs text-gray-500 ml-1">Selecionado para edição</span>
