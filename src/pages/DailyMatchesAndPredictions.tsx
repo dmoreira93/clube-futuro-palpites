@@ -66,7 +66,6 @@ const DailyMatchesAndPredictions: React.FC = () => {
       return !isAfter(new Date(), new Date(activePool.prediction_deadline));
     }
     
-    // Fallback: Se não houver prazo cadastrado, verifica se o primeiro jogo geral já começou
     return false; 
   }, [activePool]);
 
@@ -331,7 +330,7 @@ const DailyMatchesAndPredictions: React.FC = () => {
                 <div className="flex items-center gap-3 border-b pb-2 mb-3">
                   <Avatar className="h-8 w-8">
                     <AvatarImage src={p.user_avatar || undefined} />
-                    <AvatarFallback>{p.user_name?.substring(0, 2).toUpperCase()}</山区AvatarFallback>
+                    <AvatarFallback>{p.user_name?.substring(0, 2).toUpperCase()}</AvatarFallback>
                   </Avatar>
                   <div>
                     <h3 className="font-bold text-fifa-dark-blue">{p.user_name}</h3>
