@@ -43,6 +43,7 @@ interface DisplayMatch {
   home_score: number | null;
   away_score: number | null;
   is_finished: boolean;
+  status?: string;
 }
 
 interface SupabaseMatchPredictionWithLog {
@@ -260,12 +261,15 @@ const DailyMatchesAndPredictions: React.FC = () => {
           ) : (
             dailyMatches.map(match => {
               const matchPredictions = dailyPredictions.filter(p => p.match_id === match.id);
+              // Lógica resiliente para saber se o jogo terminou (pelo status textual ou gols válidos no banco)
+              const isMatchFinishedReal = match.home_score !== null && match.away_score !== null;
+
               return (
                 <Card key={match.id} className="overflow-hidden border-l-4 border-l-fifa-blue">
                   <CardHeader className="bg-gray-50/50 py-3 px-4 border-b">
                     <div className="flex justify-between items-center text-xs text-gray-500">
                       <div className="font-medium">
-                        {match.is_finished ? <Badge variant="secondary" className="bg-green-100 text-green-800">Encerrado</Badge> : <span className="flex items-center gap-1"><Calendar className="h-3 w-3" /> {format(parseISO(match.match_date), 'HH:mm')}</span>}
+                        {isMatchFinishedReal ? <Badge variant="secondary" className="bg-green-100 text-green-800">Encerrado</Badge> : <span className="flex items-center gap-1"><Calendar className="h-3 w-3" /> {format(parseISO(match.match_date), 'HH:mm')}</span>}
                       </div>
                     </div>
                   </CardHeader>
@@ -273,7 +277,7 @@ const DailyMatchesAndPredictions: React.FC = () => {
                     <div className="flex justify-between items-center max-w-md mx-auto font-semibold text-fifa-dark-blue text-sm md:text-base">
                       <span className="w-1/3 text-right truncate">{match.home_team?.name}</span>
                       <span className="px-3 py-1 bg-gray-100 rounded text-fifa-blue min-w-[60px] text-center">
-                        {match.is_finished ? `${match.home_score} - ${match.away_score}` : "vs"}
+                        {isMatchFinishedReal ? `${match.home_score} - ${match.away_score}` : "vs"}
                       </span>
                       <span className="w-1/3 text-left truncate">{match.away_team?.name}</span>
                     </div>
@@ -288,13 +292,13 @@ const DailyMatchesAndPredictions: React.FC = () => {
                             const user = poolParticipants.find(u => u.id === p.user_id);
                             if (!user) return null;
                             
-                            // Normaliza o retorno do nó de pontuação do banco de dados
+                            // Busca e limpa o nó do log de pontos associado
                             const rawLog = p.user_points_log;
                             const log = Array.isArray(rawLog) ? rawLog[0] : rawLog;
                             
                             const pontosGanhos = log?.points_earned;
                             const tipoPontuacao = log?.points_type;
-                            const possuiRegistroDePontos = pontosGanhos !== undefined && pontosGanhos !== null && match.is_finished;
+                            const possuiRegistroDePontos = pontosGanhos !== undefined && pontosGanhos !== null;
 
                             let cardBgStyle = "bg-white text-gray-700 border-gray-200";
                             let pointsBadgeStyle = "bg-gray-100 text-gray-700";
@@ -303,7 +307,6 @@ const DailyMatchesAndPredictions: React.FC = () => {
                             if (possuiRegistroDePontos) {
                               pointsStr = `+${pontosGanhos}`;
                               
-                              // Se acertou o placar em cheio (tipo EXACT_SCORE ou fez pontuação máxima de 10)
                               if (tipoPontuacao === "EXACT_SCORE" || pontosGanhos === 10) {
                                 cardBgStyle = "bg-green-50 border-green-300 text-green-950 font-medium shadow-sm";
                                 pointsBadgeStyle = "bg-green-200 text-green-800";
@@ -315,7 +318,7 @@ const DailyMatchesAndPredictions: React.FC = () => {
                             return (
                               <div key={p.id} className={`relative flex items-center justify-between p-2 rounded-md border text-xs transition-all ${cardBgStyle}`}>
                                 
-                                {/* Tag de Expoente/Potencial Absoluto no Canto Superior Direito */}
+                                {/* Tag de Expoente flutuante baseada exclusivamente na existência do log */}
                                 {possuiRegistroDePontos && (
                                   <span className="absolute -top-1.5 -right-1 bg-fifa-dark-blue text-white text-[9px] font-extrabold px-1.5 py-0.5 rounded-full shadow-sm z-10 select-none">
                                     {pointsStr}
