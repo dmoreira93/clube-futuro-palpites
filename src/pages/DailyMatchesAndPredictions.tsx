@@ -53,13 +53,9 @@ interface SupabaseMatchPredictionWithLog {
   home_score: number;
   away_score: number;
   created_at: string;
-  user_points_log?: {
-    points_earned: number;
-    points_type: string;
-  } | {
-    points_earned: number;
-    points_type: string;
-  }[];
+  // Campos extraídos e limpos para o front-end ler sem erro
+  points_earned?: number | null;
+  points_type?: string | null;
 }
 
 const DailyMatchesAndPredictions: React.FC = () => {
@@ -74,7 +70,6 @@ const DailyMatchesAndPredictions: React.FC = () => {
   const [finalPredictions, setFinalPredictions] = useState<FinalPrediction[]>([]);
   const [teamsMap, setTeamsMap] = useState<Record<string, string>>({});
 
-  // Trava de segurança unificada baseada no prazo geral
   const isVisualLocked = useMemo(() => {
     if (!activePool) return true;
     if (activePool.prediction_deadline) {
@@ -90,7 +85,6 @@ const DailyMatchesAndPredictions: React.FC = () => {
       setLoading(true);
       setError(null);
 
-      // Carrega os participantes do bolão
       const { data: participantsData, error: partError } = await supabase
         .from('participations')
         .select('user:users_custom(*)')
@@ -101,13 +95,11 @@ const DailyMatchesAndPredictions: React.FC = () => {
       setPoolParticipants(validUsers);
       const validUserIds = new Set(validUsers.map(u => u.id));
 
-      // Carrega mapa de times
       const { data: teamsData } = await supabase.from('teams').select('id, name');
       const tMap: Record<string, string> = {};
       teamsData?.forEach(t => { tMap[t.id] = t.name; });
       setTeamsMap(tMap);
 
-      // Carrega partidas do dia selecionado
       const utcStartString = startOfDay(currentDate).toISOString();
       const utcEndString = endOfDay(currentDate).toISOString();
       const matchesData = await fetchMatchesInUTCRange(utcStartString, utcEndString);
@@ -116,7 +108,7 @@ const DailyMatchesAndPredictions: React.FC = () => {
       if (matchesData && matchesData.length > 0) {
         const matchIds = matchesData.map(match => match.id);
         
-        // Chamada direta pulando o dataAccess antigo para trazer a user_points_log acoplada
+        // Chamada direta ao banco trazendo o log associado
         const { data: predsWithLogs, error: predsError } = await supabase
           .from('match_predictions')
           .select(`
@@ -136,19 +128,35 @@ const DailyMatchesAndPredictions: React.FC = () => {
 
         if (predsError) throw predsError;
 
-        const filteredPreds = (predsWithLogs || []).filter(p => 
+        // MAPEAMENTO CRUCIAL: Retira os dados do array interno do Supabase e limpa o objeto
+        const formattedPreds = (predsWithLogs || []).map((p: any) => {
+          const logArray = p.user_points_log;
+          const logData = Array.isArray(logArray) ? logArray[0] : logArray;
+          
+          return {
+            id: p.id,
+            user_id: p.user_id,
+            pool_id: p.pool_id,
+            match_id: p.match_id,
+            home_score: p.home_score,
+            away_score: p.away_score,
+            created_at: p.created_at,
+            points_earned: logData ? logData.points_earned : null,
+            points_type: logData ? logData.points_type : null
+          };
+        });
+
+        const filteredPreds = formattedPreds.filter(p => 
           p.pool_id === activePool.id && validUserIds.has(p.user_id)
         );
-        setDailyPredictions(filteredPreds as SupabaseMatchPredictionWithLog[]);
+        setDailyPredictions(filteredPreds);
       } else {
         setDailyPredictions([]);
       }
 
-      // Carrega palpites de Grupos
       const { data: groupPredsResult } = await supabase.rpc('get_all_group_predictions', { p_pool_id: activePool.id });
       setGroupPredictions((groupPredsResult || []).filter((p: GroupPrediction) => validUserIds.has(p.user_id)));
 
-      // Carrega palpites de Finais
       const { data: finalPredsData } = await supabase
         .from('final_predictions')
         .select('id, user_id, pool_id, champion_id, runner_up_id, third_place_id, fourth_place_id, final_home_score, final_away_score')
@@ -288,12 +296,11 @@ const DailyMatchesAndPredictions: React.FC = () => {
                             const user = poolParticipants.find(u => u.id === p.user_id);
                             if (!user) return null;
                             
-                            // Mapeia e limpa os registros do array retornado do Supabase log
-                            const rawLog = p.user_points_log;
-                            const log = Array.isArray(rawLog) ? rawLog[0] : rawLog;
+                            // Os dados agora são lidos de forma direta e limpa do objeto p
+                            const pontosGanhos = p.points_earned;
+                            const tipoPontuacao = p.points_type;
                             
-                            const pontosGanhos = log?.points_earned;
-                            const tipoPontuacao = log?.points_type;
+                            // Checagem robusta que aceita o número 0
                             const possuiRegistroDePontos = pontosGanhos !== undefined && pontosGanhos !== null && isMatchFinishedReal;
 
                             let cardBgStyle = "bg-white text-gray-700 border-gray-200";
@@ -304,19 +311,19 @@ const DailyMatchesAndPredictions: React.FC = () => {
                               pointsStr = `+${pontosGanhos}`;
                               
                               if (tipoPontuacao === "EXACT_SCORE" || pontosGanhos === 10) {
-                                cardBgStyle = "bg-green-50 border-green-300 text-green-950 font-medium shadow-sm";
-                                pointsBadgeStyle = "bg-green-200 text-green-800";
+                                cardBgStyle = "bg-green-50 border-green-300 text-green-950 font-semibold shadow-sm";
+                                pointsBadgeStyle = "bg-green-200 text-green-800 font-bold";
                               } else if (pontosGanhos === 0) {
-                                cardBgStyle = "bg-white text-gray-400 border-gray-100 opacity-60";
+                                cardBgStyle = "bg-gray-50/50 text-gray-400 border-gray-100 opacity-60";
                               }
                             }
 
                             return (
                               <div key={p.id} className={`relative flex items-center justify-between p-2 rounded-md border text-xs transition-all ${cardBgStyle}`}>
                                 
-                                {/* Número Elevado Estilo Potencial flutuando no canto */}
+                                {/* Expoente flutuante de potencial no canto superior */}
                                 {possuiRegistroDePontos && (
-                                  <span className="absolute -top-1.5 -right-1 bg-fifa-dark-blue text-white text-[9px] font-extrabold px-1.5 py-0.5 rounded-full shadow-sm z-10 select-none animate-fade-in">
+                                  <span className="absolute -top-1.5 -right-1 bg-fifa-dark-blue text-white text-[9px] font-extrabold px-1.5 py-0.5 rounded-full shadow-sm z-10 select-none">
                                     {pointsStr}
                                   </span>
                                 )}
