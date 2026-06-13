@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { ChevronLeft, ChevronRight, Info, Crown, Medal, Loader2, Users, Calendar, Bot, EyeOff } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
-import { fetchMatchesInUTCRange } from '@/utils/pointsCalculator/dataAccess';
+import { fetchMatchesInUTCRange, fetchMatchPredictionsForMatches } from '@/utils/pointsCalculator/dataAccess';
 import { User } from '@/utils/pointsCalculator/types';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -45,7 +45,7 @@ interface DisplayMatch {
   is_finished: boolean;
 }
 
-interface SupabaseMatchPredictionWithLog {
+interface PredictionWithPoints {
   id: string;
   user_id: string;
   pool_id: string;
@@ -53,7 +53,6 @@ interface SupabaseMatchPredictionWithLog {
   home_score: number;
   away_score: number;
   created_at: string;
-  // Campos extraídos e limpos para o front-end ler sem erro
   points_earned?: number | null;
   points_type?: string | null;
 }
@@ -65,7 +64,7 @@ const DailyMatchesAndPredictions: React.FC = () => {
   const [currentDate, setCurrentDate] = useState<Date>(new Date());
   const [poolParticipants, setPoolParticipants] = useState<User[]>([]);
   const [dailyMatches, setDailyMatches] = useState<DisplayMatch[]>([]);
-  const [dailyPredictions, setDailyPredictions] = useState<SupabaseMatchPredictionWithLog[]>([]);
+  const [dailyPredictions, setDailyPredictions] = useState<PredictionWithPoints[]>([]);
   const [groupPredictions, setGroupPredictions] = useState<GroupPrediction[]>([]);
   const [finalPredictions, setFinalPredictions] = useState<FinalPrediction[]>([]);
   const [teamsMap, setTeamsMap] = useState<Record<string, string>>({});
@@ -85,6 +84,7 @@ const DailyMatchesAndPredictions: React.FC = () => {
       setLoading(true);
       setError(null);
 
+      // Carrega os participantes do bolão
       const { data: participantsData, error: partError } = await supabase
         .from('participations')
         .select('user:users_custom(*)')
@@ -108,48 +108,52 @@ const DailyMatchesAndPredictions: React.FC = () => {
       if (matchesData && matchesData.length > 0) {
         const matchIds = matchesData.map(match => match.id);
         
-        // Chamada direta ao banco trazendo o log associado
-        const { data: predsWithLogs, error: predsError } = await supabase
-          .from('match_predictions')
-          .select(`
-            id,
-            user_id,
-            pool_id,
-            match_id,
-            home_score,
-            away_score,
-            created_at,
-            user_points_log (
-              points_earned,
-              points_type
-            )
-          `)
-          .in('match_id', matchIds);
-
-        if (predsError) throw predsError;
-
-        // MAPEAMENTO CRUCIAL: Retira os dados do array interno do Supabase e limpa o objeto
-        const formattedPreds = (predsWithLogs || []).map((p: any) => {
-          const logArray = p.user_points_log;
-          const logData = Array.isArray(logArray) ? logArray[0] : logArray;
-          
-          return {
-            id: p.id,
-            user_id: p.user_id,
-            pool_id: p.pool_id,
-            match_id: p.match_id,
-            home_score: p.home_score,
-            away_score: p.away_score,
-            created_at: p.created_at,
-            points_earned: logData ? logData.points_earned : null,
-            points_type: logData ? logData.points_type : null
-          };
-        });
-
-        const filteredPreds = formattedPreds.filter(p => 
+        // 1. Usa o seu dataAccess original para trazer os palpites mapeados corretamente pelas chaves do seu app
+        const allPreds = await fetchMatchPredictionsForMatches(matchIds);
+        const filteredPreds = allPreds.filter(p => 
           p.pool_id === activePool.id && validUserIds.has(p.user_id)
         );
-        setDailyPredictions(filteredPreds);
+
+        if (filteredPreds.length > 0) {
+          const predIds = filteredPreds.map(p => p.id);
+
+          // 2. Busca os logs de pontuação diretamente na tabela user_points_log usando as IDs dos palpites carregados
+          const { data: logsData } = await supabase
+            .from('user_points_log')
+            .select('match_prediction_id, points_earned, points_type')
+            .in('match_prediction_id', predIds);
+
+          // Criamos um mapa para cruzamento rápido de O(1) em memória
+          const logsMap = new Map<string, { points_earned: number; points_type: string }>();
+          logsData?.forEach(log => {
+            if (log.match_prediction_id) {
+              logsMap.set(log.match_prediction_id, {
+                points_earned: log.points_earned,
+                points_type: log.points_type
+              });
+            }
+          });
+
+          // 3. Acopla os pontos diretamente nas propriedades de cada palpite
+          const predsWithPoints: PredictionWithPoints[] = filteredPreds.map((p: any) => {
+            const matchLog = logsMap.get(p.id);
+            return {
+              id: p.id,
+              user_id: p.user_id,
+              pool_id: p.pool_id,
+              match_id: p.match_id,
+              home_score: p.home_score,
+              away_score: p.away_score,
+              created_at: p.created_at,
+              points_earned: matchLog ? matchLog.points_earned : null,
+              points_type: matchLog ? matchLog.points_type : null
+            };
+          });
+
+          setDailyPredictions(predsWithPoints);
+        } else {
+          setDailyPredictions([]);
+        }
       } else {
         setDailyPredictions([]);
       }
@@ -296,11 +300,10 @@ const DailyMatchesAndPredictions: React.FC = () => {
                             const user = poolParticipants.find(u => u.id === p.user_id);
                             if (!user) return null;
                             
-                            // Os dados agora são lidos de forma direta e limpa do objeto p
                             const pontosGanhos = p.points_earned;
                             const tipoPontuacao = p.points_type;
                             
-                            // Checagem robusta que aceita o número 0
+                            // Validação estrita contra nulos e undefined
                             const possuiRegistroDePontos = pontosGanhos !== undefined && pontosGanhos !== null && isMatchFinishedReal;
 
                             let cardBgStyle = "bg-white text-gray-700 border-gray-200";
@@ -321,7 +324,7 @@ const DailyMatchesAndPredictions: React.FC = () => {
                             return (
                               <div key={p.id} className={`relative flex items-center justify-between p-2 rounded-md border text-xs transition-all ${cardBgStyle}`}>
                                 
-                                {/* Expoente flutuante de potencial no canto superior */}
+                                {/* Expoente flutuante no canto superior */}
                                 {possuiRegistroDePontos && (
                                   <span className="absolute -top-1.5 -right-1 bg-fifa-dark-blue text-white text-[9px] font-extrabold px-1.5 py-0.5 rounded-full shadow-sm z-10 select-none">
                                     {pointsStr}
