@@ -6,8 +6,8 @@ import { Button } from '@/components/ui/button';
 import { ChevronLeft, ChevronRight, Info, Crown, Medal, Loader2, Users, Calendar, Bot, EyeOff } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
-import { fetchMatchesInUTCRange, fetchMatchPredictionsForMatches } from '@/utils/pointsCalculator/dataAccess';
-import { SupabaseMatchPrediction, User } from '@/utils/pointsCalculator/types';
+import { fetchMatchesInUTCRange } from '@/utils/pointsCalculator/dataAccess';
+import { User } from '@/utils/pointsCalculator/types';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -45,6 +45,23 @@ interface DisplayMatch {
   is_finished: boolean;
 }
 
+interface SupabaseMatchPredictionWithLog {
+  id: string;
+  user_id: string;
+  pool_id: string;
+  match_id: string;
+  home_score: number;
+  away_score: number;
+  created_at: string;
+  user_points_log?: {
+    points_earned: number;
+    points_type: string;
+  } | {
+    points_earned: number;
+    points_type: string;
+  }[];
+}
+
 const DailyMatchesAndPredictions: React.FC = () => {
   const { activePool } = useAuth();
   const [loading, setLoading] = useState(true);
@@ -52,7 +69,7 @@ const DailyMatchesAndPredictions: React.FC = () => {
   const [currentDate, setCurrentDate] = useState<Date>(new Date());
   const [poolParticipants, setPoolParticipants] = useState<User[]>([]);
   const [dailyMatches, setDailyMatches] = useState<DisplayMatch[]>([]);
-  const [dailyPredictions, setDailyPredictions] = useState<SupabaseMatchPrediction[]>([]);
+  const [dailyPredictions, setDailyPredictions] = useState<SupabaseMatchPredictionWithLog[]>([]);
   const [groupPredictions, setGroupPredictions] = useState<GroupPrediction[]>([]);
   const [finalPredictions, setFinalPredictions] = useState<FinalPrediction[]>([]);
   const [teamsMap, setTeamsMap] = useState<Record<string, string>>({});
@@ -61,7 +78,6 @@ const DailyMatchesAndPredictions: React.FC = () => {
   const isVisualLocked = useMemo(() => {
     if (!activePool) return true;
     
-    // Se existir prazo limite configurado no Bolão, valida por ele
     if (activePool.prediction_deadline) {
       return !isAfter(new Date(), new Date(activePool.prediction_deadline));
     }
@@ -76,7 +92,7 @@ const DailyMatchesAndPredictions: React.FC = () => {
       setLoading(true);
       setError(null);
 
-      // Carrega os participantes do bolão (incluindo admins e IAs para exibição)
+      // Carrega os participantes do bolão
       const { data: participantsData, error: partError } = await supabase
         .from('participations')
         .select('user:users_custom(*)')
@@ -87,7 +103,7 @@ const DailyMatchesAndPredictions: React.FC = () => {
       setPoolParticipants(validUsers);
       const validUserIds = new Set(validUsers.map(u => u.id));
 
-      // Carrega mapa de times para resolver nomes nas finais
+      // Carrega mapa de times
       const { data: teamsData } = await supabase.from('teams').select('id, name');
       const tMap: Record<string, string> = {};
       teamsData?.forEach(t => { tMap[t.id] = t.name; });
@@ -101,11 +117,31 @@ const DailyMatchesAndPredictions: React.FC = () => {
 
       if (matchesData && matchesData.length > 0) {
         const matchIds = matchesData.map(match => match.id);
-        const allPreds = await fetchMatchPredictionsForMatches(matchIds);
-        const filteredPreds = allPreds.filter(p => 
+        
+        // BUSCA PALPITES DO JOGO TRAZENDO RELACIONAMENTO COM LOG DE PONTOS DIRECT DO BANCO
+        const { data: predsWithLogs, error: predsError } = await supabase
+          .from('match_predictions')
+          .select(`
+            id,
+            user_id,
+            pool_id,
+            match_id,
+            home_score,
+            away_score,
+            created_at,
+            user_points_log (
+              points_earned,
+              points_type
+            )
+          `)
+          .in('match_id', matchIds);
+
+        if (predsError) throw predsError;
+
+        const filteredPreds = (predsWithLogs || []).filter(p => 
           p.pool_id === activePool.id && validUserIds.has(p.user_id)
         );
-        setDailyPredictions(filteredPreds);
+        setDailyPredictions(filteredPreds as SupabaseMatchPredictionWithLog[]);
       } else {
         setDailyPredictions([]);
       }
@@ -114,13 +150,12 @@ const DailyMatchesAndPredictions: React.FC = () => {
       const { data: groupPredsResult } = await supabase.rpc('get_all_group_predictions', { p_pool_id: activePool.id });
       setGroupPredictions((groupPredsResult || []).filter((p: GroupPrediction) => validUserIds.has(p.user_id)));
 
-      // Carrega palpites de Finais (Direto da Tabela Física para evitar erro 400 do RLS)
+      // Carrega palpites de Finais
       const { data: finalPredsData } = await supabase
         .from('final_predictions')
         .select('id, user_id, pool_id, champion_id, runner_up_id, third_place_id, fourth_place_id, final_home_score, final_away_score')
         .eq('pool_id', activePool.id);
 
-      // Mapeia os dados brutos de finais cruzando com o dicionário de usuários e times
       const mappedFinals: FinalPrediction[] = (finalPredsData || [])
         .filter(p => validUserIds.has(p.user_id))
         .map(p => {
@@ -252,9 +287,41 @@ const DailyMatchesAndPredictions: React.FC = () => {
                           {matchPredictions.map(p => {
                             const user = poolParticipants.find(u => u.id === p.user_id);
                             if (!user) return null;
-                            const isExactHit = match.is_finished && p.home_score === match.home_score && p.away_score === match.away_score;
+                            
+                            // Normaliza o retorno do nó de pontuação do banco de dados
+                            const rawLog = p.user_points_log;
+                            const log = Array.isArray(rawLog) ? rawLog[0] : rawLog;
+                            
+                            const pontosGanhos = log?.points_earned;
+                            const tipoPontuacao = log?.points_type;
+                            const possuiRegistroDePontos = pontosGanhos !== undefined && pontosGanhos !== null && match.is_finished;
+
+                            let cardBgStyle = "bg-white text-gray-700 border-gray-200";
+                            let pointsBadgeStyle = "bg-gray-100 text-gray-700";
+                            let pointsStr = "";
+
+                            if (possuiRegistroDePontos) {
+                              pointsStr = `+${pontosGanhos}`;
+                              
+                              // Se acertou o placar em cheio (tipo EXACT_SCORE ou fez pontuação máxima de 10)
+                              if (tipoPontuacao === "EXACT_SCORE" || pontosGanhos === 10) {
+                                cardBgStyle = "bg-green-50 border-green-300 text-green-950 font-medium shadow-sm";
+                                pointsBadgeStyle = "bg-green-200 text-green-800";
+                              } else if (pontosGanhos === 0) {
+                                cardBgStyle = "bg-white text-gray-400 border-gray-100 opacity-60";
+                              }
+                            }
+
                             return (
-                              <div key={p.id} className={`flex items-center justify-between p-2 rounded-md border text-xs ${isExactHit ? 'bg-green-50 border-green-200 text-green-900 font-medium' : 'bg-white text-gray-700'}`}>
+                              <div key={p.id} className={`relative flex items-center justify-between p-2 rounded-md border text-xs transition-all ${cardBgStyle}`}>
+                                
+                                {/* Tag de Expoente/Potencial Absoluto no Canto Superior Direito */}
+                                {possuiRegistroDePontos && (
+                                  <span className="absolute -top-1.5 -right-1 bg-fifa-dark-blue text-white text-[9px] font-extrabold px-1.5 py-0.5 rounded-full shadow-sm z-10 select-none">
+                                    {pointsStr}
+                                  </span>
+                                )}
+
                                 <div className="flex items-center gap-2 truncate">
                                   <Avatar className="h-5 w-5">
                                     <AvatarImage src={user.avatar_url || undefined} />
@@ -264,7 +331,7 @@ const DailyMatchesAndPredictions: React.FC = () => {
                                     {user.name} {user.is_ai && <Bot className="h-3 w-3 text-fifa-blue" />}
                                   </span>
                                 </div>
-                                <span className={`font-mono px-1.5 py-0.5 rounded ${isExactHit ? 'bg-green-200 text-green-800' : 'bg-gray-100'}`}>
+                                <span className={`font-mono px-1.5 py-0.5 rounded ${pointsBadgeStyle}`}>
                                   {p.home_score} x {p.away_score}
                                 </span>
                               </div>
