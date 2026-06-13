@@ -43,7 +43,6 @@ interface DisplayMatch {
   home_score: number | null;
   away_score: number | null;
   is_finished: boolean;
-  status?: string;
 }
 
 interface SupabaseMatchPredictionWithLog {
@@ -75,14 +74,12 @@ const DailyMatchesAndPredictions: React.FC = () => {
   const [finalPredictions, setFinalPredictions] = useState<FinalPrediction[]>([]);
   const [teamsMap, setTeamsMap] = useState<Record<string, string>>({});
 
-  // 1. TRAVA DE SEGURANÇA UNIFICADA (Regra do Início Geral do Bolão)
+  // Trava de segurança unificada baseada no prazo geral
   const isVisualLocked = useMemo(() => {
     if (!activePool) return true;
-    
     if (activePool.prediction_deadline) {
       return !isAfter(new Date(), new Date(activePool.prediction_deadline));
     }
-    
     return false; 
   }, [activePool]);
 
@@ -110,7 +107,7 @@ const DailyMatchesAndPredictions: React.FC = () => {
       teamsData?.forEach(t => { tMap[t.id] = t.name; });
       setTeamsMap(tMap);
 
-      // Carrega partidas do dia atual visualizado
+      // Carrega partidas do dia selecionado
       const utcStartString = startOfDay(currentDate).toISOString();
       const utcEndString = endOfDay(currentDate).toISOString();
       const matchesData = await fetchMatchesInUTCRange(utcStartString, utcEndString);
@@ -119,7 +116,7 @@ const DailyMatchesAndPredictions: React.FC = () => {
       if (matchesData && matchesData.length > 0) {
         const matchIds = matchesData.map(match => match.id);
         
-        // BUSCA PALPITES DO JOGO TRAZENDO RELACIONAMENTO COM LOG DE PONTOS DIRECT DO BANCO
+        // Chamada direta pulando o dataAccess antigo para trazer a user_points_log acoplada
         const { data: predsWithLogs, error: predsError } = await supabase
           .from('match_predictions')
           .select(`
@@ -147,7 +144,7 @@ const DailyMatchesAndPredictions: React.FC = () => {
         setDailyPredictions([]);
       }
 
-      // Carrega palpites de Grupos (via RPC)
+      // Carrega palpites de Grupos
       const { data: groupPredsResult } = await supabase.rpc('get_all_group_predictions', { p_pool_id: activePool.id });
       setGroupPredictions((groupPredsResult || []).filter((p: GroupPrediction) => validUserIds.has(p.user_id)));
 
@@ -261,7 +258,6 @@ const DailyMatchesAndPredictions: React.FC = () => {
           ) : (
             dailyMatches.map(match => {
               const matchPredictions = dailyPredictions.filter(p => p.match_id === match.id);
-              // Lógica resiliente para saber se o jogo terminou (pelo status textual ou gols válidos no banco)
               const isMatchFinishedReal = match.home_score !== null && match.away_score !== null;
 
               return (
@@ -292,13 +288,13 @@ const DailyMatchesAndPredictions: React.FC = () => {
                             const user = poolParticipants.find(u => u.id === p.user_id);
                             if (!user) return null;
                             
-                            // Busca e limpa o nó do log de pontos associado
+                            // Mapeia e limpa os registros do array retornado do Supabase log
                             const rawLog = p.user_points_log;
                             const log = Array.isArray(rawLog) ? rawLog[0] : rawLog;
                             
                             const pontosGanhos = log?.points_earned;
                             const tipoPontuacao = log?.points_type;
-                            const possuiRegistroDePontos = pontosGanhos !== undefined && pontosGanhos !== null;
+                            const possuiRegistroDePontos = pontosGanhos !== undefined && pontosGanhos !== null && isMatchFinishedReal;
 
                             let cardBgStyle = "bg-white text-gray-700 border-gray-200";
                             let pointsBadgeStyle = "bg-gray-100 text-gray-700";
@@ -318,9 +314,9 @@ const DailyMatchesAndPredictions: React.FC = () => {
                             return (
                               <div key={p.id} className={`relative flex items-center justify-between p-2 rounded-md border text-xs transition-all ${cardBgStyle}`}>
                                 
-                                {/* Tag de Expoente flutuante baseada exclusivamente na existência do log */}
+                                {/* Número Elevado Estilo Potencial flutuando no canto */}
                                 {possuiRegistroDePontos && (
-                                  <span className="absolute -top-1.5 -right-1 bg-fifa-dark-blue text-white text-[9px] font-extrabold px-1.5 py-0.5 rounded-full shadow-sm z-10 select-none">
+                                  <span className="absolute -top-1.5 -right-1 bg-fifa-dark-blue text-white text-[9px] font-extrabold px-1.5 py-0.5 rounded-full shadow-sm z-10 select-none animate-fade-in">
                                     {pointsStr}
                                   </span>
                                 )}
