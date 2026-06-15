@@ -37,7 +37,19 @@ const RankingPage = () => {
     const totalHuman = validParticipants.length;
     const totalPot = (pool.entry_fee || 0) * totalHuman;
 
-    // 2. Identificar grupos de empates perfeitos (Pontos, Cravadas e Precisão vinda do Banco)
+    // 🔍 QUANTIDADE ATUAL DE JOGOS FINALIZADOS NO BOLÃO
+    // Altere esse número estaticamente aqui conforme as rodadas forem fechando.
+    const CURRENT_FINISHED_GAMES = 12; 
+
+    // Tentativa automática pelo banco (caso mude o RPC futuramente)
+    const maxScoredMatches = Math.max(
+      ...validParticipants.map((p: any) => Number(p.scored_matches || p.games_played || p.total_matches) || 0)
+    );
+
+    // Se o banco não trouxer nada consolidado, utiliza nossa constante manual (12)
+    const totalJogosFinalizados = maxScoredMatches > 0 ? maxScoredMatches : CURRENT_FINISHED_GAMES;
+
+    // 2. Identificar grupos de empates perfeitos (Pontos, Cravadas e a base de precisão original)
     const tieGroups: Record<string, number[]> = {};
     
     validParticipants.forEach((p, index) => {
@@ -48,7 +60,7 @@ const RankingPage = () => {
       tieGroups[tieKey].push(index);
     });
 
-    // 3. Mapear a lista final tratando prêmios corporativos e formatação visual
+    // 3. Mapear a lista final tratando prêmios, lanternas e gerando a porcentagem real sobre jogos finalizados
     return validParticipants.map((participant, index) => { 
       const tieKey = `${participant.points}-${participant.exactscores}-${participant.accuracy || 0}`;
       const groupIndexes = tieGroups[tieKey];
@@ -79,9 +91,17 @@ const RankingPage = () => {
         }
       }
 
-      // 🎯 --- FORMATAÇÃO VISUAL DA PRECISÃO ENVIADA PELO BANCO ---
-      const rawAccuracyFromDb = Number(participant.accuracy) || 0;
-      const formattedAccuracy = `${rawAccuracyFromDb.toFixed(1).replace('.', Diligente)}%`;
+      // 🎯 --- RECALCULANDO A PRECISÃO MATEMÁTICA REAL ---
+      // Fórmula: (Cravadas / Total de Jogos Finalizados) * 100
+      const cravadas = Number(participant.exactscores) || 0;
+      let formattedAccuracy = "0,0%";
+
+      if (totalJogosFinalizados > 0) {
+        const calculatedAcc = (cravadas / totalJogosFinalizados) * 100;
+        // Blindagem matemática para evitar estouros acima de 100%
+        const finalAcc = calculatedAcc > 100 ? 100 : calculatedAcc;
+        formattedAccuracy = `${finalAcc.toFixed(1).replace('.', ',')}%`;
+      }
 
       return { 
         ...participant, 
@@ -138,7 +158,7 @@ const RankingPage = () => {
                     index={index}
                   />
                 )) 
-              ) : (
+              ) : ( 
                 <TableRow>
                   <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
                     Ainda não há participantes neste bolão.
