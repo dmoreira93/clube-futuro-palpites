@@ -32,10 +32,24 @@ const RankingPage = () => {
   const rankedParticipants = useMemo(() => { 
     if (!participants || !pool) return [];
 
+    // 1. Filtra a lista removendo o admin e as IAs completamente
     const validParticipants = participants.filter(p => !p.is_admin && !isAIParticipant(p)); 
     const totalHuman = validParticipants.length;
     const totalPot = (pool.entry_fee || 0) * totalHuman;
 
+    // 🔍 IDENTIFICAÇÃO DINÂMICA DO TOTAL DE JOGOS JÁ FINALIZADOS NO BOLÃO
+    // Buscamos o maior valor da coluna que conta partidas finalizadas do banco (se existir)
+    const maxScoredMatches = Math.max(
+      ...validParticipants.map((p: any) => Number(p.scored_matches || p.games_played || p.total_matches) || 0)
+    );
+
+    // Fallback matemático seguro: se a contagem estrutural não vier na resposta do RPC, 
+    // pegamos o maior número de cravadas atual do bolão como termômetro mínimo de jogos encerrados.
+    const totalJogosFinalizados = maxScoredMatches > 0 
+      ? maxScoredMatches 
+      : Math.max(...validParticipants.map(p => Number(p.exactscores) || 0), 1);
+
+    // 2. Identificar grupos de empates perfeitos (Pontos, Cravadas e a base de precisão original)
     const tieGroups: Record<string, number[]> = {};
     
     validParticipants.forEach((p, index) => {
@@ -46,6 +60,7 @@ const RankingPage = () => {
       tieGroups[tieKey].push(index);
     });
 
+    // 3. Mapear a lista final tratando prêmios, lanternas e gerando a porcentagem real sobre jogos finalizados
     return validParticipants.map((participant, index) => { 
       const tieKey = `${participant.points}-${participant.exactscores}-${participant.accuracy || 0}`;
       const groupIndexes = tieGroups[tieKey];
@@ -54,6 +69,7 @@ const RankingPage = () => {
 
       let prizeText = "";
 
+      // Lógica de Premiação Compartilhada (Empates de Pódio)
       if (isTied && groupIndexes.some(idx => idx < 3)) {
         let combinedPrizePot = 0;
         groupIndexes.forEach(idx => {
@@ -66,6 +82,7 @@ const RankingPage = () => {
         if (individualPrize > 0) prizeText = `R$ ${individualPrize.toFixed(2).replace('.', ',')}`;
       }
 
+      // Lógica de Punição Compartilhada (Empates de Lanterna)
       if (pool.enable_punishment && totalHuman > 3) {
         const isLastPlaceGroup = groupIndexes.includes(totalHuman - 1);
         if (isLastPlaceGroup) {
@@ -74,20 +91,16 @@ const RankingPage = () => {
         }
       }
 
-      // 🎯 --- LÓGICA DE PRECISÃO AJUSTADA ---
-      // Se o banco trouxer um valor positivo, usamos ele.
-      // Se o valor do banco for 0, mas o usuário acertou palpites, consideramos 100% de aproveitamento nos jogos avaliados.
-      const rawAccuracyFromDb = Number(participant.accuracy) || 0;
+      // 🎯 --- RECALCULANDO A PRECISÃO MATEMÁTICA REAL ---
+      // Fórmula: (Cravadas / Total de Jogos Finalizados Computados) * 100
       const cravadas = Number(participant.exactscores) || 0;
-      
       let formattedAccuracy = "0,0%";
 
-      if (rawAccuracyFromDb > 0) {
-        formattedAccuracy = `${rawAccuracyFromDb.toFixed(1).replace('.', ',')}%`;
-      } else if (cravadas > 0) {
-        // Se tem cravadas e não veio dado consolidado do banco, 
-        // assumimos 100% de precisão sobre o que foi processado até o momento.
-        formattedAccuracy = "100,0%";
+      if (totalJogosFinalizados > 0) {
+        const calculatedAcc = (cravadas / totalJogosFinalizados) * 100;
+        // Blindagem matemática: impede que passe de 100% caso haja alguma oscilação de logs
+        const finalAcc = calculatedAcc > 100 ? 100 : calculatedAcc;
+        formattedAccuracy = `${finalAcc.toFixed(1).replace('.', ',')}%`;
       }
 
       return { 
