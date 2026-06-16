@@ -7,51 +7,79 @@ import {
   TableHead, 
   TableHeader, 
   TableRow, 
-  TableCell
+  TableCell 
 } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2, Trophy } from "lucide-react";
-import { useMemo } from "react";
+import { useMemo, useState, useEffect } from "react";
+// 🚨 IMPORTANTE: Importe o seu cliente do supabase configurado no projeto
+import { supabase } from "@/lib/supabaseClient"; 
 
 // Função auxiliar para verificar se é IA
 const isAIParticipant = (p: Participant) => p.name?.startsWith('IA ') || p.username?.startsWith('GPT');
 
 // Função base de cálculo de prêmio por posição absoluta
-const getBasePrizeByRank = (rank: number, totalPot: number, pool: any): number => {
-  if (!pool || pool.entry_fee <= 0) return 0;
-  if (rank === 1 && pool.prize_percent_1st > 0) return (totalPot * pool.prize_percent_1st) / 100;
-  if (rank === 2 && pool.prize_percent_2nd > 0) return (totalPot * pool.prize_percent_2nd) / 100;
-  if (rank === 3 && pool.prize_percent_3rd > 0) return (totalPot * pool.prize_percent_3rd) / 100;
-  return 0;
+const getBasePrizeByRank = (rank: number, totalPot: number, pool: any): number => {  
+  if (!pool || pool.entry_fee <= 0) return 0;  
+  if (rank === 1 && pool.prize_percent_1st > 0) return (totalPot * pool.prize_percent_1st) / 100;  
+  if (rank === 2 && pool.prize_percent_2nd > 0) return (totalPot * pool.prize_percent_2nd) / 100;  
+  if (rank === 3 && pool.prize_percent_3rd > 0) return (totalPot * pool.prize_percent_3rd) / 100;  
+  return 0; 
 };
 
-const RankingPage = () => { 
+const RankingPage = () => {
   const { activePool: pool } = useAuth();
-  const { participants, loading, error } = useParticipantsRanking();
+  const { participants, loading: loadingRanking, error } = useParticipantsRanking();
+  
+  // 🔄 Estado para controlar os jogos finalizados dinamicamente
+  const [finishedGamesCount, setFinishedGamesCount] = useState<number | null>(null);
+  const [loadingGames, setLoadingGames] = useState<boolean>(false);
 
-  const rankedParticipants = useMemo(() => { 
+  // 📡 Buscar quantidade de jogos finalizados do campeonato do bolão ativo
+  useEffect(() => {
+    const fetchFinishedGames = async () => {
+      // Garantimos que temos o bolão e o id do campeonato atrelado a ele
+      if (!pool || !pool.championship_id) return;
+
+      setLoadingGames(true);
+      try {
+        const { count, error: fetchError } = await supabase
+          .from("matches")
+          .select("*", { count: "exact", head: true }) // Busca eficiente (traz apenas a contagem)
+          .eq("championship_id", pool.championship_id)
+          .eq("status", "finished");
+
+        if (fetchError) throw fetchError;
+
+        // Atualiza o estado com a contagem real (caso venha nulo/vazio, assume 0)
+        setFinishedGamesCount(count || 0);
+      } catch (err) {
+        console.error("Erro ao buscar contagem de jogos finalizados:", err);
+        setFinishedGamesCount(0); // Fallback amigável
+      } finally {
+        setLoadingGames(false);
+      }
+    };
+
+    fetchFinishedGames();
+  }, [pool]);
+
+  const rankedParticipants = useMemo(() => {
     if (!participants || !pool) return [];
 
     // 1. Filtra a lista removendo o admin e as IAs completamente
-    const validParticipants = participants.filter(p => !p.is_admin && !isAIParticipant(p)); 
+    const validParticipants = participants.filter(p => !p.is_admin && !isAIParticipant(p));
     const totalHuman = validParticipants.length;
     const totalPot = (pool.entry_fee || 0) * totalHuman;
 
-    // 🔍 QUANTIDADE ATUAL DE JOGOS FINALIZADOS NO BOLÃO
-    // Altere esse número estaticamente aqui conforme as rodadas forem fechando.
-    const CURRENT_FINISHED_GAMES = 12; 
+    // 🔍 O divisor agora é dinâmico. Se ainda estiver buscando ou for 0, usamos as cravadas como base temporária
+    // para evitar divisão por zero (NaN) ou renderizar 1.4% errático.
+    const totalJogosFinalizados = finishedGamesCount !== null && finishedGamesCount > 0 
+      ? finishedGamesCount 
+      : 1; 
 
-    // Tentativa automática pelo banco (caso mude o RPC futuramente)
-    const maxScoredMatches = Math.max(
-      ...validParticipants.map((p: any) => Number(p.scored_matches || p.games_played || p.total_matches) || 0)
-    );
-
-    // Se o banco não trouxer nada consolidado, utiliza nossa constante manual (12)
-    const totalJogosFinalizados = maxScoredMatches > 0 ? maxScoredMatches : CURRENT_FINISHED_GAMES;
-
-    // 2. Identificar grupos de empates perfeitos (Pontos, Cravadas e a base de precisão original)
+    // 2. Identificar grupos de empates perfeitos (Pontos, Cravadas e Precisão original)
     const tieGroups: Record<string, number[]> = {};
-    
     validParticipants.forEach((p, index) => {
       const tieKey = `${p.points}-${p.exactscores}-${p.accuracy || 0}`;
       if (!tieGroups[tieKey]) {
@@ -60,13 +88,12 @@ const RankingPage = () => {
       tieGroups[tieKey].push(index);
     });
 
-    // 3. Mapear a lista final tratando prêmios, lanternas e gerando a porcentagem real sobre jogos finalizados
-    return validParticipants.map((participant, index) => { 
+    // 3. Mapear a lista final tratando prêmios, lanternas e gerando a porcentagem real automatizada
+    return validParticipants.map((participant, index) => {
       const tieKey = `${participant.points}-${participant.exactscores}-${participant.accuracy || 0}`;
       const groupIndexes = tieGroups[tieKey];
       const isTied = groupIndexes.length > 1;
-      const visualRank = groupIndexes[0] + 1; 
-
+      const visualRank = groupIndexes[0] + 1;
       let prizeText = "";
 
       // Lógica de Premiação Compartilhada (Empates de Pódio)
@@ -91,85 +118,87 @@ const RankingPage = () => {
         }
       }
 
-      // 🎯 --- RECALCULANDO A PRECISÃO MATEMÁTICA REAL ---
-      // Fórmula: (Cravadas / Total de Jogos Finalizados) * 100
+      // 🎯 --- RECALCULANDO A PRECISÃO MATEMÁTICA AUTOMATIZADA ---
       const cravadas = Number(participant.exactscores) || 0;
       let formattedAccuracy = "0,0%";
 
-      if (totalJogosFinalizados > 0) {
+      // Só calcula se o campeonato de fato já começou e teve jogos encerrados de verdade no banco
+      if (finishedGamesCount !== null && finishedGamesCount > 0) {
         const calculatedAcc = (cravadas / totalJogosFinalizados) * 100;
-        // Blindagem matemática para evitar estouros acima de 100%
-        const finalAcc = calculatedAcc > 100 ? 100 : calculatedAcc;
+        const finalAcc = calculatedAcc > 100 ? 100 : calculatedAcc; // Proteção contra inconsistências
         formattedAccuracy = `${finalAcc.toFixed(1).replace('.', ',')}%`;
+      } else if (cravadas > 0) {
+        // Fallback de contingência caso o banco falhe momentaneamente mas ele possua cravadas
+        formattedAccuracy = "100,0%";
       }
 
-      return { 
-        ...participant, 
-        rank: visualRank, 
-        accuracy: formattedAccuracy, 
+      return {
+        ...participant,
+        rank: visualRank,
+        accuracy: formattedAccuracy,
         prize: prizeText
-      }; 
-    }); 
-  }, [participants, pool]);
+      };
+    });
+  }, [participants, pool, finishedGamesCount]);
 
-  if (loading) {
+  // Exibe o loader enquanto carrega o ranking ou enquanto o estado inicial do banco não responde
+  if (loadingRanking || loadingGames) {
     return (
-      <div className="flex h-[60vh] items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-fifa-blue" />
+      <div className="flex h-[400px] items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   }
 
   if (error) {
-    return <div className="p-4 text-center text-red-500">Erro ao Carregar o Ranking.</div>;
+    return <div className="p-4 text-center text-destructive">Erro ao Carregar o Ranking.</div>;
   }
 
-  return ( 
-    <div className="container mx-auto max-w-5xl p-4 space-y-6">
-      <div className="flex flex-col space-y-1">
-        <h1 className="text-3xl font-bold tracking-tight text-gray-900 dark:text-white flex items-center gap-2">
-          <Trophy className="h-8 w-8 text-yellow-500" /> Ranking do Bolão
-        </h1>
-        {pool?.name && <p className="text-muted-foreground text-lg">Visualizando: {pool.name}</p>}
-      </div>
-
-      <Card className="border-gray-200 shadow-md rounded-xl overflow-hidden">
-        <CardHeader className="bg-gray-50 dark:bg-zinc-900 border-b border-gray-100 dark:border-zinc-800">
-          <CardTitle className="text-xl font-semibold">Classificação Geral</CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
+  return (
+    <Card className="w-full">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-2xl">
+          <Trophy className="h-6 w-6 text-yellow-500" />
+          Ranking do Bolão
+        </CardTitle>
+        {pool?.name && (
+          <p className="text-sm text-muted-foreground">Visualizando: {pool.name}</p>
+        )}
+      </CardHeader>
+      <CardContent>
+        <div className="rounded-md border">
           <Table>
-            <TableHeader className="bg-gray-100/50 dark:bg-zinc-800/50">
+            <TableHeader>
               <TableRow>
-                <TableHead className="w-[80px] font-bold text-center">Pos.</TableHead>
-                <TableHead className="font-bold">Participante</TableHead>
-                <TableHead className="font-bold text-center">Pontos</TableHead>
-                <TableHead className="font-bold text-center">Cravadas</TableHead>
-                <TableHead className="font-bold text-center">Precisão</TableHead>
-                <TableHead className="font-bold text-right pr-6">Prêmio/Punição</TableHead>
+                <TableHead className="w-[80px]">Pos.</TableHead>
+                <TableHead>Participante</TableHead>
+                <TableHead className="text-right">Pontos</TableHead>
+                <TableHead className="text-right">Cravadas</TableHead>
+                <TableHead className="text-right">Precisão</TableHead>
+                <TableHead className="text-right">Prêmio/Punição</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {rankedParticipants.length > 0 ? (
                 rankedParticipants.map((participant, index) => (
                   <RankingRow 
-                    key={participant.id || index}
-                    participant={participant}
-                    index={index}
+                    key={participant.id || index} 
+                    participant={participant} 
+                    index={index} 
                   />
-                )) 
-              ) : ( 
+                ))
+              ) : (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={6} className="h-24 text-center">
                     Ainda não há participantes neste bolão.
                   </TableCell>
                 </TableRow>
-              )} 
+              )}
             </TableBody>
           </Table>
-        </CardContent>
-      </Card>
-    </div>
+        </div>
+      </CardContent>
+    </Card>
   );
 };
 
