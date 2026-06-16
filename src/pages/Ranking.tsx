@@ -12,8 +12,8 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2, Trophy } from "lucide-react";
 import { useMemo, useState, useEffect } from "react";
-// 🚨 IMPORTANTE: Importe o seu cliente do supabase configurado no projeto
-import { supabase } from "@/lib/supabaseClient"; 
+// 🚨 AJUSTADO: Importação corrigida para o padrão do projeto (@/lib/supabase ou relativo)
+import { supabase } from "@/lib/supabase"; 
 
 // Função auxiliar para verificar se é IA
 const isAIParticipant = (p: Participant) => p.name?.startsWith('IA ') || p.username?.startsWith('GPT');
@@ -38,20 +38,24 @@ const RankingPage = () => {
   // 📡 Buscar quantidade de jogos finalizados do campeonato do bolão ativo
   useEffect(() => {
     const fetchFinishedGames = async () => {
-      // Garantimos que temos o bolão e o id do campeonato atrelado a ele
       if (!pool || !pool.championship_id) return;
 
       setLoadingGames(true);
       try {
+        // Garante que o cliente do supabase existe antes de chamar para não estourar erro runtime
+        if (!supabase) {
+          console.warn("Cliente Supabase não encontrado.");
+          return;
+        }
+
         const { count, error: fetchError } = await supabase
           .from("matches")
-          .select("*", { count: "exact", head: true }) // Busca eficiente (traz apenas a contagem)
+          .select("*", { count: "exact", head: true })
           .eq("championship_id", pool.championship_id)
           .eq("status", "finished");
 
         if (fetchError) throw fetchError;
 
-        // Atualiza o estado com a contagem real (caso venha nulo/vazio, assume 0)
         setFinishedGamesCount(count || 0);
       } catch (err) {
         console.error("Erro ao buscar contagem de jogos finalizados:", err);
@@ -72,8 +76,7 @@ const RankingPage = () => {
     const totalHuman = validParticipants.length;
     const totalPot = (pool.entry_fee || 0) * totalHuman;
 
-    // 🔍 O divisor agora é dinâmico. Se ainda estiver buscando ou for 0, usamos as cravadas como base temporária
-    // para evitar divisão por zero (NaN) ou renderizar 1.4% errático.
+    // O divisor agora é dinâmico.
     const totalJogosFinalizados = finishedGamesCount !== null && finishedGamesCount > 0 
       ? finishedGamesCount 
       : 1; 
@@ -122,13 +125,11 @@ const RankingPage = () => {
       const cravadas = Number(participant.exactscores) || 0;
       let formattedAccuracy = "0,0%";
 
-      // Só calcula se o campeonato de fato já começou e teve jogos encerrados de verdade no banco
       if (finishedGamesCount !== null && finishedGamesCount > 0) {
         const calculatedAcc = (cravadas / totalJogosFinalizados) * 100;
-        const finalAcc = calculatedAcc > 100 ? 100 : calculatedAcc; // Proteção contra inconsistências
+        const finalAcc = calculatedAcc > 100 ? 100 : calculatedAcc; 
         formattedAccuracy = `${finalAcc.toFixed(1).replace('.', ',')}%`;
       } else if (cravadas > 0) {
-        // Fallback de contingência caso o banco falhe momentaneamente mas ele possua cravadas
         formattedAccuracy = "100,0%";
       }
 
@@ -141,7 +142,6 @@ const RankingPage = () => {
     });
   }, [participants, pool, finishedGamesCount]);
 
-  // Exibe o loader enquanto carrega o ranking ou enquanto o estado inicial do banco não responde
   if (loadingRanking || loadingGames) {
     return (
       <div className="flex h-[400px] items-center justify-center">
