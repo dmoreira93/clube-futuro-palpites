@@ -19,24 +19,39 @@ Deno.serve(async (req) => {
     const chatId = update.message.chat.id;
     let incomingText = update.message.text.trim();
 
-    // 🔥 MÁGICA DE BLINDAGEM: Remove o @NomeDoBot se o usuário marcar o bot no grupo
+    // Limpa a menção ao bot se o comando vier como /ranking@cf_palpites_bot
     incomingText = incomingText.replace(/@\w+_bot/g, "").trim();
 
     // ==========================================
     // COMANDO: /ranking
     // ==========================================
     if (incomingText.startsWith("/ranking")) {
-      const { data: ranking, error: rpcError } = await supabase
+      
+      // 1ª Tentativa: Envia usando o parâmetro 'p_pool_id'
+      let { data: ranking, error: rpcError } = await supabase
         .rpc("get_pool_ranking", { p_pool_id: POOL_ID });
 
+      // 2ª Tentativa (Mecanismo de Recuperação): Se deu erro, tenta usando o parâmetro como 'pool_id'
       if (rpcError || !ranking || ranking.length === 0) {
-        await sendTelegramMessage(telegramBotToken, chatId, "⚠️ Não foi possível carregar o ranking do bolão no momento.");
+        const { data: retryData, error: retryError } = await supabase
+          .rpc("get_pool_ranking", { pool_id: POOL_ID });
+          
+        if (!retryError && retryData && retryData.length > 0) {
+          ranking = retryData;
+          rpcError = null;
+        }
+      }
+
+      // Se mesmo após a segunda tentativa der b.o, avisa o erro técnico real no chat para sabermos
+      if (rpcError || !ranking || ranking.length === 0) {
+        const msgErro = rpcError ? rpcError.message : "Ranking retornou vazio do banco de dados.";
+        await sendTelegramMessage(telegramBotToken, chatId, `⚠️ *Erro ao ler Banco:* \`${msgErro}\``);
         return new Response("OK", { status: 200 });
       }
 
-      const parts = incomingText.split(/\s+/); // Divide por qualquer quantidade de espaços
+      const parts = incomingText.split(/\s+/);
       
-      // CASO A: /ranking geral (Sem argumentos extras)
+      // CASO A: /ranking geral (Sem passar nome de ninguém)
       if (parts.length === 1 || parts[1] === "") {
         let responseText = "🏆 *RANKING ATUAL DO BOLÃO* 🏆\n\n";
         
@@ -47,19 +62,26 @@ Deno.serve(async (req) => {
           else if (index === 2) emoji = "🥉";
           else if (index === ranking.length - 1) emoji = "🏮";
 
-          responseText += `${emoji} *${index + 1}º ${p.username || 'Sem Nome'}* — ${p.points} pts (${p.exactscores} cravadas)\n`;
+          // Usa o username do users_custom ou o name / email como alternativa secundária
+          const displayUser = p.username || p.name || p.email || "Participante";
+          responseText += `${emoji} *${index + 1}º ${displayUser}* — ${p.points ?? 0} pts (${p.exactscores ?? p.exact_scores ?? 0} cravadas)\n`;
         });
 
         responseText += "\n🤖 _Digite_ `/ranking nome` _para ver os detalhes de um participante!_";
         await sendTelegramMessage(telegramBotToken, chatId, responseText);
       } 
-      // CASO B: /ranking dmoreira
+      // CASO B: /ranking dmoreira (Procura um participante)
       else {
         const targetUsername = parts[1].replace("@", "").toLowerCase();
-        const targetIndex = ranking.findIndex((p: any) => p.username?.toLowerCase() === targetUsername);
+        
+        // Faz a busca inteligente aceitando cruzamento tanto por username quanto por name
+        const targetIndex = ranking.findIndex((p: any) => 
+          p.username?.toLowerCase() === targetUsername || 
+          p.name?.toLowerCase() === targetUsername
+        );
 
         if (targetIndex === -1) {
-          await sendTelegramMessage(telegramBotToken, chatId, `❌ Usuário *${parts[1]}* não foi encontrado no bolão.`);
+          await sendTelegramMessage(telegramBotToken, chatId, `❌ Usuário *${parts[1]}* não foi encontrado ou não está cadastrado neste bolão.`);
           return new Response("OK", { status: 200 });
         }
 
@@ -67,19 +89,25 @@ Deno.serve(async (req) => {
         const leaderStats = ranking[0];
         const lanternStats = ranking[ranking.length - 1];
 
-        const diffLeader = leaderStats.points - userStats.points;
-        const diffLantern = userStats.points - lanternStats.points;
+        const pointsUser = userStats.points ?? 0;
+        const pointsLeader = leaderStats.points ?? 0;
+        const pointsLantern = lanternStats.points ?? 0;
 
-        let responseText = `🏅 *Estatísticas de @${userStats.username}*:\n\n`;
+        const diffLeader = pointsLeader - pointsUser;
+        const diffLantern = pointsUser - pointsLantern;
+        const cravadas = userStats.exactscores ?? userStats.exact_scores ?? 0;
+        const displayUser = userStats.username || userStats.name || "Participante";
+
+        let responseText = `🏅 *Estatísticas de @${displayUser}*:\n\n`;
         responseText += `📊 *Posição:* ${targetIndex + 1}º lugar\n`;
-        responseText += `💯 *Pontuação:* ${userStats.points} pontos\n`;
-        responseText += `🎯 *Placares Cravados:* ${userStats.exactscores} jogos\n\n`;
+        responseText += `💯 *Pontuação:* ${pointsUser} pontos\n`;
+        responseText += `🎯 *Placares Cravados:* ${cravadas} jogos\n\n`;
 
         if (targetIndex === 0) {
           responseText += `👑 *Você é o líder isolado!* Mantém uma vantagem de *${diffLantern} pontos* sobre o lanterna.`;
         } else {
-          responseText += `📈 Está a *${diffLeader} pontos* de distância do líder (@${leaderStats.username}).\n`;
-          responseText += `📉 Está *${diffLantern} pontos* à frente do lanterna (@${lanternStats.username}).`;
+          responseText += `📈 Está a *${diffLeader} pontos* de distância do líder (@${leaderStats.username || leaderStats.name || 'Líder'}).\n`;
+          responseText += `📉 Está *${diffLantern} pontos* à frente do lanterna (@${lanternStats.username || lanternStats.name || 'Lanterna'}).`;
         }
 
         await sendTelegramMessage(telegramBotToken, chatId, responseText);
@@ -106,7 +134,7 @@ Deno.serve(async (req) => {
         .order("match_date", { ascending: true });
 
       if (matchError || !matches || matches.length === 0) {
-        await sendTelegramMessage(telegramBotToken, chatId, "📅 *Agenda de Hoje:*\nNenhum jogo agendado para o dia de hoje.");
+        await sendTelegramMessage(telegramBotToken, chatId, "📅 *Agenda de Hoje:*\nNenhum jogo agendado ou pendente para o dia de hoje.");
         return new Response("OK", { status: 200 });
       }
 
@@ -117,17 +145,18 @@ Deno.serve(async (req) => {
           minute: "2-digit",
           timeZone: "America/Sao_Paulo"
         });
-        responseText += `⚽ *${m.home_team?.name}* vs *${m.away_team?.name}*\n⏰ Horário: ${horaJogo}\n\n`;
+
+        responseText += `⚽ *${m.home_team?.name}* vs *${m.away_team?.name}*\n⏰ Horário: ${horaJogo} (Horário de Brasília)\n\n`;
       });
       
-      responseText += "🚨 _Não esqueçam de salvar seus palpites no app!_";
+      responseText += "🚨 _Não esqueçam de registrar ou revisar seus palpites no app!_";
       await sendTelegramMessage(telegramBotToken, chatId, responseText);
     }
 
     return new Response("OK", { status: 200 });
   } catch (err) {
     console.error("Erro interno na Edge Function:", err);
-    return new Response("Internal Error", { status: 500 });
+    return new Response("OK", { status: 200 });
   }
 });
 
