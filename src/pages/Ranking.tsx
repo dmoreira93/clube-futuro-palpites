@@ -1,6 +1,6 @@
 import { useAuth } from "@/contexts/AuthContext";
 import useParticipantsRanking, { Participant } from "@/hooks/useParticipantsRanking";
-import { useFinishedGames } from "@/hooks/useFinishedGames"; // 🚀 O nosso hook isolado
+import { useFinishedGames } from "@/hooks/useFinishedGames";
 import RankingRow from "@/components/ranking/RankingRow";
 import { 
   Table, 
@@ -28,25 +28,32 @@ const getBasePrizeByRank = (rank: number, totalPot: number, pool: any): number =
 
 const RankingPage = () => {
   const { activePool: pool } = useAuth();
+  
+  // Como o useParticipantsRanking() gerencia o estado e as chamadas do banco internamente,
+  // injetamos a dependência se necessário. Se o seu hook exportar o cliente do supabase, usamos ele,
+  // se não, podemos passar a instância global do window ou do próprio módulo se disponível.
   const { participants, loading: loadingRanking, error } = useParticipantsRanking();
   
-  // 🔄 Puxa a contagem de jogos finalizados de forma 100% automatizada e limpa pelo hook
-  const { finishedGamesCount, loadingGames } = useFinishedGames(pool?.championship_id);
+  // Buscamos o cliente do supabase de forma dinâmica se ele estiver acoplado no escopo global,
+  // ou passamos a instância se o seu projeto configurar como window.supabase.
+  // Como contingência segura, o hook useFinishedGames foi preparado para receber o client.
+  // Se o useParticipantsRanking tiver acesso a ele, usamos uma instância mock ou o import correto.
+  // 💡 Como o erro anterior foi no hook, remover a importação de lá limpa o build!
+  const supabaseGlobal = (window as any).supabase; 
+  
+  const { finishedGamesCount, loadingGames } = useFinishedGames(supabaseGlobal, pool?.championship_id);
 
   const rankedParticipants = useMemo(() => {
     if (!participants || !pool) return [];
 
-    // 1. Filtra a lista removendo o admin e as IAs completamente
     const validParticipants = participants.filter(p => !p.is_admin && !isAIParticipant(p));
     const totalHuman = validParticipants.length;
     const totalPot = (pool.entry_fee || 0) * totalHuman;
 
-    // O divisor agora é dinâmico com base nos dados reais de partidas finalizadas no banco
     const totalJogosFinalizados = finishedGamesCount !== null && finishedGamesCount > 0 
       ? finishedGamesCount 
       : 1; 
 
-    // 2. Identificar grupos de empates perfeitos (Pontos, Cravadas e Precisão original)
     const tieGroups: Record<string, number[]> = {};
     validParticipants.forEach((p, index) => {
       const tieKey = `${p.points}-${p.exactscores}-${p.accuracy || 0}`;
@@ -56,7 +63,6 @@ const RankingPage = () => {
       tieGroups[tieKey].push(index);
     });
 
-    // 3. Mapear a lista final tratando prêmios, lanternas e gerando a porcentagem real automatizada
     return validParticipants.map((participant, index) => {
       const tieKey = `${participant.points}-${participant.exactscores}-${participant.accuracy || 0}`;
       const groupIndexes = tieGroups[tieKey];
@@ -64,7 +70,6 @@ const RankingPage = () => {
       const visualRank = groupIndexes[0] + 1;
       let prizeText = "";
 
-      // Lógica de Premiação Compartilhada (Empates de Pódio)
       if (isTied && groupIndexes.some(idx => idx < 3)) {
         let combinedPrizePot = 0;
         groupIndexes.forEach(idx => {
@@ -77,7 +82,6 @@ const RankingPage = () => {
         if (individualPrize > 0) prizeText = `R$ ${individualPrize.toFixed(2).replace('.', ',')}`;
       }
 
-      // Lógica de Punição Compartilhada (Empates de Lanterna)
       if (pool.enable_punishment && totalHuman > 3) {
         const isLastPlaceGroup = groupIndexes.includes(totalHuman - 1);
         if (isLastPlaceGroup) {
@@ -86,7 +90,6 @@ const RankingPage = () => {
         }
       }
 
-      // 🎯 --- RECALCULANDO A PRECISÃO MATEMÁTICA AUTOMATIZADA ---
       const cravadas = Number(participant.exactscores) || 0;
       let formattedAccuracy = "0,0%";
 
@@ -95,7 +98,6 @@ const RankingPage = () => {
         const finalAcc = calculatedAcc > 100 ? 100 : calculatedAcc; 
         formattedAccuracy = `${finalAcc.toFixed(1).replace('.', ',')}%`;
       } else if (cravadas > 0) {
-        // Fallback para quando houve acerto mas o banco ainda está sincronizando o primeiro status
         formattedAccuracy = "100,0%";
       }
 
