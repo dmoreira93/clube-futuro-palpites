@@ -1,5 +1,6 @@
 import { useAuth } from "@/contexts/AuthContext";
 import useParticipantsRanking, { Participant } from "@/hooks/useParticipantsRanking";
+import { useFinishedGames } from "@/hooks/useFinishedGames"; // 🚀 O nosso hook isolado
 import RankingRow from "@/components/ranking/RankingRow";
 import { 
   Table, 
@@ -11,9 +12,7 @@ import {
 } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2, Trophy } from "lucide-react";
-import { useMemo, useState, useEffect } from "react";
-// 🚨 AJUSTADO: Importação corrigida para o padrão do projeto (@/lib/supabase ou relativo)
-import { supabase } from "@/lib/supabase"; 
+import { useMemo } from "react";
 
 // Função auxiliar para verificar se é IA
 const isAIParticipant = (p: Participant) => p.name?.startsWith('IA ') || p.username?.startsWith('GPT');
@@ -31,42 +30,8 @@ const RankingPage = () => {
   const { activePool: pool } = useAuth();
   const { participants, loading: loadingRanking, error } = useParticipantsRanking();
   
-  // 🔄 Estado para controlar os jogos finalizados dinamicamente
-  const [finishedGamesCount, setFinishedGamesCount] = useState<number | null>(null);
-  const [loadingGames, setLoadingGames] = useState<boolean>(false);
-
-  // 📡 Buscar quantidade de jogos finalizados do campeonato do bolão ativo
-  useEffect(() => {
-    const fetchFinishedGames = async () => {
-      if (!pool || !pool.championship_id) return;
-
-      setLoadingGames(true);
-      try {
-        // Garante que o cliente do supabase existe antes de chamar para não estourar erro runtime
-        if (!supabase) {
-          console.warn("Cliente Supabase não encontrado.");
-          return;
-        }
-
-        const { count, error: fetchError } = await supabase
-          .from("matches")
-          .select("*", { count: "exact", head: true })
-          .eq("championship_id", pool.championship_id)
-          .eq("status", "finished");
-
-        if (fetchError) throw fetchError;
-
-        setFinishedGamesCount(count || 0);
-      } catch (err) {
-        console.error("Erro ao buscar contagem de jogos finalizados:", err);
-        setFinishedGamesCount(0); // Fallback amigável
-      } finally {
-        setLoadingGames(false);
-      }
-    };
-
-    fetchFinishedGames();
-  }, [pool]);
+  // 🔄 Puxa a contagem de jogos finalizados de forma 100% automatizada e limpa pelo hook
+  const { finishedGamesCount, loadingGames } = useFinishedGames(pool?.championship_id);
 
   const rankedParticipants = useMemo(() => {
     if (!participants || !pool) return [];
@@ -76,7 +41,7 @@ const RankingPage = () => {
     const totalHuman = validParticipants.length;
     const totalPot = (pool.entry_fee || 0) * totalHuman;
 
-    // O divisor agora é dinâmico.
+    // O divisor agora é dinâmico com base nos dados reais de partidas finalizadas no banco
     const totalJogosFinalizados = finishedGamesCount !== null && finishedGamesCount > 0 
       ? finishedGamesCount 
       : 1; 
@@ -130,6 +95,7 @@ const RankingPage = () => {
         const finalAcc = calculatedAcc > 100 ? 100 : calculatedAcc; 
         formattedAccuracy = `${finalAcc.toFixed(1).replace('.', ',')}%`;
       } else if (cravadas > 0) {
+        // Fallback para quando houve acerto mas o banco ainda está sincronizando o primeiro status
         formattedAccuracy = "100,0%";
       }
 
