@@ -1,35 +1,31 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.8"
 
-// Configurações do Bolão fixadas conforme alinhado
 const POOL_ID = "e61422a4-38d3-46fb-9f6d-d672e270d093";
 
 Deno.serve(async (req) => {
   try {
-    // 1. Inicializa o cliente do Supabase usando as variáveis de ambiente locais da Edge Function
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const telegramBotToken = Deno.env.get("TELEGRAM_BOT_TOKEN")!;
     
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // 2. Recebe a atualização vinda do Webhook do Telegram
     const update = await req.json();
     
-    // Se não for uma mensagem de texto, ignora para poupar processamento
     if (!update.message || !update.message.text) {
       return new Response("OK", { status: 200 });
     }
 
     const chatId = update.message.chat.id;
-    const incomingText = update.message.text.trim();
+    let incomingText = update.message.text.trim();
 
-    // 3. Processamento dos Comandos
-    
+    // 🔥 MÁGICA DE BLINDAGEM: Remove o @NomeDoBot se o usuário marcar o bot no grupo
+    incomingText = incomingText.replace(/@\w+_bot/g, "").trim();
+
     // ==========================================
     // COMANDO: /ranking
     // ==========================================
     if (incomingText.startsWith("/ranking")) {
-      // Busca o ranking oficial direto da sua RPC do PostgreSQL
       const { data: ranking, error: rpcError } = await supabase
         .rpc("get_pool_ranking", { p_pool_id: POOL_ID });
 
@@ -38,20 +34,18 @@ Deno.serve(async (req) => {
         return new Response("OK", { status: 200 });
       }
 
-      // Separa os argumentos para ver se foi pedido um usuário específico
-      const parts = incomingText.split(" ");
+      const parts = incomingText.split(/\s+/); // Divide por qualquer quantidade de espaços
       
-      // CASO A: /ranking geral (Sem argumentos)
-      if (parts.length === 1) {
+      // CASO A: /ranking geral (Sem argumentos extras)
+      if (parts.length === 1 || parts[1] === "") {
         let responseText = "🏆 *RANKING ATUAL DO BOLÃO* 🏆\n\n";
         
-        // Lista todo mundo ou limita aos 15 primeiros para não estourar o bloco de texto
         ranking.slice(0, 15).forEach((p: any, index: number) => {
           let emoji = "🔹";
           if (index === 0) emoji = "🥇";
           else if (index === 1) emoji = "🥈";
           else if (index === 2) emoji = "🥉";
-          else if (index === ranking.length - 1) emoji = "🏮"; // Lanterna
+          else if (index === ranking.length - 1) emoji = "🏮";
 
           responseText += `${emoji} *${index + 1}º ${p.username || 'Sem Nome'}* — ${p.points} pts (${p.exactscores} cravadas)\n`;
         });
@@ -59,15 +53,13 @@ Deno.serve(async (req) => {
         responseText += "\n🤖 _Digite_ `/ranking nome` _para ver os detalhes de um participante!_";
         await sendTelegramMessage(telegramBotToken, chatId, responseText);
       } 
-      // CASO B: /ranking especifico (Ex: /ranking dmoreira)
+      // CASO B: /ranking dmoreira
       else {
         const targetUsername = parts[1].replace("@", "").toLowerCase();
-        
-        // Acha o índice (posição) do cara na lista do ranking
         const targetIndex = ranking.findIndex((p: any) => p.username?.toLowerCase() === targetUsername);
 
         if (targetIndex === -1) {
-          await sendTelegramMessage(telegramBotToken, chatId, `❌ Usuário *${parts[1]}* não foi encontrado ou não está participando deste bolão.`);
+          await sendTelegramMessage(telegramBotToken, chatId, `❌ Usuário *${parts[1]}* não foi encontrado no bolão.`);
           return new Response("OK", { status: 200 });
         }
 
@@ -100,7 +92,6 @@ Deno.serve(async (req) => {
     else if (incomingText.startsWith("/proximojogo") || incomingText.startsWith("/jogos")) {
       const hoje = new Date().toISOString().split('T')[0];
 
-      // Busca na tabela matches os jogos agendados para o dia de hoje
       const { data: matches, error: matchError } = await supabase
         .from("matches")
         .select(`
@@ -115,23 +106,21 @@ Deno.serve(async (req) => {
         .order("match_date", { ascending: true });
 
       if (matchError || !matches || matches.length === 0) {
-        await sendTelegramMessage(telegramBotToken, chatId, "📅 *Agenda de Hoje:*\nNenhum jogo agendado ou pendente para o dia de hoje.");
+        await sendTelegramMessage(telegramBotToken, chatId, "📅 *Agenda de Hoje:*\nNenhum jogo agendado para o dia de hoje.");
         return new Response("OK", { status: 200 });
       }
 
       let responseText = "📅 *JOGOS DE HOJE:* \n\n";
       matches.forEach((m: any) => {
-        // Formata a hora do jogo bonitinho
         const horaJogo = new Date(m.match_date).toLocaleTimeString("pt-BR", {
           hour: "2-digit",
           minute: "2-digit",
           timeZone: "America/Sao_Paulo"
         });
-
-        responseText += `⚽ *${m.home_team?.name}* vs *${m.away_team?.name}*\n⏰ Horário: ${horaJogo} (Horário de Brasília)\n\n`;
+        responseText += `⚽ *${m.home_team?.name}* vs *${m.away_team?.name}*\n⏰ Horário: ${horaJogo}\n\n`;
       });
       
-      responseText += "🚨 _Não esqueçam de conferir e salvar seus palpites no aplicativo!_";
+      responseText += "🚨 _Não esqueçam de salvar seus palpites no app!_";
       await sendTelegramMessage(telegramBotToken, chatId, responseText);
     }
 
@@ -142,7 +131,6 @@ Deno.serve(async (req) => {
   }
 });
 
-// Função utilitária para enviar respostas de volta para a API do Telegram
 async function sendTelegramMessage(token: string, chatId: number, text: string) {
   const url = `https://api.telegram.org/bot${token}/sendMessage`;
   await fetch(url, {
@@ -151,7 +139,7 @@ async function sendTelegramMessage(token: string, chatId: number, text: string) 
     body: JSON.stringify({
       chat_id: chatId,
       text: text,
-      parse_mode: "Markdown" // Permite negritos e itálicos maneiros
+      parse_mode: "Markdown"
     })
   });
 }
