@@ -14,20 +14,22 @@ Deno.serve(async (req) => {
     let incomingText = update.message.text.trim().toLowerCase().replace(/@\w+_bot/g, "").trim();
 
     // ==========================================
-    // MENU DE COMANDOS
+    // MENU DE COMANDOS (plaintext)
     // ==========================================
     if (incomingText.startsWith("/comandos")) {
-        const msg = `🤖 *Comandos do Bolão:* \n\n` +
-                    `/ranking - Ranking geral\n` +
-                    `/ranking <nome> - Detalhes do usuário\n` +
-                    `/proximojogo - Agenda do dia\n` +
-                    `/criterios - Regras de pontuação\n` +
-                    `/resultados - Últimos jogos finalizados\n` +
-                    `/palpitesdiario - Palpites dos jogos de hoje`;
+        const msg = "🤖 *Comandos do Bot:*\n\n" +
+                    "/ranking - Ranking geral (Top 15)\n" +
+                    "/ranking <nome> - Estatísticas de um participante\n" +
+                    "/proximojogo - Agenda de jogos de hoje\n" +
+                    "/criterios - Regras de pontuação\n" +
+                    "/resultados - Últimos 5 jogos finalizados\n" +
+                    "/palpitesdiario - Palpites registrados para hoje";
         await sendTelegramMessage(botToken, chatId, msg);
     }
 
-    // COMANDO /RANKING
+    // ==========================================
+    // COMANDO: /ranking
+    // ==========================================
     else if (incomingText.startsWith("/ranking")) {
       let { data: ranking, error: rpcError } = await supabase.rpc("get_pool_ranking", { p_pool_id: POOL_ID });
       if (rpcError || !ranking || ranking.length === 0) {
@@ -39,29 +41,35 @@ Deno.serve(async (req) => {
         await sendTelegramMessage(botToken, chatId, "⚠️ Não foi possível carregar o ranking.");
       } else {
         const parts = incomingText.split(/\s+/);
-        if (parts.length === 1) {
-          let res = "🏆 *RANKING ATUAL*\n\n";
-          ranking.slice(0, 10).forEach((p: any, i: number) => res += `${i + 1}º ${p.username || p.name} — ${p.points} pts\n`);
+        if (parts.length === 1 || parts[1] === "") {
+          let res = "🏆 *RANKING ATUAL DO BOLÃO* 🏆\n\n";
+          ranking.slice(0, 15).forEach((p: any, i: number) => {
+             const emoji = i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : "🔹";
+             res += `${emoji} *${i + 1}º ${p.username || p.name}* — ${p.points ?? 0} pts\n`;
+          });
+          res += "\n🤖 _Digite_ `/ranking nome` _para ver detalhes de um participante!_";
           await sendTelegramMessage(botToken, chatId, res);
         } else {
           const target = parts[1].replace("@", "").toLowerCase();
           const user = ranking.find((p: any) => p.username?.toLowerCase() === target || p.name?.toLowerCase() === target);
-          if (!user) await sendTelegramMessage(botToken, chatId, `❌ Usuário não encontrado.`);
-          else await sendTelegramMessage(botToken, chatId, `🏅 *Estatísticas de @${user.username || user.name}*\n\n📊 Posição: ${ranking.indexOf(user) + 1}º\n💯 Pontuação: ${user.points} pts\n🎯 Cravadas: ${user.exactscores || 0}`);
+          if (!user) await sendTelegramMessage(botToken, chatId, `❌ Usuário *${parts[1]}* não encontrado.`);
+          else {
+            const ldr = ranking[0];
+            const ltn = ranking[ranking.length - 1];
+            const diffLdr = ldr.points - user.points;
+            const diffLtn = user.points - ltn.points;
+            await sendTelegramMessage(botToken, chatId, `🏅 *Estatísticas de @${user.username || user.name}*\n\n📊 Posição: ${ranking.indexOf(user) + 1}º\n💯 Pontuação: ${user.points} pts\n🎯 Cravadas: ${user.exactscores || 0}\n\n📈 ${diffLdr} pts atrás do líder (@${ldr.username || ldr.name})\n📉 ${diffLtn} pts à frente do lanterna (@${ltn.username || ltn.name})`);
+          }
         }
       }
     }
 
-    // COMANDO /CRITÉRIOS
+    // COMANDO /CRITERIOS
     else if (incomingText.startsWith("/criterios")) {
         const { data: criteria } = await supabase.from("scoring_criteria").select("name, points, description").eq("pool_id", POOL_ID);
-        if (!criteria || criteria.length === 0) {
-            await sendTelegramMessage(botToken, chatId, "⚠️ Nenhuma regra de pontuação cadastrada.");
-        } else {
-            let msg = "📜 *Critérios de Pontuação:*\n\n";
-            criteria.forEach(c => msg += `🎯 *${c.name}:* ${c.points} pts - ${c.description || ''}\n`);
-            await sendTelegramMessage(botToken, chatId, msg);
-        }
+        let msg = "📜 *Critérios de Pontuação:*\n\n";
+        criteria?.forEach(c => msg += `🎯 *${c.name}:* ${c.points} pts - ${c.description || ''}\n`);
+        await sendTelegramMessage(botToken, chatId, msg || "Nenhuma regra cadastrada.");
     }
 
     // COMANDO /RESULTADOS
@@ -72,7 +80,6 @@ Deno.serve(async (req) => {
         .eq("status", "finished")
         .order("match_date", { ascending: false })
         .limit(5);
-        
       let msg = "⚽ *Últimos Jogos Finalizados:*\n\n";
       matches?.forEach(m => msg += `• ${m.home_team.name} ${m.home_score} x ${m.away_score} ${m.away_team.name}\n`);
       await sendTelegramMessage(botToken, chatId, msg || "Nenhum jogo finalizado.");
@@ -81,18 +88,15 @@ Deno.serve(async (req) => {
     // COMANDO /PALPITESDIARIO
     else if (incomingText.startsWith("/palpitesdiario")) {
       const hoje = new Date().toISOString().split('T')[0];
-      const { data: jogosHoje } = await supabase.from("matches").select("id, home_team:teams!matches_home_team_id_fkey(name), away_team:teams!matches_away_team_id_fkey(name)").gte("match_date", `${hoje}T00:00:00Z`).lte("match_date", `${hoje}T23:59:59Z`);
+      const { data: jogos } = await supabase.from("matches").select("id, home_team:teams!matches_home_team_id_fkey(name), away_team:teams!matches_away_team_id_fkey(name)").gte("match_date", `${hoje}T00:00:00Z`).lte("match_date", `${hoje}T23:59:59Z`);
 
-      if (!jogosHoje || jogosHoje.length === 0) {
-        await sendTelegramMessage(botToken, chatId, "📅 *Nenhum jogo hoje.*");
-      } else {
-        const { data: palpites } = await supabase.from("match_predictions").select("home_score, away_score, match_id, user:users_custom(username)").in("match_id", jogosHoje.map(j => j.id)).eq("pool_id", POOL_ID);
+      if (!jogos || jogos.length === 0) await sendTelegramMessage(botToken, chatId, "📅 *Nenhum jogo hoje.*");
+      else {
+        const { data: palpites } = await supabase.from("match_predictions").select("home_score, away_score, match_id, user:users_custom(username)").in("match_id", jogos.map(j => j.id)).eq("pool_id", POOL_ID);
         let msg = "📝 *Palpites para hoje:*\n\n";
-        jogosHoje.forEach(jogo => {
-            msg += `⚽ *${jogo.home_team.name} x ${jogo.away_team.name}*\n`;
-            const palpitesJogo = palpites?.filter(p => p.match_id === jogo.id) || [];
-            if (palpitesJogo.length === 0) msg += "  _Nenhum palpite_\n";
-            else palpitesJogo.forEach(p => msg += `  👤 ${p.user?.username}: ${p.home_score}x${p.away_score}\n`);
+        jogos.forEach(j => {
+            msg += `⚽ *${j.home_team.name} x ${j.away_team.name}*\n`;
+            palpites?.filter(p => p.match_id === j.id).forEach(p => msg += `  👤 ${p.user?.username}: ${p.home_score}x${p.away_score}\n`);
             msg += "\n";
         });
         await sendTelegramMessage(botToken, chatId, msg);
@@ -101,7 +105,11 @@ Deno.serve(async (req) => {
 
     // COMANDO /PROXIMOJOGO
     else if (incomingText.startsWith("/proximojogo") || incomingText.startsWith("/jogos")) {
-        // ... (manter sua lógica original de próximos jogos aqui)
+      const hoje = new Date().toISOString().split('T')[0];
+      const { data: matches } = await supabase.from("matches").select("match_date, home_team:teams!matches_home_team_id_fkey(name), away_team:teams!matches_away_team_id_fkey(name)").eq("status", "scheduled").gte("match_date", `${hoje}T00:00:00Z`).lte("match_date", `${hoje}T23:59:59Z`).order("match_date", { ascending: true });
+      let res = "📅 *JOGOS DE HOJE:*\n\n";
+      matches?.forEach(m => res += `⚽ *${m.home_team.name}* vs *${m.away_team.name}*\n⏰ ${new Date(m.match_date).toLocaleTimeString("pt-BR", {hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo"})}\n\n`);
+      await sendTelegramMessage(botToken, chatId, res || "Nenhum jogo agendado hoje.");
     }
 
     return new Response("OK", { status: 200 });
