@@ -47,7 +47,7 @@ const RankingPage = () => {
       tieGroups[tieKey].push(index);
     });
 
-    // 3. Mapear a lista final tratando prêmios, lanternas e mantendo apenas a contagem bruta
+    // 3. Mapear a lista final tratando prêmios, lanternas e formatando a precisão real vinda do banco
     return validParticipants.map((participant, index) => {
       const tieKey = `${participant.points}-${participant.exactscores}-${participant.accuracy || 0}`;
       const groupIndexes = tieGroups[tieKey];
@@ -77,14 +77,14 @@ const RankingPage = () => {
         }
       }
 
-      // 🎯 MODIFICADO: Retiramos o cálculo de % complexo e passamos o valor numérico puro.
-      // O hook do banco já joga as cravadas perfeitamente em exactscores ou accuracy.
-      const totalCravadas = Number(participant.exactscores) || 0;
+      // 🎯 CORREÇÃO: Resgatamos o valor que o seu banco já calcula na coluna 'accuracy'
+      const rawAccuracy = Number(participant.accuracy) || 0;
+      const formattedAccuracy = `${rawAccuracy.toFixed(1).replace('.', ',')}%`;
 
       return {
         ...participant,
         rank: visualRank,
-        accuracy: String(totalCravadas), // Injeta apenas o número cru como string para o RankingRow ler
+        accuracy: formattedAccuracy, // Devolve a porcentagem correta tratada para o componente de linha
         prize: prizeText
       };
     });
@@ -122,7 +122,7 @@ const RankingPage = () => {
                 <TableHead>Participante</TableHead>
                 <TableHead className="text-right">Pontos</TableHead>
                 <TableHead className="text-right">Cravadas</TableHead>
-                <TableHead className="text-right">Aproveitamento</TableHead>
+                <TableHead className="text-right">Precisão</TableHead>
                 <TableHead className="text-right">Prêmio/Punição</TableHead>
               </TableRow>
             </TableHeader>
