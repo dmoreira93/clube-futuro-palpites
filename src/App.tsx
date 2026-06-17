@@ -1,9 +1,10 @@
 // src/App.tsx
 
-import { useEffect } from "react"; // 🌟 Importado para gerenciar o listener global
+import { useEffect } from "react"; 
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
 import Layout from "./components/layout/Layout";
+import { supabase } from "./integrations/supabase/client"; // 🛡️ IMPORTANTE: Importe o seu cliente Supabase
 
 // Páginas Públicas
 import HomePage from "./pages/HomePage";
@@ -46,25 +47,32 @@ import AdminLogin from "./pages/AdminLogin";
 import { ProtectedRoute } from "./components/auth/ProtectedRoute";
 
 function App() {
-  // 🌟 TRAVA DE SEGURANÇA CONTRA TELA INIFINITA DE CACHE (VITE/PWA)
-  // Trava de segurança contra tela infinita de cache e interferência de extensões
+  // 🌟 TRAVA DE SEGURANÇA CONTRA TELA INIFINITA E LOOPS (VITE/PWA/SUPABASE)
   useEffect(() => {
+    // 1. OUVINTE DE ESTADO DO SUPABASE (Expulsar "zumbis" se a chave mudar ou token der erro 400/402 seguido)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_OUT' || event === 'USER_DELETED') {
+        // Se a sessão for invalidada remotamente (ex: vc gerou chave nova), limpe os dados locais agressivamente.
+        localStorage.clear();
+        sessionStorage.clear();
+      }
+    });
+
+    // 2. CAPTURA GLOBAL DE ERROS DE RENDERIZAÇÃO E CACHE
     const handleGlobalError = (e: ErrorEvent) => {
-      // 1. IGNORAR ERROS DE EXTENSÕES: Se o erro vier de um arquivo que não é do seu app, cancela a propagação
+      // IGNORAR ERROS DE EXTENSÕES
       if (e.filename && (e.filename.includes('chrome-extension://') || e.filename.includes('pinComponent'))) {
         e.preventDefault();
         e.stopPropagation();
-        console.warn('⚡ Interferência de extensão de navegador ignorada para evitar travamento.');
         return;
       }
 
-      // 2. CORREÇÃO DE CACHE: Captura o erro clássico do Vite pós-deploy
+      // CORREÇÃO DE CACHE (Failed to fetch dynamic module)
       if (
         e.message?.includes('Failed to fetch dynamically imported module') || 
         e.message?.includes('error loading dynamically imported module')
       ) {
         console.warn('⚠️ Detectada quebra de cache do Vite! Limpando Service Worker e atualizando...');
-        
         if ('serviceWorker' in navigator) {
           navigator.serviceWorker.getRegistrations().then((registrations) => {
             for (const registration of registrations) {
@@ -72,24 +80,32 @@ function App() {
             }
           });
         }
-        
         window.location.reload();
+      }
+
+      // 🛡️ ANTI-LOOP SUPABASE (Erro de Quota Excedida / Blocked)
+      // Se um componente no React entrar em loop e bater na parede do 402 ou Too Many Requests, o navegador desliga o app e limpa o cache.
+      if (e.message?.includes('402') || e.message?.includes('Payment Required') || e.message?.includes('Too Many Requests')) {
+          console.error("🚨 SOBRECARGA DE REQUISIÇÕES DETECTADA! Destruindo cache para quebrar loop.");
+          localStorage.clear();
+          window.location.replace('/'); // Joga o usuário zumbi de volta para a Home limpa.
       }
     };
 
-    window.addEventListener('error', handleGlobalError, true); // Adicionado 'true' para capturar na fase de capture
-    return () => window.removeEventListener('error', handleGlobalError, true);
+    window.addEventListener('error', handleGlobalError, true); 
+    
+    // Limpeza ao desmontar
+    return () => {
+      window.removeEventListener('error', handleGlobalError, true);
+      subscription.unsubscribe();
+    };
   }, []);
 
   return (
     <AuthProvider>
       <BrowserRouter>
         <Routes>
-          {/* 1. ROTAS DE IMPRESSÃO (Nível Raiz e Blindadas contra Cache)
-             Mapeamos os dois formatos de URL possíveis para garantir que, independente 
-             de o componente ler por useParams ou useSearchParams, a página carregue 
-             sem dar 404 Not Found.
-          */}
+          {/* 1. ROTAS DE IMPRESSÃO */}
           <Route 
             path="/comprovante/imprimir/:poolId" 
             element={<ProtectedRoute><ImprimirComprovante /></ProtectedRoute>} 
@@ -99,7 +115,7 @@ function App() {
             element={<ProtectedRoute><ImprimirComprovante /></ProtectedRoute>} 
           />
 
-          {/* 2. DEMAIS ROTAS DA APLICAÇÃO (Layout Visual do Sistema) */}
+          {/* 2. DEMAIS ROTAS DA APLICAÇÃO */}
           <Route
             path="/*"
             element={
