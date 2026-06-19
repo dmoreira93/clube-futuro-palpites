@@ -15,10 +15,17 @@ Deno.serve(async (req) => {
     let incomingText = update.message.text.trim().toLowerCase().replace(/@\w+_bot/g, "").trim();
 
     // ==========================================
-    // TRATAMENTO PRÉVIO DO RANKING SE FOR COMANDO DE RANKING OU DE ZUEIRA
+    // TRATAMENTO PRÉVIO DO RANKING SE FOR NECESSÁRIO
     // ==========================================
     let ranking: any[] = [];
-    if (incomingText.startsWith("/ranking") || incomingText.startsWith("/inverterranking")) {
+    if (
+      incomingText.startsWith("/ranking") || 
+      incomingText.startsWith("/inverterranking") || 
+      incomingText.startsWith("/chances") || 
+      incomingText.startsWith("/frasedolanterna") || 
+      incomingText.startsWith("/muraldavergonha") || 
+      incomingText.startsWith("/historico")
+    ) {
       const { data, error: rpcError } = await supabase.rpc("get_pool_ranking", { p_pool_id: POOL_ID });
       ranking = data || [];
       if (rpcError || ranking.length === 0) {
@@ -27,8 +34,8 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Executa os comandos de zueira passando o ranking populado
-    const zueiraResponse = handleZueiraCommands(incomingText, ranking);
+    // Executa os comandos de zueira e informações passando as dependências necessárias
+    const zueiraResponse = await handleZueiraCommands(incomingText, ranking, supabase, POOL_ID);
     if (zueiraResponse) {
       await sendTelegramMessage(botToken, chatId, zueiraResponse);
       return new Response("OK", { status: 200 });
@@ -41,6 +48,11 @@ Deno.serve(async (req) => {
         const msg = "🤖 *Comandos do Bot:*\n\n" +
                     "/ranking - Ranking geral (Top 15)\n" +
                     "/ranking <nome> - Estatísticas de um participante\n" +
+                    "/historico <nome> - Análise detalhada do palpiteiro\n" +
+                    "/secador - Tendência de palpites do próximo jogo\n" +
+                    "/zikadodia - Palpites isolados e ousados\n" +
+                    "/muraldavergonha - Top 3 lanternas reais\n" +
+                    "/chances - Descubra sua probabilidade matemática de ganhar\n" +
                     "/proximojogo - Agenda de jogos de hoje\n" +
                     "/criterios - Regras de pontuação\n" +
                     "/resultados - Últimos 5 jogos finalizados\n" +
@@ -129,7 +141,6 @@ Deno.serve(async (req) => {
 
     return new Response("OK", { status: 200 });
   } catch (err) {
-    // Retorna 200 em caso de erro interno para evitar que o Telegram envie a mesma mensagem repetidamente num loop de falhas
     return new Response("OK", { status: 200 });
   }
 });
