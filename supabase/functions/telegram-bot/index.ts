@@ -13,11 +13,25 @@ Deno.serve(async (req) => {
 
     const chatId = update.message.chat.id;
     let incomingText = update.message.text.trim().toLowerCase().replace(/@\w+_bot/g, "").trim();
-    // Executa os comandos de zueira antes dos comandos oficiais
-    const zueiraResponse = handleZueiraCommands(incomingText, ranking || []);
+
+    // ==========================================
+    // TRATAMENTO PRÉVIO DO RANKING SE FOR COMANDO DE RANKING OU DE ZUEIRA
+    // ==========================================
+    let ranking: any[] = [];
+    if (incomingText.startsWith("/ranking") || incomingText.startsWith("/inverterranking")) {
+      const { data, error: rpcError } = await supabase.rpc("get_pool_ranking", { p_pool_id: POOL_ID });
+      ranking = data || [];
+      if (rpcError || ranking.length === 0) {
+        const { data: retryData } = await supabase.rpc("get_pool_ranking", { pool_id: POOL_ID });
+        ranking = retryData || [];
+      }
+    }
+
+    // Executa os comandos de zueira passando o ranking populado
+    const zueiraResponse = handleZueiraCommands(incomingText, ranking);
     if (zueiraResponse) {
-    await sendTelegramMessage(telegramBotToken, chatId, zueiraResponse);
-    return new Response("OK", { status: 200 });
+      await sendTelegramMessage(botToken, chatId, zueiraResponse);
+      return new Response("OK", { status: 200 });
     }
 
     // ==========================================
@@ -35,16 +49,10 @@ Deno.serve(async (req) => {
     }
 
     // ==========================================
-    // COMANDO: /ranking
+    // COMANDO OFICIAL: /ranking
     // ==========================================
     else if (incomingText.startsWith("/ranking")) {
-      let { data: ranking, error: rpcError } = await supabase.rpc("get_pool_ranking", { p_pool_id: POOL_ID });
-      if (rpcError || !ranking || ranking.length === 0) {
-         const { data: retryData } = await supabase.rpc("get_pool_ranking", { pool_id: POOL_ID });
-         ranking = retryData;
-      }
-
-      if (!ranking || ranking.length === 0) {
+      if (ranking.length === 0) {
         await sendTelegramMessage(botToken, chatId, "⚠️ Não foi possível carregar o ranking.");
       } else {
         const parts = incomingText.split(/\s+/);
@@ -121,6 +129,7 @@ Deno.serve(async (req) => {
 
     return new Response("OK", { status: 200 });
   } catch (err) {
+    // Retorna 200 em caso de erro interno para evitar que o Telegram envie a mesma mensagem repetidamente num loop de falhas
     return new Response("OK", { status: 200 });
   }
 });
