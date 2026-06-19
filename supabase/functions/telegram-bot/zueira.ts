@@ -1,190 +1,181 @@
-import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
+// zueira.ts
 
-export async function handleZueiraCommands(
-  text: string,
-  ranking: any[],
-  supabase: SupabaseClient,
-  poolId: string
-): Promise<string | null> {
-  const command = text.trim().toLowerCase();
+export function handleZueiraCommands(command: string, ranking: any[]): string | null {
+  const cmdLower = command.toLowerCase();
 
   // ==========================================
-  // COMANDOS ANTIGOS/EXISTENTES (PRESERVADOS)
+  // COMANDO: /inverterranking
   // ==========================================
-
-  // 1. COMANDO /inverterranking
-  if (command.startsWith("/inverterranking")) {
-    if (!ranking || ranking.length === 0) return "🙃 Sem dados de ranking para inverter.";
-    
-    const rankingInvertido = [...ranking].reverse();
-    let msg = "🙃 *RANKING INVERTIDO (Mundo Paralelo)* 🙃\n\n";
-    rankingInvertido.forEach((p, i) => {
-      msg += `${i + 1}º - *${p.name || "Sem Nome"}* (${p.points} pts)\n`;
+  if (cmdLower.startsWith("/inverterranking")) {
+    if (!ranking || ranking.length === 0) return "⚠️ Ranking não carregado.";
+    const reversed = [...ranking].reverse();
+    let txt = "🙃 *RANKING INVERTIDO (MUNDO DA VOLTAS)* 🙃\n\n";
+    reversed.forEach((p, idx) => {
+      let emoji = idx === 0 ? "🏮 (Lanterna Lendário)" : "🔹";
+      txt += `${emoji} ${idx + 1}º ${p.username || p.name} — *${p.points ?? 0}* pts\n`;
     });
-    return msg;
+    return txt;
   }
-
-  // 2. COMANDO /piorparticipante
-  if (command.startsWith("/piorparticipante")) {
-    // Retorna a piada clássica do abrandalize configurada anteriormente
-    return "🦉 O prêmio de pior participante vai para: *abrandalize*! Lanterna moral incontestável.";
-  }
-
 
   // ==========================================
-  // COMANDOS NOVOS (ADICIONADOS)
+  // COMANDO: /piorparticipante
   // ==========================================
+  if (cmdLower.startsWith("/piorparticipante")) {
+    if (!ranking || ranking.length === 0) return "⚠️ Dados indisponíveis.";
+    const lanterna = ranking[ranking.length - 1];
+    return `🤡 *O INIMIGO DA PREVISÃO* 🤡\n\nO prêmio "Calculadora Quebrada" vai para *@${lanterna.username || lanterna.name}*!\nSegurando com orgulho a lanterna isolada com *${lanterna.points ?? 0}* pontos!`;
+  }
 
-  // 3. COMANDO /chances
-  if (command.startsWith("/chances")) {
-    if (!ranking || ranking.length === 0) return "🎲 Sem dados de ranking para calcular.";
+  // ==========================================
+  // COMANDO: /muraldavergonha
+  // ==========================================
+  if (cmdLower.startsWith("/muraldavergonha")) {
+    if (!ranking || ranking.length === 0) return "⚠️ Ninguém passou vergonha hoje porque o banco não abriu.";
+    const len = ranking.length;
+    let txt = "🏮 *MURAL DA VERGONHA (TOP 3 LANTERNAS)* 🏮\n\n";
     
-    const zueiras = [
-      "🎲 Calculando probabilidades... Suas chances de ganhar são de 0,004%. É mais fácil o Íbis ganhar o Mundial.",
-      "🚀 Minhas análises quânticas dizem que você tem 99% de chances... de pagar o churrasco pro líder.",
-      "🔮 O sistema travou ao tentar calcular sua chance. O nível de ruindade quebrou o algoritmo.",
-      "🏆 Chance real: Só se todo mundo esquecer de palpitar nas próximas 10 rodadas.",
-      "📈 Gráfico em ascensão! Você tem grandes chances de garantir a lanterna de forma invicta."
-    ];
-    return zueiras[Math.floor(Math.random() * zueiras.length)];
-  }
+    // Pega as últimas 3 posições de baixo para cima
+    const p1 = ranking[len - 1];
+    const p2 = ranking[len - 2];
+    const p3 = ranking[len - 3];
 
-  // 4. COMANDO /frasedolanterna
-  if (command.startsWith("/frasedolanterna")) {
-    if (!ranking || ranking.length === 0) return "🦉 Ninguém na lanterna ainda.";
+    if (p1) txt += `🚨 *${len}º lugar:* @${p1.username || p1.name} — *${p1.points ?? 0}* pts (O Lanterna Real)\n`;
+    if (p2) txt += `📉 *${len - 1}º lugar:* @${p2.username || p2.name} — *${p2.points ?? 0}* pts\n`;
+    if (p3) txt += `⏳ *${len - 2}º lugar:* @${p3.username || p3.name} — *${p3.points ?? 0}* pts\n`;
     
-    const frasesLanterna = [
-      `😭 "Não tá fácil... até o scraper tá pontuando mais do que eu."`,
-      `🦉 "Estou apenas guardando forças para uma arrancada heroica que começará nunca."`,
-      `📉 "Se o campeonato fosse invertido, eu seria o gênio incontestável deste grupo."`,
-      `💸 "Alguém me passa o pix do juiz do próximo jogo para ver se eu saio do zero."`
-    ];
-    return `🦉 FALA DO LANTERNA:\n${frasesLanterna[Math.floor(Math.random() * frasesLanterna.length)]}`;
+    txt += "\n_Rezem por uma rodada de milagres, a situação está feia!_ 👃";
+    return txt;
   }
 
-  // 5. COMANDO /secador ou /palpiteunanime
-  if (command.startsWith("/secador") || command.startsWith("/palpiteunanime")) {
-    try {
-      const { data: nextMatch } = await supabase
-        .from("matches")
-        .select(`
-          id, 
-          home_team:home_team_id(name), 
-          away_team:away_team_id(name)
-        `)
-        .eq("status", "scheduled")
-        .order("match_date", { ascending: true })
-        .limit(1)
-        .maybeSingle();
+  // ==========================================
+  // COMANDO: /historico <nome>
+  // ==========================================
+  if (cmdLower.startsWith("/historico")) {
+    if (!ranking || ranking.length === 0) return "⚠️ Ranking vazio.";
+    const parts = command.split(/\s+/);
+    if (parts.length === 1 || parts[1] === "") return "ℹ️ Use: `/historico nome` para ver a análise completa.";
 
-      if (!nextMatch) return "🗓 Sem próximos jogos agendados no momento.";
+    const targetUsername = parts[1].replace("@", "").toLowerCase();
+    const idx = ranking.findIndex(p => p.username?.toLowerCase() === targetUsername || p.name?.toLowerCase() === targetUsername);
 
-      const { data: predictions } = await supabase
-        .from("match_predictions")
-        .select("home_score, away_score")
-        .eq("match_id", nextMatch.id)
-        .eq("pool_id", poolId);
+    if (idx === -1) return `❌ Palpiteiro *${parts[1]}* não encontrado no histórico deste bolão.`;
 
-      if (!predictions || predictions.length === 0) {
-        return `🔮 Próximo jogo: *${nextMatch.home_team.name} vs ${nextMatch.away_team.name}*.\nNinguém palpitou ainda!`;
+    const p = ranking[idx];
+    const cravadas = p.exactscores ?? p.exact_scores ?? 0;
+    
+    return `📜 *ANÁLISE DETALHADA DO PALPITEIRO* 📜\n\n` +
+           `👤 *Nome:* @${p.username || p.name}\n` +
+           `🏅 *Posição Geral:* ${idx + 1}º lugar\n` +
+           `💯 *Pontuação Total:* ${p.points ?? 0} pts\n` +
+           `🎯 *Placares Cravados:* ${cravadas} (Acertos cheios)\n\n` +
+           `📊 *Desempenho Técnico:* ${cravadas > 4 ? "🔥 Perigoso e Cirúrgico" : "🐌 Devagar Quase Parando"}\n` +
+           `📝 *Veredito:* O histórico não mente, segue na luta!`;
+  }
+
+  // ==========================================
+  // COMANDO: /chances
+  // ==========================================
+  if (cmdLower.startsWith("/chances")) {
+    const parts = command.split(/\s+/);
+    const target = parts.length > 1 ? parts[1] : "seu";
+    
+    // Cálculo sarcástico baseado na posição estatística ou randômico matemático guiado
+    let probabilidade = Math.floor(Math.random() * 40) + 40; // Fallback engraçado
+    if (ranking && ranking.length > 0 && parts.length > 1) {
+      const user = parts[1].replace("@", "").toLowerCase();
+      const idx = ranking.findIndex(p => p.username?.toLowerCase() === user || p.name?.toLowerCase() === user);
+      if (idx !== -1) {
+        probabilidade = Math.max(1, Math.min(99, 100 - (idx * 7))); // Quanto mais baixo, menor a probabilidade
       }
-
-      let mandanteVence = 0, visitanteVence = 0, empate = 0;
-      const placares: Record<string, number> = {};
-
-      predictions.forEach((p) => {
-        if (p.home_score > p.away_score) mandanteVence++;
-        else if (p.away_score > p.home_score) visitanteVence++;
-        else empate++;
-
-        const placarStr = `${p.home_score}x${p.away_score}`;
-        placares[placarStr] = (placares[placarStr] || 0) + 1;
-      });
-
-      const total = predictions.length;
-      let tendencia = "";
-      if (mandanteVence > visitanteVence && mandanteVence > empate) {
-        tendencia = `votação em massa (${Math.round((mandanteVence/total)*100)}%) na vitória do ${nextMatch.home_team.name}`;
-      } else if (visitanteVence > mandanteVence && visitanteVence > empate) {
-        tendencia = `votação em massa (${Math.round((visitanteVence/total)*100)}%) na vitória do ${nextMatch.away_team.name}`;
-      } else {
-        tendencia = `equilíbrio ou favoritismo ao Empate (${Math.round((empate/total)*100)}%)`;
-      }
-
-      const topPlacar = Object.entries(placares).sort((a, b) => b[1] - a[1])[0];
-
-      return `💨 *ZONA DO SECADOR* 💨\n\nPara *${nextMatch.home_team.name} vs ${nextMatch.away_team.name}*, o grupo aponta ${tendencia}.\n🔥 Maior placar apostado: *${topPlacar[0]}* (${topPlacar[1]} pessoas).\n\nSe der zebra, o choro é livre!`;
-    } catch {
-      return "⚠️ Erro ao calcular a tendência do secador.";
     }
+
+    return `🧮 *PROBABILIDADE MATEMÁTICA DE GANHAR* 🧮\n\n` +
+           `Análise de algoritmos para *${target}*:\n` +
+           `📈 Chance estimada de título: *${probabilidade}%*\n\n` +
+           `🎲 _Nota do matemático: Os números são exatos, mas a zica do grupo pode alterar os resultados sem aviso prévio!_`;
   }
 
-  // 6. COMANDO /zikadodia ou /meteuessa
-  if (command.startsWith("/zikadodia") || command.startsWith("/meteuessa")) {
-    try {
-      const { data: matches } = await supabase
-        .from("matches")
-        .select("id, home_team:home_team_id(name), away_team:away_team_id(name)")
-        .eq("status", "scheduled")
-        .limit(3);
+  return null;
+}
 
-      if (!matches || matches.length === 0) return "🎰 Sem jogos futuros para buscar zikas.";
+export async function handleComplexZueira(command: string, supabase: any, poolId: string): Promise<string | null> {
+  const cmdLower = command.toLowerCase();
+  const hoje = new Date().toISOString().split('T')[0];
 
-      const matchIds = matches.map(m => m.id);
+  // ==========================================
+  // COMANDO: /secador
+  // ==========================================
+  if (cmdLower.startsWith("/secador")) {
+    const { data: jogos } = await supabase
+      .from("matches")
+      .select(`id, home_team:teams!matches_home_team_id_fkey(name), away_team:teams!matches_away_team_id_fkey(name)`)
+      .gte("match_date", `${hoje}T00:00:00Z`)
+      .lte("match_date", `${hoje}T23:59:59Z`)
+      .eq("status", "scheduled")
+      .limit(1);
 
-      const { data: predictions } = await supabase
-        .from("match_predictions")
-        .select("home_score, away_score, match_id, user_id, users_custom(name, email)")
-        .in("match_id", matchIds)
-        .eq("pool_id", poolId);
+    if (!jogos || jogos.length === 0) return "🔮 Sem jogos futuros agendados para hoje para secar!";
 
-      if (!predictions || predictions.length === 0) return "🦉 Nenhum palpite registrado para analisar.";
+    const jogo = jogos[0];
+    const { data: palpites } = await supabase
+      .from("match_predictions")
+      .select("home_score, away_score")
+      .eq("match_id", jogo.id)
+      .eq("pool_id", poolId); // <--- TRAVADO NO BOLÃO NOVO
 
-      let zikaPalpite = null;
-      let jogoZika = null;
+    if (!palpites || palpites.length === 0) return `🎲 Ninguém registrou palpites abertos em *${jogo.home_team.name} x ${jogo.away_team.name}* ainda.`;
 
-      for (const pred of predictions) {
-        if (pred.home_score >= 4 || pred.away_score >= 4) {
-          zikaPalpite = pred;
-          jogoZika = matches.find(m => m.id === pred.match_id);
-          break;
-        }
-      }
-
-      if (!zikaPalpite) {
-        zikaPalpite = predictions[Math.floor(Math.random() * predictions.length)];
-        jogoZika = matches.find(m => m.id === zikaPalpite.match_id);
-      }
-
-      const nomeZika = zikaPalpite.users_custom?.name || zikaPalpite.users_custom?.email || "Corneteiro";
-      return `🚨 *ALERTA DE ZIKA DO DIA* 🚨\n\nNo jogo *${jogoZika.home_team.name} vs ${jogoZika.away_team.name}*, o participante *${nomeZika}* meteu um ousado *${zikaPalpite.home_score}x${zikaPalpite.away_score}* sozinho.\n\nSe isso acontecer, ele vira o dono do bolão!`;
-    } catch {
-      return "⚠️ Erro ao varrer as zikas do dia.";
-    }
-  }
-
-  // 7. COMANDO /muraldavergonha
-  if (command.startsWith("/muraldavergonha")) {
-    if (!ranking || ranking.length === 0) return "📊 Ranking vazio.";
-    const piores = [...ranking].reverse().slice(0, 3);
-    let msg = "🦉 *MURAL DA VERGONHA* 🦉\nQuem não acertaria nem a cor da bola:\n\n";
-    piores.forEach((p, i) => {
-      msg += `${i + 1}º - *${p.name || "Sem Nome"}* (${p.points} pts | ${p.exactscores || 0} cravadas)\n`;
+    let home = 0, away = 0, emp = 0;
+    palpites.forEach((p: any) => {
+      if (p.home_score > p.away_score) home++;
+      else if (p.away_score > p.home_score) away++;
+      else emp++;
     });
-    return msg;
+
+    const total = palpites.length;
+    return `💨 *RADAR DO SECADOR* 💨\n\n` +
+           `Tendências para *${jogo.home_team.name} x ${jogo.away_team.name}*:\n` +
+           `• Vitória ${jogo.home_team.name}: ${Math.round((home/total)*100)}%\n` +
+           `• Vitória ${jogo.away_team.name}: ${Math.round((away/total)*100)}%\n` +
+           `• Empate: ${Math.round((emp/total)*100)}%\n\n` +
+           `📢 Secadores posicionados! Quem errar vai aguentar a corneta!`;
   }
 
-  // 8. COMANDO /historico
-  if (command.startsWith("/historico")) {
-    const args = text.split(" ");
-    if (args.length < 2) return "ℹ️ Uso correto: `/historico NomeDoUsuario`";
-    
-    const pesquisado = args.slice(1).join(" ").toLowerCase();
-    const userStats = ranking.find(p => p.name?.toLowerCase().includes(pesquisado));
+  // ==========================================
+  // COMANDO: /zikadodia
+  // ==========================================
+  if (cmdLower.startsWith("/zikadodia")) {
+    const { data: jogos } = await supabase
+      .from("matches")
+      .select(`id, home_team:teams!matches_home_team_id_fkey(name), away_team:teams!matches_away_team_id_fkey(name)`)
+      .gte("match_date", `${hoje}T00:00:00Z`)
+      .lte("match_date", `${hoje}T23:59:59Z`)
+      .limit(1);
 
-    if (!userStats) return "🔍 Participante não encontrado no ranking ativo.";
+    if (!jogos || jogos.length === 0) return "🦎 Sem jogos cadastrados para hoje.";
 
-    return `📊 *Ficha Técnica de Desempenho*\n\n👤 *Perfil:* ${userStats.name}\n🏆 *Pontuação Acumulada:* ${userStats.points} pts\n🎯 *Placares cravados:* ${userStats.exactscores || 0} (+10 pts)\n📈 *Acurácia Geral:* ${userStats.accuracy || "0.0"}%\n\n*Tendência:* Costuma empolgar na rodada e xingar o scraper automatizado.`;
+    const jogo = jogos[0];
+    const { data: palpites } = await supabase
+      .from("match_predictions")
+      .select("home_score, away_score, user:users_custom(username)")
+      .eq("match_id", jogo.id)
+      .eq("pool_id", poolId); // <--- TRAVADO NO BOLÃO NOVO
+
+    if (!palpites || palpites.length === 0) return "🍀 Sem palpites ousados arquivados hoje.";
+
+    let palpiteZika = palpites[0];
+    let maiorGols = 0;
+    palpites.forEach((p: any) => {
+      const soma = (p.home_score ?? 0) + (p.away_score ?? 0);
+      if (soma > maiorGols) {
+        maiorGols = soma;
+        palpiteZika = p;
+      }
+    });
+
+    return `🦎 *ZIKA DO DIA SELECT* 🦎\n\n` +
+           `Para *${jogo.home_team.name} x ${jogo.away_team.name}*, o prêmio urubu vai para *@${palpiteZika.user?.username || "Alguém"}*!\n` +
+           `Apostou em um placar explosivo de *${palpiteZika.home_score} x ${palpiteZika.away_score}*.\n👀 Estamos de olho!`;
   }
 
   return null;
