@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.8"
+import { handleZueiraCommands } from "./zueira.ts";
 
 const POOL_ID = "e61422a4-38d3-46fb-9f6d-d672e270d093";
 
@@ -12,6 +13,12 @@ Deno.serve(async (req) => {
 
     const chatId = update.message.chat.id;
     let incomingText = update.message.text.trim().toLowerCase().replace(/@\w+_bot/g, "").trim();
+    // Executa os comandos de zueira antes dos comandos oficiais
+    const zueiraResponse = handleZueiraCommands(incomingText, ranking || []);
+    if (zueiraResponse) {
+    await sendTelegramMessage(telegramBotToken, chatId, zueiraResponse);
+    return new Response("OK", { status: 200 });
+    }
 
     // ==========================================
     // MENU DE COMANDOS (plaintext)
