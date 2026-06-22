@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Calculator, Search, RefreshCw, AlertTriangle, FileSearch, ShieldCheck } from "lucide-react";
+import { Calculator, Search, RefreshCw, AlertTriangle, FileSearch, ShieldCheck, Download } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -32,13 +32,13 @@ interface AuditLog {
   event_name: string;
   prediction_text: string;
   official_result: string;
-  user_name?: string; // Adicionado para identificar quando listar "Todos"
+  user_name?: string;
 }
 
 const AuditoriaPontos = () => {
   const { activePool, isAdmin, user } = useAuth();
   const [users, setUsers] = useState<UserOption[]>([]);
-  const [selectedUser, setSelectedUser] = useState<string>("all"); // "all" por padrão para listar todos
+  const [selectedUser, setSelectedUser] = useState<string>("all");
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [loading, setLoading] = useState(false);
   const [recalcLoading, setRecalcLoading] = useState(false);
@@ -48,7 +48,6 @@ const AuditoriaPontos = () => {
     
     setLoading(true);
     try {
-      // Monta a query base trazendo também os dados do usuário para auditorias globais
       let query = supabase
         .from("user_points_log")
         .select(`
@@ -70,12 +69,9 @@ const AuditoriaPontos = () => {
         `)
         .or(`pool_id.eq.${activePool.id},pool_id.is.null`);
 
-      // Se não for "all", aplica o filtro para o usuário específico selecionado
       if (userId !== "all" && userId !== "") {
         query = query.eq("user_id", userId);
       } else {
-        // Se for "all", traz apenas os usuários vinculados a esse bolão ativo
-        // Para isso, faremos uma subquery indireta ou filtramos em memória para blindar o escopo do bolão
         const { data: participationIds } = await supabase
           .from("participations")
           .select("user_id")
@@ -96,7 +92,6 @@ const AuditoriaPontos = () => {
         let predictionText = "-";
         let officialResult = "-";
 
-        // Se for ponto de Partida (Match)
         if (log.match_prediction?.match) {
           const mp = log.match_prediction;
           const m = mp.match;
@@ -107,20 +102,17 @@ const AuditoriaPontos = () => {
           predictionText = `${mp.home_score} x ${mp.away_score}`;
           officialResult = m.home_score !== null ? `${m.home_score} x ${m.away_score}` : 'Aguardando';
         } 
-        // Se for ponto de Grupo
         else if (log.group_prediction?.group) {
           eventName = `Fase de Grupos: ${log.group_prediction.group.name}`;
           predictionText = "Palpite em Grupos";
           officialResult = "Classificação Oficial";
         } 
-        // Se for Final/Outros
         else if (log.points_type?.includes('final') || log.points_type?.includes('champion')) {
           eventName = "Mata-Mata / Finais";
           predictionText = "Palpite em Simulador";
           officialResult = "Chaveamento Oficial";
         }
 
-        // Resolve o nome do usuário de forma segura
         const uName = log.users_custom?.name || "Participante";
 
         return {
@@ -150,7 +142,6 @@ const AuditoriaPontos = () => {
       if (!activePool?.id) return;
 
       try {
-        // Traz as participações e os dados do usuário de forma limpa e direta
         const { data, error } = await supabase
           .from("participations")
           .select(`
@@ -176,13 +167,10 @@ const AuditoriaPontos = () => {
               is_admin: userData?.is_admin || false
             };
           })
-          // Filtra para remover robôs e administradores puristas da listagem geral de palpites reais
           .filter(u => u.id && !u.is_ai)
           .sort((a, b) => a.name.localeCompare(b.name));
 
         setUsers(mappedUsers);
-
-        // Define "Todos" por padrão ao carregar a página
         setSelectedUser("all");
         fetchAuditLogs("all");
 
@@ -205,9 +193,7 @@ const AuditoriaPontos = () => {
     
     setRecalcLoading(true);
     try {
-        // Se estiver em "Todos", não permitimos o RPC genérico sem id (ou enviamos o do usuário atual logado como segurança)
         const targetUserId = selectedUser === "all" ? user?.id : selectedUser;
-        
         if (!targetUserId) return;
 
         const { error } = await supabase.rpc('recalculate_user_points', { 
@@ -225,6 +211,46 @@ const AuditoriaPontos = () => {
     } finally {
         setRecalcLoading(false);
     }
+  };
+
+  // 📥 Função para Exportar a tabela atual em formato CSV compatível com Excel brasileiro
+  const handleExportCSV = () => {
+    if (logs.length === 0) {
+      toast.error("Nenhum registro encontrado para exportação.");
+      return;
+    }
+
+    // Define os cabeçalhos das colunas usando ponto e vírgula como padrão regional
+    const headers = ["Data/Hora", "Participante", "Evento/Partida", "Motivo", "Palpite do Usuario", "Resultado Oficial", "Pontos Ganhos"];
+    
+    // Converte as linhas de dados tratando possíveis aspas/caracteres perigosos
+    const rows = logs.map(log => [
+      format(new Date(log.created_at), "dd/MM/yyyy HH:mm"),
+      log.user_name || "-",
+      log.event_name.replace(/;/g, ","),
+      log.description.replace(/;/g, ","),
+      log.prediction_text,
+      log.official_result,
+      `+${log.points_earned}`
+    ]);
+
+    // Junta cabeçalhos e linhas. O '\ufeff' serve para forçar o Excel a ler em UTF-8 mantendo acentuações perfeitas!
+    const csvContent = "\ufeff" + [headers.join(";"), ...rows.map(e => e.join(";"))].join("\n");
+    
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    
+    // Nome do arquivo dinâmico
+    const userNameFile = selectedUser === "all" ? "Todos" : (users.find(u => u.id === selectedUser)?.name || "Usuario");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `VAR_Auditoria_Pontos_${userNameFile}_${activePool?.name.replace(/\s+/g, "_")}.csv`);
+    link.style.visibility = "hidden";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    toast.success("Arquivo CSV exportado com sucesso!");
   };
 
   if (!activePool) {
@@ -280,17 +306,31 @@ const AuditoriaPontos = () => {
             </Select>
           </div>
           
-          {isAdmin && selectedUser !== "all" && (
-            <Button 
-              variant="outline" 
-              onClick={handleRecalculate} 
-              disabled={recalcLoading}
-              className="w-full sm:w-auto h-12 border-amber-500 text-amber-700 hover:bg-amber-50"
+          <div className="flex gap-2 w-full sm:w-auto">
+            {/* Botão de Exportação de Planilha adicionado aqui */}
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleExportCSV}
+              disabled={loading || logs.length === 0}
+              className="flex-1 sm:flex-initial h-12 border-emerald-600 text-emerald-700 hover:bg-emerald-50 font-medium"
             >
-              {recalcLoading ? <RefreshCw className="mr-2 h-4 w-4 animate-spin"/> : <ShieldCheck className="mr-2 h-5 w-5"/>}
-              Forçar Recálculo
+              <Download className="mr-2 h-4 w-4 text-emerald-600" />
+              Exportar CSV
             </Button>
-          )}
+
+            {isAdmin && selectedUser !== "all" && (
+              <Button 
+                variant="outline" 
+                onClick={handleRecalculate} 
+                disabled={recalcLoading}
+                className="flex-1 sm:flex-initial h-12 border-amber-500 text-amber-700 hover:bg-amber-50"
+              >
+                {recalcLoading ? <RefreshCw className="mr-2 h-4 w-4 animate-spin"/> : <ShieldCheck className="mr-2 h-5 w-5"/>}
+                Forçar Recálculo
+              </Button>
+            )}
+          </div>
         </CardContent>
       </Card>
 
