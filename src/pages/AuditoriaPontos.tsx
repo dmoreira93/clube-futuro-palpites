@@ -102,15 +102,46 @@ const AuditoriaPontos = () => {
           predictionText = `${mp.home_score} x ${mp.away_score}`;
           officialResult = m.home_score !== null ? `${m.home_score} x ${m.away_score}` : 'Aguardando';
         } 
+        
         else if (log.group_prediction?.group) {
-          eventName = `Fase de Grupos: ${log.group_prediction.group.name}`;
-          predictionText = "Palpite em Grupos";
-          officialResult = "Classificação Oficial";
+        eventName = `Fase de Grupos: ${log.group_prediction.group.name}`;
+        
+        // Verifica o TIPO exato de acerto conforme o banco de dados (Seguro contra mudanças de pontos)
+        let detalheAcerto = "";
+        if (log.points_type === 'GROUP_EXACT') {
+          detalheAcerto = " - Classificação Exata";
+        } else if (log.points_type === 'GROUP_INVERTED') {
+          detalheAcerto = " - Ordem Invertida";
+        } else if (log.points_type === 'GROUP_SINGLE') {
+          detalheAcerto = " - Apenas 1 Classificado";
+        } else if (log.points_earned === 0) {
+          detalheAcerto = " - Nenhum acerto";
+        }
+
+        // Concatena o texto padrão com o detalhe do acerto
+        predictionText = `Palpite em Grupos${detalheAcerto}`;
+        officialResult = "Classificação Oficial";
         } 
-        else if (log.points_type?.includes('final') || log.points_type?.includes('champion')) {
-          eventName = "Mata-Mata / Finais";
-          predictionText = "Palpite em Simulador";
-          officialResult = "Chaveamento Oficial";
+        
+        else if (log.points_type?.startsWith('TOURNAMENT_')) {
+          eventName = "Mata-Mata / Pódio";
+          
+          // Verifica o tipo de acerto da final para detalhar na tela
+          let detalheAcerto = "";
+          if (log.points_type === 'TOURNAMENT_CHAMPION') {
+            detalheAcerto = " - Campeão Exato";
+          } else if (log.points_type === 'TOURNAMENT_RUNNERUP') {
+            detalheAcerto = " - Vice-Campeão";
+          } else if (log.points_type === 'TOURNAMENT_3RD') {
+            detalheAcerto = " - 3º Lugar";
+          } else if (log.points_type === 'TOURNAMENT_4TH') {
+            detalheAcerto = " - 4º Lugar";
+          } else {
+            detalheAcerto = " - Acerto no Pódio";
+          }
+
+          predictionText = `Seleções Escolhidas${detalheAcerto}`;
+          officialResult = "Resultado Oficial do Torneio";
         }
 
         const uName = log.users_custom?.name || "Participante";
