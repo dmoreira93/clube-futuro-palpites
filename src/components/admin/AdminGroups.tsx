@@ -132,6 +132,7 @@ export default function AdminGroups() {
       setLoading(true);
       const { error } = await supabase.from("groups_results").upsert({
           group_id: groupId,
+          championship_id: selectedChampionship,
           first_place_team_id: firstPlace,
           second_place_team_id: secondPlace,
           is_completed: true
