@@ -69,7 +69,7 @@ export default function AdminTournamentResults() {
 
       setLoading(true);
       const payload = {
-          championship_id: selectedChampionship, // VINCULA AO CAMPEONATO
+          championship_id: selectedChampionship,
           champion_id: champion,
           runner_up_id: runnerUp,
           third_place_id: third || null,
@@ -79,23 +79,38 @@ export default function AdminTournamentResults() {
           is_completed: true
       };
 
-      // Upsert baseado no ID (se existir) ou championship_id (se tiver constraint unique)
-      // Como talvez não tenha constraint unique no championship_id, usamos o ID se tivermos
       let error;
+      let savedResult; // 1. Variável para guardar o resultado salvo no banco
+
+      // 2. Adicionamos o .select().single() para o Supabase nos devolver o ID gerado/atualizado
       if (resultId) {
-          ({ error } = await supabase.from("tournament_results").update(payload).eq("id", resultId));
+          const { data, error: updateError } = await supabase.from("tournament_results").update(payload).eq("id", resultId).select().single();
+          error = updateError;
+          savedResult = data;
       } else {
-          ({ error } = await supabase.from("tournament_results").insert(payload));
+          const { data, error: insertError } = await supabase.from("tournament_results").insert(payload).select().single();
+          error = insertError;
+          savedResult = data;
       }
 
       if (error) {
           toast.error("Erro ao salvar: " + error.message);
       } else {
           toast.success("Salvo! Calculando pontos...");
-          // Dispara Pontuação
-          await supabase.rpc('process_final_results'); 
-          toast.success("Pontos calculados!");
-          loadData(); // Recarrega para pegar o ID se foi insert
+          
+          // 3. Agora passamos o ID correto para o banco de dados processar
+          const { error: rpcError } = await supabase.rpc('process_final_results', { 
+              p_result_id: savedResult.id 
+          }); 
+          
+          // 4. Validação real de sucesso
+          if (rpcError) {
+              toast.error("Erro no cálculo: " + rpcError.message);
+          } else {
+              toast.success("Pontos calculados e distribuídos com sucesso!");
+          }
+          
+          loadData(); 
       }
       setLoading(false);
   };
