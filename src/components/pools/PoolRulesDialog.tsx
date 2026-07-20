@@ -145,7 +145,7 @@ export function PoolRulesDialog({ pool, triggerButton }: PoolRulesProps) {
                       <div className="flex flex-col gap-2">
                           <RuleItem label="Ordem Exata (1º e 2º)" points={getPoints('GROUP_EXACT', 10)} color="blue" compact />
                           <RuleItem label="Ordem Invertida" desc="Acertou os 2 classificados mas inverteu as posições" points={getPoints('GROUP_INVERTED', 5)} color="gray" compact icon={<Shuffle className="h-3 w-3 mr-1"/>} />
-                          <RuleItem label="Apenas 1 Classificado" points={getPoints('GROUP_SINGLE', 3)} color="gray" compact />
+                          <RuleItem label="Apenas 1 Classificado" desc="Em ordem correta" points={getPoints('GROUP_SINGLE', 3)} color="gray" compact />
                       </div>
                   </section>
 
